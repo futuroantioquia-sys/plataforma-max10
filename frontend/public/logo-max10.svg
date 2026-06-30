@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 150" width="460" height="150">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="3" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Borde exterior negro redondeado -->
+  <rect x="2" y="2" width="456" height="146" rx="28" ry="28" fill="#000" stroke="#000" stroke-width="4"/>
+
+  <!-- Zona derecha blanca (para el "10") -->
+  <rect x="268" y="6" width="184" height="138" rx="22" ry="22" fill="#fff"/>
+
+  <!-- ===== TEXTO "Max" ===== -->
+  <!-- Sombra / volumen del Max -->
+  <text x="22" y="122"
+    font-family="'Arial Black', 'Franklin Gothic Heavy', Impact, sans-serif"
+    font-size="114" font-weight="900" font-style="italic"
+    fill="#003d00" stroke="#003d00" stroke-width="10"
+    stroke-linejoin="round">Max</text>
+  <!-- Relleno verde -->
+  <text x="22" y="122"
+    font-family="'Arial Black', 'Franklin Gothic Heavy', Impact, sans-serif"
+    font-size="114" font-weight="900" font-style="italic"
+    fill="#1c8a1c" stroke="#000" stroke-width="5"
+    stroke-linejoin="round" paint-order="stroke fill">Max</text>
+
+  <!-- ===== TEXTO "10" ===== -->
+  <!-- Sombra -->
+  <text x="278" y="122"
+    font-family="'Arial Black', 'Franklin Gothic Heavy', Impact, sans-serif"
+    font-size="114" font-weight="900" font-style="italic"
+    fill="#222" stroke="#000" stroke-width="8"
+    stroke-linejoin="round">10</text>
+  <!-- Relleno blanco con borde negro -->
+  <text x="278" y="122"
+    font-family="'Arial Black', 'Franklin Gothic Heavy', Impact, sans-serif"
+    font-size="114" font-weight="900" font-style="italic"
+    fill="#fff" stroke="#000" stroke-width="4"
+    stroke-linejoin="round" paint-order="stroke fill">10</text>
+
+  <!-- ===== SPORT diagonal ===== -->
+  <g transform="translate(390,100) rotate(-38)">
+    <text x="-46" y="0"
+      font-family="'Arial Black', 'Franklin Gothic Heavy', Impact, sans-serif"
+      font-size="28" font-weight="900" font-style="italic"
+      fill="#fff" stroke="#000" stroke-width="3"
+      stroke-linejoin="round" paint-order="stroke fill"
+      letter-spacing="1">SPORT</text>
+  </g>
+</svg>
