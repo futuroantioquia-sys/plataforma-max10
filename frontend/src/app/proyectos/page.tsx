@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, CheckCircle, Users, ClipboardList, ChevronDown, ChevronRight, MapPin } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/app/alumnos/importar/page';
-import type { Deportista } from '@/app/alumnos/importar/page';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import type { Deportista } from '@/lib/deportistas';
 
 const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
 

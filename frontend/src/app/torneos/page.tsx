@@ -9,8 +9,8 @@ import {
   TableProperties, LayoutGrid,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DEPORTISTAS_KEY } from '@/app/alumnos/importar/page';
-import type { Deportista } from '@/app/alumnos/importar/page';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import type { Deportista } from '@/lib/deportistas';
 
 // ── Clave virtual POSICIÓN ─────────────────────────────────────
 const VPOS = '__POSICION__';

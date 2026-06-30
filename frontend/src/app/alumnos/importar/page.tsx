@@ -5,15 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Upload, CheckCircle, FileSpreadsheet, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { saveDeportistas } from '@/lib/db';
-
-export const DEPORTISTAS_KEY = 'futuro_deportistas';
-
-export interface Deportista {
-  id:        string;
-  _nombre:   string; // campo interno para mostrar en lista
-  _columnas: Record<string, string>; // TODOS los datos del Excel tal como vienen
-  foto?:     string;
-}
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import type { Deportista } from '@/lib/deportistas';
 
 function loadXLSX(): Promise<any> {
   return new Promise((resolve, reject) => {

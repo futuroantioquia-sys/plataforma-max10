@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Search, Users, Save, CheckCircle, Columns3, Upload, X, Trophy, AlertCircle } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/app/alumnos/importar/page';
-import type { Deportista } from '@/app/alumnos/importar/page';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import type { Deportista } from '@/lib/deportistas';
 
 // ── Orden de programas en la tabla ────────────────────────────
 const ORDEN_PROGRAMA = [

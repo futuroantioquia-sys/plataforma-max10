@@ -3,8 +3,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/app/alumnos/importar/page';
-import type { Deportista } from '@/app/alumnos/importar/page';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import type { Deportista } from '@/lib/deportistas';
 
 const ASISTENCIA_KEY = 'futuro_asistencia';
 

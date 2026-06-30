@@ -13,8 +13,8 @@ import {
   ArrowLeft, CheckCircle, Search, ClipboardList,
   AlertCircle, UserCheck, UserPlus, ChevronRight, Lock, Calendar,
 } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/app/alumnos/importar/page';
-import type { Deportista } from '@/app/alumnos/importar/page';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import type { Deportista } from '@/lib/deportistas';
 import { cn } from '@/lib/utils';
 
 // ── Constantes ───────────────────────────────────────────────

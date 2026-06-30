@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Star, Save, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Deportista } from '@/app/alumnos/importar/page';
-import { DEPORTISTAS_KEY } from '@/app/alumnos/importar/page';
+import type { Deportista } from '@/lib/deportistas';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
 
 const CRITERIOS_TECNICOS = [
   { key: 'tecnica',    label: 'Técnica con balón'   },

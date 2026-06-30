@@ -4,8 +4,8 @@ import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Upload, FileSpreadsheet, Play, CheckCircle, AlertTriangle, XCircle, RefreshCw, Trash2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DEPORTISTAS_KEY } from '@/app/alumnos/importar/page';
-import type { Deportista } from '@/app/alumnos/importar/page';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import type { Deportista } from '@/lib/deportistas';
 import { saveAllPagos } from '@/lib/db';
 
 // ── Constantes ────────────────────────────────────────────────

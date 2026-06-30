@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Camera } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Deportista } from '@/app/alumnos/importar/page';
-import { DEPORTISTAS_KEY } from '@/app/alumnos/importar/page';
+import type { Deportista } from '@/lib/deportistas';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
 import { getFoto, saveFoto, savePagosDeportista, getPagos } from '@/lib/db';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';

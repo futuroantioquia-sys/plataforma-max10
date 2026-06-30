@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, BookOpen, Upload } from 'lucide-react';
-import type { Deportista } from '@/app/alumnos/importar/page';
-import { DEPORTISTAS_KEY } from '@/app/alumnos/importar/page';
+import type { Deportista } from '@/lib/deportistas';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
 
 export const VC_KEY = 'futuro_vista_contable';
 
