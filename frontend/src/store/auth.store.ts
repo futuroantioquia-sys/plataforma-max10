@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { createClient } from '@/lib/supabase/client';
 
 export type Rol = 'administracion' | 'contable' | 'profesor' | 'padre' | 'deportista' | 'visitante';
@@ -24,7 +25,9 @@ interface AuthState {
   limpiarError: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
   usuario:  null,
   cargando: false,
   error:    null,
@@ -38,12 +41,18 @@ export const useAuthStore = create<AuthState>((set) => ({
       throw error;
     }
     await useAuthStore.getState().cargarPerfil();
+    if (typeof document !== 'undefined') {
+      document.cookie = 'futuro-session=1; path=/; max-age=86400; SameSite=Lax';
+    }
     set({ cargando: false });
   },
 
   logout: async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    if (typeof document !== 'undefined') {
+      document.cookie = 'futuro-session=; path=/; max-age=0';
+    }
     set({ usuario: null });
   },
 
@@ -79,4 +88,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   limpiarError: () => set({ error: null }),
-}));
+    }),
+    {
+      name: 'futuro-antioquia-auth',
+      partialize: (state) => ({ usuario: state.usuario }),
+    }
+  )
+);

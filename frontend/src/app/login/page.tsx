@@ -55,6 +55,8 @@ export default function LoginPage() {
         cargando: false,
         error:    null,
       });
+      // Establecer cookie de sesión para el middleware
+      document.cookie = 'futuro-session=1; path=/; max-age=86400; SameSite=Lax';
       router.push('/dashboard');
       return;
     }

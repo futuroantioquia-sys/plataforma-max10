@@ -260,27 +260,19 @@ function DashboardPadre() {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { usuario, cargando, cargarPerfil } = useAuthStore();
+  const { usuario, cargando } = useAuthStore();
+  const [montado, setMontado] = useState(false);
+
+  useEffect(() => { setMontado(true); }, []);
 
   useEffect(() => {
-    // Si no hay usuario, cargar demo por defecto (modo sin login)
+    if (!montado) return;
     if (!usuario && !cargando) {
-      useAuthStore.setState({
-        usuario: {
-          id:       'demo-admin',
-          email:    'admin@futuroantioquia.com',
-          nombre:   'Hernán',
-          apellido: 'Marulanda',
-          rol:      'administracion',
-          activo:   true,
-          academia: { id: '1', nombre: 'Futuro Antioquia' },
-        },
-        cargando: false,
-      });
+      router.replace('/login');
     }
-  }, []);
+  }, [usuario, cargando, router, montado]);
 
-  if (cargando || !usuario) {
+  if (!montado || cargando || !usuario) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -296,6 +288,8 @@ export default function DashboardPage() {
     contable:       <DashboardContable />,
     profesor:       <DashboardProfesor />,
     padre:          <DashboardPadre />,
+    deportista:     <DashboardPadre />,
+    visitante:      <DashboardPadre />,
   };
 
   return (
