@@ -9,8 +9,8 @@ import {
   LayoutGrid, TableProperties, ChevronDown, Download, Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Deportista } from './importar/page';
-import { DEPORTISTAS_KEY } from './importar/page';
+import type { Deportista } from '@/lib/deportistas';
+import { DEPORTISTAS_KEY } from '@/lib/deportistas';
 
 const FOTOS_PROFE_KEY = 'futuro_fotos_profes';
 
