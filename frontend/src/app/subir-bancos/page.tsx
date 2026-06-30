@@ -10,7 +10,7 @@ import { saveAllPagos } from '@/lib/db';
 
 // ── Constantes ────────────────────────────────────────────────
 const PAGOS_KEY         = 'futuro_pagos_estado';
-export const BANCOS_KEY = 'futuro_bancos_historico';
+const BANCOS_KEY = 'futuro_bancos_historico';
 
 const DETALLE_VALIDOS = [
   'MATRÍCULA','MATRICULA',

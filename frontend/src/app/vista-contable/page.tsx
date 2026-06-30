@@ -4,9 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, BookOpen, Upload } from 'lucide-react';
 import type { Deportista } from '@/lib/deportistas';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-
-export const VC_KEY = 'futuro_vista_contable';
+import { DEPORTISTAS_KEY, VC_KEY } from '@/lib/deportistas';
 
 /* ── Columnas ANTES de Código ── */
 const COLS_ANTES = [

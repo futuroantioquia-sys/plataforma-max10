@@ -8,8 +8,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Deportista } from '@/lib/deportistas';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import { VC_KEY } from '@/app/vista-contable/page';
+import { DEPORTISTAS_KEY, VC_KEY } from '@/lib/deportistas';
 
 const PAGOS_KEY = 'futuro_pagos_estado';
 

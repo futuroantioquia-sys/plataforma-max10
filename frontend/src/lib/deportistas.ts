@@ -1,6 +1,8 @@
-/** Tipos y constantes compartidas de deportistas */
+/** Tipos y constantes compartidas */
 
 export const DEPORTISTAS_KEY = 'futuro_deportistas';
+export const BANCOS_KEY      = 'futuro_bancos_historico';
+export const VC_KEY          = 'futuro_vista_contable';
 
 export interface Deportista {
   id:        string;
