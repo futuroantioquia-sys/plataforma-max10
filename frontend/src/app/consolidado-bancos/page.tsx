@@ -18,7 +18,7 @@ const ORDEN_CONCEPTO = [
 ];
 
 // ── Tipos locales ─────────────────────────────────────────────
-type Estado = 'PAGÓ' | 'ERROR';
+type Estado = 'PAGÓ' | 'PAGÓ CON 10%' | 'VERIFICAR' | 'ERROR';
 type BancoLinea = {
   destino?:     string;
   fecha?:       string;
