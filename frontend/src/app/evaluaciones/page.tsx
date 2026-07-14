@@ -15,6 +15,13 @@ const DESC_FUERZA: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Domina el uso del cuerpo (brazos y tronco) para blindar el balón. Su potencia explosiva le permite ganar la mayoría de los duelos y realizar cambios de dirección firmes.',
   'Nivel 5 (Dominante)':    'Posee una fuerza explosiva superior. Es determinante en el choque, difícil de desequilibrar y sus remates o despejes tienen una potencia que marca diferencia en el partido.',
 };
+const DESC_RESISTENCIA: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Muestra signos de fatiga prematura. Su participación en el juego disminuye drásticamente después de los primeros minutos de intensidad.',
+  'Nivel 2 (En Desarrollo)':'Completa los partidos, pero con una intensidad intermitente. Requiere periodos largos de recuperación tras realizar esfuerzos máximos (sprints).',
+  'Nivel 3 (Competente)':   'Mantiene un ritmo de juego estable durante la mayor parte del encuentro. Logra recuperarse adecuadamente entre esfuerzos y mantiene la forma técnica a pesar del cansancio.',
+  'Nivel 4 (Avanzado)':     'Posee una gran capacidad de trabajo ("box to box"). Realiza múltiples esfuerzos de alta intensidad sin que su rendimiento decaiga, manteniendo la lucidez hasta el final.',
+  'Nivel 5 (Dominante)':    'Nivel de condición física sobresaliente. Es capaz de sostener un ritmo alto de presión y despliegue durante todo el partido, recuperándose casi de inmediato tras esfuerzos explosivos.',
+};
 const DESC_VELOCIDAD: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Su respuesta ante los estímulos del juego (balón o rival) es lenta. Le cuesta arrancar con rapidez y suele llegar tarde a las jugadas divididas.',
   'Nivel 2 (En Desarrollo)':'Muestra buena velocidad en línea recta, pero le toma tiempo reaccionar cuando el balón cambia de dirección o hay una transición rápida.',
@@ -385,7 +392,8 @@ export default function ValoracionPage() {
             descripciones={DESC_VELOCIDAD} />
           <BloqueAspecto titulo="RESISTENCIA" subtitulo="Capacidad Aeróbica y Recuperación"
             nivel={data.resistenciaNivel} onNivel={v => set('resistenciaNivel', v)}
-            desc={data.resistenciaDesc}   onDesc={v => set('resistenciaDesc', v)} />
+            desc={data.resistenciaDesc}   onDesc={v => set('resistenciaDesc', v)}
+            descripciones={DESC_RESISTENCIA} />
 
           {/* TÉCNICA */}
           <tbody>
