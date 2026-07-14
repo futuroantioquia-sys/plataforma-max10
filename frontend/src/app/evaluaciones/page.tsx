@@ -78,6 +78,27 @@ const DESC_VELOCIDAD_PROC: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Decide y ejecuta de forma fluida; siempre tiene un "Plan B" si la jugada se cierra.',
   'Nivel 5 (Dominante)':    'Juega a "uno o dos toques"; su mente va más rápido que el balón. Anticipa el error del rival.',
 };
+const DESC_SUPERIORIDAD: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'No identifica ventajas numéricas; intenta la acción individual aunque tenga un compañero solo.',
+  'Nivel 2 (En Desarrollo)':'Reconoce la ventaja pero elige mal el momento del pase o la conducción.',
+  'Nivel 3 (Competente)':   'Aprovecha las situaciones de superioridad para fijar a un defensa y descargar en el compañero libre.',
+  'Nivel 4 (Avanzado)':     'Atrae marcas de forma intencional para generar espacios en otras zonas del campo.',
+  'Nivel 5 (Dominante)':    'Ejecuta con perfección táctica los doblajes y triangulaciones para romper líneas defensivas.',
+};
+const DESC_BASCULACION: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Desconoce el movimiento del bloque; se queda solo en su zona sin ayudar al compañero.',
+  'Nivel 2 (En Desarrollo)':'Sigue el balón lateralmente pero deja huecos peligrosos a su espalda o en el centro.',
+  'Nivel 3 (Competente)':   'Acompaña el movimiento del equipo hacia el lado del balón; ofrece apoyo al compañero superado.',
+  'Nivel 4 (Avanzado)':     'Domina las permutas (cambio de marca) y el escalonamiento defensivo para evitar pases filtrados.',
+  'Nivel 5 (Dominante)':    'Lee el peligro antes de que surja; dirige el bloque defensivo y corrige desajustes de otros compañeros.',
+};
+const DESC_TRANSICION: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Se queda parado tras perder el balón o tras un tiro a gol; tarda en reaccionar.',
+  'Nivel 2 (En Desarrollo)':'Reacciona al cambio de posesión pero con trote lento; no identifica su nueva tarea de inmediato.',
+  'Nivel 3 (Competente)':   'Cambia el chip rápido; si pierde el balón intenta recuperarlo o regresa a su zona defensiva.',
+  'Nivel 4 (Avanzado)':     'Identifica el momento de presión tras pérdida o repliegue organizado según la instrucción.',
+  'Nivel 5 (Dominante)':    'Velocidad mental de élite; anticipa la transición antes de que ocurra y organiza el balance del equipo.',
+};
 const DESC_AMPLITUD: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Se mantiene estático; no comprende que puede alejarse del balón para crear espacio.',
   'Nivel 2 (En Desarrollo)':'Entiende que debe ocupar bandas, pero tiende a cerrarse cuando el juego se complica.',
@@ -517,13 +538,16 @@ export default function ValoracionPage() {
             descripciones={DESC_AMPLITUD} />
           <BloqueAspecto titulo="TRANSICIONES (ATAQUE-DEFENSA)" subtitulo="Cambio de Rol Ofensivo/Defensivo"
             nivel={data.transicionNivel} onNivel={v => set('transicionNivel', v)}
-            desc={data.transicionDesc}   onDesc={v => set('transicionDesc', v)} />
+            desc={data.transicionDesc}   onDesc={v => set('transicionDesc', v)}
+            descripciones={DESC_TRANSICION} />
           <BloqueAspecto titulo="LECTURA DE SUPERIORIDAD (2vs1)" subtitulo="Situaciones de Ventaja Numérica"
             nivel={data.superioridadNivel} onNivel={v => set('superioridadNivel', v)}
-            desc={data.superioridadDesc}   onDesc={v => set('superioridadDesc', v)} />
+            desc={data.superioridadDesc}   onDesc={v => set('superioridadDesc', v)}
+            descripciones={DESC_SUPERIORIDAD} />
           <BloqueAspecto titulo="BASCULACIÓN Y COBERTURAS" subtitulo="Desplazamiento Colectivo"
             nivel={data.basculacionNivel} onNivel={v => set('basculacionNivel', v)}
-            desc={data.basculacionDesc}   onDesc={v => set('basculacionDesc', v)} />
+            desc={data.basculacionDesc}   onDesc={v => set('basculacionDesc', v)}
+            descripciones={DESC_BASCULACION} />
 
           {/* ASPECTOS FORMATIVOS */}
           <tbody>
