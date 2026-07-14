@@ -59,9 +59,10 @@ type Valoracion = {
   velocidadNivel: string; velocidadDesc: string;
   resistenciaNivel: string; resistenciaDesc: string;
   controlNivel: string; controlDesc: string;
+  conductaNivel: string; conductaDesc: string;
   paseNivel: string; paseDesc: string;
   remataNivel: string; remataDesc: string;
-  conductaNivel: string; conductaDesc: string;
+  proteccionNivel: string; proteccionDesc: string;
   posicionNivel: string; posicionDesc: string;
   visionNivel: string; visionDesc: string;
   defensaNivel: string; defensaDesc: string;
@@ -76,8 +77,9 @@ const INICIAL: Valoracion = {
   programa: '', proyecto: '', perfil: '', posicion: '', foto: '',
   fuerzaNivel: '', fuerzaDesc: '', velocidadNivel: '', velocidadDesc: '',
   resistenciaNivel: '', resistenciaDesc: '', controlNivel: '', controlDesc: '',
-  paseNivel: '', paseDesc: '', remataNivel: '', remataDesc: '',
-  conductaNivel: '', conductaDesc: '', posicionNivel: '', posicionDesc: '',
+  conductaNivel: '', conductaDesc: '', paseNivel: '', paseDesc: '',
+  remataNivel: '', remataDesc: '', proteccionNivel: '', proteccionDesc: '',
+  posicionNivel: '', posicionDesc: '',
   visionNivel: '', visionDesc: '', defensaNivel: '', defensaDesc: '',
   actitudNivel: '', actitudDesc: '', disciplinaNivel: '', disciplinaDesc: '',
   trabajoNivel: '', trabajoDesc: '', observaciones: '',
@@ -422,9 +424,15 @@ export default function ValoracionPage() {
             nivel={data.conductaNivel} onNivel={v => set('conductaNivel', v)}
             desc={data.conductaDesc}   onDesc={v => set('conductaDesc', v)}
             descripciones={DESC_CONDUCCION} />
+          <BloqueAspecto titulo="CONTROL ORIENTADO" subtitulo="Primer Toque y Salida"
+            nivel={data.paseNivel} onNivel={v => set('paseNivel', v)}
+            desc={data.paseDesc}   onDesc={v => set('paseDesc', v)} />
           <BloqueAspecto titulo="REMATE A PORTERÍA" subtitulo="Potencia y Definición"
             nivel={data.remataNivel} onNivel={v => set('remataNivel', v)}
             desc={data.remataDesc}   onDesc={v => set('remataDesc', v)} />
+          <BloqueAspecto titulo="PROTECCIÓN DEL BALÓN" subtitulo="Resguardo y Dominio"
+            nivel={data.proteccionNivel} onNivel={v => set('proteccionNivel', v)}
+            desc={data.proteccionDesc}   onDesc={v => set('proteccionDesc', v)} />
 
           {/* TÁCTICA */}
           <tbody>
