@@ -15,6 +15,13 @@ const DESC_FUERZA: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Domina el uso del cuerpo (brazos y tronco) para blindar el balón. Su potencia explosiva le permite ganar la mayoría de los duelos y realizar cambios de dirección firmes.',
   'Nivel 5 (Dominante)':    'Posee una fuerza explosiva superior. Es determinante en el choque, difícil de desequilibrar y sus remates o despejes tienen una potencia que marca diferencia en el partido.',
 };
+const DESC_CONTROL_PASE: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Dificultad para amortiguar el balón; pases con poca dirección.',
+  'Nivel 2 (En Desarrollo)':'Controla con varios toques; empieza a orientar el pase hacia un compañero.',
+  'Nivel 3 (Competente)':   'Control efectivo en estático; pases precisos a corta y media distancia.',
+  'Nivel 4 (Avanzado)':     'Control orientado (primer toque) para ganar ventaja; pases con intención táctica.',
+  'Nivel 5 (Dominante)':    'Ejecución perfecta bajo presión y a máxima velocidad; precisión en pases largos.',
+};
 const DESC_RESISTENCIA: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Muestra signos de fatiga prematura. Su participación en el juego disminuye drásticamente después de los primeros minutos de intensidad.',
   'Nivel 2 (En Desarrollo)':'Completa los partidos, pero con una intensidad intermitente. Requiere periodos largos de recuperación tras realizar esfuerzos máximos (sprints).',
@@ -400,12 +407,10 @@ export default function ValoracionPage() {
             <tr>{celda(C.naranja, '#fff', 'TÉCNICA (RELACIONAMIENTO CON EL BALÓN)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Evalúa la ejecución de los fundamentos básicos del juego</td></tr>
           </tbody>
-          <BloqueAspecto titulo="CONTROL Y DOMINIO DEL BALÓN" subtitulo="Recepción y Manejo"
+          <BloqueAspecto titulo="CONTROL Y PASE" subtitulo="Recepción, Manejo y Precisión"
             nivel={data.controlNivel} onNivel={v => set('controlNivel', v)}
-            desc={data.controlDesc}   onDesc={v => set('controlDesc', v)} />
-          <BloqueAspecto titulo="PASE" subtitulo="Precisión y Visión de Juego"
-            nivel={data.paseNivel} onNivel={v => set('paseNivel', v)}
-            desc={data.paseDesc}   onDesc={v => set('paseDesc', v)} />
+            desc={data.controlDesc}   onDesc={v => set('controlDesc', v)}
+            descripciones={DESC_CONTROL_PASE} />
           <BloqueAspecto titulo="REMATE A PORTERÍA" subtitulo="Potencia y Definición"
             nivel={data.remataNivel} onNivel={v => set('remataNivel', v)}
             desc={data.remataDesc}   onDesc={v => set('remataDesc', v)} />
