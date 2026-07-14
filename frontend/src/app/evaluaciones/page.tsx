@@ -78,6 +78,13 @@ const DESC_VELOCIDAD_PROC: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Decide y ejecuta de forma fluida; siempre tiene un "Plan B" si la jugada se cierra.',
   'Nivel 5 (Dominante)':    'Juega a "uno o dos toques"; su mente va más rápido que el balón. Anticipa el error del rival.',
 };
+const DESC_LECTURA_ALTURAS: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Corre siempre hacia el balón (atracción magnética); se amontona con sus compañeros.',
+  'Nivel 2 (En Desarrollo)':'Identifica cuándo está solo, pero le cuesta ver dónde están los espacios libres para atacar.',
+  'Nivel 3 (Competente)':   'Sabe cuándo dar amplitud (ir a la banda) o profundidad (picar al espacio) según la jugada.',
+  'Nivel 4 (Avanzado)':     'Reconoce los momentos para acelerar el juego o pausarlo para reorganizar al equipo.',
+  'Nivel 5 (Dominante)':    'Maestro de la "pausa"; atrae rivales para liberar compañeros y detecta debilidades en el sistema rival.',
+};
 const POSICIONES = ['', 'PORTERO', 'CENTRAL', 'LATERAL DERECHO', 'LATERAL IZQUIERDO', 'EXTREMO DERECHO', 'EXTREMO IZQUIERDO', 'VOLANTE', 'MEDIOCAMPISTA', 'DELANTERO CENTRO'];
 const PERFILES = ['', 'DERECHO', 'IZQUIERDO', 'AMBIDIESTRO'];
 
@@ -495,7 +502,8 @@ export default function ValoracionPage() {
             descripciones={DESC_VELOCIDAD_PROC} />
           <BloqueAspecto titulo="LECTURA DE ALTURAS Y ESPACIOS" subtitulo="Análisis del Terreno"
             nivel={data.defensaNivel} onNivel={v => set('defensaNivel', v)}
-            desc={data.defensaDesc}   onDesc={v => set('defensaDesc', v)} />
+            desc={data.defensaDesc}   onDesc={v => set('defensaDesc', v)}
+            descripciones={DESC_LECTURA_ALTURAS} />
           <BloqueAspecto titulo="AMPLITUD Y PROFUNDIDAD" subtitulo="Uso del Espacio"
             nivel={data.amplitudNivel} onNivel={v => set('amplitudNivel', v)}
             desc={data.amplitudDesc}   onDesc={v => set('amplitudDesc', v)} />
