@@ -160,10 +160,10 @@ function AsistenciaInner() {
         if (p !== '__SIN_PROYECTO__') set.add(p);
       });
     const todos = Array.from(set).sort();
-    // Si es profe: solo sus proyectos asignados (si no tiene ninguno, lista vacía)
-    if (esProfe) return proyectosProfe.length > 0
-      ? todos.filter(p => proyectosProfe.includes(p))
-      : [];
+    // Si es profe: solo sus proyectos asignados.
+    // Si no tiene proyectos configurados aún, mostrar todos (fallback para no quedar bloqueado)
+    if (esProfe && proyectosProfe.length > 0)
+      return todos.filter(p => proyectosProfe.includes(p));
     return todos;
   }, [deportistas, programa, esProfe, proyectosProfe]);
 

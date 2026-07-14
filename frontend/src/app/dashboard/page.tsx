@@ -34,22 +34,22 @@ function AccesoCard({
     <button
       onClick={() => router.push(href)}
       className={cn(
-        'group bg-white rounded-2xl border border-gray-100 p-4 text-left',
+        'group bg-white rounded-xl sm:rounded-2xl border border-gray-100 p-3 sm:p-4 text-left',
         'transition-all duration-200',
         'hover:-translate-y-1 hover:shadow-lg',
         c.border,
       )}
     >
       <div className={cn(
-        'w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-all duration-200',
+        'w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-3 transition-all duration-200',
         c.icon,
       )}>
-        <Icono className="w-5 h-5" />
+        <Icono className="w-4 h-4 sm:w-5 sm:h-5" />
       </div>
-      <p className={cn('font-bold text-gray-800 text-sm leading-tight transition-colors', c.text)}>
+      <p className={cn('font-bold text-gray-800 text-xs sm:text-sm leading-tight transition-colors', c.text)}>
         {titulo}
       </p>
-      <p className="text-[11px] text-gray-400 mt-1 leading-tight">{descripcion}</p>
+      <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 sm:mt-1 leading-tight">{descripcion}</p>
     </button>
   );
 }
@@ -89,7 +89,7 @@ function CategoriaSection({
           {titulo}
         </h2>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-2 sm:gap-3">
         {children}
       </div>
     </div>
@@ -182,7 +182,7 @@ function LinkInscripcionCard() {
 // ── DASHBOARD ADMINISTRADOR ──────────────────────────────────────
 function DashboardAdmin() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8">
       {/* Categoría: Deportistas */}
       <CategoriaSection emoji="🏃" titulo="Deportistas" color="verde" delay={100}>
         <AccesoCard titulo="Consolidado Afiliados"   icono={LayoutList}    href="/general"      descripcion="Todos los deportistas"       color="verde" />
@@ -234,19 +234,79 @@ function DashboardAdmin() {
 
 // ── DASHBOARD PROFESOR ───────────────────────────────────────────
 function DashboardProfesor() {
+  const router = useRouter();
+  const [grupos, setGrupos] = useState<string[]>([]);
+  const [nombreProfe, setNombreProfe] = useState('');
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('futuro-profe-proyectos');
+      if (raw) setGrupos(JSON.parse(raw));
+      const nombre = localStorage.getItem('futuro-profe-nombre');
+      if (nombre) setNombreProfe(JSON.parse(nombre));
+    } catch {}
+  }, []);
+
   const accesos = [
     { titulo: 'Pasar Asistencia', icono: Clipboard,     href: '/asistencia',   descripcion: 'Registrar asistencia hoy',   color: 'verde'  },
     { titulo: 'Evaluar Alumnos',  icono: Star,          href: '/evaluaciones', descripcion: 'Técnico y formativo',        color: 'dorado' },
     { titulo: 'Mis Alumnos',     icono: Users,          href: '/alumnos',      descripcion: 'Fichas y seguimiento',       color: 'azul'   },
-    { titulo: 'Chat con Padres', icono: MessageCircle,  href: '/mensajes',     descripcion: 'Comunicación directa',       color: 'purple' },
-    { titulo: 'Calendario',      icono: Calendar,       href: '/calendario',   descripcion: 'Mis entrenamientos',         color: 'teal'   },
+    { titulo: 'Sesiones',        icono: Dumbbell,       href: '/sesiones',     descripcion: 'Planes de entrenamiento',    color: 'purple' },
+    { titulo: 'Postpartido',     icono: Trophy,         href: '/postpartido',  descripcion: 'Resultado y desempeño',      color: 'teal'   },
   ];
+
   return (
     <div className="space-y-6">
-      <div className="animate-fade-up">
-        <div className="flex items-center gap-2 mb-3 pl-3 border-l-4 border-l-green-500">
+      {/* Mis Grupos */}
+      {grupos.length > 0 && (
+        <div className="animate-fade-up">
+          <div className="flex items-center gap-2 mb-3 pl-3 border-l-4 border-l-green-500">
+            <span className="text-base">📋</span>
+            <h2 className="font-black text-sm uppercase tracking-widest text-green-700">Mis Grupos</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {grupos.map((g) => (
+              <button
+                key={g}
+                onClick={() => router.push(`/asistencia?proyecto=${encodeURIComponent(g)}`)}
+                className="group bg-white rounded-2xl border border-gray-100 p-4 text-left
+                           hover:border-green-300 hover:-translate-y-1 hover:shadow-lg
+                           transition-all duration-200"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-green-100 text-green-700
+                                  group-hover:bg-[#16a34a] group-hover:text-white
+                                  flex items-center justify-center transition-all duration-200 flex-shrink-0">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-800 text-sm leading-tight truncate
+                                  group-hover:text-[#16a34a] transition-colors">{g}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Toca para pasar asistencia</p>
+                  </div>
+                  <Clipboard className="w-4 h-4 text-gray-300 group-hover:text-green-500 ml-auto flex-shrink-0 transition-colors" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {grupos.length === 0 && (
+        <div className="animate-fade-up bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+          <span className="text-2xl">⚠️</span>
+          <div>
+            <p className="font-bold text-amber-800 text-sm">Sin grupos asignados</p>
+            <p className="text-amber-600 text-xs mt-0.5">Pide al administrador que te asigne tus grupos en la sección de Usuarios.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Accesos rápidos */}
+      <div className="animate-fade-up" style={{ animationDelay: '100ms' }}>
+        <div className="flex items-center gap-2 mb-3 pl-3 border-l-4 border-l-blue-500">
           <span className="text-base">⚡</span>
-          <h2 className="font-black text-sm uppercase tracking-widest text-green-700">Mi Panel</h2>
+          <h2 className="font-black text-sm uppercase tracking-widest text-blue-700">Accesos Rápidos</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {accesos.map((a) => <AccesoCard key={a.titulo} {...a} />)}
@@ -313,25 +373,25 @@ function DashboardHeader({ usuario }: { usuario: any }) {
         </svg>
       </div>
 
-      <div className="relative flex items-center justify-between px-4 py-3 max-w-7xl mx-auto">
+      <div className="relative flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 max-w-7xl mx-auto">
         {/* Logo + Marca */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center border border-white/30">
-            <span className="text-white font-black text-sm">FA</span>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center border border-white/30 flex-shrink-0">
+            <span className="text-white font-black text-xs sm:text-sm">FA</span>
           </div>
-          <div className="hidden sm:block">
-            <p className="text-white font-black text-sm tracking-wide leading-none">FUTURO ANTIOQUIA</p>
-            <p className="text-white/50 text-[10px] font-semibold tracking-widest uppercase leading-none mt-0.5">Max 10 Sport</p>
+          <div>
+            <p className="text-white font-black text-xs sm:text-sm tracking-wide leading-none">FUTURO ANTIOQUIA</p>
+            <p className="text-white/50 text-[9px] sm:text-[10px] font-semibold tracking-widest uppercase leading-none mt-0.5">Max 10 Sport</p>
           </div>
         </div>
 
-        {/* Eslogan centro */}
+        {/* Eslogan centro — solo md+ */}
         <div className="hidden md:block text-center">
           <p className="text-white/80 text-xs font-bold tracking-widest uppercase">Conecta · Gestiona · Gana</p>
         </div>
 
         {/* Usuario + Salir */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div className="hidden sm:block text-right">
             <p className="text-white font-bold text-sm leading-none">
               {usuario.nombre} {usuario.apellido}
@@ -340,14 +400,19 @@ function DashboardHeader({ usuario }: { usuario: any }) {
               {usuario.rol?.replace('_', ' ')}
             </p>
           </div>
-          <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center border border-white/20">
+          {/* En móvil: mostrar nombre abreviado */}
+          <div className="sm:hidden text-right">
+            <p className="text-white font-bold text-xs leading-none">{usuario.nombre}</p>
+            <p className="text-white/50 text-[9px] capitalize leading-none mt-0.5">{usuario.rol?.replace('_', ' ')}</p>
+          </div>
+          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white/20 rounded-lg flex items-center justify-center border border-white/20">
             <span className="text-white font-black text-xs">
               {usuario.nombre?.[0] ?? 'U'}
             </span>
           </div>
           <button
             onClick={cerrarSesion}
-            className="flex items-center gap-1.5 text-white/70 hover:text-white hover:bg-white/15 transition-all text-xs font-semibold px-3 py-2 rounded-lg"
+            className="flex items-center gap-1 sm:gap-1.5 text-white/70 hover:text-white hover:bg-white/15 transition-all text-xs font-semibold px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Salir</span>
@@ -363,21 +428,21 @@ function WelcomeBar({ usuario }: { usuario: any }) {
   const hora = new Date().getHours();
   const saludo = hora < 12 ? 'Buenos días' : hora < 18 ? 'Buenas tardes' : 'Buenas noches';
   const fecha = new Date().toLocaleDateString('es-CO', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    weekday: 'long', month: 'long', day: 'numeric',
   });
 
   return (
-    <div className="mb-7 animate-fade-up">
-      <div className="flex items-end justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900">
+    <div className="mb-5 animate-fade-up">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-black text-gray-900 truncate">
             {saludo}, <span className="text-[#16a34a]">{usuario.nombre}</span> 👋
           </h1>
-          <p className="text-gray-400 text-sm mt-1 capitalize">{fecha}</p>
+          <p className="text-gray-400 text-xs sm:text-sm mt-0.5 capitalize">{fecha}</p>
         </div>
-        <div className="flex items-center gap-2 bg-white border border-gray-100 rounded-xl px-4 py-2 shadow-sm">
-          <Zap className="w-4 h-4 text-amber-500" />
-          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Plataforma activa</span>
+        <div className="hidden sm:flex items-center gap-2 bg-white border border-gray-100 rounded-xl px-3 py-1.5 shadow-sm flex-shrink-0">
+          <Zap className="w-3.5 h-3.5 text-amber-500" />
+          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Activa</span>
         </div>
       </div>
     </div>
@@ -412,7 +477,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-[#f0f7ff]">
       <DashboardHeader usuario={usuario} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-7">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-7">
         <WelcomeBar usuario={usuario} />
         {vistaPorRol[usuario.rol] ?? <DashboardAdmin />}
       </main>
