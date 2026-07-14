@@ -87,6 +87,10 @@ type Valoracion = {
   posicionNivel: string; posicionDesc: string;
   visionNivel: string; visionDesc: string;
   defensaNivel: string; defensaDesc: string;
+  amplitudNivel: string; amplitudDesc: string;
+  transicionNivel: string; transicionDesc: string;
+  superioridadNivel: string; superioridadDesc: string;
+  basculacionNivel: string; basculacionDesc: string;
   actitudNivel: string; actitudDesc: string;
   disciplinaNivel: string; disciplinaDesc: string;
   trabajoNivel: string; trabajoDesc: string;
@@ -102,6 +106,10 @@ const INICIAL: Valoracion = {
   remataNivel: '', remataDesc: '', proteccionNivel: '', proteccionDesc: '',
   posicionNivel: '', posicionDesc: '',
   visionNivel: '', visionDesc: '', defensaNivel: '', defensaDesc: '',
+  amplitudNivel: '', amplitudDesc: '',
+  transicionNivel: '', transicionDesc: '',
+  superioridadNivel: '', superioridadDesc: '',
+  basculacionNivel: '', basculacionDesc: '',
   actitudNivel: '', actitudDesc: '', disciplinaNivel: '', disciplinaDesc: '',
   trabajoNivel: '', trabajoDesc: '', observaciones: '',
 };
@@ -463,15 +471,27 @@ export default function ValoracionPage() {
             <tr>{celda(C.naranja, '#fff', 'TÁCTICA', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Comprensión del juego y toma de decisiones</td></tr>
           </tbody>
-          <BloqueAspecto titulo="POSICIONAMIENTO" subtitulo="Ubicación en el Campo"
+          <BloqueAspecto titulo="UBICACIÓN ESPACIAL" subtitulo="Posicionamiento y Orientación"
             nivel={data.posicionNivel} onNivel={v => set('posicionNivel', v)}
             desc={data.posicionDesc}   onDesc={v => set('posicionDesc', v)} />
-          <BloqueAspecto titulo="VISIÓN DE JUEGO" subtitulo="Lectura y Anticipación"
+          <BloqueAspecto titulo="VELOCIDAD DE PROCESAMIENTO" subtitulo="Toma de Decisiones Rápida"
             nivel={data.visionNivel} onNivel={v => set('visionNivel', v)}
             desc={data.visionDesc}   onDesc={v => set('visionDesc', v)} />
-          <BloqueAspecto titulo="DEFENSA" subtitulo="Recuperación y Marcaje"
+          <BloqueAspecto titulo="LECTURA DE ALTURAS Y ESPACIOS" subtitulo="Análisis del Terreno"
             nivel={data.defensaNivel} onNivel={v => set('defensaNivel', v)}
             desc={data.defensaDesc}   onDesc={v => set('defensaDesc', v)} />
+          <BloqueAspecto titulo="AMPLITUD Y PROFUNDIDAD" subtitulo="Uso del Espacio"
+            nivel={data.amplitudNivel} onNivel={v => set('amplitudNivel', v)}
+            desc={data.amplitudDesc}   onDesc={v => set('amplitudDesc', v)} />
+          <BloqueAspecto titulo="TRANSICIONES (ATAQUE-DEFENSA)" subtitulo="Cambio de Rol Ofensivo/Defensivo"
+            nivel={data.transicionNivel} onNivel={v => set('transicionNivel', v)}
+            desc={data.transicionDesc}   onDesc={v => set('transicionDesc', v)} />
+          <BloqueAspecto titulo="LECTURA DE SUPERIORIDAD (2vs1)" subtitulo="Situaciones de Ventaja Numérica"
+            nivel={data.superioridadNivel} onNivel={v => set('superioridadNivel', v)}
+            desc={data.superioridadDesc}   onDesc={v => set('superioridadDesc', v)} />
+          <BloqueAspecto titulo="BASCULACIÓN Y COBERTURAS" subtitulo="Desplazamiento Colectivo"
+            nivel={data.basculacionNivel} onNivel={v => set('basculacionNivel', v)}
+            desc={data.basculacionDesc}   onDesc={v => set('basculacionDesc', v)} />
 
           {/* ASPECTOS FORMATIVOS */}
           <tbody>
