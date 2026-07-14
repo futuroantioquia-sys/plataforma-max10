@@ -119,30 +119,6 @@ export default function PagosPage() {
 
       <main className="max-w-4xl mx-auto px-4 py-5 space-y-4">
 
-        {/* ACCIONES */}
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => router.push('/pagos/importar-valores')}
-            className="bg-[#16a34a] hover:bg-[#064e1e] text-white rounded-2xl p-4 flex items-center gap-3 transition shadow-sm">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Upload className="w-5 h-5 text-white" />
-            </div>
-            <div className="text-left">
-              <p className="font-black text-sm">Subir Valores Cargados</p>
-              <p className="text-white/60 text-[11px]">Cargar tarifas desde Excel</p>
-            </div>
-          </button>
-          <button onClick={() => router.push('/pagos/importar-pagos')}
-            className="bg-[#16a34a] hover:bg-[#15803d] text-white rounded-2xl p-4 flex items-center gap-3 transition shadow-sm">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-              <FileSpreadsheet className="w-5 h-5 text-white" />
-            </div>
-            <div className="text-left">
-              <p className="font-black text-sm">Subir Pagos Efectuados</p>
-              <p className="text-white/60 text-[11px]">Registrar pagos desde Excel</p>
-            </div>
-          </button>
-        </div>
-
         {/* TÍTULO SECCIÓN */}
         <div className="flex items-center gap-2 pt-1">
           <DollarSign className="w-5 h-5 text-[#16a34a]" />
