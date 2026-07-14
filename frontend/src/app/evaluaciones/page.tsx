@@ -64,6 +64,20 @@ const DESC_VELOCIDAD: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Posee un "arranque" potente. Su velocidad de reacción le permite anticiparse a los rivales con frecuencia y destaca por su rapidez en distancias cortas y largas.',
   'Nivel 5 (Dominante)':    'Es un jugador veloz tanto física como mentalmente. Su capacidad de aceleración y desaceleración es élite, permitiéndole desbordar o recuperar posiciones de forma excepcional.',
 };
+const DESC_UBICACION: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Tiende a seguir el balón sin mantener una posición (efecto "enjambre").',
+  'Nivel 2 (En Desarrollo)':'Reconoce su posición general (defensa/ataque) pero se desorienta fácil.',
+  'Nivel 3 (Competente)':   'Mantiene su zona de juego y entiende cuándo subir o bajar.',
+  'Nivel 4 (Avanzado)':     'Lee el juego; ocupa espacios libres para ofrecerse como opción de pase.',
+  'Nivel 5 (Dominante)':    'Dicta el ritmo del juego; corrige la posición de sus compañeros y anticipa jugadas.',
+};
+const DESC_VELOCIDAD_PROC: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Se queda congelado con el balón; decide después de que la jugada ya pasó.',
+  'Nivel 2 (En Desarrollo)':'Elige la opción correcta pero tarda demasiado en ejecutarla, permitiendo la reacción rival.',
+  'Nivel 3 (Competente)':   'Identifica la mejor opción (pasar o conducir) en situaciones estándar de juego.',
+  'Nivel 4 (Avanzado)':     'Decide y ejecuta de forma fluida; siempre tiene un "Plan B" si la jugada se cierra.',
+  'Nivel 5 (Dominante)':    'Juega a "uno o dos toques"; su mente va más rápido que el balón. Anticipa el error del rival.',
+};
 const POSICIONES = ['', 'PORTERO', 'CENTRAL', 'LATERAL DERECHO', 'LATERAL IZQUIERDO', 'EXTREMO DERECHO', 'EXTREMO IZQUIERDO', 'VOLANTE', 'MEDIOCAMPISTA', 'DELANTERO CENTRO'];
 const PERFILES = ['', 'DERECHO', 'IZQUIERDO', 'AMBIDIESTRO'];
 
@@ -473,10 +487,12 @@ export default function ValoracionPage() {
           </tbody>
           <BloqueAspecto titulo="UBICACIÓN ESPACIAL" subtitulo="Posicionamiento y Orientación"
             nivel={data.posicionNivel} onNivel={v => set('posicionNivel', v)}
-            desc={data.posicionDesc}   onDesc={v => set('posicionDesc', v)} />
+            desc={data.posicionDesc}   onDesc={v => set('posicionDesc', v)}
+            descripciones={DESC_UBICACION} />
           <BloqueAspecto titulo="VELOCIDAD DE PROCESAMIENTO" subtitulo="Toma de Decisiones Rápida"
             nivel={data.visionNivel} onNivel={v => set('visionNivel', v)}
-            desc={data.visionDesc}   onDesc={v => set('visionDesc', v)} />
+            desc={data.visionDesc}   onDesc={v => set('visionDesc', v)}
+            descripciones={DESC_VELOCIDAD_PROC} />
           <BloqueAspecto titulo="LECTURA DE ALTURAS Y ESPACIOS" subtitulo="Análisis del Terreno"
             nivel={data.defensaNivel} onNivel={v => set('defensaNivel', v)}
             desc={data.defensaDesc}   onDesc={v => set('defensaDesc', v)} />
