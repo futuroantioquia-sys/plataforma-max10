@@ -568,8 +568,8 @@ export default function EstadoCuentaPage() {
                 {[
                   { label: 'FECHA',        w: '16%' },
                   { label: 'DESCRIPCIÓN',  w: '22%' },
-                  { label: 'DETALLE',      w: '20%' },
                   { label: 'V. PAGADO',    w: '20%' },
+                  { label: 'DETALLE',      w: '20%' },
                   { label: 'ESTADO PAGO',  w: '22%' },
                 ].map(({ label, w }) => (
                   <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '10px 8px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', width: w }}>
@@ -583,7 +583,7 @@ export default function EstadoCuentaPage() {
                 const isPaid = row.estado === 'PAGÓ';
                 const isProx = row.estado === 'PROX';
                 const rowBg   = isProx ? '#f9fafb' : ROW;
-                const detBg   = isProx ? '#9ca3af' : isPaid ? G : '#dc2626';
+                const detBg   = isProx ? '#9ca3af' : isPaid ? '#374151' : '#dc2626';
                 return (
                   <tr key={idx} style={{ opacity: isProx ? 0.6 : 1 }}>
 
@@ -607,21 +607,21 @@ export default function EstadoCuentaPage() {
                       />
                     </td>
 
-                    {/* DETALLE */}
-                    <td style={{ background: detBg, color: 'white', border: BW, padding: '8px 10px', textAlign: 'center', fontWeight: 900, fontSize: 11, whiteSpace: 'nowrap' }}>
-                      {row.detalle}
-                    </td>
-
-                    {/* V. PAGADO */}
-                    <td style={{ background: isPaid ? G : rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                    {/* V. PAGADO — gris claro, número con $ y puntos */}
+                    <td style={{ background: '#e5e7eb', border: BW, padding: '4px 6px', textAlign: 'center' }}>
                       <input
-                        value={row.vPagado}
+                        value={ensurePeso(row.vPagado)}
                         readOnly={!isPaid}
                         onChange={e => { if (!isPaid) return; const u = pagos.map((r,i) => i===idx ? {...r, vPagado: e.target.value} : r); savePagos(u); }}
                         className={cn('w-full text-center font-bold text-xs bg-transparent focus:outline-none px-1 py-1',
-                          isPaid ? 'text-white' : 'text-gray-400 cursor-default')}
+                          isPaid ? 'text-[#374151]' : 'text-[#9ca3af] cursor-default')}
                         placeholder="—"
                       />
+                    </td>
+
+                    {/* DETALLE — gris oscuro en vez de verde cuando pagó */}
+                    <td style={{ background: detBg, color: 'white', border: BW, padding: '8px 10px', textAlign: 'center', fontWeight: 900, fontSize: 11, whiteSpace: 'nowrap' }}>
+                      {row.detalle}
                     </td>
 
                     {/* ESTADO PAGO */}

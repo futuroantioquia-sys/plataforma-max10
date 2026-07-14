@@ -16,10 +16,8 @@ const C = {
 };
 
 type Valoracion = {
-  fecha: string; codigo: string; nombre: string; edad: string;
-  proyecto: string; perfil: string; posicion: string;
-  torneos: string; partJugados: string; tarjAmarillas: string; partTitular: string;
-  tarjRojas: string; minutosJugados: string; goles: string; calificacion: string;
+  fecha: string; codigo: string; nombre: string; fechaNac: string;
+  programa: string; proyecto: string; perfil: string; posicion: string;
   foto: string;
   fuerzaNivel: string; fuerzaDesc: string;
   velocidadNivel: string; velocidadDesc: string;
@@ -38,10 +36,8 @@ type Valoracion = {
 };
 
 const INICIAL: Valoracion = {
-  fecha: new Date().toLocaleDateString('es-CO'), codigo: '', nombre: '', edad: '',
-  proyecto: '', perfil: '', posicion: '',
-  torneos: '', partJugados: '', tarjAmarillas: '', partTitular: '',
-  tarjRojas: '', minutosJugados: '', goles: '', calificacion: '', foto: '',
+  fecha: new Date().toLocaleDateString('es-CO'), codigo: '', nombre: '', fechaNac: '',
+  programa: '', proyecto: '', perfil: '', posicion: '', foto: '',
   fuerzaNivel: '', fuerzaDesc: '', velocidadNivel: '', velocidadDesc: '',
   resistenciaNivel: '', resistenciaDesc: '', controlNivel: '', controlDesc: '',
   paseNivel: '', paseDesc: '', remataNivel: '', remataDesc: '',
@@ -94,6 +90,32 @@ function buscarCampo(dep: Deportista, regex: RegExp): string {
   return key ? cols[key].trim() : '';
 }
 
+const MESES_NOMBRE: Record<string, string> = {
+  '1':'Enero','2':'Febrero','3':'Marzo','4':'Abril','5':'Mayo','6':'Junio',
+  '7':'Julio','8':'Agosto','9':'Septiembre','10':'Octubre','11':'Noviembre','12':'Diciembre',
+  'enero':'Enero','febrero':'Febrero','marzo':'Marzo','abril':'Abril','mayo':'Mayo','junio':'Junio',
+  'julio':'Julio','agosto':'Agosto','septiembre':'Septiembre','octubre':'Octubre',
+  'noviembre':'Noviembre','diciembre':'Diciembre',
+};
+
+function construirFechaNac(dep: Deportista): string {
+  const cols = dep._columnas ?? {};
+  const entries = Object.entries(cols);
+  // Buscar campo fecha_nac directo
+  const keyFecha = entries.find(([k]) => /fecha.*nac|nac.*fecha|f\.?nac/i.test(k.trim()))?.[0];
+  if (keyFecha && cols[keyFecha].trim()) return cols[keyFecha].trim();
+  // Construir desde dia/mes/año
+  const keyAnio = entries.find(([k]) => /^a[ñn]o$/i.test(k.trim()))?.[0];
+  const keyMes  = entries.find(([k]) => /^mes$/i.test(k.trim()))?.[0];
+  const keyDia  = entries.find(([k]) => /^d[ií]a$/i.test(k.trim()))?.[0];
+  if (!keyAnio && !keyMes && !keyDia) return '';
+  const anio   = keyAnio ? cols[keyAnio].trim() : '';
+  const mesRaw = keyMes  ? cols[keyMes].trim()  : '';
+  const dia    = keyDia  ? cols[keyDia].trim()   : '';
+  const mes    = MESES_NOMBRE[mesRaw] ?? MESES_NOMBRE[mesRaw.toLowerCase()] ?? mesRaw;
+  return [dia && `${dia}`, mes, anio].filter(Boolean).join(' de ');
+}
+
 /* ════════════════════════════════════════════════════════════════ */
 export default function ValoracionPage() {
   const router  = useRouter();
@@ -132,10 +154,19 @@ export default function ValoracionPage() {
           )
         );
         if (dep) {
-          const proyecto = buscarCampo(dep, /^proyecto/i)
-            || buscarCampo(dep, /^program/i)
-            || buscarCampo(dep, /sede|categ|sub/i);
-          extra = { nombre: dep._nombre ?? '', proyecto };
+          const proyecto  = buscarCampo(dep, /^proy/i);
+          const programa  = buscarCampo(dep, /^program/i)
+            || buscarCampo(dep, /^categ/i)
+            || buscarCampo(dep, /^sub/i);
+          const posicion  = buscarCampo(dep, /^posici[oó]n/i) || buscarCampo(dep, /^pos$/i);
+          const fechaNac  = construirFechaNac(dep);
+          extra = {
+            nombre: dep._nombre ?? '',
+            proyecto,
+            programa,
+            fechaNac,
+            ...(posicion ? { posicion } : {}),
+          };
           setEncontrado(dep._nombre ?? '');
           setTimeout(() => setEncontrado(''), 3000);
         }
@@ -228,7 +259,7 @@ export default function ValoracionPage() {
               <button key={ev.id} onClick={() => cargarDeHistorial(ev)}
                 style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12 }}>
                 <span>{ev.fecha}</span>
-                <span style={{ color: '#6b7280' }}>Calificación: {ev.calificacion || '—'}</span>
+                <span style={{ color: '#6b7280' }}>{ev.proyecto || ev.programa || ev.perfil || '—'}</span>
               </button>
             ))}
           </div>
@@ -294,16 +325,22 @@ export default function ValoracionPage() {
           {/* DATOS DEL DEPORTISTA */}
           <tbody>
             <tr>{celda(C.negro, '#fff', 'DATOS DEL DEPORTISTA', { colSpan: 3, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
-            {[
-              ['NOMBRE', 'nombre', false],
-              ['EDAD', 'edad', false],
-              ['PROYECTO', 'proyecto', false],
-            ].map(([label, campo]) => (
-              <tr key={campo as string}>
-                {celda(C.negro, '#fff', label as string)}
-                <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp(campo as keyof Valoracion)}</td>
-              </tr>
-            ))}
+            <tr>
+              {celda(C.negro, '#fff', 'NOMBRE')}
+              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('nombre')}</td>
+            </tr>
+            <tr>
+              {celda(C.negro, '#fff', 'FECHA DE NACIMIENTO')}
+              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('fechaNac', 'Auto-cargado del perfil')}</td>
+            </tr>
+            <tr>
+              {celda(C.negro, '#fff', 'PROGRAMA')}
+              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('programa', 'Auto-cargado del perfil')}</td>
+            </tr>
+            <tr>
+              {celda(C.negro, '#fff', 'PROYECTO')}
+              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('proyecto', 'Auto-cargado del perfil')}</td>
+            </tr>
             <tr>
               {celda(C.negro, '#fff', 'PERFIL')}
               <td colSpan={2} style={{ background: C.grisClaro, padding: '2px 8px' }}>{sel('perfil', PERFILES)}</td>
@@ -312,24 +349,6 @@ export default function ValoracionPage() {
               {celda(C.negro, '#fff', 'POSICIÓN')}
               <td colSpan={2} style={{ background: C.grisClaro, padding: '2px 8px' }}>{sel('posicion', POSICIONES)}</td>
             </tr>
-          </tbody>
-
-          {/* DATOS ESTADÍSTICOS */}
-          <tbody>
-            <tr>{celda(C.negro, '#fff', 'DATOS ESTADÍSTICOS', { colSpan: 4, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
-            {([
-              ['# DE TORNEOS', 'torneos', 'PARTIDOS JUGADOS', 'partJugados'],
-              ['# TARJETAS AMARILLAS', 'tarjAmarillas', 'PARTIDOS COMO TITULAR', 'partTitular'],
-              ['# TARJETAS ROJAS', 'tarjRojas', 'MINUTOS JUGADOS', 'minutosJugados'],
-              ['#GOLES', 'goles', 'CALIFICACIÓN PROMEDIO', 'calificacion'],
-            ] as [string, keyof Valoracion, string, keyof Valoracion][]).map(([l1, c1, l2, c2]) => (
-              <tr key={c1}>
-                <td style={{ background: C.negro, color: '#fff', fontWeight: 700, fontSize: 10, padding: '3px 8px', width: '25%' }}>{l1}</td>
-                <td style={{ background: C.grisClaro, padding: '3px 8px', width: '25%' }}>{inp(c1, '', 'number')}</td>
-                <td style={{ background: C.negro, color: '#fff', fontWeight: 700, fontSize: 10, padding: '3px 8px', width: '25%' }}>{l2}</td>
-                <td style={{ background: C.grisClaro, padding: '3px 8px', width: '25%' }}>{inp(c2, '', 'number')}</td>
-              </tr>
-            ))}
           </tbody>
 
           {/* ASPECTOS CONDICIONALES */}
