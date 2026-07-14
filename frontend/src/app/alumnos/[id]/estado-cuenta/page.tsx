@@ -429,100 +429,82 @@ export default function EstadoCuentaPage() {
       <main className="max-w-2xl mx-auto px-3 py-4 space-y-4">
 
         {/* ── TARJETA HERO ── */}
-        <div className="rounded-2xl bg-gradient-to-br from-[#064e1e] via-[#052a10] to-black shadow-lg overflow-hidden">
-          <div className="flex items-stretch">
+        <div className="rounded-2xl bg-gradient-to-br from-[#0a2e12] via-[#052a10] to-black p-4 shadow-xl">
+          <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={subirFoto}/>
 
-            {/* FOTO — ocupa toda la altura incluyendo botones */}
-            <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={subirFoto}/>
-            <button
-              onClick={() => fotoInputRef.current?.click()}
-              className="w-32 flex-shrink-0 relative group bg-white/10">
-              {foto
-                ? <img src={foto} alt="" className="w-full h-full object-cover object-top"/>
-                : <div className="w-full h-full flex flex-col items-center justify-center gap-2 min-h-[160px]">
-                    <span className="text-white font-black text-4xl">{initials}</span>
-                    <Camera className="w-5 h-5 text-white/40"/>
-                  </div>
-              }
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                <Camera className="w-8 h-8 text-white"/>
+          {/* Fila superior: foto 3×4 + info + código */}
+          <div className="flex items-stretch gap-3">
+
+            {/* Foto 3×4 */}
+            <button onClick={() => fotoInputRef.current?.click()}
+              className="relative flex-shrink-0 group">
+              <div className="w-[72px] h-[96px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex flex-col items-center justify-center">
+                {foto
+                  ? <img src={foto} alt="" className="w-full h-full object-cover object-top"/>
+                  : <>
+                      <span className="text-white font-black text-3xl select-none">{initials}</span>
+                      <Camera className="w-4 h-4 text-white/40 mt-1"/>
+                    </>
+                }
+                <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                  <Camera className="w-6 h-6 text-white"/>
+                </div>
               </div>
             </button>
 
-            {/* Columna derecha: info + botones */}
-            <div className="flex-1 min-w-0 flex flex-col">
+            {/* Nombre + filas de datos */}
+            <div className="flex-1 min-w-0 space-y-[5px]">
+              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide mb-2">
+                {nombre}
+              </h1>
 
-              {/* Info */}
-              <div className="flex-1 p-3 space-y-1.5">
-
-                {/* Nombre + código */}
-                <div className="flex items-start justify-between gap-2">
-                  <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide flex-1 min-w-0">
-                    {nombre}
-                  </h1>
-                  {codVal && (
-                    <div className="flex-shrink-0 text-center">
-                      <p className="text-white/60 text-[8px] font-black tracking-widest uppercase mb-0.5">CÓDIGO</p>
-                      <div className="bg-[#16a34a] text-white font-black text-lg px-2.5 py-1 rounded-xl min-w-[48px] text-center shadow-sm">
-                        {codVal}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* PROGRAMA + PROYECTO misma línea */}
-                {(catVal || proyecto) && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {catVal && (
-                      <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                        {catVal.toUpperCase()}
-                      </span>
-                    )}
-                    {proyecto && (
-                      <span className="bg-white/15 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                        PROYECTO {proyecto.toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* FECHA DE AFILIACIÓN */}
-                {fechaAfil && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-white/50 text-[9px] font-black tracking-widest uppercase">FECHA DE AFILIACIÓN</span>
-                    <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                      {formatFecha(fechaAfil)}
-                    </span>
-                  </div>
-                )}
-
-                {/* MENSUALIDAD */}
-                <div className="text-center pt-0.5">
-                  <p className="text-white/50 text-[9px] font-black tracking-widest uppercase">MENSUALIDAD</p>
-                  <p className="text-[#4ade80] font-black text-2xl leading-tight">{tarifa}</p>
-                </div>
-              </div>
-
-              {/* Botones — pegados al fondo de la columna derecha */}
-              <div className="grid grid-cols-4 gap-1 p-2 pt-0">
-                {[
-                  { label: 'ASIST.',   href: `/alumnos/${id}/asistencia` },
-                  { label: 'PAGOS',    href: null },
-                  { label: 'INFORMES', href: '/evaluaciones' },
-                  { label: 'MENSAJES', href: '/mensajes' },
-                ].map(({ label, href }) => (
-                  <button key={label}
-                    onClick={() => href && router.push(href)}
-                    className={cn(
-                      'transition rounded-lg py-1 text-[10px] font-black tracking-wide',
-                      !href ? 'bg-[#16a34a] text-white' : 'bg-white hover:bg-gray-100 active:bg-gray-200 text-black'
-                    )}>
+              {[
+                { label: 'PROGRAMA',    val: catVal },
+                { label: 'PROYECTO',    val: proyecto },
+                { label: 'FECHA AFIL.', val: fechaAfil ? formatFecha(fechaAfil) : '' },
+                { label: 'MENSUALIDAD', val: tarifa },
+              ].filter(r => r.val).map(({ label, val }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[90px] text-center flex-shrink-0 tracking-wide">
                     {label}
-                  </button>
-                ))}
-              </div>
-
+                  </span>
+                  <span className="text-white text-[11px] font-semibold truncate">
+                    {String(val).toUpperCase()}
+                  </span>
+                </div>
+              ))}
             </div>
+
+            {/* CÓDIGO */}
+            {codVal && (
+              <div className="flex-shrink-0 text-center self-start">
+                <p className="text-white/60 text-[9px] font-black tracking-widest uppercase mb-1">CÓDIGO</p>
+                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
+                  {codVal}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Botones */}
+          <div className="grid grid-cols-4 gap-2 mt-4">
+            {[
+              { label: 'PAGOS',    href: null },
+              { label: 'ASIST.',   href: `/alumnos/${id}/asistencia` },
+              { label: 'INFORMES', href: '/evaluaciones' },
+              { label: 'MENSAJES', href: '/mensajes' },
+            ].map(({ label, href }) => (
+              <button key={label}
+                onClick={() => href && router.push(href)}
+                className={cn(
+                  'transition rounded-xl py-2.5 text-[10px] font-black tracking-wide',
+                  !href
+                    ? 'bg-[#16a34a] text-white'
+                    : 'bg-white/10 hover:bg-white/20 border border-white/20 text-white'
+                )}>
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 

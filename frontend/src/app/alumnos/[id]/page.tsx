@@ -196,9 +196,10 @@ export default function PerfilDeportista() {
 
   /* Campos para el encabezado */
   const getC = (rx: RegExp) => { const k = Object.keys(dep._columnas).find(k => rx.test(k)); return k ? dep._columnas[k] : ''; };
-  const programaVal  = getC(/^program/i);
-  const proyectoVal  = getC(/^proy/i);
-  const codigoVal    = getC(/^c[oó]d/i);
+  const programaVal    = getC(/^program/i);
+  const proyectoVal    = getC(/^proy/i);
+  const codigoVal      = getC(/^c[oó]d/i);
+  const mensualidadVal = getC(/mensual|tarifa|cuota|valor/i);
   const fechaAfilVal = (() => {
     const raw = getC(/fecha.*afil|afil.*fecha/i);
     if (!raw) return '';
@@ -255,65 +256,55 @@ export default function PerfilDeportista() {
       <main className="max-w-xl mx-auto px-4 sm:px-6 py-5 space-y-4">
 
         {/* ── TARJETA HERO ── */}
-        <div className="rounded-2xl bg-gradient-to-br from-[#064e1e] via-[#052a10] to-black p-4 shadow-lg">
+        <div className="rounded-2xl bg-gradient-to-br from-[#0a2e12] via-[#052a10] to-black p-4 shadow-xl">
 
-          {/* Fila superior: avatar + info + código */}
-          <div className="flex items-start gap-3">
+          {/* Fila superior: foto + info + código */}
+          <div className="flex items-stretch gap-3">
 
-            {/* Avatar */}
+            {/* Foto 3×4 */}
             <div className="relative flex-shrink-0">
-              <div className="w-20 h-20 rounded-2xl ring-4 ring-white/30 overflow-hidden bg-white/20 flex items-center justify-center">
+              <div className="w-[72px] h-[96px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex items-center justify-center">
                 {foto
                   ? <img src={foto} alt="" className="w-full h-full object-cover"/>
-                  : <span className="text-white font-black text-3xl">{initials}</span>
+                  : <span className="text-white font-black text-3xl select-none">{initials}</span>
                 }
               </div>
               <button onClick={() => inputFotoRef.current?.click()}
-                className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-white/90 hover:bg-white rounded-full px-2 py-0.5 flex items-center gap-1 shadow transition">
-                <Camera className="w-3 h-3 text-gray-600"/>
+                className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white/90 hover:bg-white rounded-full p-1 shadow-md transition">
+                <Camera className="w-3 h-3 text-gray-700"/>
               </button>
               <input ref={inputFotoRef} type="file" accept="image/*" className="hidden" onChange={subirFoto}/>
             </div>
 
-            {/* Nombre + etiquetas */}
-            <div className="flex-1 min-w-0 space-y-1.5">
-              <h1 className="text-white font-black text-lg leading-tight uppercase tracking-wide">
+            {/* Nombre + filas de datos */}
+            <div className="flex-1 min-w-0 space-y-[5px]">
+              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide mb-2">
                 {dep._nombre}
               </h1>
 
-              {programaVal && (
-                <div className="flex items-center gap-2">
-                  <span className="text-white/60 text-[10px] font-black tracking-widest uppercase w-24 flex-shrink-0">PROGRAMA</span>
-                  <span className="bg-[#16a34a] text-white text-[11px] font-black px-3 py-0.5 rounded-full">
-                    {programaVal.toUpperCase()}
+              {/* Fila: etiqueta verde + valor blanco */}
+              {[
+                { label: 'PROGRAMA',    val: programaVal },
+                { label: 'PROYECTO',    val: proyectoVal },
+                { label: 'FECHA AFIL.', val: fechaAfilVal },
+                { label: 'MENSUALIDAD', val: mensualidadVal },
+              ].filter(r => r.val).map(({ label, val }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[90px] text-center flex-shrink-0 tracking-wide">
+                    {label}
+                  </span>
+                  <span className="text-white text-[11px] font-semibold truncate">
+                    {val!.toUpperCase()}
                   </span>
                 </div>
-              )}
-
-              {proyectoVal && (
-                <div className="flex items-center gap-2">
-                  <span className="text-white/60 text-[10px] font-black tracking-widest uppercase w-24 flex-shrink-0">PROYECTO</span>
-                  <span className="bg-[#16a34a] text-white text-[11px] font-black px-3 py-0.5 rounded-full">
-                    {proyectoVal.toUpperCase()}
-                  </span>
-                </div>
-              )}
-
-              {fechaAfilVal && (
-                <div className="flex items-center gap-2">
-                  <span className="text-white/60 text-[10px] font-black tracking-widest uppercase w-24 flex-shrink-0 leading-tight">FECHA DE AFILIACIÓN</span>
-                  <span className="bg-[#16a34a] text-white text-[11px] font-black px-3 py-0.5 rounded-full">
-                    {fechaAfilVal}
-                  </span>
-                </div>
-              )}
+              ))}
             </div>
 
             {/* CÓDIGO — esquina superior derecha */}
             {codigoVal && (
-              <div className="flex-shrink-0 text-center ml-1">
-                <p className="text-white/70 text-[9px] font-black tracking-widest uppercase mb-1">CÓDIGO</p>
-                <div className="bg-[#16a34a] text-white font-black text-xl px-3 py-1.5 rounded-xl min-w-[64px] text-center shadow-sm">
+              <div className="flex-shrink-0 text-center self-start">
+                <p className="text-white/60 text-[9px] font-black tracking-widest uppercase mb-1">CÓDIGO</p>
+                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
                   {codigoVal}
                 </div>
               </div>
@@ -323,13 +314,13 @@ export default function PerfilDeportista() {
           {/* Botones de acceso */}
           <div className="grid grid-cols-4 gap-2 mt-4">
             {[
-              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia` },
               { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta` },
+              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia` },
               { label: 'INFORMES',   href: '/evaluaciones' },
               { label: 'MENSAJES',   href: '/mensajes' },
             ].map(({ label, href }) => (
               <button key={label} onClick={() => router.push(href)}
-                className="bg-white hover:bg-gray-100 active:bg-gray-200 transition rounded-xl py-2.5 text-black font-black text-[11px] tracking-wide">
+                className="bg-white/10 hover:bg-white/20 border border-white/20 active:bg-white/30 transition rounded-xl py-2.5 text-white font-black text-[10px] tracking-wide">
                 {label}
               </button>
             ))}

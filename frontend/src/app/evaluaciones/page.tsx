@@ -125,6 +125,7 @@ type Valoracion = {
   fecha: string; codigo: string; nombre: string; fechaNac: string;
   programa: string; proyecto: string; perfil: string; posicion: string;
   foto: string;
+  numeroInforme: string;
   fuerzaNivel: string; fuerzaDesc: string;
   velocidadNivel: string; velocidadDesc: string;
   resistenciaNivel: string; resistenciaDesc: string;
@@ -148,7 +149,7 @@ type Valoracion = {
 
 const INICIAL: Valoracion = {
   fecha: new Date().toLocaleDateString('es-CO'), codigo: '', nombre: '', fechaNac: '',
-  programa: '', proyecto: '', perfil: '', posicion: '', foto: '',
+  programa: '', proyecto: '', perfil: '', posicion: '', foto: '', numeroInforme: '',
   fuerzaNivel: '', fuerzaDesc: '', velocidadNivel: '', velocidadDesc: '',
   resistenciaNivel: '', resistenciaDesc: '', controlNivel: '', controlDesc: '',
   conductaNivel: '', conductaDesc: '', paseNivel: '', paseDesc: '',
@@ -391,84 +392,104 @@ export default function ValoracionPage() {
       <div style={{ maxWidth: 780, margin: '16px auto', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', fontFamily: 'Arial, sans-serif' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
 
-          {/* ENCABEZADO */}
+          {/* ── ENCABEZADO REDISEÑADO ── */}
           <tbody>
             <tr>
-              {/* Logo */}
-              <td style={{ width: 110, padding: 10, textAlign: 'center', verticalAlign: 'middle' }}>
-                <div style={{ width: 88, height: 88, borderRadius: 8, background: '#e8f5e9', border: '2px solid #2d8a48', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                  <span style={{ fontSize: 26, fontWeight: 900, color: C.verde }}>FA</span>
+              <td colSpan={3} style={{ padding: 0 }}>
+                {/* Título superior */}
+                <div style={{ background: '#111', color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 13, letterSpacing: 3, padding: '7px 16px', textTransform: 'uppercase' }}>
+                  Valoración Cuantitativa del Deportista
                 </div>
-              </td>
-              {/* Título */}
-              <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '8px 4px' }}>
-                <div style={{ fontSize: 11, color: '#777', letterSpacing: 3, fontWeight: 600, textTransform: 'uppercase' }}>Seguimiento Deportivo</div>
-                <div style={{ fontSize: 34, fontWeight: 900, color: C.negro, lineHeight: 1 }}>Futuro</div>
-                <div style={{ fontSize: 34, fontWeight: 900, color: C.verde, lineHeight: 1 }}>Antioquia</div>
-              </td>
-              {/* Foto */}
-              <td style={{ width: 110, padding: 10, textAlign: 'center', verticalAlign: 'middle' }}>
-                <input ref={fotoRef} type="file" accept="image/*" onChange={onFoto} style={{ display: 'none' }} />
-                <div onClick={() => fotoRef.current?.click()} className="print:hidden"
-                  style={{ width: 90, height: 110, borderRadius: 8, border: '2px dashed #2d8a48', background: data.foto ? 'transparent' : '#e8f5e9', overflow: 'hidden', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                  {data.foto
-                    ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <div style={{ textAlign: 'center', color: C.verde, fontSize: 10 }}><Camera size={22} /><div style={{ marginTop: 3 }}>Foto</div></div>
-                  }
-                </div>
-                {data.foto && <img src={data.foto} alt="foto" className="hidden print:block" style={{ width: 90, height: 110, objectFit: 'cover', borderRadius: 8, margin: '0 auto' }} />}
-              </td>
-            </tr>
-          </tbody>
 
-          {/* SEGUIMIENTO DEPORTIVO */}
-          <tbody>
-            <tr>{celda(C.negro, '#fff', 'SEGUIMIENTO DEPORTIVO', { colSpan: 3, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
-            <tr>
-              {celda(C.negro, '#fff', 'FECHA', { width: '16%' })}
-              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('fecha')}</td>
-            </tr>
-            <tr>
-              {celda(C.negro, '#fff', 'CODIGO')}
-              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {inp('codigo', 'Ej: B635')}
-                  {encontrado && (
-                    <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#dcfce7', border: '1px solid #86efac', borderRadius: 6, padding: '2px 8px', fontSize: 10, color: '#16a34a', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      <CheckCircle size={11} /> {encontrado}
+                {/* Tarjeta hero verde oscura */}
+                <div style={{ background: 'linear-gradient(135deg, #0a2e12 0%, #052a10 55%, #000 100%)', padding: 12, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+
+                    {/* Foto 3×4 */}
+                    <div style={{ flexShrink: 0 }}>
+                      <input ref={fotoRef} type="file" accept="image/*" onChange={onFoto} style={{ display: 'none' }} />
+                      <div onClick={() => fotoRef.current?.click()}
+                        style={{ width: 68, height: 90, borderRadius: 10, overflow: 'hidden', background: '#0d3d1a', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                        {data.foto
+                          ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+                          : <>
+                              <span style={{ color: '#fff', fontWeight: 900, fontSize: 22, lineHeight: 1 }}>
+                                {data.nombre.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'FA'}
+                              </span>
+                              <Camera size={13} color="rgba(255,255,255,0.4)" style={{ marginTop: 4 }} />
+                            </>
+                        }
+                      </div>
                     </div>
-                  )}
+
+                    {/* Nombre + filas de datos */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Nombre */}
+                      <div style={{ color: '#fff', fontWeight: 900, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, lineHeight: 1.2 }}>
+                        <input value={data.nombre} onChange={e => set('nombre', e.target.value)}
+                          placeholder="NOMBRE DEL DEPORTISTA"
+                          style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 900, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Arial, sans-serif', padding: 0 }} />
+                      </div>
+                      {/* Código (pantalla) + encontrado */}
+                      <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                        <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 5px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>CÓDIGO</span>
+                        <input value={data.codigo} onChange={e => set('codigo', e.target.value)}
+                          placeholder="Ej: 24228"
+                          style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 700, fontSize: 10, fontFamily: 'Arial, sans-serif', width: 70, padding: 0 }} />
+                        {encontrado && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#dcfce7', borderRadius: 5, padding: '2px 6px', fontSize: 9, color: '#16a34a', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            <CheckCircle size={10} /> {encontrado}
+                          </div>
+                        )}
+                      </div>
+                      {/* Filas de info */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {([
+                          { label: 'PROGRAMA',    field: 'programa',      placeholder: 'Auto-cargado del perfil', editable: true  },
+                          { label: 'PROYECTO',    field: 'proyecto',      placeholder: 'Auto-cargado del perfil', editable: true  },
+                          { label: 'FECHA INF.',  field: 'fecha',         placeholder: 'dd/mm/aaaa',             editable: true  },
+                          { label: '# INFORME',   field: 'numeroInforme', placeholder: '01',                     editable: true  },
+                        ] as { label: string; field: keyof Valoracion; placeholder: string; editable: boolean }[]).map(({ label, field, placeholder }) => (
+                          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 5px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>
+                              {label}
+                            </span>
+                            <input value={data[field]} onChange={e => set(field, e.target.value)}
+                              placeholder={placeholder}
+                              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 600, fontSize: 10, fontFamily: 'Arial, sans-serif', flex: 1, padding: 0 }} />
+                          </div>
+                        ))}
+                        {/* POSICIÓN y PERFIL con selects */}
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+                          {([
+                            { label: 'POSICIÓN', field: 'posicion' as keyof Valoracion, opts: POSICIONES },
+                            { label: 'PERFIL',   field: 'perfil'   as keyof Valoracion, opts: PERFILES   },
+                          ]).map(({ label, field, opts }) => (
+                            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 5px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>
+                                {label}
+                              </span>
+                              <select value={data[field]} onChange={e => set(field, e.target.value)}
+                                style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 600, fontSize: 10, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                                {opts.map(o => <option key={o} value={o} style={{ color: '#000', background: '#fff' }}>{o || '— Seleccionar —'}</option>)}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* CÓDIGO badge (para imprimir) */}
+                    <div style={{ flexShrink: 0, textAlign: 'center', alignSelf: 'flex-start' }}>
+                      <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 8, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CÓDIGO</div>
+                      <div style={{ background: '#16a34a', color: '#fff', fontWeight: 900, fontSize: 17, padding: '8px 10px', borderRadius: 10, minWidth: 55, textAlign: 'center', lineHeight: 1 }}>
+                        {data.codigo || '—'}
+                      </div>
+                    </div>
+
+                  </div>
                 </div>
               </td>
-            </tr>
-          </tbody>
-
-          {/* DATOS DEL DEPORTISTA */}
-          <tbody>
-            <tr>{celda(C.negro, '#fff', 'DATOS DEL DEPORTISTA', { colSpan: 3, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
-            <tr>
-              {celda(C.negro, '#fff', 'NOMBRE')}
-              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('nombre')}</td>
-            </tr>
-            <tr>
-              {celda(C.negro, '#fff', 'FECHA DE NACIMIENTO')}
-              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('fechaNac', 'Auto-cargado del perfil')}</td>
-            </tr>
-            <tr>
-              {celda(C.negro, '#fff', 'PROGRAMA')}
-              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('programa', 'Auto-cargado del perfil')}</td>
-            </tr>
-            <tr>
-              {celda(C.negro, '#fff', 'PROYECTO')}
-              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('proyecto', 'Auto-cargado del perfil')}</td>
-            </tr>
-            <tr>
-              {celda(C.negro, '#fff', 'PERFIL')}
-              <td colSpan={2} style={{ background: C.grisClaro, padding: '2px 8px' }}>{sel('perfil', PERFILES)}</td>
-            </tr>
-            <tr>
-              {celda(C.negro, '#fff', 'POSICIÓN')}
-              <td colSpan={2} style={{ background: C.grisClaro, padding: '2px 8px' }}>{sel('posicion', POSICIONES)}</td>
             </tr>
           </tbody>
 
