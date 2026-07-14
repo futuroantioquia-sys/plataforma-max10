@@ -15,6 +15,20 @@ const DESC_FUERZA: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Domina el uso del cuerpo (brazos y tronco) para blindar el balón. Su potencia explosiva le permite ganar la mayoría de los duelos y realizar cambios de dirección firmes.',
   'Nivel 5 (Dominante)':    'Posee una fuerza explosiva superior. Es determinante en el choque, difícil de desequilibrar y sus remates o despejes tienen una potencia que marca diferencia en el partido.',
 };
+const DESC_PROTECCION: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Pierde el balón fácilmente ante el contacto físico; no usa su cuerpo como barrera.',
+  'Nivel 2 (En Desarrollo)':'Intenta interponer el cuerpo, pero pierde el equilibrio ante cargas del rival.',
+  'Nivel 3 (Competente)':   'Utiliza los brazos y la cadera para mantener la posesión mientras busca una descarga.',
+  'Nivel 4 (Avanzado)':     'Domina el uso del cuerpo para esconder el balón y girar sobre la presión del oponente.',
+  'Nivel 5 (Dominante)':    'Protege el balón con éxito ante múltiples rivales, provocando faltas o manteniendo la posesión bajo estrés máximo.',
+};
+const DESC_REMATE: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Contacto impreciso con el balón; le cuesta dar dirección o potencia. Generalmente golpea con la punta o sin coordinar la carrera.',
+  'Nivel 2 (En Desarrollo)':'Logra impactar con el empeine o borde interno, pero el tiro suele ir al centro o fuera. Necesita mucho tiempo y espacio para preparar el cuerpo.',
+  'Nivel 3 (Competente)':   'Capaz de dirigir el remate hacia los costados en situaciones de poca presión. Empieza a diferenciar superficies de contacto según la distancia.',
+  'Nivel 4 (Avanzado)':     'Ejecuta con potencia y colocación incluso en carrera. Ajusta el cuerpo rápidamente para rematar balones que vienen de diferentes ángulos.',
+  'Nivel 5 (Dominante)':    'Define con ambas piernas y bajo máxima presión defensiva. Domina el remate de primera intención y utiliza recursos variados (volea, cabeza, colocación sutil).',
+};
 const DESC_CONTROL_ORIENTADO: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'El balón se le escapa tras el primer toque; necesita varios contactos para dominarlo.',
   'Nivel 2 (En Desarrollo)':'Detiene el balón, pero queda estático. Requiere un segundo toque para empezar a moverse.',
@@ -437,10 +451,12 @@ export default function ValoracionPage() {
             descripciones={DESC_CONTROL_ORIENTADO} />
           <BloqueAspecto titulo="REMATE A PORTERÍA" subtitulo="Potencia y Definición"
             nivel={data.remataNivel} onNivel={v => set('remataNivel', v)}
-            desc={data.remataDesc}   onDesc={v => set('remataDesc', v)} />
+            desc={data.remataDesc}   onDesc={v => set('remataDesc', v)}
+            descripciones={DESC_REMATE} />
           <BloqueAspecto titulo="PROTECCIÓN DEL BALÓN" subtitulo="Resguardo y Dominio"
             nivel={data.proteccionNivel} onNivel={v => set('proteccionNivel', v)}
-            desc={data.proteccionDesc}   onDesc={v => set('proteccionDesc', v)} />
+            desc={data.proteccionDesc}   onDesc={v => set('proteccionDesc', v)}
+            descripciones={DESC_PROTECCION} />
 
           {/* TÁCTICA */}
           <tbody>
