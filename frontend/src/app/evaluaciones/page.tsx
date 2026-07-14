@@ -6,7 +6,15 @@ import { Printer, Save, RefreshCw, Camera, CheckCircle, History } from 'lucide-r
 import { getDeportistas, getEvaluaciones, saveEvaluacion } from '@/lib/db';
 import type { Deportista, Evaluacion } from '@/lib/db';
 
-const NIVELES = ['', 'Nivel 1 (Iniciación)', 'Nivel 2 (En Desarrollo)', 'Nivel 3 (Competente)', 'Nivel 4 (Destacado)'];
+const NIVELES = ['', 'Nivel 1 (Iniciación)', 'Nivel 2 (En Desarrollo)', 'Nivel 3 (Competente)', 'Nivel 4 (Avanzado)', 'Nivel 5 (Dominante)'];
+
+const DESC_FUERZA: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Presenta dificultades para mantener el equilibrio en contactos físicos. Su potencia de golpeo es limitada y suele perder la posición fácilmente en los duelos 1vs1.',
+  'Nivel 2 (En Desarrollo)':'Muestra intención de utilizar su cuerpo para proteger el balón, pero carece de la estabilidad necesaria para sostener la carga del rival de forma efectiva.',
+  'Nivel 3 (Competente)':   'Utiliza su fuerza de manera adecuada para disputar balones. Posee una potencia de remate y salto acorde a su edad, logrando ganar duelos físicos de intensidad media.',
+  'Nivel 4 (Avanzado)':     'Domina el uso del cuerpo (brazos y tronco) para blindar el balón. Su potencia explosiva le permite ganar la mayoría de los duelos y realizar cambios de dirección firmes.',
+  'Nivel 5 (Dominante)':    'Posee una fuerza explosiva superior. Es determinante en el choque, difícil de desequilibrar y sus remates o despejes tienen una potencia que marca diferencia en el partido.',
+};
 const POSICIONES = ['', 'PORTERO', 'CENTRAL', 'LATERAL DERECHO', 'LATERAL IZQUIERDO', 'EXTREMO DERECHO', 'EXTREMO IZQUIERDO', 'VOLANTE', 'MEDIOCAMPISTA', 'DELANTERO CENTRO'];
 const PERFILES = ['', 'DERECHO', 'IZQUIERDO', 'AMBIDIESTRO'];
 
@@ -52,8 +60,9 @@ interface BloqueProps {
   titulo: string; subtitulo: string;
   nivel: string; onNivel: (v: string) => void;
   desc: string; onDesc: (v: string) => void;
+  descripciones?: Record<string, string>;
 }
-function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc }: BloqueProps) {
+function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descripciones }: BloqueProps) {
   return (
     <tbody>
       <tr>
@@ -66,7 +75,11 @@ function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc }: Bloq
           ({subtitulo})
         </td>
         <td colSpan={2} style={{ background: C.verde, color: '#fff', padding: '2px 8px' }}>
-          <select value={nivel} onChange={e => onNivel(e.target.value)}
+          <select value={nivel} onChange={e => {
+            const v = e.target.value;
+            onNivel(v);
+            if (descripciones && v && descripciones[v]) onDesc(descripciones[v]);
+          }}
             style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
             {NIVELES.map(o => <option key={o} value={o} style={{ color: '#000', background: '#fff' }}>{o || '— Seleccionar —'}</option>)}
           </select>
@@ -357,7 +370,8 @@ export default function ValoracionPage() {
           </tbody>
           <BloqueAspecto titulo="FUERZA" subtitulo="Potencia y Duelo"
             nivel={data.fuerzaNivel} onNivel={v => set('fuerzaNivel', v)}
-            desc={data.fuerzaDesc}   onDesc={v => set('fuerzaDesc', v)} />
+            desc={data.fuerzaDesc}   onDesc={v => set('fuerzaDesc', v)}
+            descripciones={DESC_FUERZA} />
           <BloqueAspecto titulo="VELOCIDAD" subtitulo="Reacción y Desplazamiento"
             nivel={data.velocidadNivel} onNivel={v => set('velocidadNivel', v)}
             desc={data.velocidadDesc}   onDesc={v => set('velocidadDesc', v)} />
