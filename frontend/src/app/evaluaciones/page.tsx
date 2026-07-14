@@ -78,6 +78,13 @@ const DESC_VELOCIDAD_PROC: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Decide y ejecuta de forma fluida; siempre tiene un "Plan B" si la jugada se cierra.',
   'Nivel 5 (Dominante)':    'Juega a "uno o dos toques"; su mente va más rápido que el balón. Anticipa el error del rival.',
 };
+const DESC_AMPLITUD: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Se mantiene estático; no comprende que puede alejarse del balón para crear espacio.',
+  'Nivel 2 (En Desarrollo)':'Entiende que debe ocupar bandas, pero tiende a cerrarse cuando el juego se complica.',
+  'Nivel 3 (Competente)':   'Se posiciona correctamente en ataque para "estirar" la defensa rival y ofrecer líneas de pase.',
+  'Nivel 4 (Avanzado)':     'Sincroniza sus movimientos con los compañeros; sabe cuándo picar al vacío o cuándo dar apoyo.',
+  'Nivel 5 (Dominante)':    'Domina los conceptos de tercer hombre y desmarques de ruptura; manipula la estructura rival con su posición.',
+};
 const DESC_LECTURA_ALTURAS: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Corre siempre hacia el balón (atracción magnética); se amontona con sus compañeros.',
   'Nivel 2 (En Desarrollo)':'Identifica cuándo está solo, pero le cuesta ver dónde están los espacios libres para atacar.',
@@ -506,7 +513,8 @@ export default function ValoracionPage() {
             descripciones={DESC_LECTURA_ALTURAS} />
           <BloqueAspecto titulo="AMPLITUD Y PROFUNDIDAD" subtitulo="Uso del Espacio"
             nivel={data.amplitudNivel} onNivel={v => set('amplitudNivel', v)}
-            desc={data.amplitudDesc}   onDesc={v => set('amplitudDesc', v)} />
+            desc={data.amplitudDesc}   onDesc={v => set('amplitudDesc', v)}
+            descripciones={DESC_AMPLITUD} />
           <BloqueAspecto titulo="TRANSICIONES (ATAQUE-DEFENSA)" subtitulo="Cambio de Rol Ofensivo/Defensivo"
             nivel={data.transicionNivel} onNivel={v => set('transicionNivel', v)}
             desc={data.transicionDesc}   onDesc={v => set('transicionDesc', v)} />
