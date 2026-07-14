@@ -3,8 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Users, ChevronRight, CheckCircle, Clock } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import type { Deportista } from '@/lib/deportistas';
+import type { Deportista } from '@/lib/db';
 import { getDeportistas, getPagos } from '@/lib/db';
 
 const PAGOS_KEY = 'futuro_pagos_estado';
@@ -59,15 +58,6 @@ export default function PagosProyectoPage() {
   const [busqueda, setBusqueda] = useState('');
 
   useEffect(() => {
-    // Cargar inmediato desde localStorage
-    try {
-      const deps: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
-      const pagos = JSON.parse(localStorage.getItem(PAGOS_KEY) ?? '{}');
-      setLista(deps);
-      setAllPagos(pagos);
-    } catch {}
-
-    // Actualizar desde Supabase en background
     getDeportistas().then(deps => { if (deps.length) setLista(deps); }).catch(() => {});
     getPagos().then(pagos => { if (Object.keys(pagos).length) setAllPagos(pagos); }).catch(() => {});
 

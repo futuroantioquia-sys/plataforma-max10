@@ -9,8 +9,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle, UserPlus, AlertCircle, ChevronRight, Search } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import type { Deportista } from '@/lib/deportistas';
+import { getDeportistas, saveDeportistas } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
 import { cn } from '@/lib/utils';
 
 // Helpers
@@ -65,13 +65,11 @@ export default function AsignacionPage() {
   const [error,       setError]       = useState('');
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DEPORTISTAS_KEY);
-      const lista: Deportista[] = raw ? JSON.parse(raw) : [];
+    getDeportistas().then(lista => {
       setTodos(lista);
       setPendientes(lista.filter(esPendiente));
       setProgramas(getProgramasExistentes(lista));
-    } catch {}
+    });
   }, []);
 
   function seleccionar(dep: Deportista) {
@@ -93,8 +91,7 @@ export default function AsignacionPage() {
 
     setGuardando(true); setError('');
     try {
-      const raw = localStorage.getItem(DEPORTISTAS_KEY);
-      const lista: Deportista[] = raw ? JSON.parse(raw) : [];
+      const lista: Deportista[] = todos;
 
       const actualizada = lista.map(d => {
         if (d.id !== selected.id) return d;
@@ -118,7 +115,7 @@ export default function AsignacionPage() {
         };
       });
 
-      localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(actualizada));
+      saveDeportistas(actualizada);
       setTodos(actualizada);
       setPendientes(actualizada.filter(esPendiente));
       setProgramas(getProgramasExistentes(actualizada));

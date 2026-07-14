@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, CheckCircle, Users, ClipboardList, ChevronDown, ChevronRight, MapPin } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import type { Deportista } from '@/lib/deportistas';
+import { getDeportistas, saveDeportistas } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
 
 const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
 
@@ -49,10 +49,9 @@ export default function GestionProyectosPage() {
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    getDeportistas().then(lista => { if (lista.length) setDeportistas(lista); });
     try {
-      const raw     = localStorage.getItem(DEPORTISTAS_KEY);
       const rawMeta = localStorage.getItem(PROYECTOS_META_KEY);
-      if (raw)     setDeportistas(JSON.parse(raw));
       if (rawMeta) setMeta(JSON.parse(rawMeta));
     } catch {}
   }, []);
@@ -165,7 +164,7 @@ export default function GestionProyectosPage() {
       }
     });
 
-    localStorage.setItem(DEPORTISTAS_KEY,    JSON.stringify(updated));
+    saveDeportistas(updated).catch(console.error);
     localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(newMeta));
     setDeportistas(updated);
     setMeta(newMeta);

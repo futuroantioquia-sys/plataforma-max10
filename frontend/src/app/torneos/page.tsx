@@ -9,8 +9,8 @@ import {
   TableProperties, LayoutGrid,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import type { Deportista } from '@/lib/deportistas';
+import { getDeportistas, saveDeportistas } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
 
 // ── Clave virtual POSICIÓN ─────────────────────────────────────
 const VPOS = '__POSICION__';
@@ -473,10 +473,7 @@ export default function TorneosPage() {
   const guardadoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DEPORTISTAS_KEY);
-      if (raw) setDeportistas(JSON.parse(raw));
-    } catch {}
+    getDeportistas().then(lista => { if (lista.length) setDeportistas(lista); });
   }, []);
 
   const grupoMap = useMemo(() => {
@@ -519,7 +516,7 @@ export default function TorneosPage() {
           ? { ...dep, _columnas: { ...dep._columnas, [VPOS]: val } }
           : dep
       );
-      try { localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(updated)); } catch {}
+      saveDeportistas(updated).catch(console.error);
       return updated;
     });
     setGuardado(true);

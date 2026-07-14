@@ -2,220 +2,390 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Shield, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Shield, AlertCircle, Loader2, Users, Star } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
+import { getProfes, getDeportistas, getVistaContable } from '@/lib/db';
 
-// ── Usuarios demo (sin Supabase) ────────────────────────────
-const DEMO_USERS = [
-  { email: 'admin@futuroantioquia.com',       password: 'demo1234', rol: 'administracion', nombre: 'Hernán',   apellido: 'Marulanda' },
-  { email: 'profesor@futuroantioquia.com',    password: 'demo1234', rol: 'profesor',       nombre: 'Andrés',   apellido: 'Tobón'    },
-  { email: 'deportista@futuroantioquia.com',  password: 'demo1234', rol: 'deportista',     nombre: 'Carlos',   apellido: 'Pérez'    },
-  { email: 'visitante@futuroantioquia.com',   password: 'demo1234', rol: 'visitante',      nombre: 'María',    apellido: 'Gómez'    },
-  { email: 'contable@futuroantioquia.com',    password: 'demo1234', rol: 'contable',       nombre: 'Lucía',    apellido: 'García'   },
-  { email: 'padre@futuroantioquia.com',       password: 'demo1234', rol: 'padre',          nombre: 'Jorge',    apellido: 'López'    },
-] as const;
-
-const ROL_COLOR: Record<string, string> = {
-  administracion: 'bg-[#dbeafe] text-[#1e3a8a]',
-  profesor:       'bg-blue-100  text-blue-700',
-  deportista:     'bg-green-100 text-green-700',
-  visitante:      'bg-gray-100  text-gray-700',
-  contable:       'bg-[#dbeafe] text-[#1e3a8a]',
-  padre:          'bg-yellow-100 text-yellow-700',
-};
+type Tab = 'admin' | 'profe' | 'calidoso';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { login, cargando, error, limpiarError } = useAuthStore();
+  const router  = useRouter();
+  const { cargando } = useAuthStore();
 
-  const [email,       setEmail]       = useState('');
-  const [password,    setPassword]    = useState('');
+  const [tab,         setTab]         = useState<Tab>('admin');
+  const [usuario,     setUsuario]     = useState('');
+  const [clave,       setClave]       = useState('');
   const [mostrarPass, setMostrarPass] = useState(false);
+  const [errLocal,    setErrLocal]    = useState('');
+  const [enviando,    setEnviando]    = useState(false);
+
+  function cambiarTab(t: Tab) {
+    setTab(t);
+    setUsuario('');
+    setClave('');
+    setErrLocal('');
+    setMostrarPass(false);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    limpiarError();
+    setErrLocal('');
+    setEnviando(true);
 
-    // ── Acceso demo sin Supabase ──────────────────────────────
-    const demoUser = DEMO_USERS.find(
-      (u) => u.email === email.trim() && u.password === password
-    );
-    if (demoUser) {
-      useAuthStore.setState({
-        usuario: {
-          id:       'demo-' + demoUser.rol,
-          email:    demoUser.email,
-          nombre:   demoUser.nombre,
-          apellido: demoUser.apellido,
-          rol:      demoUser.rol as any,
-          activo:   true,
-          academia: { id: '1', nombre: 'Futuro Antioquia' },
-        },
-        cargando: false,
-        error:    null,
-      });
-      // Establecer cookie de sesión para el middleware
-      document.cookie = 'futuro-session=1; path=/; max-age=86400; SameSite=Lax';
-      router.push('/dashboard');
-      return;
-    }
+    const u = usuario.trim().toUpperCase();
+    const c = clave.trim();
 
-    // ── Login real con Supabase ───────────────────────────────
     try {
-      await login(email, password);
-      router.push('/dashboard');
-    } catch {}
+      /* ── ADMINISTRADOR ─── */
+      if (tab === 'admin') {
+        if (u === 'ADMON' && c === '34') {
+          try {
+            localStorage.removeItem('futuro-profe-proyectos');
+            localStorage.removeItem('futuro-profe-nombre');
+          } catch {}
+          useAuthStore.setState({
+            usuario: {
+              id: 'admin-1', email: 'admin@futuroantioquia.com',
+              nombre: 'Administrador', apellido: '',
+              rol: 'administracion' as any, activo: true,
+              academia: { id: '1', nombre: 'Futuro Antioquia' },
+            },
+            cargando: false, error: null,
+          });
+          document.cookie = 'futuro-session=1; path=/; max-age=86400; SameSite=Lax';
+          router.push('/dashboard');
+        } else {
+          setErrLocal('Usuario o contraseña incorrectos');
+        }
+        return;
+      }
+
+      /* ── PROFE ─── */
+      if (tab === 'profe') {
+        const listaProfes = await getProfes();
+        const profe = listaProfes.find(p => p.usuario === u && p.clave === c);
+        if (profe) {
+          useAuthStore.setState({
+            usuario: {
+              id: 'profe-' + profe.usuario,
+              email: profe.usuario.toLowerCase() + '@futuroantioquia.com',
+              nombre: profe.usuario, apellido: '',
+              rol: 'profesor' as any, activo: true,
+              academia: { id: '1', nombre: 'Futuro Antioquia' },
+            },
+            cargando: false, error: null,
+          });
+          document.cookie = 'futuro-session=profesor; path=/; max-age=86400; SameSite=Lax';
+          try {
+            localStorage.setItem('futuro-profe-proyectos', JSON.stringify(profe.proyectos));
+            localStorage.setItem('futuro-profe-nombre',    JSON.stringify(profe.usuario));
+            const foto = localStorage.getItem(`futuro-foto-profe-${profe.usuario.toUpperCase()}`);
+            if (foto) localStorage.setItem('futuro-profe-foto', foto);
+            else      localStorage.removeItem('futuro-profe-foto');
+          } catch {}
+          router.push('/asistencia');
+        } else {
+          setErrLocal('Usuario o contraseña incorrectos');
+        }
+        return;
+      }
+
+      /* ── CALIDOSO ─── */
+      if (tab === 'calidoso') {
+        const normDoc = (v: string) => v.replace(/[\s.,\-]/g, '');
+        const cNorm   = normDoc(c);
+
+        try {
+          const rawCred = localStorage.getItem('futuro_calidoso_credenciales');
+          if (rawCred) {
+            const creds: Record<string, string> = JSON.parse(rawCred);
+            const docGuardado = creds[u] ?? '';
+            if (docGuardado && normDoc(docGuardado) === cNorm) {
+              const deps = await getDeportistas();
+              const dep = deps.find(d => {
+                const cols = d._columnas ?? {};
+                const codKey = Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim()));
+                return codKey ? String(cols[codKey]).trim().toUpperCase() === u : false;
+              });
+              document.cookie = 'futuro-session=deportista; path=/; max-age=86400; SameSite=Lax';
+              try { localStorage.setItem('futuro-calidoso-id', dep?.id ?? ''); } catch {}
+              router.push(dep ? `/alumnos/${dep.id}` : '/alumnos');
+              return;
+            }
+          }
+        } catch {}
+
+        let vcData: Record<string, string>[] = [];
+        try {
+          const raw = localStorage.getItem('futuro_vista_contable');
+          if (raw) vcData = JSON.parse(raw);
+        } catch {}
+        if (!vcData.length) vcData = await getVistaContable();
+
+        const deportistas = await getDeportistas();
+        const RX_DOC = /num.*doc|^doc|doc|c[eé]dul|c\.c|identif|nit|no.*doc|cc\b/i;
+
+        const dep = deportistas.find(d => {
+          const cols   = d._columnas ?? {};
+          const codKey = Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim()));
+          const codigo = codKey ? String(cols[codKey]).trim().toUpperCase() : '';
+          if (codigo !== u) return false;
+          const docKey = Object.keys(cols).find(k => RX_DOC.test(k.trim()));
+          const doc    = docKey ? normDoc(String(cols[docKey]).trim()) : '';
+          return doc === cNorm;
+        });
+
+        if (dep) {
+          document.cookie = 'futuro-session=deportista; path=/; max-age=86400; SameSite=Lax';
+          try {
+            localStorage.setItem('futuro-calidoso-id',     dep.id);
+            localStorage.setItem('futuro-calidoso-nombre', dep._nombre ?? '');
+          } catch {}
+          router.push(`/alumnos/${dep.id}`);
+          return;
+        }
+
+        const vcRow = vcData.find(fila => {
+          const cod = String(fila.codigo ?? '').trim().toUpperCase();
+          const doc = normDoc(String(fila.documento ?? '').trim());
+          return cod === u && doc === cNorm;
+        });
+
+        if (vcRow) {
+          const depVC = deportistas.find(d => {
+            const cols   = d._columnas ?? {};
+            const codKey = Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim()));
+            const cod    = codKey ? String(cols[codKey]).trim().toUpperCase() : '';
+            return cod === u;
+          });
+          document.cookie = 'futuro-session=deportista; path=/; max-age=86400; SameSite=Lax';
+          try {
+            localStorage.setItem('futuro-calidoso-nombre', vcRow.nombre ?? '');
+            if (depVC) localStorage.setItem('futuro-calidoso-id', depVC.id);
+          } catch {}
+          router.push(depVC ? `/alumnos/${depVC.id}` : '/alumnos');
+          return;
+        }
+
+        setErrLocal('Código o documento incorrecto');
+        return;
+      }
+    } finally {
+      setEnviando(false);
+    }
   }
 
-  function entrarDemo(u: typeof DEMO_USERS[number]) {
-    setEmail(u.email);
-    setPassword(u.password);
-  }
+  const config = {
+    admin: {
+      titulo:       'Administrador',
+      labelUser:    'Usuario',
+      placeholderU: 'ADMON',
+      labelClave:   'Contraseña',
+      placeholderC: '••••',
+      grad:         'from-[#064e1e] to-[#22c55e]',
+      ring:         'focus:border-green-400',
+      tabActive:    'text-[#064e1e]',
+    },
+    profe: {
+      titulo:       'Profesor',
+      labelUser:    'Usuario',
+      placeholderU: 'Ej: CASTRO',
+      labelClave:   'Contraseña (cédula)',
+      placeholderC: 'Tu número de cédula',
+      grad:         'from-[#1e3a8a] to-[#3b82f6]',
+      ring:         'focus:border-blue-400',
+      tabActive:    'text-[#1e3a8a]',
+    },
+    calidoso: {
+      titulo:       'Calidoso',
+      labelUser:    'Código',
+      placeholderU: 'Tu código de deportista',
+      labelClave:   'Documento de identidad',
+      placeholderC: 'Tu número de documento',
+      grad:         'from-[#92400e] to-[#f97316]',
+      ring:         'focus:border-orange-400',
+      tabActive:    'text-[#9a3412]',
+    },
+  };
+
+  const cfg     = config[tab];
+  const ocupado = enviando || cargando;
+
+  /* Gradiente de fondo según tab */
+  const fondoMap: Record<Tab, string> = {
+    admin:    'from-[#064e1e] via-[#0a6628] to-[#22c55e]',
+    profe:    'from-[#0f172a] via-[#1e3a8a] to-[#3b82f6]',
+    calidoso: 'from-[#431407] via-[#92400e] to-[#f97316]',
+  };
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-[#064e1e] to-[#22c55e] flex items-center justify-center p-4 overflow-hidden">
+    <div className={cn(
+      'relative min-h-screen bg-gradient-to-br flex items-center justify-center p-4 overflow-hidden transition-all duration-500',
+      fondoMap[tab],
+    )}>
       {/* Patrón de balones */}
       <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
-        <svg className="absolute inset-0 w-full h-full opacity-[0.12]" xmlns="http://www.w3.org/2000/svg">
+        <svg className="absolute inset-0 w-full h-full opacity-[0.08]" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <pattern id="sp-login" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
-              <circle cx="50" cy="50" r="26" fill="none" stroke="white" strokeWidth="1.5"/>
-              <polygon points="50,40 60,47 56,58 44,58 40,47" fill="none" stroke="white" strokeWidth="1.5"/>
-              <line x1="50" y1="40" x2="50" y2="24" stroke="white" strokeWidth="1"/>
-              <line x1="60" y1="47" x2="73" y2="43" stroke="white" strokeWidth="1"/>
-              <line x1="56" y1="58" x2="64" y2="69" stroke="white" strokeWidth="1"/>
-              <line x1="44" y1="58" x2="36" y2="69" stroke="white" strokeWidth="1"/>
-              <line x1="40" y1="47" x2="27" y2="43" stroke="white" strokeWidth="1"/>
+            <pattern id="sp-login" x="0" y="0" width="90" height="90" patternUnits="userSpaceOnUse">
+              <circle cx="45" cy="45" r="22" fill="none" stroke="white" strokeWidth="1.2"/>
+              <polygon points="45,35 54,41 51,52 39,52 36,41" fill="none" stroke="white" strokeWidth="1.2"/>
+              <line x1="45" y1="35" x2="45" y2="23" stroke="white" strokeWidth="0.7"/>
+              <line x1="54" y1="41" x2="66" y2="37" stroke="white" strokeWidth="0.7"/>
+              <line x1="51" y1="52" x2="58" y2="63" stroke="white" strokeWidth="0.7"/>
+              <line x1="39" y1="52" x2="32" y2="63" stroke="white" strokeWidth="0.7"/>
+              <line x1="36" y1="41" x2="24" y2="37" stroke="white" strokeWidth="0.7"/>
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#sp-login)"/>
         </svg>
-        {/* Balón grande esquina inferior derecha */}
-        <svg className="absolute -bottom-24 -right-24 w-80 h-80 opacity-[0.07]" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="50" cy="50" r="48" fill="none" stroke="white" strokeWidth="2"/>
+        {/* Balón grande decorativo */}
+        <svg className="absolute -bottom-16 -right-16 w-72 h-72 opacity-[0.06]" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="46" fill="none" stroke="white" strokeWidth="2"/>
           <polygon points="50,22 72,38 63,64 37,64 28,38" fill="none" stroke="white" strokeWidth="2"/>
-          <line x1="50" y1="22" x2="50" y2="2" stroke="white" strokeWidth="1.5"/>
-          <line x1="72" y1="38" x2="90" y2="30" stroke="white" strokeWidth="1.5"/>
-          <line x1="63" y1="64" x2="78" y2="82" stroke="white" strokeWidth="1.5"/>
-          <line x1="37" y1="64" x2="22" y2="82" stroke="white" strokeWidth="1.5"/>
-          <line x1="28" y1="38" x2="10" y2="30" stroke="white" strokeWidth="1.5"/>
+          <line x1="50" y1="22" x2="50" y2="4"   stroke="white" strokeWidth="1.5"/>
+          <line x1="72" y1="38" x2="89" y2="29"  stroke="white" strokeWidth="1.5"/>
+          <line x1="63" y1="64" x2="77" y2="81"  stroke="white" strokeWidth="1.5"/>
+          <line x1="37" y1="64" x2="23" y2="81"  stroke="white" strokeWidth="1.5"/>
+          <line x1="28" y1="38" x2="11" y2="29"  stroke="white" strokeWidth="1.5"/>
         </svg>
-        {/* Arco de cancha superior izquierda */}
-        <svg className="absolute -top-10 -left-10 w-56 h-56 opacity-[0.07]" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="0" cy="0" r="80" fill="none" stroke="white" strokeWidth="2"/>
-          <circle cx="0" cy="0" r="40" fill="none" stroke="white" strokeWidth="1.5"/>
+        {/* Balón pequeño izquierda */}
+        <svg className="absolute top-10 -left-10 w-40 h-40 opacity-[0.05]" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="46" fill="none" stroke="white" strokeWidth="2"/>
+          <polygon points="50,28 68,40 61,60 39,60 32,40" fill="none" stroke="white" strokeWidth="2"/>
         </svg>
       </div>
-      <div className="relative w-full max-w-md">
+
+      <div className="relative w-full max-w-sm animate-fade-up">
 
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-xl mb-4">
-            <Shield className="w-8 h-8 text-[#16a34a]" />
+        <div className="text-center mb-7">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/15 backdrop-blur rounded-2xl shadow-2xl border border-white/30 mb-4">
+            <span className="text-white font-black text-xl">FA</span>
           </div>
-          <h1 className="text-2xl font-bold text-white">Futuro Antioquia</h1>
-          <p className="text-white/70 text-sm mt-1">Plataforma de Gestión Deportiva</p>
+          <h1 className="text-2xl font-black text-white tracking-tight">Futuro Antioquia</h1>
+          <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mt-1">Plataforma Deportiva · 2026</p>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-1.5 flex gap-1 mb-5 border border-white/20">
+          {(
+            [
+              { key: 'admin',    label: 'Admin',    icon: Shield },
+              { key: 'profe',    label: 'Profe',    icon: Users  },
+              { key: 'calidoso', label: 'Calidoso', icon: Star   },
+            ] as { key: Tab; label: string; icon: any }[]
+          ).map(({ key, label, icon: Icono }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => cambiarTab(key)}
+              className={cn(
+                'flex-1 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5',
+                tab === key
+                  ? `bg-white shadow-md ${cfg.tabActive}`
+                  : 'text-white/70 hover:text-white hover:bg-white/10',
+              )}
+            >
+              <Icono className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Tarjeta */}
-        <div className="bg-white rounded-3xl shadow-2xl p-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-1">Inicia sesión</h2>
-          <p className="text-sm text-gray-400 mb-6">Ingresa con tu correo y contraseña</p>
+        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in">
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Franja superior de color */}
+          <div className={cn('h-1.5 w-full bg-gradient-to-r', cfg.grad)} />
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
-                Correo electrónico
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                placeholder="tu@email.com"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:border-[#22c55e] focus:bg-white transition"
-              />
-            </div>
+          <div className="p-7">
+            <h2 className="text-xl font-black text-gray-900 mb-0.5">{cfg.titulo}</h2>
+            <p className="text-sm text-gray-400 mb-6">Ingresa tus datos para continuar</p>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
-                Contraseña
-              </label>
-              <div className="relative">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Campo usuario */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  {cfg.labelUser}
+                </label>
                 <input
-                  type={mostrarPass ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  type="text"
+                  value={usuario}
+                  onChange={e => setUsuario(e.target.value)}
                   required
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  className="w-full px-4 py-3 pr-12 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:outline-none focus:border-[#22c55e] focus:bg-white transition"
-                />
-                <button
-                  type="button"
-                  onClick={() => setMostrarPass(!mostrarPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {mostrarPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            {error && (
-              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
-                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={cargando}
-              className={cn(
-                'w-full py-3.5 rounded-xl font-bold text-white text-sm transition',
-                'bg-gradient-to-r from-[#064e1e] to-[#22c55e]',
-                'shadow-lg shadow-green-900/30',
-                'hover:from-[#0a2e14] hover:to-[#16a34a]',
-                'disabled:opacity-60 disabled:cursor-not-allowed',
-                'flex items-center justify-center gap-2'
-              )}
-            >
-              {cargando ? (
-                <><Loader2 className="w-4 h-4 animate-spin" />Iniciando sesión...</>
-              ) : 'Entrar'}
-            </button>
-
-          </form>
-
-          {/* Acceso rápido demo */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-            <p className="text-xs font-semibold text-gray-400 mb-3">Acceso rápido — modo demo</p>
-            <div className="grid grid-cols-2 gap-2">
-              {DEMO_USERS.map((u) => (
-                <button
-                  key={u.rol}
-                  type="button"
-                  onClick={() => entrarDemo(u)}
+                  autoComplete="username"
+                  placeholder={cfg.placeholderU}
                   className={cn(
-                    'text-[11px] px-3 py-2 rounded-xl font-semibold text-left transition hover:opacity-80',
-                    ROL_COLOR[u.rol]
+                    'w-full px-4 py-3 border-2 border-gray-100 rounded-xl text-sm bg-gray-50',
+                    'focus:outline-none focus:bg-white transition-all duration-200 uppercase',
+                    cfg.ring,
                   )}
-                >
-                  <span className="block capitalize">{u.rol}</span>
-                  <span className="block font-normal opacity-70">{u.nombre} {u.apellido}</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-gray-400 mt-2 text-center">
-              Contraseña: <span className="font-mono font-bold">demo1234</span>
-            </p>
+                />
+              </div>
+
+              {/* Campo clave */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  {cfg.labelClave}
+                </label>
+                <div className="relative">
+                  <input
+                    type={mostrarPass ? 'text' : 'password'}
+                    value={clave}
+                    onChange={e => setClave(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    placeholder={mostrarPass ? cfg.placeholderC : '••••••••'}
+                    className={cn(
+                      'w-full px-4 py-3 pr-12 border-2 border-gray-100 rounded-xl text-sm bg-gray-50',
+                      'focus:outline-none focus:bg-white transition-all duration-200',
+                      cfg.ring,
+                    )}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMostrarPass(!mostrarPass)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors"
+                  >
+                    {mostrarPass ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error */}
+              {errLocal && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 animate-fade-in">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <p className="text-sm text-red-700 font-medium">{errLocal}</p>
+                </div>
+              )}
+
+              {/* Botón */}
+              <button
+                type="submit"
+                disabled={ocupado}
+                className={cn(
+                  'w-full py-3.5 rounded-xl font-black text-white text-sm',
+                  'bg-gradient-to-r', cfg.grad,
+                  'shadow-lg transition-all duration-200',
+                  'hover:opacity-95 hover:-translate-y-0.5 hover:shadow-xl',
+                  'active:translate-y-0',
+                  'disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none',
+                  'flex items-center justify-center gap-2',
+                )}
+              >
+                {ocupado
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />Ingresando…</>
+                  : 'Ingresar a la plataforma'
+                }
+              </button>
+            </form>
           </div>
         </div>
 
-        <p className="text-center text-white/40 text-xs mt-6">
+        <p className="text-center text-white/30 text-xs mt-6 font-medium">
           © 2026 Futuro Antioquia · Medellín, Colombia
         </p>
       </div>

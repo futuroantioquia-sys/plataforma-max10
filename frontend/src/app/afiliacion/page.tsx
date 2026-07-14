@@ -7,14 +7,14 @@
  * FLUJO NUEVO:   escribe PIN "34" → formulario vacío → queda pendiente de asignación de proyecto
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle, Search, ClipboardList,
   AlertCircle, UserCheck, UserPlus, ChevronRight, Lock, Calendar,
 } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import type { Deportista } from '@/lib/deportistas';
+import { getDeportistas, saveDeportistas } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
 import { cn } from '@/lib/utils';
 
 // ── Constantes ───────────────────────────────────────────────
@@ -362,6 +362,10 @@ export default function AfiliacionPage() {
   const [buscando,  setBuscando]  = useState(false);
   const [enviando,  setEnviando]  = useState(false);
 
+  // Cache local de deportistas para búsquedas/validaciones
+  const [_deps, _setDeps] = useState<Deportista[]>([]);
+  useEffect(() => { getDeportistas().then(_setDeps); }, []);
+
   const [depId,      setDepId]      = useState<string | null>(null);
   const [campos,     setCampos]     = useState<{ key: string; label: string; tipo: string; seccion?: string }[]>([]);
   const [valores,    setValores]    = useState<Record<string, string>>({});
@@ -405,7 +409,7 @@ export default function AfiliacionPage() {
     }
     setBuscando(true); setError('');
     try {
-      const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) || '[]');
+      const lista: Deportista[] = _deps;
       const norm = (s: string) => s.toLowerCase().replace(/[\s.-]/g, '');
 
       // Buscar por código primero
@@ -457,7 +461,7 @@ export default function AfiliacionPage() {
   // ── Validar código único (solo para nuevos) ──────────────────
   function validarCodigoUnico(val: string) {
     if (!val.trim()) { setCodigoError(''); return; }
-    const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) || '[]');
+    const lista: Deportista[] = _deps;
     const norm = (s: string) => s.toLowerCase().replace(/[\s.-]/g, '');
     const existe = lista.some(d => {
       const kCod = Object.keys(d._columnas).find(c => /^c[oó]d/i.test(c));
@@ -475,7 +479,7 @@ export default function AfiliacionPage() {
     // Revalidar código antes de guardar (para nuevos)
     if (!depId) {
       const codVal = valores['CODIGO'] ?? '';
-      const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) || '[]');
+      const lista: Deportista[] = _deps;
       const norm = (s: string) => s.toLowerCase().replace(/[\s.-]/g, '');
       const existe = lista.some(d => {
         const kCod = Object.keys(d._columnas).find(c => /^c[oó]d/i.test(c));
@@ -489,7 +493,7 @@ export default function AfiliacionPage() {
 
     setEnviando(true);
     try {
-      const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) || '[]');
+      const lista: Deportista[] = [..._deps];
 
       if (depId) {
         // Actualizar existente
@@ -521,20 +525,21 @@ export default function AfiliacionPage() {
 
           return { ...d, _nombre: valores['_nombre'] || d._nombre, _columnas: cols };
         });
-        localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(act));
+        saveDeportistas(act);
+        _setDeps(act);
       } else {
         // Nuevo deportista — pendiente de asignación
         const cols: Record<string, string> = { ESTADO: '1. Nuevo' };
         CAMPOS_NUEVO.forEach(c => { cols[c.key] = valores[c.key] ?? ''; });
-        // Guardar documento como campo para que asignación lo vea
         cols['DOCUMENTO_INGRESO'] = valores['DOCUMENTO'] ?? '';
         const nuevo: Deportista = {
           id: `nuevo_${Date.now()}`,
           _nombre: valores['NOMBRE_COMPLETO'] || 'Nuevo deportista',
           _columnas: cols,
         };
-        lista.push(nuevo);
-        localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(lista));
+        const nuevaLista = [...lista, nuevo];
+        saveDeportistas(nuevaLista);
+        _setDeps(nuevaLista);
       }
       setPaso('enviado');
     } catch { setError('Error al guardar. Intenta de nuevo.'); }

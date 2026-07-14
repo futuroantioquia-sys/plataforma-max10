@@ -3,18 +3,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Camera } from 'lucide-react';
+import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
-import type { Deportista } from '@/lib/deportistas';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import { getDeportistas } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
 import { getFoto, saveFoto, savePagosDeportista, getPagos } from '@/lib/db';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
 const PAGOS_KEY    = 'futuro_pagos_estado';
 
 const DETALLE_ROWS = [
-  'MATRÍCULA',
-  'FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
-  'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE',
+  'MATRÍCULA 2026',
+  'FEBRERO 2026','MARZO 2026','ABRIL 2026','MAYO 2026','JUNIO 2026',
+  'JULIO 2026','AGOSTO 2026','SEPTIEMBRE 2026','OCTUBRE 2026','NOVIEMBRE 2026','DICIEMBRE 2026',
 ];
 
 /* Asegura que un valor numérico tenga signo $ */
@@ -29,11 +30,11 @@ function ensurePeso(v: string | undefined): string {
 
 /* Mapa detalle → clave en Vista Contable */
 const VC_KEYS: Record<string, string> = {
-  'MATRÍCULA':  'matricula',
-  'FEBRERO':    'feb',  'MARZO':      'mar',  'ABRIL':    'abr',
-  'MAYO':       'may',  'JUNIO':      'jun',  'JULIO':    'jul',
-  'AGOSTO':     'ago',  'SEPTIEMBRE': 'sep',  'OCTUBRE':  'oct',
-  'NOVIEMBRE':  'nov',  'DICIEMBRE':  'dic',
+  'MATRÍCULA 2026':   'matricula',
+  'FEBRERO 2026':     'feb',  'MARZO 2026':      'mar',  'ABRIL 2026':    'abr',
+  'MAYO 2026':        'may',  'JUNIO 2026':      'jun',  'JULIO 2026':    'jul',
+  'AGOSTO 2026':      'ago',  'SEPTIEMBRE 2026': 'sep',  'OCTUBRE 2026':  'oct',
+  'NOVIEMBRE 2026':   'nov',  'DICIEMBRE 2026':  'dic',
 };
 
 type PagoRow = {
@@ -47,9 +48,9 @@ type PagoRow = {
 
 /* Mes numérico por nombre de fila (MATRÍCULA = 0 = siempre activo) */
 const MES_NUM: Record<string, number> = {
-  'MATRÍCULA': 0,
-  'FEBRERO':2,'MARZO':3,'ABRIL':4,'MAYO':5,'JUNIO':6,
-  'JULIO':7,'AGOSTO':8,'SEPTIEMBRE':9,'OCTUBRE':10,'NOVIEMBRE':11,'DICIEMBRE':12,
+  'MATRÍCULA 2026': 0,
+  'FEBRERO 2026':2,'MARZO 2026':3,'ABRIL 2026':4,'MAYO 2026':5,'JUNIO 2026':6,
+  'JULIO 2026':7,'AGOSTO 2026':8,'SEPTIEMBRE 2026':9,'OCTUBRE 2026':10,'NOVIEMBRE 2026':11,'DICIEMBRE 2026':12,
 };
 
 function esFuturo(detalle: string): boolean {
@@ -63,6 +64,54 @@ type AllPagos = Record<string, PagoRow[]>;
 function getCol(dep: Deportista, rx: RegExp): string {
   const k = Object.keys(dep._columnas).find(k => rx.test(k));
   return k ? dep._columnas[k] : '';
+}
+
+/** Extrae código numérico del deportista eliminando tildes para comparación robusta */
+function sinTildesEC(s: string): string {
+  return String(s ?? '').normalize('NFD').split('').filter(
+    c => c.charCodeAt(0) < 0x0300 || c.charCodeAt(0) > 0x036f
+  ).join('').toUpperCase();
+}
+
+/** Devuelve TODOS los posibles códigos de 4-5 dígitos del deportista,
+ *  normalizados con parseInt (elimina ceros iniciales).
+ *  Excluye años (2020-2099) para evitar falsos positivos. */
+function todosLosCodigos(dep: Deportista): string[] {
+  const cols = dep._columnas ?? {};
+  const result: string[] = [];
+  const seen  = new Set<string>();
+
+  const add = (digits: string) => {
+    if (!digits) return;
+    const n = parseInt(digits, 10);
+    if (isNaN(n)) return;
+    // Excluir años
+    if (n >= 2000 && n <= 2099 && digits.length === 4) return;
+    const key = String(n);
+    if (!seen.has(key)) { seen.add(key); result.push(key); }
+    // Agregar también con ceros originales por si el import guardó con ellos
+    if (digits !== key && !seen.has(digits)) { seen.add(digits); result.push(digits); }
+  };
+
+  // 1. Prioridad: columna cuyo nombre empiece con "cod"
+  const kCod = Object.keys(cols).find(k => /^cod/i.test(sinTildesEC(k)));
+  if (kCod) {
+    const digits = String(cols[kCod] ?? '').replace(/\D/g, '');
+    if (digits.length >= 4 && digits.length <= 5) add(digits);
+  }
+
+  // 2. Cualquier columna con valor de 4-5 dígitos
+  for (const v of Object.values(cols)) {
+    const digits = String(v ?? '').replace(/\D/g, '');
+    if (digits.length >= 4 && digits.length <= 5) add(digits);
+  }
+
+  return result;
+}
+
+/** Obtiene el código principal (primer resultado normalizado) */
+function getCodigoDeportista(dep: Deportista): string {
+  return todosLosCodigos(dep)[0] ?? '';
 }
 
 function formatFecha(v: string): string {
@@ -119,12 +168,19 @@ export default function EstadoCuentaPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
 
-  const [dep,     setDep]     = useState<Deportista | null>(null);
-  const [foto,    setFoto]    = useState<string | null>(null);
-  const [pagos,   setPagos]   = useState<PagoRow[]>([]);
-  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [dep,      setDep]     = useState<Deportista | null>(null);
+  const [foto,     setFoto]    = useState<string | null>(null);
+  const [pagos,    setPagos]   = useState<PagoRow[]>([]);
+  const [editIdx,  setEditIdx] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<PagoRow>>({});
-  const [anio,    setAnio]    = useState(new Date().getFullYear());
+  const [anio,     setAnio]    = useState(new Date().getFullYear());
+  const [debugInfo, setDebugInfo] = useState<{
+    codigosDep: string[];
+    clavesPagos: string[];
+    filasPorCod: { cod: string; cant: number }[];
+    filasPorId: number;
+  } | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -141,95 +197,111 @@ export default function EstadoCuentaPage() {
 
   /* ─── Cargar deportista y pagos guardados ─── */
   useEffect(() => {
-    try {
-      const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
+    Promise.all([getDeportistas(), getPagos(), getFoto(id)]).then(([lista, allPagos, foto]) => {
       const found = lista.find(d => d.id === id);
       if (found) setDep(found);
+      if (foto) setFoto(foto);
 
-      // Foto: Supabase primero (async), localStorage como inmediato
-      const fotosLocal = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}');
-      if (fotosLocal[id]) setFoto(fotosLocal[id]);
-      getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {});
+      /* ── Buscar pagos por dep.id Y por código(s) de 4-5 dígitos ──────────
+         El Libro Contable guarda bajo el código numérico (ej: "8095").
+         Las ediciones manuales se guardan bajo dep.id (ej: "dep-xxx-42").
+         Probamos TODOS los posibles códigos del deportista para no perder
+         pagos importados aunque haya diferencias de formato (ceros iniciales). */
+      const codigosDep = found ? todosLosCodigos(found) : [];
 
-      /* Buscar fila en Vista Contable para enriquecer valores */
-      const vcData: Record<string, string>[] = JSON.parse(
-        localStorage.getItem('futuro_vista_contable') ?? '[]'
-      );
-      const cod = found ? (Object.entries(found._columnas).find(([k]) => /^c[oó]d/i.test(k))?.[1] ?? '') : '';
-      const vcRow = vcData.find(r =>
-        (cod && r.codigo?.toLowerCase() === cod.toLowerCase()) ||
-        (found && r.nombre?.toLowerCase() === found._nombre.toLowerCase())
-      );
+      /* Merge: dep.id gana (manual > import) */
+      const mergeMap = new Map<string, PagoRow>();
 
-      // Pagos: localStorage inmediato, Supabase actualiza en background
-      const allPagos: AllPagos = JSON.parse(localStorage.getItem(PAGOS_KEY) ?? '{}');
-      let filas: PagoRow[] = allPagos[id] ?? [];
-      // Intentar obtener frescos de Supabase
-      getPagos().then(sbPagos => {
-        const sbFilas = sbPagos[id];
-        if (sbFilas && sbFilas.length > 0) setPagos(sbFilas as PagoRow[]);
-      }).catch(() => {});
-
-      /* Si hay datos de Vista Contable, rellena vCargado vacíos */
-      if (vcRow && filas.length > 0) {
-        filas = filas.map(row => ({
-          ...row,
-          vCargado: row.vCargado || ensurePeso(vcRow[VC_KEYS[row.detalle]]) || '',
-        }));
+      /* Base: pagos importados (todos los códigos posibles) */
+      for (const cod of codigosDep) {
+        for (const r of ((allPagos as AllPagos)[cod] ?? [])) {
+          mergeMap.set(r.detalle, r);
+        }
       }
 
-      /* Normalizar meses futuros: PEND → PROX (no deben aparecer como deuda) */
-      if (filas.length > 0) {
-        filas = filas.map(row => ({
-          ...row,
-          estado: row.estado === 'PEND'  && esFuturo(row.detalle) ? 'PROX'
-                : row.estado === 'PROX' && !esFuturo(row.detalle) ? 'PEND'
-                : row.estado,
-        }));
-        setPagos(filas);
+      /* Override: ediciones manuales bajo dep.id */
+      for (const r of ((allPagos as AllPagos)[id] ?? [])) {
+        mergeMap.set(r.detalle, r);
       }
-      /* Si no hay filas guardadas, el segundo useEffect las crea desde VC */
-      if (!allPagos[id]) (window as any).__vcRow = vcRow ?? null;
-    } catch {}
+
+      let filas: PagoRow[] = Array.from(mergeMap.values());
+
+      /* Guardar info de diagnóstico */
+      setDebugInfo({
+        codigosDep,
+        clavesPagos: Object.keys(allPagos as AllPagos),
+        filasPorCod: codigosDep.map(cod => ({
+          cod,
+          cant: ((allPagos as AllPagos)[cod] ?? []).length,
+        })),
+        filasPorId: ((allPagos as AllPagos)[id] ?? []).length,
+      });
+
+      /* Migrar nombres viejos → nombres con 2026 */
+      const MIGRAR: Record<string, string> = {
+        'MATRÍCULA':'MATRÍCULA 2026',
+        'FEBRERO':'FEBRERO 2026','MARZO':'MARZO 2026','ABRIL':'ABRIL 2026',
+        'MAYO':'MAYO 2026','JUNIO':'JUNIO 2026','JULIO':'JULIO 2026',
+        'AGOSTO':'AGOSTO 2026','SEPTIEMBRE':'SEPTIEMBRE 2026','OCTUBRE':'OCTUBRE 2026',
+        'NOVIEMBRE':'NOVIEMBRE 2026','DICIEMBRE':'DICIEMBRE 2026',
+      };
+      filas = filas.map(row => ({
+        ...row,
+        detalle: MIGRAR[row.detalle] ?? row.detalle,
+      }));
+
+      /* Construir SIEMPRE las 12 filas de DETALLE_ROWS.
+         Si existe dato guardado para ese mes → se usa (con su estado PAGÓ / PEND / PROX).
+         Si no existe → fila vacía con PEND o PROX según si el mes es futuro.
+         Así, aunque el Libro Contable solo haya subido 3 meses pagados,
+         se ven los 12 meses correctamente. */
+      const filasMap = new Map(filas.map(r => [r.detalle, r]));
+      const fullRows: PagoRow[] = DETALLE_ROWS.map(detalle => {
+        const saved = filasMap.get(detalle);
+        if (saved) {
+          return {
+            ...saved,
+            estado: saved.estado === 'PEND' && esFuturo(detalle) ? 'PROX'
+                  : saved.estado === 'PROX' && !esFuturo(detalle) ? 'PEND'
+                  : saved.estado,
+          };
+        }
+        return {
+          detalle,
+          vCargado: '',
+          estado: esFuturo(detalle) ? 'PROX' : 'PEND',
+          destino: '',
+          fecha: '',
+          vPagado: '',
+        };
+      });
+      setPagos(fullRows);
+    }).catch(console.error);
   }, [id]);
 
-  /* ─── Inicializar filas por defecto si no hay datos guardados ─── */
+  /* ─── Rellenar vCargado desde Vista Contable (siempre que dep esté listo) ─── */
   useEffect(() => {
-    if (!dep || pagos.length > 0) return;
+    if (!dep) return;
 
-    /* Intentar obtener valores desde Vista Contable */
-    let vcRow: Record<string, string> | null = (window as any).__vcRow ?? null;
-    if (!vcRow) {
-      try {
-        const vcData: Record<string, string>[] = JSON.parse(
-          localStorage.getItem('futuro_vista_contable') ?? '[]'
-        );
-        const cod = getCol(dep, /^c[oó]d/i);
-        vcRow = vcData.find(r =>
-          (cod && r.codigo?.toLowerCase() === cod.toLowerCase()) ||
-          r.nombre?.toLowerCase() === dep._nombre.toLowerCase()
-        ) ?? null;
-      } catch {}
-    }
+    import('@/lib/db').then(({ getVistaContable }) => getVistaContable()).then(vcData => {
+      const cod = getCol(dep, /^c[oó]d/i);
+      const vcRow = vcData.find((r: any) =>
+        (cod && r.codigo?.toLowerCase() === cod.toLowerCase()) ||
+        r.nombre?.toLowerCase() === dep._nombre.toLowerCase()
+      ) ?? null;
 
-    const defaultRows: PagoRow[] = DETALLE_ROWS.map(detalle => ({
-      detalle,
-      vCargado: vcRow ? ensurePeso(vcRow[VC_KEYS[detalle]]) : '',
-      estado: esFuturo(detalle) ? 'PROX' : 'PEND',   // PROX solo meses estrictamente futuros
-      destino: '',
-      fecha: '',
-      vPagado: '',
-    }));
-    setPagos(defaultRows);
-  }, [dep, pagos.length]);
+      if (!vcRow) return;
 
-  /* ─── Persistir en localStorage + Supabase ─── */
+      /* Solo actualizar filas donde vCargado esté vacío */
+      setPagos(prev => prev.map(row => ({
+        ...row,
+        vCargado: row.vCargado || ensurePeso(vcRow[VC_KEYS[row.detalle]]) || '',
+      })));
+    }).catch(console.error);
+  }, [dep]);
+
+  /* ─── Persistir en Supabase ─── */
   function savePagos(updated: PagoRow[]) {
-    try {
-      const allPagos: AllPagos = JSON.parse(localStorage.getItem(PAGOS_KEY) ?? '{}');
-      allPagos[id] = updated;
-      localStorage.setItem(PAGOS_KEY, JSON.stringify(allPagos));
-    } catch {}
     savePagosDeportista(id, updated as any).catch(console.error);
     setPagos(updated);
   }
@@ -267,11 +339,7 @@ export default function EstadoCuentaPage() {
 
   /* ─── Loading ─── */
   if (!dep) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-400 font-semibold">Cargando...</p>
-      </div>
-    );
+    return <LoadingBall />;
   }
 
   /* ─── Datos del deportista ─── */
@@ -287,8 +355,11 @@ export default function EstadoCuentaPage() {
 
   /* ─── Tarifa mensual según programa y sede ─── */
   function calcTarifa(prog: string, sede: string): string {
-    const p = prog.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    const s = sede.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const strip = (v: string) => String(v ?? '').toLowerCase().normalize('NFD').split('').filter(
+      c => c.charCodeAt(0) < 0x0300 || c.charCodeAt(0) > 0x036f
+    ).join('');
+    const p = strip(prog);
+    const s = strip(sede);
     const esNiquia = s.includes('niqu');
     if (esNiquia) {
       if (p.includes('estimul')) return '$70.000';
@@ -342,7 +413,7 @@ export default function EstadoCuentaPage() {
             <rect width="100%" height="100%" fill="url(#sp-ec)"/>
           </svg>
         </div>
-        <button onClick={() => router.back()} className="relative text-white/70 hover:text-white transition">
+        <button onClick={() => window.history.length > 1 ? router.back() : router.push(`/alumnos/${id}`)} className="relative text-white/70 hover:text-white transition">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="relative flex-1">
@@ -495,11 +566,11 @@ export default function EstadoCuentaPage() {
             <thead>
               <tr>
                 {[
-                  { label: 'DETALLE',    w: '22%' },
-                  { label: 'V. PAGADO',  w: '20%' },
-                  { label: 'DESTINO',    w: '18%' },
-                  { label: 'FECHA',      w: '18%' },
-                  { label: 'ESTADO PAGO',w: '22%' },
+                  { label: 'FECHA',        w: '16%' },
+                  { label: 'DESCRIPCIÓN',  w: '22%' },
+                  { label: 'DETALLE',      w: '20%' },
+                  { label: 'V. PAGADO',    w: '20%' },
+                  { label: 'ESTADO PAGO',  w: '22%' },
                 ].map(({ label, w }) => (
                   <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '10px 8px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', width: w }}>
                     {label}
@@ -515,6 +586,27 @@ export default function EstadoCuentaPage() {
                 const detBg   = isProx ? '#9ca3af' : isPaid ? G : '#dc2626';
                 return (
                   <tr key={idx} style={{ opacity: isProx ? 0.6 : 1 }}>
+
+                    {/* FECHA */}
+                    <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                      <input
+                        value={formatFecha(row.fecha)}
+                        onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, fecha: e.target.value} : r); savePagos(u); }}
+                        className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                        placeholder="DD/MM/AAAA"
+                      />
+                    </td>
+
+                    {/* DESCRIPCIÓN (campo destino) */}
+                    <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                      <input
+                        value={row.destino}
+                        onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, destino: e.target.value} : r); savePagos(u); }}
+                        className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                        placeholder="—"
+                      />
+                    </td>
+
                     {/* DETALLE */}
                     <td style={{ background: detBg, color: 'white', border: BW, padding: '8px 10px', textAlign: 'center', fontWeight: 900, fontSize: 11, whiteSpace: 'nowrap' }}>
                       {row.detalle}
@@ -529,26 +621,6 @@ export default function EstadoCuentaPage() {
                         className={cn('w-full text-center font-bold text-xs bg-transparent focus:outline-none px-1 py-1',
                           isPaid ? 'text-white' : 'text-gray-400 cursor-default')}
                         placeholder="—"
-                      />
-                    </td>
-
-                    {/* DESTINO */}
-                    <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      <input
-                        value={row.destino}
-                        onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, destino: e.target.value} : r); savePagos(u); }}
-                        className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
-                        placeholder="—"
-                      />
-                    </td>
-
-                    {/* FECHA */}
-                    <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      <input
-                        value={formatFecha(row.fecha)}
-                        onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, fecha: e.target.value} : r); savePagos(u); }}
-                        className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
-                        placeholder="DD/MM/AAAA"
                       />
                     </td>
 
@@ -577,6 +649,54 @@ export default function EstadoCuentaPage() {
           Toca <strong>PEND</strong> para registrar un pago · Toca <strong>PAGÓ</strong> para revertir
         </p>
 
+        {/* ── PANEL DEBUG ── */}
+        <div className="border-t border-gray-200 pt-3">
+          <button
+            onClick={() => setShowDebug(v => !v)}
+            className="w-full text-xs text-gray-400 font-semibold py-1.5 hover:text-gray-600 transition"
+          >
+            {showDebug ? '▲ Ocultar diagnóstico' : '🔍 Ver diagnóstico de pagos'}
+          </button>
+          {showDebug && debugInfo && (
+            <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3 text-[10px] font-mono space-y-1.5 text-gray-700">
+              <p className="font-black text-gray-800 text-xs">🔍 Diagnóstico Estado de Cuenta</p>
+              <p><strong>ID deportista:</strong> {id}</p>
+              <p><strong>Códigos detectados en _columnas:</strong>{' '}
+                <span className={debugInfo.codigosDep.length ? 'text-green-700 font-bold' : 'text-red-600 font-bold'}>
+                  {debugInfo.codigosDep.length ? debugInfo.codigosDep.join(', ') : '⚠ NINGUNO'}
+                </span>
+              </p>
+              <p><strong>Filas por código:</strong>{' '}
+                {debugInfo.filasPorCod.map(fc => (
+                  <span key={fc.cod} className={`mr-2 ${fc.cant > 0 ? 'text-green-700 font-bold' : 'text-gray-400'}`}>
+                    {fc.cod}={fc.cant}
+                  </span>
+                ))}
+                {debugInfo.filasPorCod.every(fc => fc.cant === 0) &&
+                  <span className="text-red-600 font-bold">⚠ 0 filas encontradas</span>
+                }
+              </p>
+              <p><strong>Filas por dep.id:</strong>{' '}
+                <span className={debugInfo.filasPorId > 0 ? 'text-green-700 font-bold' : 'text-gray-400'}>
+                  {debugInfo.filasPorId}
+                </span>
+              </p>
+              <p><strong>Claves en allPagos ({debugInfo.clavesPagos.length} total):</strong></p>
+              <div className="bg-white rounded p-1.5 max-h-24 overflow-y-auto break-all">
+                {debugInfo.clavesPagos.length === 0
+                  ? <span className="text-red-600">⚠ allPagos está VACÍO</span>
+                  : debugInfo.clavesPagos.map((k, i) => (
+                      <span key={i} className={`mr-2 ${/^\d{4,5}$/.test(k) ? 'text-blue-700 font-bold' : 'text-gray-500'}`}>
+                        {k}
+                      </span>
+                    ))
+                }
+              </div>
+              <p className="text-[9px] text-gray-400">Azul = claves numéricas (Libro Contable) · Gris = dep.id</p>
+            </div>
+          )}
+        </div>
+
       </main>
 
       {/* ── MODAL REGISTRAR PAGO ── */}
@@ -598,12 +718,12 @@ export default function EstadoCuentaPage() {
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Destino / Cuenta</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Descripción</label>
                 <input
                   value={editForm.destino || ''}
                   onChange={e => setEditForm(f => ({ ...f, destino: e.target.value }))}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-[#111827]"
-                  placeholder="613"
+                  placeholder="Ej: Transferencia, efectivo..."
                 />
               </div>
               <div>

@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Calendar, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Deportista } from '@/lib/deportistas';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import { getDeportistas, getAsistencia, getFoto } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
+import LoadingBall from '@/components/LoadingBall';
 
 const ASISTENCIA_KEY = 'futuro_asistencia';
 const FOTOS_KEY      = 'futuro_fotos_deportistas';
@@ -74,15 +75,14 @@ export default function AsistenciaAtletaPage() {
   const [vista,      setVista]      = useState<'mes' | 'consolidado'>('mes');
 
   useEffect(() => {
-    try {
-      const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
+    getDeportistas().then(lista => {
       const found = lista.find(d => d.id === id);
       if (found) setDep(found);
-      const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}');
-      if (fotos[id]) setFoto(fotos[id]);
-      const rawA = localStorage.getItem(ASISTENCIA_KEY);
-      if (rawA) setAsistencia(JSON.parse(rawA));
-    } catch {}
+    });
+    getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {
+      try { const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); if (fotos[id]) setFoto(fotos[id]); } catch {}
+    });
+    getAsistencia().then(data => { if (Object.keys(data).length) setAsistencia(data as any); });
   }, [id]);
 
   /* Datos derivados del deportista (seguros con dep ?? null) */
@@ -133,11 +133,7 @@ export default function AsistenciaAtletaPage() {
 
   /* ── Loading (DESPUÉS de todos los hooks) ── */
   if (!dep) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-400 font-semibold">Cargando...</p>
-      </div>
-    );
+    return <LoadingBall />;
   }
 
   const G    = '#16a34a';   // verde  — encabezado MES + columna mes
@@ -161,7 +157,7 @@ export default function AsistenciaAtletaPage() {
             <rect width="100%" height="100%" fill="url(#sp-as)"/>
           </svg>
         </div>
-        <button onClick={() => router.back()} className="relative text-white/70 hover:text-white transition">
+        <button onClick={() => window.history.length > 1 ? router.back() : router.push(`/alumnos/${id}`)} className="relative text-white/70 hover:text-white transition">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="relative flex-1 min-w-0">

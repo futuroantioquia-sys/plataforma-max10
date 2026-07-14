@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Upload, CheckCircle, FileSpreadsheet, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { saveDeportistas } from '@/lib/db';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import type { Deportista } from '@/lib/deportistas';
+import type { Deportista } from '@/lib/db';
 
 function loadXLSX(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -118,8 +117,7 @@ export default function ImportarPage() {
           })(),
         }));
 
-      // Guardar local (inmediato) + Supabase (async en background)
-      localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(deportistas));
+      // Guardar en Supabase
       saveDeportistas(deportistas).catch(console.error);
       setResultado({ total: deportistas.length, errores });
       setPaso('confirmar');

@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, BookOpen, Upload } from 'lucide-react';
-import type { Deportista } from '@/lib/deportistas';
-import { DEPORTISTAS_KEY, VC_KEY } from '@/lib/deportistas';
+import { getDeportistas, getVistaContable } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
 
 /* ── Columnas ANTES de Código ── */
 const COLS_ANTES = [
@@ -114,38 +114,25 @@ export default function VistaContablePage() {
 
   /* ── Cargar y enriquecer con datos de la plataforma ── */
   useEffect(() => {
-    try {
-      const rawVC  = localStorage.getItem(VC_KEY);
-      if (!rawVC) return;
-      const parsed: FilaVC[] = JSON.parse(rawVC);
-
-      // Enriquecer con datos de deportistas en plataforma
-      try {
-        const rawDep = localStorage.getItem(DEPORTISTAS_KEY);
-        if (rawDep) {
-          const deps: Deportista[] = JSON.parse(rawDep);
-          const enriquecidas = parsed.map(fila => {
-            const dep = deps.find(d => {
-              const cod = codigoDe(d);
-              return (fila.codigo && cod && cod.toLowerCase() === fila.codigo.toLowerCase()) ||
-                     (fila.nombre && d._nombre.toLowerCase() === fila.nombre.toLowerCase());
-            });
-            if (!dep) return fila;
-            return {
-              ...fila,
-              tipoAfil: fila.tipoAfil || getCol(dep, /tipo.*afil|afil.*tipo|tipo.*mat/i),
-              estado:   fila.estado   || getCol(dep, /^estado/i),
-              anoNac:   fila.anoNac   || getCol(dep, /^a[ñn]o/i),
-              proyecto: fila.proyecto || getCol(dep, /^proy/i),
-            };
-          });
-          setFilas(enriquecidas);
-          return;
-        }
-      } catch {}
-
-      setFilas(parsed);
-    } catch {}
+    Promise.all([getVistaContable(), getDeportistas()]).then(([parsed, deps]) => {
+      if (!parsed.length) return;
+      const enriquecidas = parsed.map(fila => {
+        const dep = deps.find(d => {
+          const cod = codigoDe(d);
+          return (fila.codigo && cod && cod.toLowerCase() === fila.codigo.toLowerCase()) ||
+                 (fila.nombre && d._nombre.toLowerCase() === fila.nombre.toLowerCase());
+        });
+        if (!dep) return fila;
+        return {
+          ...fila,
+          tipoAfil: fila.tipoAfil || getCol(dep, /tipo.*afil|afil.*tipo|tipo.*mat/i),
+          estado:   fila.estado   || getCol(dep, /^estado/i),
+          anoNac:   fila.anoNac   || getCol(dep, /^a[ñn]o/i),
+          proyecto: fila.proyecto || getCol(dep, /^proy/i),
+        };
+      });
+      setFilas(enriquecidas);
+    }).catch(console.error);
   }, []);
 
   /* Filtros */

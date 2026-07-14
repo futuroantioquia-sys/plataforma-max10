@@ -29,22 +29,68 @@ export type AllPagos = Record<string, FilaPago[]>;
 const LS_DEPS  = 'futuro_deportistas';
 const LS_PAGOS = 'futuro_pagos_estado';
 const LS_FOTOS = 'futuro_fotos_deportistas';
+/** Clave dedicada para pagos del Libro Contable (claves numéricas 4-5 dígitos).
+ *  Se guarda SEPARADO del resto para que no compita con datos de Supabase
+ *  y no pierda datos por cuota de localStorage. */
+const LS_LIBRO = 'futuro_libro_pagos';
+
+// ── Caché en memoria (evita re-fetch en cada navegación) ─────
+let _cacheDeportistas: Deportista[] | null = null;
+let _cachePagos:       AllPagos    | null = null;
+
+/** Invalida la caché para forzar recarga desde Supabase */
+export function invalidarCache() {
+  _cacheDeportistas = null;
+  _cachePagos       = null;
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 function supabase() { return createClient(); }
+
+/**
+ * Deriva el nombre correcto del deportista.
+ * Si el campo `nombre` es un código numérico (o está vacío),
+ * busca en columnas alguna clave que represente el nombre real.
+ */
+function derivarNombre(nombre: string, columnas: Record<string, string>): string {
+  const n = (nombre ?? '').trim();
+  // Si tiene contenido y NO es solo dígitos → es el nombre real
+  if (n && !/^\d+$/.test(n)) return n;
+
+  const cols = columnas ?? {};
+
+  // Prioridad 1: columna que contenga "deportista" o "alumno" o "jugador"
+  const key1 = Object.keys(cols).find(k =>
+    /deportista|alumno|jugador|atleta/i.test(k.trim())
+  );
+  if (key1 && cols[key1]?.trim()) return cols[key1].trim();
+
+  // Prioridad 2: cualquier columna que contenga "nombre"
+  // (pero que no sea solo el CÓDIGO)
+  const key2 = Object.keys(cols).find(k =>
+    /nombre/i.test(k.trim()) && !/^c[oó]d/i.test(k.trim())
+  );
+  if (key2 && cols[key2]?.trim() && !/^\d+$/.test(cols[key2].trim())) {
+    return cols[key2].trim();
+  }
+
+  return n;
+}
 
 function lsGet<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback; }
   catch { return fallback; }
 }
 function lsSet(key: string, val: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+  try { localStorage.setItem(key, JSON.stringify(val)); }
+  catch (e) { console.warn('[db] localStorage lleno o bloqueado:', key, e); }
 }
 
 // ── DEPORTISTAS ───────────────────────────────────────────────
 
-/** Lee deportistas: Supabase primero, localStorage como fallback. */
+/** Lee deportistas: caché en memoria → Supabase → localStorage. */
 export async function getDeportistas(): Promise<Deportista[]> {
+  if (_cacheDeportistas) return _cacheDeportistas;
   try {
     const { data, error } = await supabase()
       .from('deportistas')
@@ -52,29 +98,62 @@ export async function getDeportistas(): Promise<Deportista[]> {
       .order('nombre');
 
     if (error) throw error;
-    if (!data || !data.length) return lsGet<Deportista[]>(LS_DEPS, []);
+    if (!data || !data.length) {
+      // Normalizar nombres en el caché local también
+      const cached = lsGet<Deportista[]>(LS_DEPS, []);
+      return cached.map(d => ({
+        ...d,
+        _nombre: derivarNombre(d._nombre, d._columnas ?? {}),
+      }));
+    }
 
     const deps: Deportista[] = data.map((r: any) => ({
       id:        r.id,
-      _nombre:   r.nombre,
+      _nombre:   derivarNombre(r.nombre, r.columnas ?? {}),
       _columnas: r.columnas ?? {},
     }));
 
     lsSet(LS_DEPS, deps);
+    _cacheDeportistas = deps;
     return deps;
   } catch {
-    return lsGet<Deportista[]>(LS_DEPS, []);
+    const cached = lsGet<Deportista[]>(LS_DEPS, []);
+    const result = cached.map(d => ({
+      ...d,
+      _nombre: derivarNombre(d._nombre, d._columnas ?? {}),
+    }));
+    if (result.length) _cacheDeportistas = result;
+    return result;
+  }
+}
+
+/** Elimina TODOS los deportistas de Supabase y localStorage. */
+export async function deleteAllDeportistas(): Promise<void> {
+  _cacheDeportistas = null;
+  try { localStorage.removeItem(LS_DEPS); } catch {}
+
+  try {
+    // Borrar toda la tabla deportistas en Supabase
+    const { error } = await supabase()
+      .from('deportistas')
+      .delete()
+      .neq('id', '___never___'); // condición que aplica a todas las filas
+
+    if (error) console.error('[db] deleteAllDeportistas:', error.message);
+  } catch (e) {
+    console.error('[db] deleteAllDeportistas:', e);
   }
 }
 
 /** Guarda deportistas en Supabase (upsert) y en localStorage. */
 export async function saveDeportistas(deps: Deportista[]): Promise<void> {
+  _cacheDeportistas = deps; // actualizar caché inmediatamente
   lsSet(LS_DEPS, deps);
 
   try {
     const rows = deps.map(d => ({
       id:      d.id,
-      nombre:  d._nombre,
+      nombre:  derivarNombre(d._nombre, d._columnas),
       columnas: d._columnas,
     }));
 
@@ -90,20 +169,30 @@ export async function saveDeportistas(deps: Deportista[]): Promise<void> {
 
 // ── PAGOS ────────────────────────────────────────────────────
 
-/** Lee todos los pagos de Supabase. Fallback: localStorage. */
+/** Lee todos los pagos: fusiona Supabase + localStorage.
+ *  Para deportistas que existen en ambos → Supabase tiene prioridad (más confiable).
+ *  Para deportistas solo en localStorage → usa localStorage
+ *  (cubre el caso donde el upsert a Supabase falló pero localStorage sí se actualizó). */
 export async function getPagos(): Promise<AllPagos> {
+  // 1. Leer pagos del Libro Contable (clave dedicada — pequeña, siempre disponible)
+  const libroAll = lsGet<AllPagos>(LS_LIBRO, {});
+
+  // 2. Leer pagos manuales de localStorage (dep.id)
+  const lsAll = lsGet<AllPagos>(LS_PAGOS, {});
+
   try {
+    // 3. Leer pagos manuales de Supabase
     const { data, error } = await supabase()
       .from('pagos_estado')
-      .select('deportista_id, detalle, estado, v_pagado, v_cargado, destino, fecha');
+      .select('deportista_id, detalle, estado, v_pagado, v_cargado, destino, fecha')
+      .limit(2000);
 
     if (error) throw error;
-    if (!data || !data.length) return lsGet<AllPagos>(LS_PAGOS, {});
 
-    const all: AllPagos = {};
-    for (const r of data) {
-      if (!all[r.deportista_id]) all[r.deportista_id] = [];
-      all[r.deportista_id].push({
+    const sbAll: AllPagos = {};
+    for (const r of (data ?? [])) {
+      if (!sbAll[r.deportista_id]) sbAll[r.deportista_id] = [];
+      sbAll[r.deportista_id].push({
         detalle:  r.detalle,
         estado:   r.estado,
         vPagado:  r.v_pagado  ?? '',
@@ -113,16 +202,20 @@ export async function getPagos(): Promise<AllPagos> {
       });
     }
 
-    lsSet(LS_PAGOS, all);
-    return all;
+    // Fusionar: lsAll y libroAll ganan (escritura más reciente)
+    // Orden: sbAll < lsAll < libroAll
+    // libroAll son claves numéricas, no colisionan con dep.id
+    const merged: AllPagos = { ...sbAll, ...lsAll, ...libroAll };
+    return merged;
   } catch {
-    return lsGet<AllPagos>(LS_PAGOS, {});
+    // Sin Supabase: usar solo localStorage
+    return { ...lsAll, ...libroAll };
   }
 }
 
 /** Guarda/actualiza pagos de UN deportista en Supabase. */
 export async function savePagosDeportista(depId: string, filas: FilaPago[]): Promise<void> {
-  // Actualizar localStorage
+  // Actualizar localStorage (solo dep.id entries, NO tocar LS_LIBRO)
   const all = lsGet<AllPagos>(LS_PAGOS, {});
   all[depId] = filas;
   lsSet(LS_PAGOS, all);
@@ -148,13 +241,32 @@ export async function savePagosDeportista(depId: string, filas: FilaPago[]): Pro
   }
 }
 
-/** Guarda todos los pagos (batch): usado al aplicar archivo banco. */
+/** Guarda todos los pagos (batch): usado al importar Libro Contable.
+ *  - Claves numéricas (4-5 dígitos) → LS_LIBRO (clave separada, pequeña, robusta)
+ *  - Claves dep.id → LS_PAGOS + Supabase pagos_estado */
 export async function saveAllPagos(all: AllPagos): Promise<void> {
-  lsSet(LS_PAGOS, all);
+  /* Separar claves numéricas (Libro Contable) de claves dep.id (manual) */
+  const libroEntries: AllPagos = {};
+  const depEntries:   AllPagos = {};
 
+  for (const [key, filas] of Object.entries(all)) {
+    if (/^\d{1,5}$/.test(key)) {
+      libroEntries[key] = filas;
+    } else {
+      depEntries[key] = filas;
+    }
+  }
+
+  /* 1. Guardar pagos del Libro Contable en clave DEDICADA (pequeña, sin Supabase) */
+  lsSet(LS_LIBRO, libroEntries);
+
+  /* 2. Guardar pagos manuales (dep.id) en clave general */
+  lsSet(LS_PAGOS, depEntries);
+
+  /* 3. Sincronizar dep.id con Supabase */
   try {
     const rows: object[] = [];
-    for (const [depId, filas] of Object.entries(all)) {
+    for (const [depId, filas] of Object.entries(depEntries)) {
       for (const f of filas) {
         rows.push({
           deportista_id: depId,
@@ -167,10 +279,7 @@ export async function saveAllPagos(all: AllPagos): Promise<void> {
         });
       }
     }
-
     if (!rows.length) return;
-
-    // Supabase tiene límite de 1000 filas por upsert, hacemos chunks
     const CHUNK = 500;
     for (let i = 0; i < rows.length; i += CHUNK) {
       const { error } = await supabase()
@@ -223,5 +332,462 @@ export async function saveFoto(depId: string, base64: string): Promise<void> {
     if (error) console.error('[db] saveFoto:', error.message);
   } catch (e) {
     console.error('[db] saveFoto:', e);
+  }
+}
+
+// ── ASISTENCIA ────────────────────────────────────────────────
+
+// [proyecto][anio_mes][deportistaId][fecha] = Estado
+export type AsistenciaData = Record<string, Record<string, Record<string, Record<string, string>>>>;
+
+const LS_ASIST = 'futuro_asistencia';
+
+/** Lee asistencia completa: Supabase primero, localStorage como fallback. */
+export async function getAsistencia(): Promise<AsistenciaData> {
+  try {
+    const { data, error } = await supabase()
+      .from('asistencia')
+      .select('proyecto, anio_mes, deportista_id, fecha, estado');
+
+    if (error) throw error;
+    if (!data || !data.length) return lsGet<AsistenciaData>(LS_ASIST, {});
+
+    const result: AsistenciaData = {};
+    for (const r of data) {
+      if (!result[r.proyecto])                         result[r.proyecto] = {};
+      if (!result[r.proyecto][r.anio_mes])             result[r.proyecto][r.anio_mes] = {};
+      if (!result[r.proyecto][r.anio_mes][r.deportista_id]) result[r.proyecto][r.anio_mes][r.deportista_id] = {};
+      result[r.proyecto][r.anio_mes][r.deportista_id][r.fecha] = r.estado;
+    }
+    lsSet(LS_ASIST, result);
+    return result;
+  } catch {
+    return lsGet<AsistenciaData>(LS_ASIST, {});
+  }
+}
+
+/** Guarda asistencia completa (upsert batch). */
+export async function saveAsistencia(data: AsistenciaData): Promise<void> {
+  lsSet(LS_ASIST, data);
+
+  try {
+    const rows: object[] = [];
+    for (const [proyecto, meses] of Object.entries(data)) {
+      for (const [anio_mes, deps] of Object.entries(meses)) {
+        for (const [deportista_id, fechas] of Object.entries(deps)) {
+          for (const [fecha, estado] of Object.entries(fechas)) {
+            rows.push({ proyecto, anio_mes, deportista_id, fecha, estado });
+          }
+        }
+      }
+    }
+    if (!rows.length) return;
+    const CHUNK = 500;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const { error } = await supabase()
+        .from('asistencia')
+        .upsert(rows.slice(i, i + CHUNK), { onConflict: 'proyecto,anio_mes,deportista_id,fecha' });
+      if (error) console.error('[db] saveAsistencia chunk:', error.message);
+    }
+  } catch (e) {
+    console.error('[db] saveAsistencia:', e);
+  }
+}
+
+// ── VISTA CONTABLE ────────────────────────────────────────────
+
+export type FilaVC = Record<string, string>; // { CÓDIGO, NOMBRE, MATRÍCULA, FEBRERO... }
+
+const LS_VC = 'futuro_vista_contable';
+
+/** Lee vista contable: Supabase primero, localStorage como fallback. */
+export async function getVistaContable(): Promise<FilaVC[]> {
+  try {
+    const { data, error } = await supabase()
+      .from('vista_contable')
+      .select('deportista_id, nombre, valores');
+
+    if (error) throw error;
+    if (!data || !data.length) return lsGet<FilaVC[]>(LS_VC, []);
+
+    const rows: FilaVC[] = data.map((r: any) => ({
+      ...r.valores,
+      _dep_id: r.deportista_id,
+    }));
+    lsSet(LS_VC, rows);
+    return rows;
+  } catch {
+    return lsGet<FilaVC[]>(LS_VC, []);
+  }
+}
+
+/** Guarda vista contable en Supabase y localStorage. */
+export async function saveVistaContable(filas: FilaVC[]): Promise<void> {
+  lsSet(LS_VC, filas);
+
+  try {
+    const rows = filas.map(f => ({
+      deportista_id: f['CÓDIGO'] ?? f['_dep_id'] ?? String(Math.random()),
+      nombre:        f['NOMBRE'] ?? '',
+      valores:       f,
+    }));
+
+    const CHUNK = 200;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const { error } = await supabase()
+        .from('vista_contable')
+        .upsert(rows.slice(i, i + CHUNK), { onConflict: 'deportista_id' });
+      if (error) console.error('[db] saveVistaContable chunk:', error.message);
+    }
+  } catch (e) {
+    console.error('[db] saveVistaContable:', e);
+  }
+}
+
+// ── BANCOS HISTÓRICO ──────────────────────────────────────────
+
+const LS_BANCOS = 'futuro_bancos_historico';
+
+/** Lee historial de bancos: Supabase primero, localStorage como fallback. */
+export async function getBancosHistorico(): Promise<object[]> {
+  try {
+    const { data, error } = await supabase()
+      .from('bancos_historico')
+      .select('datos, batch_id, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    if (!data || !data.length) return lsGet<object[]>(LS_BANCOS, []);
+
+    // Aplanar todos los batches en un solo array
+    const all: object[] = [];
+    for (const batch of data) {
+      if (Array.isArray(batch.datos)) all.push(...batch.datos);
+    }
+    lsSet(LS_BANCOS, all);
+    return all;
+  } catch {
+    return lsGet<object[]>(LS_BANCOS, []);
+  }
+}
+
+/** Guarda un nuevo batch del historial de bancos. */
+export async function saveBancosHistorico(filas: object[]): Promise<void> {
+  // Agregar al array existente en localStorage
+  const prev = lsGet<object[]>(LS_BANCOS, []);
+  const nuevo = [...prev, ...filas];
+  lsSet(LS_BANCOS, nuevo);
+
+  try {
+    const batch_id = Date.now().toString();
+    const { error } = await supabase()
+      .from('bancos_historico')
+      .insert({ datos: filas, batch_id });
+    if (error) console.error('[db] saveBancosHistorico:', error.message);
+  } catch (e) {
+    console.error('[db] saveBancosHistorico:', e);
+  }
+}
+
+/** Reemplaza todo el historial de bancos (para borrar/resetear). */
+export async function setBancosHistorico(filas: object[]): Promise<void> {
+  lsSet(LS_BANCOS, filas);
+
+  try {
+    // Borrar todos los batches existentes e insertar uno nuevo
+    await supabase().from('bancos_historico').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (filas.length) {
+      const { error } = await supabase()
+        .from('bancos_historico')
+        .insert({ datos: filas, batch_id: 'reset-' + Date.now() });
+      if (error) console.error('[db] setBancosHistorico:', error.message);
+    }
+  } catch (e) {
+    console.error('[db] setBancosHistorico:', e);
+  }
+}
+
+// ── Gestión de Profes ─────────────────────────────────────────
+
+export interface Profe {
+  id:        string;   // uuid generado en cliente
+  usuario:   string;   // apellido en mayúsculas (login)
+  clave:     string;   // cédula
+  proyectos: string[]; // proyectos a los que puede acceder
+}
+
+const LS_PROFES = 'futuro_profes';
+
+// Profes iniciales — fallback garantizado si no hay BD ni caché
+const PROFES_INICIALES: Profe[] = [
+  { id: 'pi-01', usuario: 'CASTRO',   clave: '1214734807', proyectos: [] },
+  { id: 'pi-02', usuario: 'MEJIA',    clave: '1152192324', proyectos: [] },
+  { id: 'pi-03', usuario: 'RAMIREZ',  clave: '1017258984', proyectos: [] },
+  { id: 'pi-04', usuario: 'SAMUEL',   clave: '1000415036', proyectos: [] },
+  { id: 'pi-05', usuario: 'TABARES',  clave: '1000084856', proyectos: [] },
+  { id: 'pi-06', usuario: 'CHALARCA', clave: '1128389946', proyectos: [] },
+  { id: 'pi-07', usuario: 'RIOS',     clave: '1036639022', proyectos: [] },
+  { id: 'pi-08', usuario: 'JESUS',    clave: '1003404311', proyectos: [] },
+  { id: 'pi-09', usuario: 'MARTIN',   clave: '1013458275', proyectos: [] },
+  { id: 'pi-10', usuario: 'MARLON',   clave: '1017192180', proyectos: [] },
+  { id: 'pi-11', usuario: 'ALEX',     clave: '1020464354', proyectos: [] },
+  { id: 'pi-12', usuario: 'DORIA',    clave: '1003050289', proyectos: [] },
+  { id: 'pi-13', usuario: 'MUÑOZ',    clave: '1034776238', proyectos: [] },
+  { id: 'pi-14', usuario: 'ALVAREZ',  clave: '1033180115', proyectos: [] },
+  { id: 'pi-15', usuario: 'DUVAN',    clave: '1002066215', proyectos: [] },
+  { id: 'pi-16', usuario: 'GIRALDO',  clave: '1127792656', proyectos: [] },
+  { id: 'pi-17', usuario: 'NICOLAS',  clave: '1005372826', proyectos: [] },
+  { id: 'pi-18', usuario: 'KAREN',    clave: '1000870631', proyectos: [] },
+  { id: 'pi-19', usuario: 'CAMILA',   clave: '1193081467', proyectos: [] },
+  { id: 'pi-20', usuario: 'EDGAR',    clave: '98539787',   proyectos: [] },
+  { id: 'pi-21', usuario: 'JIMENEZ',  clave: '1036864427', proyectos: [] },
+  { id: 'pi-22', usuario: 'GUZMAN',   clave: '1000203538', proyectos: [] },
+];
+
+export async function getProfes(): Promise<Profe[]> {
+  // 1. localStorage (más rápido)
+  const cached = lsGet<Profe[]>(LS_PROFES, []);
+  if (cached && cached.length) return cached;
+
+  // 2. Supabase
+  try {
+    const { data, error } = await supabase()
+      .from('profes')
+      .select('*')
+      .order('usuario');
+    if (!error && data && data.length) {
+      const lista: Profe[] = data.map((r: any) => ({
+        id:        r.id,
+        usuario:   r.usuario,
+        clave:     r.clave,
+        proyectos: r.proyectos ?? [],
+      }));
+      lsSet(LS_PROFES, lista);
+      return lista;
+    }
+  } catch {}
+
+  // 3. Fallback garantizado: lista inicial hardcodeada
+  //    La guardamos en localStorage para que la próxima vez sea rápido
+  lsSet(LS_PROFES, PROFES_INICIALES);
+  return PROFES_INICIALES;
+}
+
+export async function saveProfes(lista: Profe[]): Promise<void> {
+  lsSet(LS_PROFES, lista);
+
+  try {
+    // Upsert de todos los profes
+    const rows = lista.map(p => ({
+      id:        p.id,
+      usuario:   p.usuario,
+      clave:     p.clave,
+      proyectos: p.proyectos,
+    }));
+    if (rows.length) {
+      await supabase().from('profes').upsert(rows, { onConflict: 'id' });
+    }
+    // Eliminar los que ya no están
+    const ids = lista.map(p => p.id);
+    if (ids.length) {
+      await supabase().from('profes').delete().not('id', 'in', `(${ids.map(i => `'${i}'`).join(',')})`);
+    } else {
+      await supabase().from('profes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    }
+  } catch (e) {
+    console.error('[db] saveProfes:', e);
+  }
+}
+
+// ── EVALUACIONES (Valoración deportiva — historial real) ───────
+
+export interface Evaluacion {
+  id: string; fecha: string; codigo: string; nombre: string; edad: string;
+  proyecto: string; perfil: string; posicion: string;
+  torneos: string; partJugados: string; tarjAmarillas: string; partTitular: string;
+  tarjRojas: string; minutosJugados: string; goles: string; calificacion: string;
+  foto: string;
+  fuerzaNivel: string; fuerzaDesc: string;
+  velocidadNivel: string; velocidadDesc: string;
+  resistenciaNivel: string; resistenciaDesc: string;
+  controlNivel: string; controlDesc: string;
+  paseNivel: string; paseDesc: string;
+  remataNivel: string; remataDesc: string;
+  conductaNivel: string; conductaDesc: string;
+  posicionNivel: string; posicionDesc: string;
+  visionNivel: string; visionDesc: string;
+  defensaNivel: string; defensaDesc: string;
+  actitudNivel: string; actitudDesc: string;
+  disciplinaNivel: string; disciplinaDesc: string;
+  trabajoNivel: string; trabajoDesc: string;
+  observaciones: string;
+}
+
+const LS_EVALUACIONES = 'futuro_evaluaciones';
+
+/** Lee el historial de evaluaciones, opcionalmente filtrado por código de deportista. */
+export async function getEvaluaciones(codigo?: string): Promise<Evaluacion[]> {
+  try {
+    let query = supabase().from('evaluaciones').select('*').order('created_at', { ascending: false });
+    if (codigo) query = query.eq('codigo', codigo.trim().toUpperCase());
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const lista: Evaluacion[] = (data ?? []).map((r: any) => ({
+      id: r.id, fecha: r.fecha, codigo: r.codigo, nombre: r.nombre ?? '', edad: r.edad ?? '',
+      proyecto: r.proyecto ?? '', perfil: r.perfil ?? '', posicion: r.posicion ?? '',
+      torneos: r.torneos ?? '', partJugados: r.part_jugados ?? '', tarjAmarillas: r.tarj_amarillas ?? '',
+      partTitular: r.part_titular ?? '', tarjRojas: r.tarj_rojas ?? '', minutosJugados: r.minutos_jugados ?? '',
+      goles: r.goles ?? '', calificacion: r.calificacion ?? '', foto: r.foto ?? '',
+      fuerzaNivel: r.fuerza_nivel ?? '', fuerzaDesc: r.fuerza_desc ?? '',
+      velocidadNivel: r.velocidad_nivel ?? '', velocidadDesc: r.velocidad_desc ?? '',
+      resistenciaNivel: r.resistencia_nivel ?? '', resistenciaDesc: r.resistencia_desc ?? '',
+      controlNivel: r.control_nivel ?? '', controlDesc: r.control_desc ?? '',
+      paseNivel: r.pase_nivel ?? '', paseDesc: r.pase_desc ?? '',
+      remataNivel: r.remata_nivel ?? '', remataDesc: r.remata_desc ?? '',
+      conductaNivel: r.conducta_nivel ?? '', conductaDesc: r.conducta_desc ?? '',
+      posicionNivel: r.posicion_nivel ?? '', posicionDesc: r.posicion_desc ?? '',
+      visionNivel: r.vision_nivel ?? '', visionDesc: r.vision_desc ?? '',
+      defensaNivel: r.defensa_nivel ?? '', defensaDesc: r.defensa_desc ?? '',
+      actitudNivel: r.actitud_nivel ?? '', actitudDesc: r.actitud_desc ?? '',
+      disciplinaNivel: r.disciplina_nivel ?? '', disciplinaDesc: r.disciplina_desc ?? '',
+      trabajoNivel: r.trabajo_nivel ?? '', trabajoDesc: r.trabajo_desc ?? '',
+      observaciones: r.observaciones ?? '',
+    }));
+    lsSet(LS_EVALUACIONES, lista);
+    return lista;
+  } catch {
+    const cached = lsGet<Evaluacion[]>(LS_EVALUACIONES, []);
+    return codigo ? cached.filter(e => e.codigo === codigo.trim().toUpperCase()) : cached;
+  }
+}
+
+/** Guarda una NUEVA evaluación (siempre inserta — cada guardado queda en el historial). */
+export async function saveEvaluacion(data: Omit<Evaluacion, 'id'>): Promise<void> {
+  const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  const cached = lsGet<Evaluacion[]>(LS_EVALUACIONES, []);
+  lsSet(LS_EVALUACIONES, [{ ...data, id }, ...cached]);
+
+  try {
+    const row = {
+      id, fecha: data.fecha, codigo: data.codigo.trim().toUpperCase(), nombre: data.nombre, edad: data.edad,
+      proyecto: data.proyecto, perfil: data.perfil, posicion: data.posicion,
+      torneos: data.torneos, part_jugados: data.partJugados, tarj_amarillas: data.tarjAmarillas,
+      part_titular: data.partTitular, tarj_rojas: data.tarjRojas, minutos_jugados: data.minutosJugados,
+      goles: data.goles, calificacion: data.calificacion, foto: data.foto,
+      fuerza_nivel: data.fuerzaNivel, fuerza_desc: data.fuerzaDesc,
+      velocidad_nivel: data.velocidadNivel, velocidad_desc: data.velocidadDesc,
+      resistencia_nivel: data.resistenciaNivel, resistencia_desc: data.resistenciaDesc,
+      control_nivel: data.controlNivel, control_desc: data.controlDesc,
+      pase_nivel: data.paseNivel, pase_desc: data.paseDesc,
+      remata_nivel: data.remataNivel, remata_desc: data.remataDesc,
+      conducta_nivel: data.conductaNivel, conducta_desc: data.conductaDesc,
+      posicion_nivel: data.posicionNivel, posicion_desc: data.posicionDesc,
+      vision_nivel: data.visionNivel, vision_desc: data.visionDesc,
+      defensa_nivel: data.defensaNivel, defensa_desc: data.defensaDesc,
+      actitud_nivel: data.actitudNivel, actitud_desc: data.actitudDesc,
+      disciplina_nivel: data.disciplinaNivel, disciplina_desc: data.disciplinaDesc,
+      trabajo_nivel: data.trabajoNivel, trabajo_desc: data.trabajoDesc,
+      observaciones: data.observaciones,
+    };
+    const { error } = await supabase().from('evaluaciones').insert(row);
+    if (error) console.error('[db] saveEvaluacion:', error.message);
+  } catch (e) {
+    console.error('[db] saveEvaluacion:', e);
+  }
+}
+
+// ── SESIONES DE ENTRENAMIENTO ────────────────────────────────
+
+export interface Sesion {
+  id: string; fecha: string; proyecto: string; profesor: string;
+  objetivo: string; ejercicios: string; observaciones: string;
+}
+
+const LS_SESIONES = 'futuro_sesiones';
+
+/** Lee sesiones de entrenamiento, opcionalmente filtradas por proyecto. */
+export async function getSesiones(proyecto?: string): Promise<Sesion[]> {
+  try {
+    let query = supabase().from('sesiones_entrenamiento').select('*').order('fecha', { ascending: false });
+    if (proyecto) query = query.eq('proyecto', proyecto);
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const lista: Sesion[] = (data ?? []).map((r: any) => ({
+      id: r.id, fecha: r.fecha, proyecto: r.proyecto, profesor: r.profesor ?? '',
+      objetivo: r.objetivo ?? '', ejercicios: r.ejercicios ?? '', observaciones: r.observaciones ?? '',
+    }));
+    lsSet(LS_SESIONES, lista);
+    return lista;
+  } catch {
+    const cached = lsGet<Sesion[]>(LS_SESIONES, []);
+    return proyecto ? cached.filter(s => s.proyecto === proyecto) : cached;
+  }
+}
+
+/** Guarda una nueva sesión de entrenamiento (siempre inserta). */
+export async function saveSesion(data: Omit<Sesion, 'id'>): Promise<void> {
+  const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  const cached = lsGet<Sesion[]>(LS_SESIONES, []);
+  lsSet(LS_SESIONES, [{ ...data, id }, ...cached]);
+
+  try {
+    const { error } = await supabase().from('sesiones_entrenamiento').insert({ id, ...data });
+    if (error) console.error('[db] saveSesion:', error.message);
+  } catch (e) {
+    console.error('[db] saveSesion:', e);
+  }
+}
+
+// ── POSTPARTIDO ──────────────────────────────────────────────
+
+export interface DesempenoJugador { codigo: string; nombre: string; observacion: string; }
+
+export interface Postpartido {
+  id: string; fecha: string; proyecto: string; rival: string; resultado: string;
+  observacionesGrupo: string; desempenoIndividual: DesempenoJugador[]; aprendizajes: string;
+}
+
+const LS_POSTPARTIDOS = 'futuro_postpartidos';
+
+/** Lee postpartidos, opcionalmente filtrados por proyecto. */
+export async function getPostpartidos(proyecto?: string): Promise<Postpartido[]> {
+  try {
+    let query = supabase().from('postpartidos').select('*').order('fecha', { ascending: false });
+    if (proyecto) query = query.eq('proyecto', proyecto);
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const lista: Postpartido[] = (data ?? []).map((r: any) => ({
+      id: r.id, fecha: r.fecha, proyecto: r.proyecto, rival: r.rival ?? '', resultado: r.resultado ?? '',
+      observacionesGrupo: r.observaciones_grupo ?? '',
+      desempenoIndividual: r.desempeno_individual ?? [],
+      aprendizajes: r.aprendizajes ?? '',
+    }));
+    lsSet(LS_POSTPARTIDOS, lista);
+    return lista;
+  } catch {
+    const cached = lsGet<Postpartido[]>(LS_POSTPARTIDOS, []);
+    return proyecto ? cached.filter(p => p.proyecto === proyecto) : cached;
+  }
+}
+
+/** Guarda un nuevo postpartido (siempre inserta). */
+export async function savePostpartido(data: Omit<Postpartido, 'id'>): Promise<void> {
+  const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  const cached = lsGet<Postpartido[]>(LS_POSTPARTIDOS, []);
+  lsSet(LS_POSTPARTIDOS, [{ ...data, id }, ...cached]);
+
+  try {
+    const row = {
+      id, fecha: data.fecha, proyecto: data.proyecto, rival: data.rival, resultado: data.resultado,
+      observaciones_grupo: data.observacionesGrupo, desempeno_individual: data.desempenoIndividual,
+      aprendizajes: data.aprendizajes,
+    };
+    const { error } = await supabase().from('postpartidos').insert(row);
+    if (error) console.error('[db] savePostpartido:', error.message);
+  } catch (e) {
+    console.error('[db] savePostpartido:', e);
   }
 }

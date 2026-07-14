@@ -8,9 +8,10 @@ import {
   ChevronRight, ArrowLeft, Camera, GraduationCap,
   LayoutGrid, TableProperties, ChevronDown, Download, Loader2,
 } from 'lucide-react';
+import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
-import type { Deportista } from '@/lib/deportistas';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import { getDeportistas, saveDeportistas } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
 
 const FOTOS_PROFE_KEY = 'futuro_fotos_profes';
 
@@ -707,11 +708,12 @@ export default function AlumnosPage() {
   const [proy,        setProy]        = useState<string | null>(null);
   const [busqueda,    setBusqueda]    = useState('');
   const [proyEdits,   setProyEdits]   = useState<Record<string, string>>({});
+  const [cargando,    setCargando]    = useState(true);
 
   useEffect(() => {
+    // Cargar deportistas desde Supabase (con fallback a localStorage)
+    getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
     try {
-      const g = localStorage.getItem(DEPORTISTAS_KEY);
-      if (g) setDeportistas(JSON.parse(g));
       const f = localStorage.getItem('futuro_fotos_deportistas');
       if (f) setFotos(JSON.parse(f));
       const fp = localStorage.getItem(FOTOS_PROFE_KEY);
@@ -728,7 +730,7 @@ export default function AlumnosPage() {
     });
     setDeportistas(lista);
     setProyEdits(prev => { const n = { ...prev }; delete n[depId]; return n; });
-    try { localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(lista)); } catch {}
+    saveDeportistas(lista);
   }
 
   function guardarFotoProfe(profe: string, b64: string) {
@@ -781,7 +783,7 @@ export default function AlumnosPage() {
           ? { ...d, _columnas: { ...(d._columnas ?? {}), [VPOS]: val } }
           : d
       );
-      localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(next));
+      saveDeportistas(next);
       return next;
     });
   }
@@ -821,7 +823,9 @@ export default function AlumnosPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        {deportistas.length === 0 ? (
+        {cargando ? (
+          <BalonCargando />
+        ) : deportistas.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center mb-5">
               <Users className="w-10 h-10 text-gray-300" />

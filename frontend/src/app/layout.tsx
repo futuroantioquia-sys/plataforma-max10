@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { BotonInicioFlotante } from '@/components/BotonInicioFlotante';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], preload: false, display: 'swap' });
 
 export const metadata: Metadata = {
   title:       'Futuro Antioquia — Plataforma Digital',
@@ -13,7 +14,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        {children}
+        <BotonInicioFlotante />
+      </body>
     </html>
   );
 }

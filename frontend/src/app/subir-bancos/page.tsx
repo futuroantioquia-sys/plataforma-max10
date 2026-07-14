@@ -1,16 +1,11 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Upload, FileSpreadsheet, Play, CheckCircle, AlertTriangle, XCircle, RefreshCw, Trash2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import type { Deportista } from '@/lib/deportistas';
-import { saveAllPagos } from '@/lib/db';
-
-// ── Constantes ────────────────────────────────────────────────
-const PAGOS_KEY         = 'futuro_pagos_estado';
-const BANCOS_KEY = 'futuro_bancos_historico';
+import { getDeportistas, getPagos, saveAllPagos, saveBancosHistorico, setBancosHistorico, getBancosHistorico } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
 
 const DETALLE_VALIDOS = [
   'MATRÍCULA','MATRICULA',
@@ -211,9 +206,9 @@ export default function SubirBancosPage() {
   }, []);
 
   // ── Procesar ─────────────────────────────────────────────
-  function procesar() {
-    const deportistas: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
-    const allPagos: Record<string, any[]> = JSON.parse(localStorage.getItem(PAGOS_KEY) ?? '{}');
+  async function procesar() {
+    const deportistas: Deportista[] = await getDeportistas();
+    const allPagos: Record<string, any[]> = await getPagos() as any;
 
     // Mapa código → deportista
     const mapCod = new Map<string, Deportista>();
@@ -305,8 +300,8 @@ export default function SubirBancosPage() {
   }
 
   // ── Aplicar ───────────────────────────────────────────────
-  function aplicar() {
-    const allPagos: Record<string, any[]> = JSON.parse(localStorage.getItem(PAGOS_KEY) ?? '{}');
+  async function aplicar() {
+    const allPagos: Record<string, any[]> = await getPagos() as any;
     const aplicados: {depId: string; detalle: string}[] = [];
     const MESES_BASE = ['MATRÍCULA','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
 
@@ -330,32 +325,30 @@ export default function SubirBancosPage() {
       aplicados.push({ depId: ln.depId, detalle: ln.detalle });
     });
 
-    localStorage.setItem(PAGOS_KEY, JSON.stringify(allPagos));
-    saveAllPagos(allPagos).catch(console.error); // sync Supabase en background
+    await saveAllPagos(allPagos);
 
     const lote: BancoLote = { id: `lote-${Date.now()}`, fechaSubida: new Date().toISOString(), totalRegistros: lineas.length, lineas };
-    const hist: BancoLote[] = JSON.parse(localStorage.getItem(BANCOS_KEY) ?? '[]');
+    const hist: BancoLote[] = await getBancosHistorico() as any[];
     hist.unshift(lote);
-    localStorage.setItem(BANCOS_KEY, JSON.stringify(hist));
+    await setBancosHistorico(hist);
 
     setRegistrosAplicados(aplicados);
     setFase('aplicado');
   }
 
   // ── Revertir ──────────────────────────────────────────────
-  function revertir() {
+  async function revertir() {
     if (!confirm('¿Eliminar todos los cambios aplicados?')) return;
-    const allPagos: Record<string, any[]> = JSON.parse(localStorage.getItem(PAGOS_KEY) ?? '{}');
+    const allPagos: Record<string, any[]> = await getPagos() as any;
     registrosAplicados.forEach(({ depId, detalle }) => {
       const fd = allPagos[depId]; if (!fd) return;
       const idx = fd.findIndex((r: any) => r.detalle === detalle); if (idx === -1) return;
       fd[idx] = { ...fd[idx], estado: 'PEND', vPagado: '', fecha: '' };
     });
-    localStorage.setItem(PAGOS_KEY, JSON.stringify(allPagos));
-    saveAllPagos(allPagos).catch(console.error); // sync revert en Supabase
-    const hist: BancoLote[] = JSON.parse(localStorage.getItem(BANCOS_KEY) ?? '[]');
+    await saveAllPagos(allPagos);
+    const hist: BancoLote[] = await getBancosHistorico() as any[];
     hist.shift();
-    localStorage.setItem(BANCOS_KEY, JSON.stringify(hist));
+    await setBancosHistorico(hist);
     setRegistrosAplicados([]);
     setFase('upload'); setRawFilas([]); setLineas([]);
   }

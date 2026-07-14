@@ -3,10 +3,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import type { Deportista } from '@/lib/deportistas';
-
-const ASISTENCIA_KEY = 'futuro_asistencia';
+import { getDeportistas, getAsistencia } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
+import { BalonCargando } from '@/components/BalonCargando';
 
 // Feb=1 … Dic=11  (índice JS 0-based)
 const MESES_CONSOLIDADO = [
@@ -47,13 +46,11 @@ export default function ConsolidadoPage() {
   const [proyecto,    setProyecto]    = useState('');
   const [anio,        setAnio]        = useState(new Date().getFullYear());
 
+  const [cargando, setCargando] = useState(true);
+
   useEffect(() => {
-    try {
-      const raw  = localStorage.getItem(DEPORTISTAS_KEY);
-      const rawA = localStorage.getItem(ASISTENCIA_KEY);
-      if (raw)  setDeportistas(JSON.parse(raw));
-      if (rawA) setAsistencia(JSON.parse(rawA));
-    } catch {}
+    getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
+    getAsistencia().then(data   => { if (Object.keys(data).length) setAsistencia(data as any); });
   }, []);
 
   const programas = useMemo(() => {
@@ -143,6 +140,7 @@ export default function ConsolidadoPage() {
           <h1 className="text-white font-black text-lg">Consolidado de Asistencia</h1>
           <p className="text-white/60 text-xs">Febrero – Diciembre · por deportista</p>
         </div>
+
         <div className="relative text-right leading-tight">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
           <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
@@ -192,7 +190,11 @@ export default function ConsolidadoPage() {
 
       {/* Tabla */}
       <main className="px-3 py-4">
-        {!proyecto ? (
+        {cargando ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+            <BalonCargando />
+          </div>
+        ) : !proyecto ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
             <BarChart3 className="w-14 h-14 text-gray-200 mx-auto mb-3" />
             <p className="text-gray-400 font-semibold">Selecciona un proyecto para ver el consolidado.</p>

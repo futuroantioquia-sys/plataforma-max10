@@ -7,10 +7,9 @@ import {
   ChevronRight, User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Deportista } from '@/lib/deportistas';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-
-const PAGOS_KEY = 'futuro_pagos_estado';
+import { getDeportistas, getPagos } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
+import { BalonCargando } from '@/components/BalonCargando';
 
 type PagoRow = {
   detalle: string; vCargado: string; estado: 'PAGÓ' | 'PEND';
@@ -34,14 +33,11 @@ export default function PagosPage() {
   const [allPagos,    setAllPagos]    = useState<AllPagos>({});
   const [busqueda,    setBusqueda]    = useState('');
   const [filtroPrograma, setFiltroPrograma] = useState('');
+  const [cargando,    setCargando]    = useState(true);
 
   useEffect(() => {
-    try {
-      const raw  = localStorage.getItem(DEPORTISTAS_KEY);
-      const rawP = localStorage.getItem(PAGOS_KEY);
-      if (raw)  setDeportistas(JSON.parse(raw));
-      if (rawP) setAllPagos(JSON.parse(rawP));
-    } catch {}
+    getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
+    getPagos().then(p => { if (Object.keys(p).length) setAllPagos(p as any); });
   }, []);
 
   const programas = useMemo(() =>
@@ -177,7 +173,9 @@ export default function PagosPage() {
         </div>
 
         {/* LISTA DE DEPORTISTAS */}
-        {deportistas.length === 0 ? (
+        {cargando ? (
+          <BalonCargando />
+        ) : deportistas.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
             <User className="w-12 h-12 text-gray-200 mx-auto mb-3" />
             <p className="text-gray-400 font-semibold text-sm">

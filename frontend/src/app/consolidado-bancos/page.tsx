@@ -4,9 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Landmark, Download, Trash2, ChevronDown, ChevronRight, Loader2, Search, ExternalLink } from 'lucide-react';
 
-// ── Constantes (autónomo, sin importar de subir-bancos) ───────
-const BANCOS_KEY      = 'futuro_bancos_historico';
-const DEPORTISTAS_KEY = 'futuro_deportistas';
+import { getBancosHistorico, setBancosHistorico, getDeportistas } from '@/lib/db';
 
 const G   = '#16a34a';
 const ROW = '#f1f5f9';
@@ -131,23 +129,18 @@ export default function ConsolidadoBancosPage() {
   const [busqResultados, setBusqResultados] = useState<{id:string; nombre:string; codigo:string}[]>([]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(BANCOS_KEY);
-      if (!raw) { setLotes([]); return; }
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) { setErrorLS('Formato inválido en localStorage.'); return; }
-      setLotes(parsed);
-    } catch (e: any) {
-      setErrorLS('Error leyendo datos: ' + e.message);
-    }
+    getBancosHistorico().then(parsed => {
+      if (!Array.isArray(parsed)) { setErrorLS('Formato inválido.'); return; }
+      setLotes(parsed as any[]);
+    }).catch((e: any) => setErrorLS('Error leyendo datos: ' + e.message));
   }, []);
 
   // Búsqueda por código → estado de cuenta
-  function buscarPorCodigo(val: string) {
+  async function buscarPorCodigo(val: string) {
     setBusqCod(val);
     if (!val.trim()) { setBusqResultados([]); return; }
     try {
-      const lista: any[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
+      const lista: any[] = await getDeportistas();
       const term = val.trim().toLowerCase();
       const res = lista
         .map(d => {
@@ -202,14 +195,14 @@ export default function ConsolidadoBancosPage() {
     if (!confirm('¿Eliminar este lote del historial? Solo borra el registro, NO revierte los estados de cuenta.')) return;
     const nuevo = lotes.filter(l => l.id !== id);
     setLotes(nuevo);
-    localStorage.setItem(BANCOS_KEY, JSON.stringify(nuevo));
+    setBancosHistorico(nuevo).catch(console.error);
     if (loteAbierto === id) setLoteAbierto(null);
   }
 
   // Borrar todo el historial
   function borrarTodo() {
     if (!confirm('⚠ ¿Borrar TODO el historial de bancos? Esto NO revierte los estados de cuenta de los deportistas.')) return;
-    localStorage.removeItem(BANCOS_KEY);
+    setBancosHistorico([]).catch(console.error);
     setLotes([]);
     setLoteAbierto(null);
   }

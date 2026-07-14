@@ -2,55 +2,19 @@
 
 ## Requisitos previos
 - Node.js 20+
-- PostgreSQL 16
-- npm o pnpm
+- npm
+- Proyecto de Supabase (ya activo: `futuroantioquia-max10`)
 
 ---
 
-## 1. Configurar la base de datos
-
-```sql
--- En PostgreSQL, crear la base de datos:
-CREATE DATABASE futuro_antioquia;
-```
-
-Ejecutar el esquema completo que ya tienes:
-```bash
-psql -U postgres -d futuro_antioquia -f "database_schema.sql"
-```
-
----
-
-## 2. Backend (API)
-
-```bash
-cd backend
-
-# Copiar y configurar variables de entorno
-copy .env.example .env
-# → Editar .env con tus credenciales de PostgreSQL
-
-# Instalar dependencias
-npm install
-
-# Sincronizar Prisma con la BD
-npm run db:push
-
-# Iniciar en modo desarrollo
-npm run dev
-# → API disponible en http://localhost:4000
-# → GET http://localhost:4000/health  (verificar conexión)
-```
-
----
-
-## 3. Frontend (Web)
+## 1. Frontend (Web) — única app real del proyecto
 
 ```bash
 cd frontend
 
 # Copiar variables de entorno
 copy .env.example .env.local
+# → Completar NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 # Instalar dependencias
 npm install
@@ -62,72 +26,39 @@ npm run dev
 # → Dashboard: http://localhost:3000/dashboard
 ```
 
----
-
-## Endpoints de Auth disponibles
-
-| Método | Ruta                        | Descripción                        |
-|--------|-----------------------------|------------------------------------|
-| POST   | /api/auth/login             | Iniciar sesión                     |
-| POST   | /api/auth/refresh           | Renovar access token               |
-| POST   | /api/auth/logout            | Cerrar sesión                      |
-| POST   | /api/auth/logout-todos      | Cerrar todas las sesiones          |
-| GET    | /api/auth/yo                | Perfil del usuario autenticado     |
-| POST   | /api/auth/cambiar-password  | Cambiar contraseña                 |
-| POST   | /api/auth/2fa/habilitar     | Iniciar configuración de 2FA       |
-| POST   | /api/auth/2fa/confirmar     | Confirmar y activar 2FA            |
-| POST   | /api/auth/2fa/deshabilitar  | Desactivar 2FA                     |
-| POST   | /api/auth/usuarios          | Crear usuario (admin+)             |
-
----
-
-## Credenciales de prueba (seed)
-
-```
-Email:    admin@futuroantioquia.com
-Password: (definir en BD seed)
-Rol:      admin_academia
-```
+También puedes usar `ARRANCAR_APP.bat` (instala dependencias e inicia el servidor automáticamente).
 
 ---
 
 ## Estructura del proyecto
 
 ```
-backend/
-├── prisma/
-│   └── schema.prisma          ← Modelos de BD
-├── src/
-│   ├── index.js               ← Servidor Express
-│   ├── config/prisma.js       ← Cliente Prisma
-│   ├── middleware/
-│   │   ├── auth.middleware.js ← JWT + RBAC + multi-tenant
-│   │   └── rateLimit.js       ← Protección brute-force
-│   ├── routes/auth.routes.js  ← Endpoints de auth
-│   ├── controllers/           ← Handlers HTTP
-│   ├── services/auth.service.js ← Lógica de negocio
-│   └── utils/                 ← JWT, password, audit
-├── .env.example
-└── package.json
-
 frontend/
 ├── src/
 │   ├── app/
-│   │   ├── login/page.tsx     ← Pantalla de login
-│   │   └── dashboard/page.tsx ← Dashboard multi-rol
+│   │   ├── login/page.tsx        ← Login (admin / profesor / calidoso)
+│   │   ├── dashboard/page.tsx    ← Dashboard multi-rol
+│   │   ├── alumnos/              ← Fichas de deportistas
+│   │   ├── asistencia/           ← Registro de asistencia (profesor)
+│   │   ├── sesiones/             ← Sesiones de entrenamiento (profesor)
+│   │   ├── postpartido/          ← Reporte postpartido (profesor)
+│   │   ├── evaluaciones/         ← Valoración deportiva (profesor)
+│   │   ├── pagos/, vista-contable/ ← Módulo contable
+│   │   └── usuarios/             ← Gestión de profesores/claves
 │   ├── lib/
-│   │   ├── api.ts             ← Cliente axios con auto-refresh
-│   │   └── utils.ts           ← Helpers
-│   └── store/auth.store.ts    ← Estado global (Zustand)
+│   │   ├── db.ts                 ← Toda la lectura/escritura real a Supabase
+│   │   └── supabase/             ← Clientes Supabase (browser/server)
+│   └── middleware.ts             ← Control de rutas por rol
 ├── .env.example
 └── package.json
 ```
 
+Todos los datos (deportistas, pagos, asistencia, evaluaciones, sesiones, postpartidos, profes) viven directamente en tablas de Supabase — no hay backend intermedio. Los helpers de acceso a datos están centralizados en `frontend/src/lib/db.ts`.
+
 ---
 
-## Próximas fases de desarrollo
+## Pendiente conocido (backlog)
 
-- **Fase 2:** CRUD alumnos, categorías, asistencia, evaluaciones técnicas
-- **Fase 3:** Chat en tiempo real (WebSocket), notificaciones push
-- **Fase 4:** Integración Wompi/PayU, módulo nutricional
-- **Fase 5:** Multi-academia SaaS, app Flutter, IA de recomendaciones
+- **Seguridad:** activar Row Level Security en las tablas reales y reemplazar las contraseñas de profesores (actualmente cédulas en texto plano en `usuarios/page.tsx`) por un mecanismo seguro.
+- **Contabilidad institucional automatizada** (Fase 3 del plan de acción).
+- **Web informativa pública** (Fase 4 del plan de acción).

@@ -2,9 +2,13 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Search, Users, Save, CheckCircle, Columns3, Upload, X, Trophy, AlertCircle } from 'lucide-react';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
-import type { Deportista } from '@/lib/deportistas';
+import { ArrowLeft, Search, Users, Save, CheckCircle, Columns3, Upload, X, Trophy, AlertCircle, Trash2 } from 'lucide-react';
+import { getDeportistas, saveDeportistas, deleteAllDeportistas } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
+import { BalonCargando } from '@/components/BalonCargando';
+
+// ── Regex reutilizable para columna de proyecto ───────────────
+const RX_PROY = /proyecto|^proy\b/i;
 
 // ── Orden de programas en la tabla ────────────────────────────
 const ORDEN_PROGRAMA = [
@@ -106,6 +110,7 @@ export default function GeneralPage() {
   const [panelColumnas,  setPanelColumnas]  = useState(false);
   const [resizingActive, setResizingActive] = useState<string | null>(null);
   const [programaFiltro, setProgramaFiltro] = useState<string | null>(null);
+  const [proyectoFiltro, setProyectoFiltro] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // ── Importar Torneos ─────────────────────────────────────────
@@ -115,6 +120,20 @@ export default function GeneralPage() {
   const [torneoPaso,    setTorneoPaso]    = useState<'subir' | 'preview' | 'listo'>('subir');
   const [torneoProc,    setTorneoProc]    = useState(false);
   const [torneoArrastr, setTorneoArrastr] = useState(false);
+  const [borrando,      setBorrando]      = useState(false);
+  const [cargando,      setCargando]      = useState(true);
+
+  async function eliminarYReimportar() {
+    if (!confirm('¿Eliminar TODOS los deportistas y volver a importar desde Excel?\n\nEsta acción no se puede deshacer.')) return;
+    setBorrando(true);
+    try {
+      await deleteAllDeportistas();
+      router.push('/alumnos/importar');
+    } catch {
+      alert('Error al eliminar. Intenta de nuevo.');
+      setBorrando(false);
+    }
+  }
   const torneoInputRef = useRef<HTMLInputElement>(null);
 
   // Cerrar panel al hacer clic fuera
@@ -181,13 +200,10 @@ export default function GeneralPage() {
   }
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DEPORTISTAS_KEY);
-      if (!raw) return;
-      const lista: Deportista[] = JSON.parse(raw);
+    getDeportistas().then(lista => {
+      setCargando(false);
+      if (!lista.length) return;
       let cambiado = false;
-
-      // Regla automática: Desarrollo y Selección → SEDE = INSTITUCIONAL (si está vacía)
       const actualizados = lista.map(dep => {
         const keySede     = Object.keys(dep._columnas).find(k => /sede/i.test(k.trim()));
         const keyPrograma = Object.keys(dep._columnas).find(k => /^program/i.test(k.trim()));
@@ -200,10 +216,9 @@ export default function GeneralPage() {
         }
         return dep;
       });
-
-      if (cambiado) localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(actualizados));
+      if (cambiado) saveDeportistas(actualizados);
       setDeportistas(actualizados);
-    } catch {}
+    });
   }, []);
 
   // ── Columnas ordenadas: FECHA AFIL → CÓD → resto (DIA → PROYECTO → PROFE) ──
@@ -216,8 +231,8 @@ export default function GeneralPage() {
     const todas = Object.keys(ref._columnas);
     const fecha    = todas.filter(c => esFechaAfil(c));
     const cod      = todas.filter(c => esCodigo(c));
-    const proyecto = todas.filter(c => /^proyecto/i.test(c.trim()));
-    const profe    = todas.filter(c => /^prof/i.test(c.trim()));
+    const proyecto = todas.filter(c => /proyecto|^proy\b/i.test(c.trim()));
+    const profe    = todas.filter(c => /^prof|\bprofe\b/i.test(c.trim()));
     const compite     = todas.filter(c => /^compite$/i.test(c.trim()));
     const competencia = todas.filter(c => /^competencia$/i.test(c.trim()));
     const torneo2     = todas.filter(c => /torneo.?2/i.test(c.trim()));
@@ -249,7 +264,17 @@ export default function GeneralPage() {
       resto.push(...proyecto, ...profe, ...torneos);
     }
 
-    return [...fecha, ...cod, ...resto];
+    // Garantía final: si PROFE aparece antes que PROYECTO en el array resultado,
+    // mover PROFE a después de PROYECTO (por si los nombres no coincidían con regex)
+    const finalArr = [...fecha, ...cod, ...resto];
+    const iProy = finalArr.findIndex(c => /proyecto|proy/i.test(c.trim()));
+    const iProf = finalArr.findIndex(c => /^prof|\bprofe\b/i.test(c.trim()));
+    if (iProy > -1 && iProf > -1 && iProf < iProy) {
+      const [colProf] = finalArr.splice(iProf, 1);
+      const newIProy  = finalArr.findIndex(c => /proyecto|proy/i.test(c.trim()));
+      finalArr.splice(newIProy + 1, 0, colProf);
+    }
+    return finalArr;
   }, [deportistas]);
 
   const colVisibles  = columnas.filter(c => colVisible[c] !== false);
@@ -260,7 +285,7 @@ export default function GeneralPage() {
     const map: Record<string, Set<string>> = {};
     deportistas.forEach(dep => {
       const prog = getColVal(dep, /^program/i).trim();
-      const proy = getColVal(dep, /^proyecto/i).trim();
+      const proy = getColVal(dep, RX_PROY).trim();
       if (proy) {
         const key = prog || '__SIN_PROGRAMA__';
         if (!map[key]) map[key] = new Set();
@@ -362,18 +387,15 @@ export default function GeneralPage() {
 
   // ── ACTUALIZAR: guarda TODO ───────────────────────────────────
   function actualizarTodo() {
-    try {
-      const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
-      const nueva = lista.map(d => {
-        if (!edits[d.id]) return d;
-        return { ...d, _columnas: { ...d._columnas, ...edits[d.id] } };
-      });
-      localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(nueva));
-      setDeportistas(nueva);
-      setEdits({});
-      setGuardado(true);
-      setTimeout(() => setGuardado(false), 3000);
-    } catch {}
+    const nueva = deportistas.map(d => {
+      if (!edits[d.id]) return d;
+      return { ...d, _columnas: { ...d._columnas, ...edits[d.id] } };
+    });
+    saveDeportistas(nueva);
+    setDeportistas(nueva);
+    setEdits({});
+    setGuardado(true);
+    setTimeout(() => setGuardado(false), 3000);
   }
 
   // ── Mostrar valor de celda con conversión de fecha ───────────
@@ -455,7 +477,7 @@ export default function GeneralPage() {
   }
 
   function aplicarTorneos() {
-    const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
+    const lista = deportistas;
     const updates: Record<string, Record<string, string>> = {};
 
     torneoFilas.forEach(fila => {
@@ -481,7 +503,7 @@ export default function GeneralPage() {
     const nueva = lista.map(d =>
       updates[d.id] ? { ...d, _columnas: { ...d._columnas, ...updates[d.id] } } : d
     );
-    localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(nueva));
+    saveDeportistas(nueva);
     setDeportistas(nueva);
     setTorneoPaso('listo');
   }
@@ -518,8 +540,10 @@ export default function GeneralPage() {
         <div className="relative flex-1 min-w-0">
           <h1 className="text-white font-black text-base leading-tight">Vista General</h1>
           <p className="text-white/60 text-[11px]">
-            {programaFiltro
-              ? `${grupos.find(g => g.key === programaFiltro)?.lista.length ?? 0} deportistas · ${LABEL_GRUPO[programaFiltro] ?? programaFiltro}`
+            {proyectoFiltro
+              ? `Proyecto: ${proyectoFiltro}`
+              : programaFiltro
+              ? `${LABEL_GRUPO[programaFiltro] ?? programaFiltro}`
               : `${deportistas.length} deportistas · ${grupos.length} programas`}
           </p>
         </div>
@@ -548,6 +572,16 @@ export default function GeneralPage() {
             ↺ anchos
           </button>
         )}
+
+        {/* Botón eliminar datos y reimportar */}
+        <button
+          onClick={eliminarYReimportar}
+          disabled={borrando}
+          className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-red-600/80 hover:bg-red-700 disabled:opacity-50 text-white transition flex-shrink-0"
+          title="Eliminar todos los deportistas y reimportar Excel">
+          <Trash2 className="w-3.5 h-3.5" />
+          {borrando ? 'Borrando…' : 'Eliminar datos'}
+        </button>
 
         {/* Botón importar torneos */}
         <button
@@ -647,43 +681,42 @@ export default function GeneralPage() {
         </div>
       </header>
 
-      {/* ── BARRA DE FILTRO POR PROGRAMA ── */}
-      {grupos.length > 0 && (
-        <div className="flex-shrink-0 bg-[#4b5563] border-b border-white/10 px-3 py-2 flex flex-wrap gap-1.5 items-center">
-          <span className="text-white/50 text-[10px] font-bold uppercase tracking-wider mr-1 flex-shrink-0">Programa:</span>
+      {/* ── BARRA DE FILTRO PROGRAMA + PROYECTO ── */}
+      {deportistas.length > 0 && (
+        <div className="flex-shrink-0 bg-white border-b border-gray-100 shadow-sm px-4 py-3 flex flex-wrap gap-4 items-end">
 
-          {/* TODOS */}
-          <button
-            onClick={() => setProgramaFiltro(null)}
-            className={`px-3 py-1 rounded-full text-[10px] font-black border transition flex-shrink-0 ${
-              programaFiltro === null
-                ? 'bg-[#16a34a] text-white border-[#16a34a]'
-                : 'bg-transparent text-white border-white/40 hover:border-white hover:bg-white/10'
-            }`}>
-            TODOS
-          </button>
+          {/* Programa */}
+          <div className="min-w-[180px]">
+            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Programa</label>
+            <select
+              value={programaFiltro ?? ''}
+              onChange={e => {
+                setProgramaFiltro(e.target.value || null);
+                setProyectoFiltro(null);
+              }}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              <option value="">— Todos —</option>
+              {grupos.map(({ key }) => (
+                <option key={key} value={key}>{LABEL_GRUPO[key] ?? key}</option>
+              ))}
+            </select>
+          </div>
 
-          {/* Un pill por cada grupo (programa) */}
-          {grupos.map(({ key, lista }) => {
-            const label    = LABEL_GRUPO[key] ?? key;
-            const activo   = programaFiltro === key;
-            const bgActivo = '#16a34a';
-            return (
-              <button key={key}
-                onClick={() => setProgramaFiltro(activo ? null : key)}
-                style={activo ? { backgroundColor: bgActivo, borderColor: bgActivo } : {}}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black border-2 transition flex-shrink-0 ${
-                  activo
-                    ? 'text-white'
-                    : 'bg-transparent text-white border-white/40 hover:border-white hover:bg-white/10'
-                }`}>
-                {label}
-                <span className={`text-[9px] px-1 rounded-full ${activo ? 'bg-black/25 text-white' : 'text-white/35'}`}>
-                  {lista.length}
-                </span>
-              </button>
-            );
-          })}
+          {/* Proyecto */}
+          <div className="min-w-[180px]">
+            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Proyecto</label>
+            <select
+              value={proyectoFiltro ?? ''}
+              onChange={e => setProyectoFiltro(e.target.value || null)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              <option value="">— Todos —</option>
+              {(programaFiltro
+                ? (proyectosPorPrograma[programaFiltro] ?? [])
+                : Object.entries(proyectosPorPrograma).filter(([k]) => k !== '__RETIRADO__').flatMap(([,v]) => v).filter((v,i,a) => a.indexOf(v) === i).sort()
+              ).map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+
         </div>
       )}
 
@@ -705,7 +738,11 @@ export default function GeneralPage() {
           </div>
         </div>
 
-        {deportistas.length === 0 ? (
+        {cargando ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+            <BalonCargando />
+          </div>
+        ) : deportistas.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
             <Users className="w-14 h-14 text-gray-200 mx-auto mb-3" />
             <p className="text-gray-400 font-semibold text-base">No hay deportistas cargados</p>
@@ -768,12 +805,16 @@ export default function GeneralPage() {
                 <tbody>
                   {grupos.map(({ key, lista }) => {
                     if (programaFiltro !== null && programaFiltro !== key) return null;
+                    const listaFiltrada = proyectoFiltro
+                      ? lista.filter(d => getColVal(d, RX_PROY).trim() === proyectoFiltro)
+                      : lista;
+                    if (listaFiltrada.length === 0) return null;
                     const colorGrupo = COLOR_GRUPO[key] ?? 'bg-gray-600';
                     const labelGrupo = LABEL_GRUPO[key] ?? key.toUpperCase();
 
-                    // Sub-agrupar por PROYECTO (orden de aparición ya viene del sort)
+                    // Sub-agrupar por PROYECTO (usar listaFiltrada para respetar filtro)
                     const subMap = new Map<string, Deportista[]>();
-                    lista.forEach(dep => {
+                    listaFiltrada.forEach(dep => {
                       const proy = getColVal(dep, /^proyecto/i).trim() || '— Sin Proyecto —';
                       if (!subMap.has(proy)) subMap.set(proy, []);
                       subMap.get(proy)!.push(dep);
@@ -786,7 +827,7 @@ export default function GeneralPage() {
                       <tr key={`hdr-${key}`}>
                         <td colSpan={1 + colVisibles.length}
                           className={`${colorGrupo} text-white font-black text-[11px] uppercase tracking-widest px-4 py-2 border-b-2 border-white/20`}>
-                          {labelGrupo} — {lista.length} deportista{lista.length !== 1 ? 's' : ''}
+                          {labelGrupo} — {listaFiltrada.length} deportista{listaFiltrada.length !== 1 ? 's' : ''}
                         </td>
                       </tr>
                     );
@@ -880,10 +921,12 @@ export default function GeneralPage() {
                               );
 
                               // PROYECTO — select verde filtrado por programa
-                              const esProyecto = /^proyecto/i.test(col.trim());
+                              const esProyecto = RX_PROY.test(col.trim());
                               if (esProyecto) {
-                                const progActual  = getValCelda(dep, colPrograma).trim();
-                                const opsProy     = proyectosPorPrograma[progActual] ?? Object.values(proyectosPorPrograma).flat().filter((v,i,a)=>a.indexOf(v)===i).sort();
+                                const progActual = getValCelda(dep, colPrograma).trim();
+                                const opsProy    = (proyectosPorPrograma[progActual] && proyectosPorPrograma[progActual].length > 0)
+                                  ? proyectosPorPrograma[progActual]
+                                  : Object.entries(proyectosPorPrograma).filter(([k]) => k !== '__RETIRADO__').flatMap(([,v]) => v).filter((v,i,a)=>a.indexOf(v)===i).sort();
                                 return (
                                   <td key={col}
                                     style={{ border: '2px solid white', backgroundColor: '#16a34a' }}

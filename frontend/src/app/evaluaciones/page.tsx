@@ -1,216 +1,440 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Star, Save, FileSpreadsheet } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import type { Deportista } from '@/lib/deportistas';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import { Printer, Save, RefreshCw, Camera, CheckCircle, History } from 'lucide-react';
+import { getDeportistas, getEvaluaciones, saveEvaluacion } from '@/lib/db';
+import type { Deportista, Evaluacion } from '@/lib/db';
 
-const CRITERIOS_TECNICOS = [
-  { key: 'tecnica',    label: 'Técnica con balón'   },
-  { key: 'tactica',    label: 'Comprensión táctica' },
-  { key: 'fisico',     label: 'Condición física'    },
-  { key: 'velocidad',  label: 'Velocidad/Agilidad'  },
-  { key: 'remate',     label: 'Remate a portería'   },
-];
+const NIVELES = ['', 'Nivel 1 (Iniciación)', 'Nivel 2 (En Desarrollo)', 'Nivel 3 (Competente)', 'Nivel 4 (Destacado)'];
+const POSICIONES = ['', 'PORTERO', 'CENTRAL', 'LATERAL DERECHO', 'LATERAL IZQUIERDO', 'EXTREMO DERECHO', 'EXTREMO IZQUIERDO', 'VOLANTE', 'MEDIOCAMPISTA', 'DELANTERO CENTRO'];
+const PERFILES = ['', 'DERECHO', 'IZQUIERDO', 'AMBIDIESTRO'];
 
-const CRITERIOS_FORMATIVOS = [
-  { key: 'actitud',    label: 'Actitud y esfuerzo'  },
-  { key: 'compañerismo',label: 'Compañerismo'        },
-  { key: 'disciplina', label: 'Disciplina'           },
-  { key: 'puntualidad',label: 'Puntualidad'          },
-];
+const C = {
+  negro: '#1a1a1a', verde: '#1a6b2e', naranja: '#e85d04',
+  verdeClaro: '#2d8a48', grisClaro: '#f0f0f0',
+};
 
-function EstrellaRating({ valor, onChange }: { valor: number; onChange: (n: number) => void }) {
-  const [hover, setHover] = useState(0);
+type Valoracion = {
+  fecha: string; codigo: string; nombre: string; edad: string;
+  proyecto: string; perfil: string; posicion: string;
+  torneos: string; partJugados: string; tarjAmarillas: string; partTitular: string;
+  tarjRojas: string; minutosJugados: string; goles: string; calificacion: string;
+  foto: string;
+  fuerzaNivel: string; fuerzaDesc: string;
+  velocidadNivel: string; velocidadDesc: string;
+  resistenciaNivel: string; resistenciaDesc: string;
+  controlNivel: string; controlDesc: string;
+  paseNivel: string; paseDesc: string;
+  remataNivel: string; remataDesc: string;
+  conductaNivel: string; conductaDesc: string;
+  posicionNivel: string; posicionDesc: string;
+  visionNivel: string; visionDesc: string;
+  defensaNivel: string; defensaDesc: string;
+  actitudNivel: string; actitudDesc: string;
+  disciplinaNivel: string; disciplinaDesc: string;
+  trabajoNivel: string; trabajoDesc: string;
+  observaciones: string;
+};
+
+const INICIAL: Valoracion = {
+  fecha: new Date().toLocaleDateString('es-CO'), codigo: '', nombre: '', edad: '',
+  proyecto: '', perfil: '', posicion: '',
+  torneos: '', partJugados: '', tarjAmarillas: '', partTitular: '',
+  tarjRojas: '', minutosJugados: '', goles: '', calificacion: '', foto: '',
+  fuerzaNivel: '', fuerzaDesc: '', velocidadNivel: '', velocidadDesc: '',
+  resistenciaNivel: '', resistenciaDesc: '', controlNivel: '', controlDesc: '',
+  paseNivel: '', paseDesc: '', remataNivel: '', remataDesc: '',
+  conductaNivel: '', conductaDesc: '', posicionNivel: '', posicionDesc: '',
+  visionNivel: '', visionDesc: '', defensaNivel: '', defensaDesc: '',
+  actitudNivel: '', actitudDesc: '', disciplinaNivel: '', disciplinaDesc: '',
+  trabajoNivel: '', trabajoDesc: '', observaciones: '',
+};
+
+/* ── Bloque de aspecto: definido FUERA del componente principal ── */
+interface BloqueProps {
+  titulo: string; subtitulo: string;
+  nivel: string; onNivel: (v: string) => void;
+  desc: string; onDesc: (v: string) => void;
+}
+function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc }: BloqueProps) {
   return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-        <button
-          key={n}
-          onClick={() => onChange(n)}
-          onMouseEnter={() => setHover(n)}
-          onMouseLeave={() => setHover(0)}
-          className={cn(
-            'w-6 h-6 rounded text-xs font-bold border transition',
-            (hover || valor) >= n
-              ? 'bg-[#16a34a] border-[#16a34a] text-white'
-              : 'bg-gray-100 border-gray-200 text-gray-400'
-          )}
-        >
-          {n}
-        </button>
-      ))}
-    </div>
+    <tbody>
+      <tr>
+        <td colSpan={4} style={{ background: C.negro, color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 12, padding: '4px 8px', letterSpacing: 1 }}>
+          {titulo}
+        </td>
+      </tr>
+      <tr>
+        <td colSpan={2} style={{ background: C.verdeClaro, color: '#fff', fontWeight: 700, fontSize: 11, padding: '3px 10px' }}>
+          ({subtitulo})
+        </td>
+        <td colSpan={2} style={{ background: C.verde, color: '#fff', padding: '2px 8px' }}>
+          <select value={nivel} onChange={e => onNivel(e.target.value)}
+            style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+            {NIVELES.map(o => <option key={o} value={o} style={{ color: '#000', background: '#fff' }}>{o || '— Seleccionar —'}</option>)}
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td colSpan={4} style={{ background: C.grisClaro, padding: '6px 10px' }}>
+          <textarea value={desc} onChange={e => onDesc(e.target.value)}
+            rows={2} placeholder="Descripción del desempeño..."
+            style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+        </td>
+      </tr>
+    </tbody>
   );
 }
 
-export default function EvaluacionesPage() {
-  const router = useRouter();
-  const [alumnos, setAlumnos]     = useState<Pick<Deportista, 'id'|'nombre'|'apellido'|'categoria'>[]>([]);
-  const [alumnoId, setAlumnoId]   = useState('');
-  const [notas, setNotas]         = useState<Record<string, number>>({});
-  const [notas2, setNotas2]       = useState<Record<string, number>>({});
-  const [observaciones, setObs]   = useState('');
-  const [guardado, setGuardado]   = useState(false);
-  const [seccion, setSeccion]     = useState<'tecnica' | 'formativa'>('tecnica');
+/* ── Helpers de búsqueda en deportista ── */
+function buscarCampo(dep: Deportista, regex: RegExp): string {
+  const cols = dep._columnas ?? {};
+  const key = Object.keys(cols).find(k => regex.test(k.trim()));
+  return key ? cols[key].trim() : '';
+}
+
+/* ════════════════════════════════════════════════════════════════ */
+export default function ValoracionPage() {
+  const router  = useRouter();
+  const fotoRef = useRef<HTMLInputElement>(null);
+  const [data,        setData]        = useState<Valoracion>(INICIAL);
+  const [guardando,   setGuardando]   = useState(false);
+  const [guardado,    setGuardado]    = useState(false);
+  const [deportistas, setDeportistas] = useState<Deportista[]>([]);
+  const [encontrado,  setEncontrado]  = useState('');
+  const [historial,   setHistorial]   = useState<Evaluacion[]>([]);
+  const [verHistorial, setVerHistorial] = useState(false);
 
   useEffect(() => {
-    try {
-      const guardados = localStorage.getItem(DEPORTISTAS_KEY);
-      if (guardados) {
-        const lista = JSON.parse(guardados) as Deportista[];
-        setAlumnos(lista);
-        if (lista.length > 0) setAlumnoId(lista[0].id);
-      }
-    } catch {}
+    getDeportistas().then(setDeportistas);
   }, []);
 
-  const alumno = alumnos.find((a) => a.id === alumnoId);
+  useEffect(() => {
+    const cod = data.codigo.trim().toUpperCase();
+    if (cod.length >= 2) {
+      getEvaluaciones(cod).then(setHistorial);
+    } else {
+      setHistorial([]);
+    }
+  }, [data.codigo]);
 
-  const promTecnico   = CRITERIOS_TECNICOS.length
-    ? (CRITERIOS_TECNICOS.reduce((s, c) => s + (notas[c.key] ?? 0), 0) / CRITERIOS_TECNICOS.length).toFixed(1)
-    : '—';
-  const promFormativo = CRITERIOS_FORMATIVOS.length
-    ? (CRITERIOS_FORMATIVOS.reduce((s, c) => s + (notas2[c.key] ?? 0), 0) / CRITERIOS_FORMATIVOS.length).toFixed(1)
-    : '—';
+  /* set genérico — sin definir componentes dentro */
+  const set = (k: keyof Valoracion, v: string) => {
+    let extra: Partial<Valoracion> = {};
 
-  function guardar() {
-    setGuardado(true);
-    setTimeout(() => setGuardado(false), 2500);
-  }
+    if (k === 'codigo') {
+      const cod = v.trim().toUpperCase();
+      if (cod.length >= 2) {
+        const dep = deportistas.find(d =>
+          Object.entries(d._columnas ?? {}).some(([key, val]) =>
+            /^c[oó]d/i.test(key.trim()) && String(val).trim().toUpperCase() === cod
+          )
+        );
+        if (dep) {
+          const proyecto = buscarCampo(dep, /^proyecto/i)
+            || buscarCampo(dep, /^program/i)
+            || buscarCampo(dep, /sede|categ|sub/i);
+          extra = { nombre: dep._nombre ?? '', proyecto };
+          setEncontrado(dep._nombre ?? '');
+          setTimeout(() => setEncontrado(''), 3000);
+        }
+      }
+    }
 
+    setData(p => ({ ...p, [k]: v, ...extra }));
+  };
+
+  const guardar = async () => {
+    if (!data.codigo.trim()) { alert('Ingresa el código del deportista antes de guardar.'); return; }
+    setGuardando(true);
+    try {
+      await saveEvaluacion(data);
+      setGuardado(true);
+      setTimeout(() => setGuardado(false), 2000);
+      getEvaluaciones(data.codigo).then(setHistorial);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const limpiar = () => {
+    if (confirm('¿Limpiar el formulario? (el historial guardado en Supabase no se borra)')) {
+      setData({ ...INICIAL, fecha: new Date().toLocaleDateString('es-CO') });
+    }
+  };
+
+  const cargarDeHistorial = (ev: Evaluacion) => {
+    const { id, ...resto } = ev;
+    setData(resto);
+    setVerHistorial(false);
+  };
+
+  const onFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => set('foto', ev.target?.result as string);
+    r.readAsDataURL(f);
+  };
+
+  /* ── Render helpers — funciones, NO componentes ── */
+  const inp = (campo: keyof Valoracion, placeholder = '', type = 'text') => (
+    <input type={type} value={data[campo]} onChange={e => set(campo, e.target.value)}
+      placeholder={placeholder}
+      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontWeight: 700, fontSize: 12, fontFamily: 'Arial, sans-serif' }} />
+  );
+
+  const sel = (campo: keyof Valoracion, opts: string[]) => (
+    <select value={data[campo]} onChange={e => set(campo, e.target.value)}
+      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'Arial, sans-serif' }}>
+      {opts.map(o => <option key={o} value={o}>{o || '— Seleccionar —'}</option>)}
+    </select>
+  );
+
+  const celda = (bg: string, color: string, content: React.ReactNode, extra?: React.CSSProperties) => (
+    <td style={{ background: bg, color, padding: '3px 8px', fontSize: 11, fontWeight: 700, ...extra }}>{content}</td>
+  );
+
+  /* ════════════════════════════════════════════════════════════ */
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/dashboard')} className="text-white/70 hover:text-white">← Volver</button>
-          <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-            <Star className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-bold text-white">Evaluaciones</span>
-        </div>
-        <button
-          onClick={guardar}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition',
-            guardado ? 'bg-white/30 text-white' : 'bg-white text-[#16a34a] hover:bg-green-50'
-          )}
-        >
-          <Save className="w-4 h-4" />
-          {guardado ? '¡Guardado!' : 'Guardar'}
+    <div style={{ minHeight: '100vh', background: '#e5e7eb' }}>
+
+      {/* Barra herramientas */}
+      <div className="print:hidden" style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={() => router.push('/dashboard')} style={{ color: '#6b7280', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>← Volver</button>
+        <span style={{ fontWeight: 800, color: '#111', flex: 1, fontSize: 15 }}>Valoración del Deportista</span>
+        {historial.length > 0 && (
+          <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+            <History size={13} /> Historial ({historial.length})
+          </button>
+        )}
+        <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+          <RefreshCw size={13} /> Limpiar
         </button>
-        <div className="ml-auto text-right leading-tight">
-          <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-          <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
-        </div>
-      </header>
+        <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.verde, color: '#fff', cursor: guardando ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, opacity: guardando ? 0.7 : 1 }}>
+          <Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}
+        </button>
+        <button onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.naranja, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+          <Printer size={13} /> Imprimir / PDF
+        </button>
+      </div>
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-
-        {/* Selector alumno */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Alumno</p>
-          {alumnos.length === 0 ? (
-            <div className="text-center py-4">
-              <p className="text-sm text-gray-400 mb-3">No hay deportistas cargados</p>
-              <button
-                onClick={() => router.push('/alumnos/importar')}
-                className="inline-flex items-center gap-2 bg-[#16a34a] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#064e1e] transition"
-              >
-                <FileSpreadsheet className="w-4 h-4" /> Importar Excel
-              </button>
-            </div>
-          ) : (
-            <select
-              value={alumnoId}
-              onChange={(e) => { setAlumnoId(e.target.value); setNotas({}); setNotas2({}); }}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
-            >
-              {alumnos.map((a) => (
-                <option key={a.id} value={a.id}>{a.nombre} {a.apellido} — {a.categoria}</option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        {/* Promedios */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Técnico</p>
-            <p className="text-3xl font-bold text-[#16a34a] mt-1">{promTecnico}</p>
-            <p className="text-xs text-gray-400">de 10</p>
-          </div>
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Formativo</p>
-            <p className="text-3xl font-bold text-[#16a34a] mt-1">{promFormativo}</p>
-            <p className="text-xs text-gray-400">de 10</p>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex border-b border-gray-100">
-            {(['tecnica', 'formativa'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setSeccion(s)}
-                className={cn(
-                  'flex-1 py-3 text-sm font-semibold transition',
-                  seccion === s
-                    ? 'bg-[#16a34a] text-white'
-                    : 'text-gray-500 hover:bg-gray-50'
-                )}
-              >
-                {s === 'tecnica' ? 'Evaluación Técnica' : 'Evaluación Formativa'}
+      {/* HISTORIAL DE EVALUACIONES DEL DEPORTISTA */}
+      {verHistorial && historial.length > 0 && (
+        <div className="print:hidden" style={{ maxWidth: 780, margin: '0 auto', background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '10px 16px' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Evaluaciones anteriores de {data.nombre || data.codigo}:</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto' }}>
+            {historial.map(ev => (
+              <button key={ev.id} onClick={() => cargarDeHistorial(ev)}
+                style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12 }}>
+                <span>{ev.fecha}</span>
+                <span style={{ color: '#6b7280' }}>Calificación: {ev.calificacion || '—'}</span>
               </button>
             ))}
           </div>
-
-          <div className="p-4 space-y-5">
-            {seccion === 'tecnica'
-              ? CRITERIOS_TECNICOS.map((c) => (
-                <div key={c.key}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-semibold text-gray-700">{c.label}</p>
-                    <span className="text-sm font-bold text-[#16a34a]">{notas[c.key] ?? '—'}</span>
-                  </div>
-                  <EstrellaRating
-                    valor={notas[c.key] ?? 0}
-                    onChange={(n) => setNotas((p) => ({ ...p, [c.key]: n }))}
-                  />
-                </div>
-              ))
-              : CRITERIOS_FORMATIVOS.map((c) => (
-                <div key={c.key}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-semibold text-gray-700">{c.label}</p>
-                    <span className="text-sm font-bold text-[#16a34a]">{notas2[c.key] ?? '—'}</span>
-                  </div>
-                  <EstrellaRating
-                    valor={notas2[c.key] ?? 0}
-                    onChange={(n) => setNotas2((p) => ({ ...p, [c.key]: n }))}
-                  />
-                </div>
-              ))
-            }
-          </div>
         </div>
+      )}
 
-        {/* Observaciones */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <p className="text-sm font-semibold text-gray-700 mb-2">Observaciones del entrenador</p>
-          <textarea
-            value={observaciones}
-            onChange={(e) => setObs(e.target.value)}
-            placeholder="Escribe tus comentarios sobre el desempeño del alumno..."
-            rows={4}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] resize-none"
-          />
-        </div>
-      </main>
+      {/* FORMULARIO */}
+      <div style={{ maxWidth: 780, margin: '16px auto', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', fontFamily: 'Arial, sans-serif' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+
+          {/* ENCABEZADO */}
+          <tbody>
+            <tr>
+              {/* Logo */}
+              <td style={{ width: 110, padding: 10, textAlign: 'center', verticalAlign: 'middle' }}>
+                <div style={{ width: 88, height: 88, borderRadius: 8, background: '#e8f5e9', border: '2px solid #2d8a48', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                  <span style={{ fontSize: 26, fontWeight: 900, color: C.verde }}>FA</span>
+                </div>
+              </td>
+              {/* Título */}
+              <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '8px 4px' }}>
+                <div style={{ fontSize: 11, color: '#777', letterSpacing: 3, fontWeight: 600, textTransform: 'uppercase' }}>Seguimiento Deportivo</div>
+                <div style={{ fontSize: 34, fontWeight: 900, color: C.negro, lineHeight: 1 }}>Futuro</div>
+                <div style={{ fontSize: 34, fontWeight: 900, color: C.verde, lineHeight: 1 }}>Antioquia</div>
+              </td>
+              {/* Foto */}
+              <td style={{ width: 110, padding: 10, textAlign: 'center', verticalAlign: 'middle' }}>
+                <input ref={fotoRef} type="file" accept="image/*" onChange={onFoto} style={{ display: 'none' }} />
+                <div onClick={() => fotoRef.current?.click()} className="print:hidden"
+                  style={{ width: 90, height: 110, borderRadius: 8, border: '2px dashed #2d8a48', background: data.foto ? 'transparent' : '#e8f5e9', overflow: 'hidden', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  {data.foto
+                    ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <div style={{ textAlign: 'center', color: C.verde, fontSize: 10 }}><Camera size={22} /><div style={{ marginTop: 3 }}>Foto</div></div>
+                  }
+                </div>
+                {data.foto && <img src={data.foto} alt="foto" className="hidden print:block" style={{ width: 90, height: 110, objectFit: 'cover', borderRadius: 8, margin: '0 auto' }} />}
+              </td>
+            </tr>
+          </tbody>
+
+          {/* SEGUIMIENTO DEPORTIVO */}
+          <tbody>
+            <tr>{celda(C.negro, '#fff', 'SEGUIMIENTO DEPORTIVO', { colSpan: 3, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>
+              {celda(C.negro, '#fff', 'FECHA', { width: '16%' })}
+              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp('fecha')}</td>
+            </tr>
+            <tr>
+              {celda(C.negro, '#fff', 'CODIGO')}
+              <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {inp('codigo', 'Ej: B635')}
+                  {encontrado && (
+                    <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#dcfce7', border: '1px solid #86efac', borderRadius: 6, padding: '2px 8px', fontSize: 10, color: '#16a34a', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <CheckCircle size={11} /> {encontrado}
+                    </div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          </tbody>
+
+          {/* DATOS DEL DEPORTISTA */}
+          <tbody>
+            <tr>{celda(C.negro, '#fff', 'DATOS DEL DEPORTISTA', { colSpan: 3, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
+            {[
+              ['NOMBRE', 'nombre', false],
+              ['EDAD', 'edad', false],
+              ['PROYECTO', 'proyecto', false],
+            ].map(([label, campo]) => (
+              <tr key={campo as string}>
+                {celda(C.negro, '#fff', label as string)}
+                <td colSpan={2} style={{ background: C.grisClaro, padding: '3px 8px' }}>{inp(campo as keyof Valoracion)}</td>
+              </tr>
+            ))}
+            <tr>
+              {celda(C.negro, '#fff', 'PERFIL')}
+              <td colSpan={2} style={{ background: C.grisClaro, padding: '2px 8px' }}>{sel('perfil', PERFILES)}</td>
+            </tr>
+            <tr>
+              {celda(C.negro, '#fff', 'POSICIÓN')}
+              <td colSpan={2} style={{ background: C.grisClaro, padding: '2px 8px' }}>{sel('posicion', POSICIONES)}</td>
+            </tr>
+          </tbody>
+
+          {/* DATOS ESTADÍSTICOS */}
+          <tbody>
+            <tr>{celda(C.negro, '#fff', 'DATOS ESTADÍSTICOS', { colSpan: 4, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
+            {([
+              ['# DE TORNEOS', 'torneos', 'PARTIDOS JUGADOS', 'partJugados'],
+              ['# TARJETAS AMARILLAS', 'tarjAmarillas', 'PARTIDOS COMO TITULAR', 'partTitular'],
+              ['# TARJETAS ROJAS', 'tarjRojas', 'MINUTOS JUGADOS', 'minutosJugados'],
+              ['#GOLES', 'goles', 'CALIFICACIÓN PROMEDIO', 'calificacion'],
+            ] as [string, keyof Valoracion, string, keyof Valoracion][]).map(([l1, c1, l2, c2]) => (
+              <tr key={c1}>
+                <td style={{ background: C.negro, color: '#fff', fontWeight: 700, fontSize: 10, padding: '3px 8px', width: '25%' }}>{l1}</td>
+                <td style={{ background: C.grisClaro, padding: '3px 8px', width: '25%' }}>{inp(c1, '', 'number')}</td>
+                <td style={{ background: C.negro, color: '#fff', fontWeight: 700, fontSize: 10, padding: '3px 8px', width: '25%' }}>{l2}</td>
+                <td style={{ background: C.grisClaro, padding: '3px 8px', width: '25%' }}>{inp(c2, '', 'number')}</td>
+              </tr>
+            ))}
+          </tbody>
+
+          {/* ASPECTOS CONDICIONALES */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'ASPECTOS CONDICIONALES', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+          </tbody>
+          <BloqueAspecto titulo="FUERZA" subtitulo="Potencia y Duelo"
+            nivel={data.fuerzaNivel} onNivel={v => set('fuerzaNivel', v)}
+            desc={data.fuerzaDesc}   onDesc={v => set('fuerzaDesc', v)} />
+          <BloqueAspecto titulo="VELOCIDAD" subtitulo="Reacción y Desplazamiento"
+            nivel={data.velocidadNivel} onNivel={v => set('velocidadNivel', v)}
+            desc={data.velocidadDesc}   onDesc={v => set('velocidadDesc', v)} />
+          <BloqueAspecto titulo="RESISTENCIA" subtitulo="Capacidad Aeróbica y Recuperación"
+            nivel={data.resistenciaNivel} onNivel={v => set('resistenciaNivel', v)}
+            desc={data.resistenciaDesc}   onDesc={v => set('resistenciaDesc', v)} />
+
+          {/* TÉCNICA */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'TÉCNICA (RELACIONAMIENTO CON EL BALÓN)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Evalúa la ejecución de los fundamentos básicos del juego</td></tr>
+          </tbody>
+          <BloqueAspecto titulo="CONTROL Y DOMINIO DEL BALÓN" subtitulo="Recepción y Manejo"
+            nivel={data.controlNivel} onNivel={v => set('controlNivel', v)}
+            desc={data.controlDesc}   onDesc={v => set('controlDesc', v)} />
+          <BloqueAspecto titulo="PASE" subtitulo="Precisión y Visión de Juego"
+            nivel={data.paseNivel} onNivel={v => set('paseNivel', v)}
+            desc={data.paseDesc}   onDesc={v => set('paseDesc', v)} />
+          <BloqueAspecto titulo="REMATE A PORTERÍA" subtitulo="Potencia y Definición"
+            nivel={data.remataNivel} onNivel={v => set('remataNivel', v)}
+            desc={data.remataDesc}   onDesc={v => set('remataDesc', v)} />
+          <BloqueAspecto titulo="CONDUCCIÓN" subtitulo="Desplazamiento con Balón"
+            nivel={data.conductaNivel} onNivel={v => set('conductaNivel', v)}
+            desc={data.conductaDesc}   onDesc={v => set('conductaDesc', v)} />
+
+          {/* TÁCTICA */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'TÁCTICA', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Comprensión del juego y toma de decisiones</td></tr>
+          </tbody>
+          <BloqueAspecto titulo="POSICIONAMIENTO" subtitulo="Ubicación en el Campo"
+            nivel={data.posicionNivel} onNivel={v => set('posicionNivel', v)}
+            desc={data.posicionDesc}   onDesc={v => set('posicionDesc', v)} />
+          <BloqueAspecto titulo="VISIÓN DE JUEGO" subtitulo="Lectura y Anticipación"
+            nivel={data.visionNivel} onNivel={v => set('visionNivel', v)}
+            desc={data.visionDesc}   onDesc={v => set('visionDesc', v)} />
+          <BloqueAspecto titulo="DEFENSA" subtitulo="Recuperación y Marcaje"
+            nivel={data.defensaNivel} onNivel={v => set('defensaNivel', v)}
+            desc={data.defensaDesc}   onDesc={v => set('defensaDesc', v)} />
+
+          {/* ASPECTOS FORMATIVOS */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'ASPECTOS FORMATIVOS', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+          </tbody>
+          <BloqueAspecto titulo="ACTITUD Y COMPROMISO" subtitulo="Esfuerzo y Responsabilidad"
+            nivel={data.actitudNivel} onNivel={v => set('actitudNivel', v)}
+            desc={data.actitudDesc}   onDesc={v => set('actitudDesc', v)} />
+          <BloqueAspecto titulo="DISCIPLINA Y RESPETO" subtitulo="Comportamiento y Valores"
+            nivel={data.disciplinaNivel} onNivel={v => set('disciplinaNivel', v)}
+            desc={data.disciplinaDesc}   onDesc={v => set('disciplinaDesc', v)} />
+          <BloqueAspecto titulo="TRABAJO EN EQUIPO" subtitulo="Compañerismo y Comunicación"
+            nivel={data.trabajoNivel} onNivel={v => set('trabajoNivel', v)}
+            desc={data.trabajoDesc}   onDesc={v => set('trabajoDesc', v)} />
+
+          {/* OBSERVACIONES */}
+          <tbody>
+            <tr>{celda(C.negro, '#fff', 'OBSERVACIONES GENERALES', { colSpan: 4, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
+            <tr>
+              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
+                <textarea value={data.observaciones} onChange={e => set('observaciones', e.target.value)}
+                  rows={4} placeholder="Observaciones generales del entrenador..."
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+              </td>
+            </tr>
+          </tbody>
+
+          {/* FIRMAS */}
+          <tbody>
+            <tr>
+              <td colSpan={2} style={{ padding: '24px 24px 10px', textAlign: 'center', verticalAlign: 'bottom' }}>
+                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Firma del Entrenador</div>
+              </td>
+              <td colSpan={2} style={{ padding: '24px 24px 10px', textAlign: 'center', verticalAlign: 'bottom' }}>
+                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Firma del Directivo</div>
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={4} style={{ background: C.verde, color: '#fff', textAlign: 'center', fontSize: 10, padding: 6, fontWeight: 700, letterSpacing: 1 }}>
+                FUTURO ANTIOQUIA — MAX 10 SPORT · Conecta, Gestiona, Gana
+              </td>
+            </tr>
+          </tbody>
+
+        </table>
+      </div>
+
+      <style>{`
+        @media print {
+          body { background: white !important; }
+          .print\\:hidden { display: none !important; }
+          .print\\:block  { display: block  !important; }
+          .hidden { display: none !important; }
+          @page { margin: 8mm; size: A4; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+      `}</style>
     </div>
   );
 }

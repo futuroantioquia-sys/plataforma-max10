@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Star, Clipboard, DollarSign, MessageCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Deportista } from '@/lib/deportistas';
-import { DEPORTISTAS_KEY } from '@/lib/deportistas';
+import { getDeportistas, saveDeportistas, getFoto, saveFoto } from '@/lib/db';
+import type { Deportista } from '@/lib/db';
 
 const FOTOS_KEY = 'futuro_fotos_deportistas';
 
@@ -127,13 +127,13 @@ export default function PerfilDeportista() {
   const inputFotoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    try {
-      const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
+    getDeportistas().then(lista => {
       const d = lista.find(x => x.id === id);
       if (d) { setDep(d); setEdits({ ...d._columnas }); }
-      const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}');
-      if (fotos[id]) setFoto(fotos[id]);
-    } catch {}
+    });
+    getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {
+      try { const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); if (fotos[id]) setFoto(fotos[id]); } catch {}
+    });
   }, [id]);
 
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -143,33 +143,25 @@ export default function PerfilDeportista() {
     reader.onload = ev => {
       const b64 = ev.target?.result as string;
       setFoto(b64);
-      try {
-        const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}');
-        fotos[id] = b64;
-        localStorage.setItem(FOTOS_KEY, JSON.stringify(fotos));
-      } catch {}
+      saveFoto(id, b64).catch(console.error);
     };
     reader.readAsDataURL(file);
   }
 
-  function guardar() {
+  async function guardar() {
     if (!dep) return;
-    try {
-      const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
-      const nueva = lista.map(d => d.id === id ? { ...d, _columnas: edits } : d);
-      localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(nueva));
-      setDep(prev => prev ? { ...prev, _columnas: edits } : prev);
-      setEditando(false);
-    } catch {}
+    const lista = await getDeportistas();
+    const nueva = lista.map(d => d.id === id ? { ...d, _columnas: edits } : d);
+    await saveDeportistas(nueva);
+    setDep(prev => prev ? { ...prev, _columnas: edits } : prev);
+    setEditando(false);
   }
 
-  function eliminar() {
+  async function eliminar() {
     if (!dep) return;
     if (!confirm(`¿Eliminar a ${dep._nombre} de la lista? Esta acción no se puede deshacer.`)) return;
-    try {
-      const lista: Deportista[] = JSON.parse(localStorage.getItem(DEPORTISTAS_KEY) ?? '[]');
-      localStorage.setItem(DEPORTISTAS_KEY, JSON.stringify(lista.filter(d => d.id !== id)));
-    } catch {}
+    const lista = await getDeportistas();
+    await saveDeportistas(lista.filter(d => d.id !== id));
     router.push('/alumnos');
   }
 
