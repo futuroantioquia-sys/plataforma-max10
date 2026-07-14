@@ -15,6 +15,13 @@ const DESC_FUERZA: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Domina el uso del cuerpo (brazos y tronco) para blindar el balón. Su potencia explosiva le permite ganar la mayoría de los duelos y realizar cambios de dirección firmes.',
   'Nivel 5 (Dominante)':    'Posee una fuerza explosiva superior. Es determinante en el choque, difícil de desequilibrar y sus remates o despejes tienen una potencia que marca diferencia en el partido.',
 };
+const DESC_CONDUCCION: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Mantiene la vista fija en el balón; pierde el control al aumentar la velocidad.',
+  'Nivel 2 (En Desarrollo)':'Conduce con el interior/exterior pero con trayectorias rígidas.',
+  'Nivel 3 (Competente)':   'Conduce con la cabeza levantada; realiza cambios de dirección básicos.',
+  'Nivel 4 (Avanzado)':     'Domina el cambio de ritmo y fintas para superar rivales en el 1vs1.',
+  'Nivel 5 (Dominante)':    'Control total del espacio y el balón; utiliza ambos perfiles para desequilibrar.',
+};
 const DESC_CONTROL_PASE: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Dificultad para amortiguar el balón; pases con poca dirección.',
   'Nivel 2 (En Desarrollo)':'Controla con varios toques; empieza a orientar el pase hacia un compañero.',
@@ -411,12 +418,13 @@ export default function ValoracionPage() {
             nivel={data.controlNivel} onNivel={v => set('controlNivel', v)}
             desc={data.controlDesc}   onDesc={v => set('controlDesc', v)}
             descripciones={DESC_CONTROL_PASE} />
+          <BloqueAspecto titulo="CONDUCCIÓN Y DRIBBLING" subtitulo="Desplazamiento con Balón"
+            nivel={data.conductaNivel} onNivel={v => set('conductaNivel', v)}
+            desc={data.conductaDesc}   onDesc={v => set('conductaDesc', v)}
+            descripciones={DESC_CONDUCCION} />
           <BloqueAspecto titulo="REMATE A PORTERÍA" subtitulo="Potencia y Definición"
             nivel={data.remataNivel} onNivel={v => set('remataNivel', v)}
             desc={data.remataDesc}   onDesc={v => set('remataDesc', v)} />
-          <BloqueAspecto titulo="CONDUCCIÓN" subtitulo="Desplazamiento con Balón"
-            nivel={data.conductaNivel} onNivel={v => set('conductaNivel', v)}
-            desc={data.conductaDesc}   onDesc={v => set('conductaDesc', v)} />
 
           {/* TÁCTICA */}
           <tbody>
