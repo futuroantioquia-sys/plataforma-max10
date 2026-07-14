@@ -15,6 +15,13 @@ const DESC_FUERZA: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Domina el uso del cuerpo (brazos y tronco) para blindar el balón. Su potencia explosiva le permite ganar la mayoría de los duelos y realizar cambios de dirección firmes.',
   'Nivel 5 (Dominante)':    'Posee una fuerza explosiva superior. Es determinante en el choque, difícil de desequilibrar y sus remates o despejes tienen una potencia que marca diferencia en el partido.',
 };
+const DESC_CONTROL_ORIENTADO: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'El balón se le escapa tras el primer toque; necesita varios contactos para dominarlo.',
+  'Nivel 2 (En Desarrollo)':'Detiene el balón, pero queda estático. Requiere un segundo toque para empezar a moverse.',
+  'Nivel 3 (Competente)':   'Controla el balón hacia una zona libre de presión en situaciones de baja intensidad.',
+  'Nivel 4 (Avanzado)':     'El primer toque ya es una ventaja: prepara el balón para el siguiente pase o tiro de inmediato.',
+  'Nivel 5 (Dominante)':    'Domina el control con cualquier superficie (pecho, muslo, cabeza) y elimina rivales con el primer toque.',
+};
 const DESC_CONDUCCION: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Mantiene la vista fija en el balón; pierde el control al aumentar la velocidad.',
   'Nivel 2 (En Desarrollo)':'Conduce con el interior/exterior pero con trayectorias rígidas.',
@@ -426,7 +433,8 @@ export default function ValoracionPage() {
             descripciones={DESC_CONDUCCION} />
           <BloqueAspecto titulo="CONTROL ORIENTADO" subtitulo="Primer Toque y Salida"
             nivel={data.paseNivel} onNivel={v => set('paseNivel', v)}
-            desc={data.paseDesc}   onDesc={v => set('paseDesc', v)} />
+            desc={data.paseDesc}   onDesc={v => set('paseDesc', v)}
+            descripciones={DESC_CONTROL_ORIENTADO} />
           <BloqueAspecto titulo="REMATE A PORTERÍA" subtitulo="Potencia y Definición"
             nivel={data.remataNivel} onNivel={v => set('remataNivel', v)}
             desc={data.remataDesc}   onDesc={v => set('remataDesc', v)} />
