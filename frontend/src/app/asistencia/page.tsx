@@ -437,7 +437,7 @@ function AsistenciaInner() {
               <button
                 onClick={guardarAsistencia}
                 disabled={guardando}
-                className={`relative flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition border ${
+                className={`relative flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition border ${
                   guardado
                     ? 'bg-white text-[#16a34a] border-white'
                     : 'bg-[#16a34a] hover:bg-[#15803d] text-white border-white/30'
@@ -451,18 +451,18 @@ function AsistenciaInner() {
                 }
               </button>
               <button onClick={descargarExcel}
-                className="relative flex items-center gap-1.5 bg-white/20 hover:bg-white/35 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition border border-white/30">
+                className="relative hidden sm:flex items-center gap-1.5 bg-white/20 hover:bg-white/35 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition border border-white/30">
                 <FileDown className="w-3.5 h-3.5" />
                 Descargar Excel
               </button>
             </>
           )}
           <button onClick={() => router.push('/consolidado')}
-            className="relative flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition">
+            className="relative hidden sm:flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition">
             <Users className="w-3.5 h-3.5" />
             Ver consolidado
           </button>
-          <div className="text-right leading-tight">
+          <div className="hidden sm:block text-right leading-tight">
             <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
             <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
           </div>
@@ -607,7 +607,7 @@ function AsistenciaInner() {
               <div className="flex gap-1.5">
                 {DIAS_ORDEN_JS.map((jsDay, i) => (
                   <button key={jsDay} onClick={() => toggleDia(jsDay)}
-                    className={`w-9 h-9 rounded-lg text-[11px] font-black transition ${
+                    className={`w-10 h-10 rounded-lg text-[11px] font-black transition ${
                       diasSel.includes(jsDay)
                         ? 'bg-[#16a34a] text-white shadow-sm'
                         : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -817,7 +817,7 @@ function AsistenciaInner() {
                                   <button
                                     onClick={() => toggleEstado(dep.id, d)}
                                     title={ESTADO_LABEL[estado] || 'Sin registro'}
-                                    className={`min-w-[68px] h-8 rounded font-black text-[9px] leading-tight px-1 transition active:scale-90 whitespace-nowrap ${ESTADO_STYLE[estado]}`}>
+                                    className={`min-w-[68px] h-10 rounded font-black text-[9px] leading-tight px-1 transition active:scale-90 whitespace-nowrap ${ESTADO_STYLE[estado]}`}>
                                     {ESTADO_LABEL[estado]}
                                   </button>
                                 </td>

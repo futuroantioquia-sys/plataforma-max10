@@ -174,18 +174,12 @@ export async function saveDeportistas(deps: Deportista[]): Promise<void> {
  *  Para deportistas solo en localStorage → usa localStorage
  *  (cubre el caso donde el upsert a Supabase falló pero localStorage sí se actualizó). */
 export async function getPagos(): Promise<AllPagos> {
-  // 1. Leer pagos del Libro Contable (clave dedicada — pequeña, siempre disponible)
-  const libroAll = lsGet<AllPagos>(LS_LIBRO, {});
-
-  // 2. Leer pagos manuales de localStorage (dep.id)
-  const lsAll = lsGet<AllPagos>(LS_PAGOS, {});
-
   try {
-    // 3. Leer pagos manuales de Supabase
+    // 1. Supabase PRIMERO — fuente de verdad (incluye libro contable + manuales)
     const { data, error } = await supabase()
       .from('pagos_estado')
       .select('deportista_id, detalle, estado, v_pagado, v_cargado, destino, fecha')
-      .limit(2000);
+      .limit(5000);
 
     if (error) throw error;
 
@@ -202,13 +196,21 @@ export async function getPagos(): Promise<AllPagos> {
       });
     }
 
-    // Fusionar: lsAll y libroAll ganan (escritura más reciente)
-    // Orden: sbAll < lsAll < libroAll
-    // libroAll son claves numéricas, no colisionan con dep.id
-    const merged: AllPagos = { ...sbAll, ...lsAll, ...libroAll };
-    return merged;
+    // Actualizar caché local con datos frescos de Supabase
+    const libroKeys: AllPagos = {};
+    const depKeys:   AllPagos = {};
+    for (const [k, v] of Object.entries(sbAll)) {
+      if (/^\d{1,6}$/.test(k)) libroKeys[k] = v;
+      else depKeys[k] = v;
+    }
+    lsSet(LS_LIBRO, libroKeys);
+    lsSet(LS_PAGOS, depKeys);
+
+    return sbAll;
   } catch {
-    // Sin Supabase: usar solo localStorage
+    // Sin Supabase: fallback a localStorage
+    const libroAll = lsGet<AllPagos>(LS_LIBRO, {});
+    const lsAll    = lsGet<AllPagos>(LS_PAGOS, {});
     return { ...lsAll, ...libroAll };
   }
 }
@@ -242,30 +244,44 @@ export async function savePagosDeportista(depId: string, filas: FilaPago[]): Pro
 }
 
 /** Guarda todos los pagos (batch): usado al importar Libro Contable.
- *  - Claves numéricas (4-5 dígitos) → LS_LIBRO (clave separada, pequeña, robusta)
- *  - Claves dep.id → LS_PAGOS + Supabase pagos_estado */
+ *  - TODAS las claves → Supabase pagos_estado (fuente de verdad)
+ *  - Claves numéricas también → LS_LIBRO (caché local rápida)
+ *  - Claves dep.id → LS_PAGOS (caché local rápida) */
 export async function saveAllPagos(all: AllPagos): Promise<void> {
   /* Separar claves numéricas (Libro Contable) de claves dep.id (manual) */
   const libroEntries: AllPagos = {};
   const depEntries:   AllPagos = {};
 
   for (const [key, filas] of Object.entries(all)) {
-    if (/^\d{1,5}$/.test(key)) {
+    if (/^\d{1,6}$/.test(key)) {
       libroEntries[key] = filas;
     } else {
       depEntries[key] = filas;
     }
   }
 
-  /* 1. Guardar pagos del Libro Contable en clave DEDICADA (pequeña, sin Supabase) */
+  /* 1. Caché localStorage */
   lsSet(LS_LIBRO, libroEntries);
-
-  /* 2. Guardar pagos manuales (dep.id) en clave general */
   lsSet(LS_PAGOS, depEntries);
 
-  /* 3. Sincronizar dep.id con Supabase */
+  /* 2. Sincronizar TODO (libro + dep.id) con Supabase — fuente de verdad */
   try {
     const rows: object[] = [];
+    // Libro contable (claves numéricas como deportista_id — TEXT, sin FK)
+    for (const [codigo, filas] of Object.entries(libroEntries)) {
+      for (const f of filas) {
+        rows.push({
+          deportista_id: codigo,
+          detalle:       f.detalle,
+          estado:        f.estado,
+          v_pagado:      f.vPagado,
+          v_cargado:     f.vCargado,
+          destino:       f.destino,
+          fecha:         f.fecha,
+        });
+      }
+    }
+    // Pagos manuales (dep.id)
     for (const [depId, filas] of Object.entries(depEntries)) {
       for (const f of filas) {
         rows.push({
@@ -545,11 +561,7 @@ const PROFES_INICIALES: Profe[] = [
 ];
 
 export async function getProfes(): Promise<Profe[]> {
-  // 1. localStorage (más rápido)
-  const cached = lsGet<Profe[]>(LS_PROFES, []);
-  if (cached && cached.length) return cached;
-
-  // 2. Supabase
+  // 1. Supabase PRIMERO — fuente de verdad (garantiza proyectos actualizados)
   try {
     const { data, error } = await supabase()
       .from('profes')
@@ -562,13 +574,16 @@ export async function getProfes(): Promise<Profe[]> {
         clave:     r.clave,
         proyectos: r.proyectos ?? [],
       }));
-      lsSet(LS_PROFES, lista);
+      lsSet(LS_PROFES, lista);  // actualizar caché local
       return lista;
     }
   } catch {}
 
+  // 2. localStorage como fallback (sin red / Supabase no disponible)
+  const cached = lsGet<Profe[]>(LS_PROFES, []);
+  if (cached && cached.length) return cached;
+
   // 3. Fallback garantizado: lista inicial hardcodeada
-  //    La guardamos en localStorage para que la próxima vez sea rápido
   lsSet(LS_PROFES, PROFES_INICIALES);
   return PROFES_INICIALES;
 }

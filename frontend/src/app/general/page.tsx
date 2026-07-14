@@ -564,29 +564,29 @@ export default function GeneralPage() {
           </div>
         </div>
 
-        {/* Restablecer anchos */}
+        {/* Restablecer anchos — oculto en móvil */}
         {Object.keys(colWidths).length > 0 && (
           <button onClick={resetColWidths}
-            className="relative text-white/60 hover:text-white text-[10px] font-semibold flex-shrink-0 px-2 py-1 rounded-lg hover:bg-white/10 transition"
+            className="relative hidden sm:flex text-white/60 hover:text-white text-[10px] font-semibold flex-shrink-0 px-2 py-1 rounded-lg hover:bg-white/10 transition"
             title="Restablecer anchos de columna">
             ↺ anchos
           </button>
         )}
 
-        {/* Botón eliminar datos y reimportar */}
+        {/* Botón eliminar datos — oculto en móvil */}
         <button
           onClick={eliminarYReimportar}
           disabled={borrando}
-          className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-red-600/80 hover:bg-red-700 disabled:opacity-50 text-white transition flex-shrink-0"
+          className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-red-600/80 hover:bg-red-700 disabled:opacity-50 text-white transition flex-shrink-0"
           title="Eliminar todos los deportistas y reimportar Excel">
           <Trash2 className="w-3.5 h-3.5" />
           {borrando ? 'Borrando…' : 'Eliminar datos'}
         </button>
 
-        {/* Botón importar torneos */}
+        {/* Botón importar torneos — oculto en móvil */}
         <button
           onClick={() => { setModalTorneo(true); setTorneoPaso('subir'); setTorneoFilas([]); }}
-          className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-white/15 text-white hover:bg-white/25 transition flex-shrink-0">
+          className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-white/15 text-white hover:bg-white/25 transition flex-shrink-0">
           <Trophy className="w-3.5 h-3.5" />
           Torneos
         </button>
@@ -675,7 +675,7 @@ export default function GeneralPage() {
           }
         </button>
 
-        <div className="relative text-right leading-tight ml-2 flex-shrink-0">
+        <div className="hidden sm:block relative text-right leading-tight ml-2 flex-shrink-0">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
           <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
         </div>

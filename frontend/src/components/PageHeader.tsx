@@ -62,7 +62,7 @@ export function PageHeader({
         {/* Botón atrás */}
         <button
           onClick={handleBack}
-          className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 transition-all flex-shrink-0 border border-white/20"
+          className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/15 hover:bg-white/25 transition-all flex-shrink-0 border border-white/20"
         >
           <ArrowLeft className="w-4 h-4 text-white" />
         </button>

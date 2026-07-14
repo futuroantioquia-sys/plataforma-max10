@@ -15,10 +15,21 @@ declare global { interface Window { XLSX: any } }
 /* Meses válidos en DETALLE del Libro Contable */
 const MESES_VALIDOS = [
   'MATRÍCULA 2026','MATRICULA 2026',
+  'INSCRIPCIÓN 2026','INSCRIPCION 2026',
+  'CIA INSCRIPCIÓN 2026','CIA INSCRIPCION 2026',
   'ENERO 2026','FEBRERO 2026','MARZO 2026','ABRIL 2026','MAYO 2026','JUNIO 2026',
   'JULIO 2026','AGOSTO 2026','SEPTIEMBRE 2026','OCTUBRE 2026',
   'NOVIEMBRE 2026','DICIEMBRE 2026',
 ];
+
+/* Alias: qué valor canónico se guarda cuando se detecta cada forma */
+const ALIAS_CANON: Record<string, string> = {
+  'INSCRIPCIÓN 2026':     'MATRÍCULA 2026',
+  'INSCRIPCION 2026':     'MATRÍCULA 2026',
+  'CIA INSCRIPCIÓN 2026': 'MATRÍCULA 2026',
+  'CIA INSCRIPCION 2026': 'MATRÍCULA 2026',
+  'MATRICULA 2026':       'MATRÍCULA 2026',
+};
 
 type PagoRow = {
   detalle:  string;
@@ -355,21 +366,32 @@ export default function LibroContablePage() {
           'JUNIO':'JUNIO','JULIO':'JULIO','AGOSTO':'AGOSTO','SEPTIEMBRE':'SEPTIEMBRE',
           'OCTUBRE':'OCTUBRE','NOVIEMBRE':'NOVIEMBRE','DICIEMBRE':'DICIEMBRE',
           'MATRICULA':'MATRÍCULA','MATR':'MATRÍCULA',
+          'INSCRIPCION':'MATRÍCULA','INSCRIPCIÓN':'MATRÍCULA',
         };
 
         function normDetalle(raw: string): string {
-          const up = limpiar(raw);
-          if (MESES_VALIDOS.includes(up)) return up;
-          const parcial = MESES_VALIDOS.find(m => up.includes(m));
-          if (parcial) return parcial;
+          const up = sinTildes(limpiar(raw));
+          // Check alias first (sin tildes comparison)
+          const aliasKey = Object.keys(ALIAS_CANON).find(k => sinTildes(k) === up);
+          if (aliasKey) return ALIAS_CANON[aliasKey];
+          // Check exact match in MESES_VALIDOS (with/without tildes)
+          const exactMatch = MESES_VALIDOS.find(m => sinTildes(m) === up);
+          if (exactMatch) return exactMatch;
+          // Check partial match
+          const parcial = MESES_VALIDOS.find(m => up.includes(sinTildes(m)) || sinTildes(m).includes(up));
+          if (parcial) return ALIAS_CANON[parcial] ?? parcial;
           const partes  = up.replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
           const mesAbr  = partes.find(p => ABREV[p]);
           const anioStr = partes.find(p => /^20\d{2}$/.test(p)) ?? '2026';
           if (mesAbr) {
             const canon = ABREV[mesAbr] + ' ' + anioStr;
-            if (MESES_VALIDOS.includes(canon)) return canon;
+            const canonMatch = MESES_VALIDOS.find(m => sinTildes(m) === sinTildes(canon));
+            if (canonMatch) return canonMatch;
           }
-          return up;
+          // Check if raw (con tildes) is directly in MESES_VALIDOS
+          const rawUp = limpiar(raw);
+          if (MESES_VALIDOS.includes(rawUp)) return rawUp;
+          return rawUp;
         }
 
         for (const row of rows.slice(hRow + 1)) {
