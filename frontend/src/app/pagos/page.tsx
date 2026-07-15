@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  DollarSign, Search, Upload, FileSpreadsheet,
+  DollarSign, Search,
   ChevronRight, User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -90,11 +90,6 @@ export default function PagosPage() {
       return s + (isNaN(n) ? 0 : n);
     }, 0);
     return { cargados, pagados, pendientes, proximos, totalPag, totalPend, total: filas.length };
-  }
-
-  function fmt(n: number) {
-    if (!n) return '';
-    return '$' + n.toLocaleString('es-CO').replace(/,/g, '.');
   }
 
   const BL = '#4b5563';
