@@ -371,13 +371,26 @@ export default function EstadoCuentaPage() {
   }
   const tarifa = calcTarifa(catVal, sedeVal);
 
+  /* ─── Mes de afiliación (para ocultar meses anteriores) ─── */
+  const mesAfilNum = (() => {
+    if (!fechaAfil) return 1;
+    const f = formatFecha(fechaAfil);
+    const m = f.match(/^\d{1,2}\/(\d{1,2})\/\d{4}$/);
+    return m ? parseInt(m[1], 10) : 1;
+  })();
+
   /* ─── Filas según año seleccionado ─── */
   const anioActual = new Date().getFullYear();
-  const pagosVista: PagoRow[] = anio > anioActual
+  const pagosVista: PagoRow[] = (anio > anioActual
     ? pagos.map(r => ({ ...r, estado: 'PROX' as const, vPagado: '', destino: '', fecha: '' }))
     : anio < anioActual
     ? pagos.map(r => ({ ...r, estado: r.estado === 'PROX' ? 'PEND' as const : r.estado }))
-    : pagos;
+    : pagos
+  ).filter(r => {
+    const rowNum = MES_NUM[r.detalle];
+    if (rowNum === undefined || rowNum === 0) return true; // MATRÍCULA siempre
+    return rowNum >= mesAfilNum;
+  });
 
   /* ─── Totales ─── */
   const pagados    = pagosVista.filter(p => p.estado === 'PAGÓ').length;
