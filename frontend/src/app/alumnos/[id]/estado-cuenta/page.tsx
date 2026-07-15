@@ -307,25 +307,34 @@ export default function EstadoCuentaPage() {
     setPagos(updated);
   }
 
+  /* ─── Buscar índice real en pagos[] a partir del índice de vista ─── */
+  function realIdxDe(viewIdx: number): number {
+    const detalle = pagosVista[viewIdx]?.detalle;
+    if (!detalle) return -1;
+    return pagos.findIndex(r => r.detalle === detalle);
+  }
+
   /* ─── Toggle estado ─── */
-  function toggleEstado(idx: number) {
-    const row = pagos[idx];
+  function toggleEstado(viewIdx: number) {
+    const row     = pagosVista[viewIdx];
+    const realIdx = realIdxDe(viewIdx);
+    if (!row || realIdx === -1) return;
     if (row.estado === 'PAGÓ') {
-      // Revertir a pendiente
       const updated = pagos.map((r, i) =>
-        i === idx ? { ...r, estado: 'PEND' as const, destino: '', fecha: '', vPagado: '' } : r
+        i === realIdx ? { ...r, estado: 'PEND' as const, destino: '', fecha: '', vPagado: '' } : r
       );
       savePagos(updated);
     } else {
-      // Marcar como pagado
-      setEditIdx(idx);
+      setEditIdx(viewIdx);
       setEditForm({ vCargado: row.vCargado, destino: row.destino, fecha: '', vPagado: row.vCargado });
     }
   }
 
   function confirmarPago() {
     if (editIdx === null) return;
-    const updated = pagos.map((r, i) => i === editIdx ? {
+    const realIdx = realIdxDe(editIdx);
+    if (realIdx === -1) return;
+    const updated = pagos.map((r, i) => i === realIdx ? {
       ...r,
       estado:   'PAGÓ' as const,
       vCargado: editForm.vCargado || r.vCargado,
@@ -338,19 +347,17 @@ export default function EstadoCuentaPage() {
     setEditForm({});
   }
 
-  /** Elimina un mes del cobro (queda guardado como ELIM, desaparece de la vista) */
-  function eliminarMes(pagoIdx: number) {
-    // pagoIdx es índice en pagosVista; necesitamos encontrar el índice en pagos
-    const detalleTarget = pagosVista[pagoIdx]?.detalle;
-    if (!detalleTarget) return;
-    const realIdx = pagos.findIndex(r => r.detalle === detalleTarget);
+  /** Elimina un mes del cobro (desde el modal de PEND) */
+  function eliminarMes(viewIdx: number) {
+    const realIdx = realIdxDe(viewIdx);
     if (realIdx === -1) return;
     const updated = pagos.map((r, i) => i === realIdx
       ? { ...r, estado: 'ELIM' as const, vPagado: '', destino: '', fecha: '' }
       : r
     );
     savePagos(updated);
-    setElimConfirm(null);
+    setEditIdx(null);
+    setEditForm({});
   }
 
   /* ─── Loading ─── */
@@ -649,41 +656,16 @@ export default function EstadoCuentaPage() {
                     </td>
 
                     {/* ESTADO PAGO */}
-                    <td style={{ background: rowBg, border: BW, padding: '4px 4px', textAlign: 'center' }}>
-                      {isProx ? (
-                        <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
-                          style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
-                      ) : elimConfirm === idx ? (
-                        /* Mini confirmación de eliminación */
-                        <div className="flex flex-col gap-1 px-1">
-                          <p className="text-[9px] text-gray-500 font-bold leading-tight">¿No cobrar este mes?</p>
-                          <div className="flex gap-1">
-                            <button onClick={() => eliminarMes(idx)}
-                              className="flex-1 bg-red-600 text-white text-[9px] font-black py-1 rounded">
-                              ELIMINAR
-                            </button>
-                            <button onClick={() => setElimConfirm(null)}
-                              className="flex-1 bg-gray-200 text-gray-600 text-[9px] font-black py-1 rounded">
-                              CANCELAR
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className={cn('flex gap-1', isPaid ? 'items-center' : '')}>
-                          <button onClick={() => toggleEstado(idx)}
-                            className={cn('flex-1 px-2 py-1 rounded font-black text-white text-[11px] transition',
+                    <td style={{ background: rowBg, border: BW, padding: '6px 4px', textAlign: 'center' }}>
+                      {isProx
+                        ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
+                            style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
+                        : <button onClick={() => toggleEstado(idx)}
+                            className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
                               isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
                             {isPaid ? 'PAGÓ' : 'PEND'}
                           </button>
-                          {isPaid && (
-                            <button onClick={() => setElimConfirm(idx)}
-                              title="Eliminar este mes del cobro"
-                              className="px-1.5 py-1 rounded bg-gray-100 hover:bg-red-100 text-gray-400 hover:text-red-500 transition text-sm leading-none flex-shrink-0">
-                              🗑
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      }
                     </td>
                   </tr>
                 );
@@ -695,7 +677,7 @@ export default function EstadoCuentaPage() {
 
         {/* ── NOTA ── */}
         <p className="text-center text-[11px] text-gray-400 pb-4">
-          Toca <strong>PEND</strong> para registrar · Toca <strong>PAGÓ</strong> para revertir · 🗑 para eliminar mes
+          Toca <strong>PEND</strong> para registrar pago · Toca <strong>PAGÓ</strong> para revertir
         </p>
 
         {/* ── PANEL DEBUG ── */}
@@ -754,7 +736,7 @@ export default function EstadoCuentaPage() {
           <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 w-full max-w-sm">
             <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5 sm:hidden"/>
             <h3 className="font-black text-[#111827] text-base mb-1">Registrar Pago</h3>
-            <p className="text-gray-400 text-xs mb-5 font-semibold">{pagos[editIdx]?.detalle} — {anio}</p>
+            <p className="text-gray-400 text-xs mb-5 font-semibold">{pagosVista[editIdx]?.detalle} — {anio}</p>
 
             <div className="space-y-3">
               <div>
@@ -813,6 +795,15 @@ export default function EstadoCuentaPage() {
                 onClick={confirmarPago}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 text-sm font-black transition">
                 ✓ Confirmar
+              </button>
+            </div>
+
+            {/* Eliminar mes — opción discreta al fondo del modal */}
+            <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+              <button
+                onClick={() => editIdx !== null && eliminarMes(editIdx)}
+                className="text-red-400 hover:text-red-600 text-xs font-bold transition underline underline-offset-2">
+                No cobrar este mes (eliminar del estado de cuenta)
               </button>
             </div>
           </div>

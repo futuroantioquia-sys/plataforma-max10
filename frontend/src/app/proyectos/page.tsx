@@ -8,6 +8,8 @@ import type { Deportista } from '@/lib/db';
 
 const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
 
+const CAL_OPTIONS = ['', ...Array.from({ length: 46 }, (_, i) => ((i + 5) / 10).toFixed(1))];
+
 const ORDEN_PROGRAMA = [
   'Estimulación','Formación','Progresión',
   'Pre-Progresión','Selección','Desarrollo',
@@ -23,17 +25,18 @@ function ordenProg(p: string) {
   return i >= 0 ? i : 999;
 }
 
-interface ProyMeta { horario: string; }
+interface ProyMeta { horario: string; calificacion: string; }
 
 interface ProyRow {
-  programa:    string;
-  proyecto:    string;
-  profe:       string;
-  sede:        string;
-  jornada:     string;
-  horario:     string;
-  count:       number;
-  deps:        Deportista[];
+  programa:      string;
+  proyecto:      string;
+  profe:         string;
+  sede:          string;
+  jornada:       string;
+  horario:       string;
+  calificacion:  string;
+  count:         number;
+  deps:          Deportista[];
 }
 
 export default function GestionProyectosPage() {
@@ -80,7 +83,8 @@ export default function GestionProyectosPage() {
               profe:   getCol(deps[0], /^prof/i),
               sede:    getCol(deps[0], /^sede/i),
               jornada: getCol(deps[0], /^jornada/i),
-              horario: meta[k]?.horario ?? '',
+              horario:      meta[k]?.horario      ?? '',
+              calificacion: meta[k]?.calificacion ?? '',
               count:   deps.length,
               deps,
             };
@@ -159,8 +163,12 @@ export default function GestionProyectosPage() {
 
     const newMeta = { ...meta };
     Object.entries(edits).forEach(([k, e]) => {
-      if (e.horario !== undefined) {
-        newMeta[k] = { ...(newMeta[k] ?? {}), horario: e.horario as string };
+      if (e.horario !== undefined || e.calificacion !== undefined) {
+        newMeta[k] = {
+          ...(newMeta[k] ?? {}),
+          ...(e.horario      !== undefined ? { horario:      e.horario      as string } : {}),
+          ...(e.calificacion !== undefined ? { calificacion: e.calificacion as string } : {}),
+        };
       }
     });
 
@@ -273,6 +281,7 @@ export default function GestionProyectosPage() {
                       <th style={{ border: '2px solid white' }} className="px-4 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Sede</th>
                       <th style={{ border: '2px solid white' }} className="px-4 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Días de Entrenamiento</th>
                       <th style={{ border: '2px solid white' }} className="px-4 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Horario</th>
+                      <th style={{ border: '2px solid white', background: '#1d4ed8' }} className="px-4 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">CAL</th>
                       <th style={{ border: '2px solid white', background: '#4b5563' }} className="px-4 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">
                         <Users className="w-3.5 h-3.5 inline mr-1" />Deportistas
                       </th>
@@ -303,6 +312,23 @@ export default function GestionProyectosPage() {
                           <td className="px-2 py-1 min-w-[140px]" style={{ border: '2px solid white' }}>
                             <input value={val(row, 'horario')} onChange={e => set(row, 'horario', e.target.value)}
                               placeholder="Ej: 8:00 - 10:00 am…" className={inputCls} />
+                          </td>
+                          <td className="px-2 py-1 text-center" style={{ border: '2px solid white', minWidth: '80px' }}>
+                            {(() => {
+                              const calVal = val(row, 'calificacion');
+                              const calNum = parseFloat(calVal);
+                              const calColor = !calVal ? '#9ca3af' : calNum >= 4.5 ? '#16a34a' : calNum >= 3.0 ? '#f59e0b' : '#ef4444';
+                              return (
+                                <select
+                                  value={calVal}
+                                  onChange={e => set(row, 'calificacion', e.target.value)}
+                                  style={{ color: calColor, fontWeight: 900, fontSize: '0.8rem', background: 'transparent', outline: 'none', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
+                                  {CAL_OPTIONS.map(v => (
+                                    <option key={v} value={v}>{v || '—'}</option>
+                                  ))}
+                                </select>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-2 text-center whitespace-nowrap" style={{ background: '#f1f5f9', border: '2px solid white' }}>
                             <span className="inline-flex items-center gap-1 font-black text-[#111827] text-base">{row.count}</span>

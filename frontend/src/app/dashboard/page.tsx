@@ -245,7 +245,7 @@ function DashboardProfesor() {
   }, []);
 
   const accesos = [
-    { titulo: 'Pasar Asistencia', icono: Clipboard,     href: '/asistencia',   descripcion: 'Registrar asistencia hoy',   color: 'verde'  },
+    { titulo: 'Mis Proyectos',   icono: Clipboard,     href: '/mis-proyectos', descripcion: 'Asistencia y calificación',  color: 'verde'  },
     { titulo: 'Evaluar Alumnos',  icono: Star,          href: '/evaluaciones', descripcion: 'Técnico y formativo',        color: 'dorado' },
     { titulo: 'Mis Alumnos',     icono: Users,          href: '/alumnos',      descripcion: 'Fichas y seguimiento',       color: 'azul'   },
     { titulo: 'Sesiones',        icono: Dumbbell,       href: '/sesiones',     descripcion: 'Planes de entrenamiento',    color: 'purple' },
@@ -259,13 +259,13 @@ function DashboardProfesor() {
         <div className="animate-fade-up">
           <div className="flex items-center gap-2 mb-3 pl-3 border-l-4 border-l-green-500">
             <span className="text-base">📋</span>
-            <h2 className="font-black text-sm uppercase tracking-widest text-green-700">Mis Grupos</h2>
+            <h2 className="font-black text-sm uppercase tracking-widest text-green-700">Mis Proyectos</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {grupos.map((g) => (
               <button
                 key={g}
-                onClick={() => router.push(`/asistencia?proyecto=${encodeURIComponent(g)}`)}
+                onClick={() => router.push(`/mis-proyectos`)}
                 className="group bg-white rounded-2xl border border-gray-100 p-4 text-left
                            hover:border-green-300 hover:-translate-y-1 hover:shadow-lg
                            transition-all duration-200"
@@ -279,7 +279,7 @@ function DashboardProfesor() {
                   <div className="min-w-0">
                     <p className="font-bold text-gray-800 text-sm leading-tight truncate
                                   group-hover:text-[#16a34a] transition-colors">{g}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Toca para pasar asistencia</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Asistencia · Calificación</p>
                   </div>
                   <Clipboard className="w-4 h-4 text-gray-300 group-hover:text-green-500 ml-auto flex-shrink-0 transition-colors" />
                 </div>

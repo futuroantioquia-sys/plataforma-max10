@@ -292,24 +292,17 @@ export default function PagosPage() {
 
                       {/* PAGADOS */}
                       <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
-                        {tieneDatos ? (
-                          <div>
-                            <span className="font-black text-green-600 text-sm">{pagados}</span>
-                            {totalPag > 0 && <p className="text-[10px] text-green-500 font-semibold">{fmt(totalPag)}</p>}
-                          </div>
-                        ) : <span className="text-gray-300 text-xs">—</span>}
+                        <span className="font-black text-green-600 text-sm">{pagados || '—'}</span>
                       </td>
 
                       {/* PENDIENTES */}
-                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
-                        {tieneDatos ? (
-                          <div>
-                            <span className={cn('font-black text-sm', pendientes > 0 ? 'text-red-500' : 'text-gray-300')}>
-                              {pendientes}
-                            </span>
-                            {totalPend > 0 && <p className="text-[10px] text-red-400 font-semibold">{fmt(totalPend)}</p>}
-                          </div>
-                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      <td style={{
+                        background: pendientes > 0 ? '#fef2f2' : bg,
+                        border: '1px solid white', padding: '6px 8px', textAlign: 'center',
+                      }}>
+                        <span className={cn('font-black text-sm', pendientes > 0 ? 'text-red-500' : 'text-gray-300')}>
+                          {pendientes > 0 ? pendientes : '—'}
+                        </span>
                       </td>
 
                       {/* PRÓXIMOS */}
@@ -321,15 +314,12 @@ export default function PagosPage() {
 
                       {/* ESTADO chip */}
                       <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
-                        {tieneDatos ? (
-                          pendientes === 0
-                            ? <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full">AL DÍA</span>
-                            : pagados === 0
-                              ? <span className="bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full">SIN PAGO</span>
-                              : <span className="bg-yellow-100 text-yellow-700 text-[10px] font-black px-2 py-0.5 rounded-full">PARCIAL</span>
-                        ) : (
-                          <span className="bg-gray-100 text-gray-400 text-[10px] font-bold px-2 py-0.5 rounded-full">SIN DATOS</span>
-                        )}
+                        {pendientes === 0 && tieneDatos
+                          ? <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap">AL DÍA</span>
+                          : pendientes > 0
+                            ? <span className="bg-red-100 text-red-500 text-[10px] font-black px-2 py-0.5 rounded-full">PEND</span>
+                            : <span className="text-gray-300 text-xs">—</span>
+                        }
                       </td>
 
                       {/* BOTÓN */}
