@@ -31,9 +31,11 @@ export default function PagosPage() {
 
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const [allPagos,    setAllPagos]    = useState<AllPagos>({});
-  const [busqueda,    setBusqueda]    = useState('');
+  const [busqueda,       setBusqueda]       = useState('');
+  const [filtroCodigo,   setFiltroCodigo]   = useState('');
   const [filtroPrograma, setFiltroPrograma] = useState('');
-  const [cargando,    setCargando]    = useState(true);
+  const [filtroProyecto, setFiltroProyecto] = useState('');
+  const [cargando,       setCargando]       = useState(true);
 
   useEffect(() => {
     getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
@@ -45,22 +47,29 @@ export default function PagosPage() {
     [deportistas]
   );
 
+  const proyectos = useMemo(() => {
+    const base = filtroPrograma
+      ? deportistas.filter(d => getCol(d, /^program/i) === filtroPrograma)
+      : deportistas;
+    return [...new Set(base.map(d => getCol(d, /^proy/i)).filter(Boolean))].sort();
+  }, [deportistas, filtroPrograma]);
+
   const filtrados = useMemo(() => {
     return deportistas.filter(d => {
-      const q = busqueda.toLowerCase();
+      const q    = busqueda.toLowerCase();
+      const cod  = codigoDe(d).toLowerCase();
       const prog = getCol(d, /^program/i);
+      const proy = getCol(d, /^proy/i);
       if (filtroPrograma && prog !== filtroPrograma) return false;
+      if (filtroProyecto && proy !== filtroProyecto) return false;
+      if (filtroCodigo && !cod.includes(filtroCodigo.toLowerCase())) return false;
       if (!q) return true;
-      return (
-        d._nombre.toLowerCase().includes(q) ||
-        codigoDe(d).toLowerCase().includes(q) ||
-        prog.toLowerCase().includes(q)
-      );
+      return d._nombre.toLowerCase().includes(q) || cod.includes(q);
     }).sort((a, b) => {
       const ca = codigoDe(a), cb = codigoDe(b);
       return ca.localeCompare(cb, 'es', { numeric: true });
     });
-  }, [deportistas, busqueda, filtroPrograma]);
+  }, [deportistas, busqueda, filtroCodigo, filtroPrograma, filtroProyecto]);
 
   /* Resumen de pagos por deportista */
   function resumenPago(id: string) {
@@ -125,27 +134,56 @@ export default function PagosPage() {
           <h2 className="font-black text-[#111827] text-base">Estado de Cuenta por Deportista</h2>
         </div>
 
-        {/* BÚSQUEDA Y FILTRO */}
-        <div className="flex gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[180px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              placeholder="Buscar nombre o código..."
-              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white"
-            />
+        {/* FILTROS */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 shadow-sm">
+          {/* Fila 1: PROGRAMA + PROYECTO */}
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex-1 min-w-[140px]">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Programa</label>
+              <select value={filtroPrograma}
+                onChange={e => { setFiltroPrograma(e.target.value); setFiltroProyecto(''); }}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+                <option value="">Todos los programas</option>
+                {programas.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[140px]">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Proyecto</label>
+              <select value={filtroProyecto} onChange={e => setFiltroProyecto(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+                <option value="">Todos los proyectos</option>
+                {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
           </div>
-          {programas.length > 0 && (
-            <select value={filtroPrograma} onChange={e => setFiltroPrograma(e.target.value)}
-              className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white min-w-[130px]">
-              <option value="">Todos los programas</option>
-              {programas.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          )}
-          <span className="flex items-center text-sm font-bold text-gray-400">
-            {filtrados.length} deportistas
-          </span>
+
+          {/* Fila 2: CÓDIGO + NOMBRE */}
+          <div className="flex gap-3 flex-wrap">
+            <div className="w-[130px]">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Código</label>
+              <input
+                value={filtroCodigo}
+                onChange={e => setFiltroCodigo(e.target.value)}
+                placeholder="Ej: 2018"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white"
+              />
+            </div>
+            <div className="relative flex-1 min-w-[160px]">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Nombre</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={busqueda}
+                  onChange={e => setBusqueda(e.target.value)}
+                  placeholder="Buscar nombre..."
+                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white"
+                />
+              </div>
+            </div>
+            <div className="flex items-end pb-0.5">
+              <span className="text-sm font-black text-[#16a34a]">{filtrados.length} deportistas</span>
+            </div>
+          </div>
         </div>
 
         {/* LISTA DE DEPORTISTAS */}

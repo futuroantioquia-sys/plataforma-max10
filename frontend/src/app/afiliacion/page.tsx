@@ -162,7 +162,7 @@ const DROPDOWNS: { rx: RegExp; label: string; opciones: DropOpt[] }[] = [
     ],
   },
   {
-    rx: /^tipo.*doc.*acud|^td.*acud|^doc.*acud/i,
+    rx: /^tipo.*doc.*acud|^td.*acud|^tipo_doc_acud/i,
     label: 'Tipo de doc. del acudiente',
     opciones: [
       { value: 'Cédula de Ciudadanía (CC)',          label: 'Cédula de Ciudadanía (CC)'          },

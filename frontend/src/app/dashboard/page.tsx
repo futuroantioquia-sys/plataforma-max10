@@ -196,10 +196,7 @@ function DashboardAdmin() {
       {/* Categoría: Finanzas */}
       <CategoriaSection emoji="💰" titulo="Finanzas" color="azul" delay={200}>
         <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="azul" />
-        <AccesoCard titulo="Consolidado Valores"   icono={BarChart3}    href="/vista-contable"          descripcion="Valores por deportista"        color="azul" />
         <AccesoCard titulo="Subir Valores"         icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" />
-        <AccesoCard titulo="Subir Bancos"          icono={Upload}       href="/subir-bancos"            descripcion="Cargar extracto y pagar"       color="azul" />
-        <AccesoCard titulo="Consolidado Bancos"    icono={DollarSign}   href="/consolidado-bancos"      descripcion="Historial de pagos recibidos"  color="azul" />
         <AccesoCard titulo="Pagos por Proyecto"    icono={FolderKanban} href="/pagos-proyecto"          descripcion="Estado de cuenta por grupo"    color="azul" />
       </CategoriaSection>
 

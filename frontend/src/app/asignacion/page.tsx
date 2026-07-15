@@ -22,6 +22,8 @@ function colEstado(d: Deportista)   { return getCol(d, /^estado/i); }
 function colPrograma(d: Deportista) { return getCol(d, /^program/i); }
 function colProy(d: Deportista)     { return getCol(d, /^proy/i); }
 function colCodigo(d: Deportista)   { return getCol(d, /^c[oó]d/i); }
+function colSede(d: Deportista)     { return getCol(d, /^sede/i); }
+function colJornada(d: Deportista)  { return getCol(d, /^jorn/i); }
 
 // Un deportista pendiente es nuevo (sin código asignado aún)
 function esPendiente(d: Deportista): boolean {
@@ -76,8 +78,9 @@ export default function AsignacionPage() {
     setSelected(dep);
     setExito(false);
     setError('');
-    // Pre-llenar estado desde el formulario del deportista
-    setForm({ programa:'', proyecto:'', proyNuevo:'', codigo:'', estado:'1. Nuevo' });
+    // Pre-llenar programa desde los datos del deportista (si ya lo escogió en el formulario)
+    const progExistente = colPrograma(dep).trim();
+    setForm({ programa: progExistente, proyecto:'', proyNuevo:'', codigo:'', estado:'1. Nuevo' });
   }
 
   function cancelar() { setSelected(null); setExito(false); setError(''); }
@@ -193,33 +196,51 @@ export default function AsignacionPage() {
               )}
 
               {filtrados.map(dep => {
-                const doc   = dep._columnas['DOCUMENTO'] ?? dep._columnas['DOCUMENTO_INGRESO'] ?? '—';
-                const fecha = dep._columnas['FECHA_NAC'] ?? '';
-                const tel   = dep._columnas['TELEFONO'] ?? '';
-                const isSel = selected?.id === dep.id;
+                const doc     = dep._columnas['DOCUMENTO'] ?? dep._columnas['DOCUMENTO_INGRESO'] ?? '—';
+                const prog    = colPrograma(dep);
+                const sede    = colSede(dep);
+                const jornada = colJornada(dep);
+                const isSel   = selected?.id === dep.id;
                 return (
                   <button key={dep.id} onClick={() => seleccionar(dep)}
                     className={cn(
                       'w-full text-left rounded-2xl border-2 p-4 transition-all',
                       isSel
-                        ? 'border-blue-400 bg-[#eff6ff] shadow-md'
-                        : 'border-gray-100 bg-white hover:border-blue-300 hover:shadow-sm'
+                        ? 'border-[#16a34a] bg-[#f0fdf4] shadow-md'
+                        : 'border-gray-100 bg-white hover:border-green-300 hover:shadow-sm'
                     )}>
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 bg-[#dbeafe] rounded-xl flex items-center justify-center flex-shrink-0">
-                        <UserPlus className="w-5 h-5 text-[#1d4ed8]" />
+                      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
+                        isSel ? 'bg-[#dcfce7]' : 'bg-[#dbeafe]')}>
+                        <UserPlus className={cn('w-5 h-5', isSel ? 'text-[#16a34a]' : 'text-[#1d4ed8]')} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-black text-gray-900 text-sm truncate">{dep._nombre}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Doc: {doc}</p>
-                        {(fecha || tel) && (
-                          <p className="text-[10px] text-gray-400 mt-0.5">
-                            {fecha && `Nac: ${fecha}`}{fecha && tel && ' · '}{tel && `Tel: ${tel}`}
-                          </p>
-                        )}
+                        <p className="text-[11px] text-gray-500 mt-0.5">Doc: {doc}</p>
+                        {/* Programa, Sede, Jornada */}
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {prog && (
+                            <span className="bg-[#16a34a] text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">
+                              {prog}
+                            </span>
+                          )}
+                          {sede && (
+                            <span className="bg-[#1d4ed8] text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">
+                              {sede}
+                            </span>
+                          )}
+                          {jornada && (
+                            <span className="bg-gray-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">
+                              {jornada}
+                            </span>
+                          )}
+                          {!prog && !sede && !jornada && (
+                            <span className="text-[10px] text-gray-400 italic">Sin datos de programa/sede</span>
+                          )}
+                        </div>
                       </div>
                       <ChevronRight className={cn('w-4 h-4 flex-shrink-0 mt-1 transition-colors',
-                        isSel ? 'text-[#2563eb]' : 'text-gray-300')} />
+                        isSel ? 'text-[#16a34a]' : 'text-gray-300')} />
                     </div>
                   </button>
                 );
@@ -243,6 +264,36 @@ export default function AsignacionPage() {
                     <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest">Asignando a</p>
                     <p className="text-white font-black text-lg leading-tight">{selected._nombre}</p>
                   </div>
+
+                  {/* Badges: Programa, Sede, Jornada */}
+                  {(() => {
+                    const prog    = colPrograma(selected);
+                    const sede    = colSede(selected);
+                    const jornada = colJornada(selected);
+                    if (!prog && !sede && !jornada) return null;
+                    return (
+                      <div className="px-5 py-3 bg-[#f0fdf4] border-b border-green-100 flex flex-wrap gap-2">
+                        {prog && (
+                          <div className="flex flex-col items-start">
+                            <span className="text-[9px] font-black text-green-700 uppercase tracking-widest">Programa</span>
+                            <span className="bg-[#16a34a] text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{prog}</span>
+                          </div>
+                        )}
+                        {sede && (
+                          <div className="flex flex-col items-start">
+                            <span className="text-[9px] font-black text-blue-700 uppercase tracking-widest">Sede</span>
+                            <span className="bg-[#1d4ed8] text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{sede}</span>
+                          </div>
+                        )}
+                        {jornada && (
+                          <div className="flex flex-col items-start">
+                            <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Jornada</span>
+                            <span className="bg-gray-600 text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{jornada}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Datos del formulario de afiliación */}
                   <div className="px-5 py-3 bg-[#eff6ff] border-b border-blue-100">
