@@ -371,12 +371,18 @@ export default function EstadoCuentaPage() {
   }
   const tarifa = calcTarifa(catVal, sedeVal);
 
-  /* ─── Mes de afiliación (para ocultar meses anteriores) ─── */
+  /* ─── Mes de afiliación (para ocultar meses anteriores solo si se afilió en 2026) ───
+     Si la afiliación es de 2025 o antes → mostrar todos los meses (mesAfilNum = 1).
+     Si la afiliación es de 2026         → mostrar solo desde ese mes en adelante.  */
   const mesAfilNum = (() => {
     if (!fechaAfil) return 1;
     const f = formatFecha(fechaAfil);
-    const m = f.match(/^\d{1,2}\/(\d{1,2})\/\d{4}$/);
-    return m ? parseInt(m[1], 10) : 1;
+    const m = f.match(/^\d{1,2}\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return 1;
+    const mes      = parseInt(m[1], 10);
+    const anioAfil = parseInt(m[2], 10);
+    if (anioAfil < 2026) return 1; // matriculado en 2025 o antes → todos los meses
+    return mes;
   })();
 
   /* ─── Filas según año seleccionado ─── */
