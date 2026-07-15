@@ -1,65 +1,67 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, CheckCircle } from 'lucide-react';
-
-const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
-
-const CAL_OPTIONS = ['', ...Array.from({ length: 46 }, (_, i) => ((i + 5) / 10).toFixed(1))];
-
-interface ProyMeta { horario: string; calificacion: string; }
+import { ArrowLeft, Users, ClipboardList } from 'lucide-react';
+import { getDeportistas } from '@/lib/db';
 
 export default function MisProyectosPage() {
   const router = useRouter();
 
-  const [misGrupos,   setMisGrupos]   = useState<string[]>([]);
-  const [meta,        setMeta]        = useState<Record<string, ProyMeta>>({});
-  const [calEdits,    setCalEdits]    = useState<Record<string, string>>({});
-  const [guardado,    setGuardado]    = useState(false);
-  const [nombreProfe, setNombreProfe] = useState('');
+  const [misGrupos,    setMisGrupos]    = useState<string[]>([]);
+  const [nombreProfe,  setNombreProfe]  = useState('');
+  const [fotoProfe,    setFotoProfe]    = useState('');
+  const [deportistas,  setDeportistas]  = useState<any[]>([]);
+  const [cargando,     setCargando]     = useState(true);
 
   useEffect(() => {
     try {
       const rawGrupos = localStorage.getItem('futuro-profe-proyectos');
       if (rawGrupos) setMisGrupos(JSON.parse(rawGrupos));
-      const rawMeta = localStorage.getItem(PROYECTOS_META_KEY);
-      if (rawMeta) setMeta(JSON.parse(rawMeta));
       const nombre = localStorage.getItem('futuro-profe-nombre');
       if (nombre) setNombreProfe(JSON.parse(nombre));
+      // Foto
+      const nombre2 = nombre ? JSON.parse(nombre) : '';
+      if (nombre2) {
+        const f1 = localStorage.getItem(`futuro-foto-profe-${nombre2.toUpperCase()}`);
+        if (f1) { setFotoProfe(f1); }
+        else {
+          const f2 = localStorage.getItem('futuro-profe-foto');
+          if (f2) setFotoProfe(f2);
+        }
+      }
     } catch {}
+
+    getDeportistas().then(lista => {
+      setDeportistas(lista);
+      setCargando(false);
+    });
   }, []);
 
-  function getCalVal(proyecto: string): string {
-    // busca la clave que contenga este proyecto en el meta
-    const key = Object.keys(meta).find(k => k.endsWith(`::${proyecto}`));
-    if (!key) return calEdits[proyecto] ?? '';
-    return calEdits[proyecto] !== undefined ? calEdits[proyecto] : (meta[key]?.calificacion ?? '');
-  }
-
-  function setCalVal(proyecto: string, val: string) {
-    setCalEdits(prev => ({ ...prev, [proyecto]: val }));
-  }
-
-  function guardar() {
-    const newMeta = { ...meta };
-    Object.entries(calEdits).forEach(([proyecto, val]) => {
-      const key = Object.keys(newMeta).find(k => k.endsWith(`::${proyecto}`));
-      if (key) {
-        newMeta[key] = { ...(newMeta[key] ?? { horario: '' }), calificacion: val };
-      } else {
-        // si no existe la clave aún, créala
-        newMeta[`__SIN_PROGRAMA__::${proyecto}`] = { horario: '', calificacion: val };
-      }
+  /* Proyectos del profe que existen realmente en la lista de deportistas */
+  const proyectos = useMemo(() => {
+    if (!deportistas.length || !misGrupos.length) return misGrupos;
+    const set = new Set<string>();
+    deportistas.forEach(d => {
+      const cols = d._columnas ?? {};
+      const k = Object.keys(cols).find(k => /^proy/i.test(k));
+      const val = k ? String(cols[k] ?? '').trim() : '';
+      if (val && misGrupos.includes(val)) set.add(val);
     });
-    localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(newMeta));
-    setMeta(newMeta);
-    setCalEdits({});
-    setGuardado(true);
-    setTimeout(() => setGuardado(false), 2500);
+    // Si ninguno coincidió, mostrar los asignados en storage
+    return set.size > 0 ? Array.from(set).sort() : misGrupos;
+  }, [deportistas, misGrupos]);
+
+  /* Contar alumnos por proyecto */
+  function alumnosDe(proyecto: string): number {
+    return deportistas.filter(d => {
+      const cols = d._columnas ?? {};
+      const k = Object.keys(cols).find(k => /^proy/i.test(k));
+      return k ? String(cols[k] ?? '').trim() === proyecto : false;
+    }).length;
   }
 
-  const hayEdits = Object.keys(calEdits).length > 0;
+  const primerNombre = nombreProfe ? nombreProfe.split(' ')[0] : 'Profe';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -83,21 +85,18 @@ export default function MisProyectosPage() {
           <ArrowLeft className="w-5 h-5"/>
         </button>
 
-        <div className="relative flex-1 min-w-0">
-          <h1 className="text-white font-black text-base">Mis Proyectos</h1>
-          <p className="text-white/60 text-[11px]">{nombreProfe || 'Formador'}</p>
+        <div className="relative flex-1 min-w-0 flex items-center gap-3">
+          {fotoProfe
+            ? <img src={fotoProfe} alt="" className="w-9 h-9 rounded-xl object-cover border border-white/30 flex-shrink-0"/>
+            : <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-black text-sm">{primerNombre[0]}</span>
+              </div>
+          }
+          <div>
+            <h1 className="text-white font-black text-base leading-tight">Mis Proyectos</h1>
+            <p className="text-white/60 text-[11px]">{nombreProfe || 'Formador'}</p>
+          </div>
         </div>
-
-        {guardado ? (
-          <span className="relative flex items-center gap-1.5 bg-green-400 text-white font-bold text-xs px-3 py-2 rounded-xl">
-            <CheckCircle className="w-3.5 h-3.5"/>Guardado
-          </span>
-        ) : hayEdits ? (
-          <button onClick={guardar}
-            className="relative flex items-center gap-1.5 bg-white text-[#16a34a] font-bold text-xs px-3 py-2 rounded-xl hover:bg-green-50 transition shadow">
-            <Save className="w-3.5 h-3.5"/>Guardar
-          </button>
-        ) : null}
       </header>
 
       <main className="max-w-xl mx-auto px-4 py-5 space-y-4">
@@ -105,9 +104,7 @@ export default function MisProyectosPage() {
         {/* Bienvenida */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4">
           <p className="font-black text-[#111827] text-base leading-snug">
-            {nombreProfe
-              ? `¡Hola, ${nombreProfe.split(' ')[0]}!`
-              : '¡Hola, Profe!'}
+            ¡Hola, {primerNombre}!
           </p>
           <p className="text-gray-500 text-sm mt-0.5">
             Estos son tus proyectos,{' '}
@@ -115,67 +112,50 @@ export default function MisProyectosPage() {
           </p>
         </div>
 
-        {/* Proyectos */}
-        {misGrupos.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-            <p className="text-gray-400 font-semibold text-sm">Sin proyectos asignados</p>
-            <p className="text-gray-300 text-xs mt-1">
+        {/* Lista de proyectos */}
+        {cargando ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
+            <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"/>
+            <p className="text-gray-400 text-sm font-semibold">Cargando proyectos…</p>
+          </div>
+        ) : proyectos.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
+            <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <p className="text-gray-700 font-bold text-sm">Sin proyectos asignados</p>
+            <p className="text-gray-400 text-xs mt-1">
               Pide al administrador que te asigne proyectos en Gestión de Usuarios.
             </p>
           </div>
         ) : (
-          misGrupos.map(proyecto => {
-            const calVal = getCalVal(proyecto);
-            const calNum = parseFloat(calVal);
-            const calColor = !calVal
-              ? '#9ca3af'
-              : calNum >= 4.5 ? '#16a34a'
-              : calNum >= 3.0 ? '#f59e0b'
-              : '#ef4444';
-
+          proyectos.map(proyecto => {
+            const numAlumnos = alumnosDe(proyecto);
             return (
-              <div key={proyecto} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div key={proyecto}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
-                {/* Nombre del proyecto */}
-                <div className="bg-gradient-to-r from-[#064e1e] to-[#16a34a] px-4 py-3">
+                {/* Encabezado verde */}
+                <div className="bg-gradient-to-r from-[#064e1e] to-[#16a34a] px-4 py-3 flex items-center justify-between">
                   <p className="text-white font-black text-sm">{proyecto}</p>
+                  {numAlumnos > 0 && (
+                    <div className="flex items-center gap-1.5 bg-white/20 rounded-lg px-2.5 py-1">
+                      <Users className="w-3.5 h-3.5 text-white"/>
+                      <span className="text-white font-bold text-xs">{numAlumnos}</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="p-4 space-y-3">
-
-                  {/* Calificación */}
-                  <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                        Calificación del Proyecto (CAL)
-                      </p>
-                      <select
-                        value={calVal}
-                        onChange={e => setCalVal(proyecto, e.target.value)}
-                        style={{ color: calColor }}
-                        className="w-full bg-transparent font-black text-xl focus:outline-none cursor-pointer">
-                        <option value="">— Sin calificar —</option>
-                        {CAL_OPTIONS.filter(Boolean).map(v => (
-                          <option key={v} value={v}>{v}</option>
-                        ))}
-                      </select>
-                    </div>
-                    {calVal && (
-                      <div className="text-right flex-shrink-0">
-                        <p className="font-black text-3xl leading-none" style={{ color: calColor }}>{calVal}</p>
-                        <p className="text-[10px] text-gray-400 font-semibold">/ 5.0</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Botón asistencia */}
+                {/* Botón gestionar */}
+                <div className="p-4">
                   <button
                     onClick={() => router.push(`/asistencia?proyecto=${encodeURIComponent(proyecto)}`)}
-                    className="w-full py-3.5 rounded-xl font-black text-sm text-white tracking-wide transition hover:opacity-90 active:scale-[.98]"
+                    className="w-full py-3.5 rounded-xl font-black text-sm text-white tracking-wide
+                               transition hover:opacity-90 active:scale-[.98] flex items-center justify-center gap-2"
                     style={{ background: '#16a34a' }}>
+                    <ClipboardList className="w-4 h-4"/>
                     GESTIONAR ASISTENCIAS
                   </button>
-
                 </div>
               </div>
             );

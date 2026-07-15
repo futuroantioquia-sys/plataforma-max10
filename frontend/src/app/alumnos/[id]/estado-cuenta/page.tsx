@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Camera } from 'lucide-react';
 import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
@@ -167,6 +167,8 @@ function construirFechaNac(cols: Record<string, string>): string | null {
 export default function EstadoCuentaPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const puedeEditar = searchParams.get('edit') === '1';
 
   const [dep,      setDep]     = useState<Deportista | null>(null);
   const [foto,     setFoto]    = useState<string | null>(null);
@@ -182,6 +184,7 @@ export default function EstadoCuentaPage() {
     filasPorId: number;
   } | null>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [confirmRevert, setConfirmRevert] = useState<number | null>(null);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -320,14 +323,24 @@ export default function EstadoCuentaPage() {
     const realIdx = realIdxDe(viewIdx);
     if (!row || realIdx === -1) return;
     if (row.estado === 'PAGÓ') {
-      const updated = pagos.map((r, i) =>
-        i === realIdx ? { ...r, estado: 'PEND' as const, destino: '', fecha: '', vPagado: '' } : r
-      );
-      savePagos(updated);
+      /* Pide confirmación antes de revertir */
+      setConfirmRevert(viewIdx);
     } else {
       setEditIdx(viewIdx);
       setEditForm({ vCargado: row.vCargado, destino: row.destino, fecha: '', vPagado: row.vCargado });
     }
+  }
+
+  function ejecutarRevert() {
+    if (confirmRevert === null) return;
+    const realIdx = realIdxDe(confirmRevert);
+    if (realIdx !== -1) {
+      const updated = pagos.map((r, i) =>
+        i === realIdx ? { ...r, estado: 'PEND' as const, destino: '', fecha: '', vPagado: '' } : r
+      );
+      savePagos(updated);
+    }
+    setConfirmRevert(null);
   }
 
   function confirmarPago() {
@@ -678,11 +691,16 @@ export default function EstadoCuentaPage() {
                       {isProx
                         ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
                             style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
-                        : <button onClick={() => toggleEstado(idx)}
-                            className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
-                              isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
-                            {isPaid ? 'PAGÓ' : 'PEND'}
-                          </button>
+                        : puedeEditar
+                          ? <button onClick={() => toggleEstado(idx)}
+                              className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
+                                isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
+                                {isPaid ? 'PAGÓ' : 'PEND'}
+                            </button>
+                          : <span className={cn('px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default',
+                              isPaid ? 'bg-green-500' : 'bg-red-500')}>
+                              {isPaid ? 'PAGÓ' : 'PEND'}
+                            </span>
                       }
                     </td>
                   </tr>
@@ -694,9 +712,14 @@ export default function EstadoCuentaPage() {
         </div>
 
         {/* ── NOTA ── */}
-        <p className="text-center text-[11px] text-gray-400 pb-4">
-          Toca <strong>PEND</strong> para registrar pago · Toca <strong>PAGÓ</strong> para revertir
-        </p>
+        {puedeEditar
+          ? <p className="text-center text-[11px] text-gray-400 pb-4">
+              Toca <strong>PEND</strong> para registrar pago · Toca <strong>PAGÓ</strong> para revertir
+            </p>
+          : <p className="text-center text-[11px] text-amber-500 font-semibold pb-4">
+              Solo lectura · Edición disponible desde Control de Pagos
+            </p>
+        }
 
         {/* ── PANEL DEBUG ── */}
         <div className="border-t border-gray-200 pt-3">
@@ -747,6 +770,44 @@ export default function EstadoCuentaPage() {
         </div>
 
       </main>
+
+      {/* ── MODAL CONFIRMAR REVERT ── */}
+      {confirmRevert !== null && (() => {
+        const row = pagosVista[confirmRevert];
+        return (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-red-600 text-xl font-black">!</span>
+                </div>
+                <div>
+                  <h3 className="font-black text-gray-900 text-base leading-tight">¿Revertir este pago?</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{row?.detalle}</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">Esta acción eliminará la información registrada:</p>
+              <div className="bg-red-50 border border-red-100 rounded-xl p-3 mb-5 text-xs text-gray-700 space-y-1">
+                {row?.vPagado && <p><span className="font-bold">Valor:</span> {row.vPagado}</p>}
+                {row?.destino && <p><span className="font-bold">Destino:</span> {row.destino}</p>}
+                {row?.fecha   && <p><span className="font-bold">Fecha:</span>  {row.fecha}</p>}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmRevert(null)}
+                  className="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
+                  Cancelar
+                </button>
+                <button
+                  onClick={ejecutarRevert}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-3 text-sm font-black transition">
+                  Sí, revertir
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── MODAL REGISTRAR PAGO ── */}
       {editIdx !== null && (

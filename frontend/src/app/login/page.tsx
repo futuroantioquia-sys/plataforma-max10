@@ -84,7 +84,7 @@ export default function LoginPage() {
             if (foto) localStorage.setItem('futuro-profe-foto', foto);
             else      localStorage.removeItem('futuro-profe-foto');
           } catch {}
-          router.push('/asistencia');
+          router.push('/mis-proyectos');
         } else {
           setErrLocal('Usuario o contraseña incorrectos');
         }

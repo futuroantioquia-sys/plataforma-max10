@@ -174,6 +174,13 @@ function AsistenciaInner() {
     if (proyecto && !proyectos.includes(proyecto)) setProyecto('');
   }, [proyectos, deportistas.length]);
 
+  // Si es profe y llegó sin proyecto seleccionado → redirigir a mis-proyectos
+  useEffect(() => {
+    if (esProfe && !searchParams.get('proyecto') && deportistas.length > 0) {
+      router.replace('/mis-proyectos');
+    }
+  }, [esProfe, deportistas.length]);
+
   // Deportistas del proyecto seleccionado
   const atletas = useMemo(() => {
     if (!proyecto) return [];

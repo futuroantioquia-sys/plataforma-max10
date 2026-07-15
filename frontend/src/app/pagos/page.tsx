@@ -340,7 +340,7 @@ export default function PagosPage() {
 
                       {/* CÓDIGO */}
                       <td
-                        onClick={() => router.push(`/alumnos/${dep.id}/estado-cuenta`)}
+                        onClick={() => router.push(`/alumnos/${dep.id}/estado-cuenta?edit=1`)}
                         style={{
                           background: G, color: 'white', border: '1px solid white',
                           padding: '8px 10px', textAlign: 'center',
