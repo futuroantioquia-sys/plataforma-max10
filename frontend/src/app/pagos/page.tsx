@@ -26,29 +26,6 @@ function getCol(dep: Deportista, rx: RegExp): string {
   return k ? dep._columnas[k] : '';
 }
 
-/* ─── Helpers para mes de afiliación ─── */
-function fmtFechaP(v: string): string {
-  if (!v) return '';
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v)) return v;
-  const num = Number(v);
-  if (!isNaN(num) && num > 40000 && num < 60000) {
-    const d = new Date(Math.round((num - 25569) * 86400 * 1000));
-    return `${d.getUTCDate().toString().padStart(2,'0')}/${(d.getUTCMonth()+1).toString().padStart(2,'0')}/${d.getUTCFullYear()}`;
-  }
-  const iso = v.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
-  return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : v;
-}
-function getMesAfilP(cols: Record<string, string>): number {
-  const k = Object.keys(cols).find(k => /fecha.*afil|afil.*fecha/i.test(k));
-  if (!k) return 1;
-  const f = fmtFechaP(String(cols[k] ?? '').trim());
-  const m = f.match(/^\d{1,2}\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return 1;
-  return parseInt(m[2], 10) < 2026 ? 1 : parseInt(m[1], 10);
-}
-/* Meses del año (0=matrícula, 2-12 = feb-dic) */
-const MESES_AÑO = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-const MES_ACTUAL = new Date().getMonth() + 1; // 1-based
 
 export default function PagosPage() {
   const router = useRouter();
@@ -98,19 +75,18 @@ export default function PagosPage() {
   /* Resumen de pagos por deportista */
   function resumenPago(dep: Deportista) {
     const filas: PagoRow[] = (allPagos[dep.id] ?? []).filter((r: any) => r.estado !== 'ELIM');
-    const mesAfil   = getMesAfilP(dep._columnas);
-    const cargados  = MESES_AÑO.filter(n => n === 0 || n >= mesAfil).length;
-    const pagados   = filas.filter(r => r.estado === 'PAGÓ').length;
-    const pendientes = filas.filter(r => r.estado === 'PEND').length;
-    const proximos  = filas.filter(r => r.estado === 'PROX').length;
+    const pagados    = filas.filter((r: any) => r.estado === 'PAGÓ').length;
+    const pendientes = filas.filter((r: any) => r.estado === 'PEND').length;
+    const proximos   = filas.filter((r: any) => r.estado === 'PROX').length;
+    const cargados   = pagados + pendientes + proximos;   // CARGADOS = PAGADOS + PEND + PRÓX
     const totalPag  = filas.reduce((s, r) => {
-      if (r.estado !== 'PAGÓ') return s;
-      const n = parseInt((r.vPagado || '0').replace(/\D/g, ''));
+      if ((r as any).estado !== 'PAGÓ') return s;
+      const n = parseInt(((r.vPagado || '0')).replace(/\D/g, ''));
       return s + (isNaN(n) ? 0 : n);
     }, 0);
     const totalPend = filas.reduce((s, r) => {
-      if (r.estado !== 'PEND') return s;
-      const n = parseInt((r.vCargado || '0').replace(/\D/g, ''));
+      if ((r as any).estado !== 'PEND') return s;
+      const n = parseInt(((r.vCargado || '0')).replace(/\D/g, ''));
       return s + (isNaN(n) ? 0 : n);
     }, 0);
     return { cargados, pagados, pendientes, proximos, totalPag, totalPend, total: filas.length };
