@@ -426,6 +426,7 @@ export default function EstadoCuentaPage() {
   const pagados    = pagosVista.filter(p => p.estado === 'PAGÓ').length;
   const pendientes = pagosVista.filter(p => p.estado === 'PEND').length;
   const proximos   = pagosVista.filter(p => p.estado === 'PROX').length;
+  const cargados   = pagados + pendientes + proximos;
   const totalPagado = pagosVista.reduce((s, p) => {
     const n = parseInt((p.vPagado || '0').replace(/\D/g, ''));
     return s + (isNaN(n) ? 0 : n);
@@ -559,7 +560,15 @@ export default function EstadoCuentaPage() {
         </div>
 
         {/* ── RESUMEN KPI ── */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
+          <div className="bg-gray-100 border border-gray-300 rounded-xl p-3 flex items-center gap-2">
+            <div className="w-9 h-9 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-black text-base">{cargados}</span>
+            </div>
+            <div>
+              <p className="text-gray-600 font-black text-xs leading-tight">Cargados</p>
+            </div>
+          </div>
           <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
             <div className="w-9 h-9 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
               <span className="text-white font-black text-base">{pagados}</span>
