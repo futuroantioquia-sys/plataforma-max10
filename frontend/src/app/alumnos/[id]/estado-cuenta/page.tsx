@@ -425,6 +425,7 @@ export default function EstadoCuentaPage() {
   /* ─── Totales ─── */
   const pagados    = pagosVista.filter(p => p.estado === 'PAGÓ').length;
   const pendientes = pagosVista.filter(p => p.estado === 'PEND').length;
+  const proximos   = pagosVista.filter(p => p.estado === 'PROX').length;
   const totalPagado = pagosVista.reduce((s, p) => {
     const n = parseInt((p.vPagado || '0').replace(/\D/g, ''));
     return s + (isNaN(n) ? 0 : n);
@@ -558,22 +559,30 @@ export default function EstadoCuentaPage() {
         </div>
 
         {/* ── RESUMEN KPI ── */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-lg">{pagados}</span>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
+            <div className="w-9 h-9 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-black text-base">{pagados}</span>
             </div>
             <div>
-              <p className="text-green-700 font-black text-sm">Pagos realizados</p>
+              <p className="text-green-700 font-black text-xs leading-tight">Pagados</p>
             </div>
           </div>
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-lg">{pendientes}</span>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
+            <div className="w-9 h-9 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-black text-base">{pendientes}</span>
             </div>
             <div>
-              <p className="text-red-700 font-black text-sm">Pendientes</p>
-              <p className="text-red-600 text-[11px]">${totalPendiente.toLocaleString('es-CO').replace(/,/g,'.')}</p>
+              <p className="text-red-700 font-black text-xs leading-tight">Pendientes</p>
+              {totalPendiente > 0 && <p className="text-red-500 text-[10px] font-bold">${totalPendiente.toLocaleString('es-CO').replace(/,/g,'.')}</p>}
+            </div>
+          </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-2">
+            <div className="w-9 h-9 bg-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-black text-base">{proximos}</span>
+            </div>
+            <div>
+              <p className="text-blue-700 font-black text-xs leading-tight">Próximos</p>
             </div>
           </div>
         </div>
