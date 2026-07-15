@@ -452,27 +452,53 @@ export default function EstadoCuentaPage() {
               </div>
             </button>
 
-            {/* Nombre + filas de datos */}
-            <div className="flex-1 min-w-0 space-y-[5px]">
-              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide mb-2">
+            {/* Nombre + filas de datos + botones */}
+            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide">
                 {nombre}
               </h1>
 
-              {[
-                { label: 'PROGRAMA',    val: catVal },
-                { label: 'PROYECTO',    val: proyecto },
-                { label: 'FECHA AFIL.', val: fechaAfil ? formatFecha(fechaAfil) : '' },
-                { label: 'MENSUALIDAD', val: tarifa },
-              ].filter(r => r.val).map(({ label, val }) => (
-                <div key={label} className="flex items-center gap-2">
-                  <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[90px] text-center flex-shrink-0 tracking-wide">
-                    {label}
-                  </span>
-                  <span className="text-white text-[11px] font-semibold truncate">
-                    {String(val).toUpperCase()}
-                  </span>
+              <div className="flex gap-2 items-start">
+                {/* Filas de datos */}
+                <div className="flex-1 min-w-0 space-y-[5px]">
+                  {[
+                    { label: 'PROGRAMA',    val: catVal },
+                    { label: 'PROYECTO',    val: proyecto },
+                    { label: 'FECHA AFIL.', val: fechaAfil ? formatFecha(fechaAfil) : '' },
+                    { label: 'MENSUALIDAD', val: tarifa },
+                  ].filter(r => r.val).map(({ label, val }) => (
+                    <div key={label} className="flex items-center gap-2">
+                      <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
+                        {label}
+                      </span>
+                      <span className="text-white text-[11px] font-semibold truncate">
+                        {String(val).toUpperCase()}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+
+                {/* Botones 2×2 */}
+                <div className="flex-shrink-0 grid grid-cols-2 gap-1.5">
+                  {[
+                    { label: 'PAGOS',      href: null },
+                    { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia` },
+                    { label: 'INFORMES',   href: '/evaluaciones' },
+                    { label: 'MENSAJES',   href: '/mensajes' },
+                  ].map(({ label, href }) => (
+                    <button key={label}
+                      onClick={() => href && router.push(href)}
+                      className={cn(
+                        'transition rounded-lg py-2 px-2 text-[9px] font-black tracking-wide text-center leading-tight',
+                        !href
+                          ? 'bg-[#16a34a] text-white'
+                          : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
+                      )}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* CÓDIGO */}
@@ -486,26 +512,6 @@ export default function EstadoCuentaPage() {
             )}
           </div>
 
-          {/* Botones */}
-          <div className="grid grid-cols-4 gap-2 mt-4">
-            {[
-              { label: 'PAGOS',    href: null },
-              { label: 'ASIST.',   href: `/alumnos/${id}/asistencia` },
-              { label: 'INFORMES', href: '/evaluaciones' },
-              { label: 'MENSAJES', href: '/mensajes' },
-            ].map(({ label, href }) => (
-              <button key={label}
-                onClick={() => href && router.push(href)}
-                className={cn(
-                  'transition rounded-xl py-2.5 text-[10px] font-black tracking-wide',
-                  !href
-                    ? 'bg-[#16a34a] text-white'
-                    : 'bg-white/10 hover:bg-white/20 border border-white/20 text-white'
-                )}>
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* ── RESUMEN KPI ── */}
