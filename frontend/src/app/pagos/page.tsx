@@ -26,6 +26,30 @@ function getCol(dep: Deportista, rx: RegExp): string {
   return k ? dep._columnas[k] : '';
 }
 
+/* ─── Helpers para mes de afiliación ─── */
+function fmtFechaP(v: string): string {
+  if (!v) return '';
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v)) return v;
+  const num = Number(v);
+  if (!isNaN(num) && num > 40000 && num < 60000) {
+    const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+    return `${d.getUTCDate().toString().padStart(2,'0')}/${(d.getUTCMonth()+1).toString().padStart(2,'0')}/${d.getUTCFullYear()}`;
+  }
+  const iso = v.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+  return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : v;
+}
+function getMesAfilP(cols: Record<string, string>): number {
+  const k = Object.keys(cols).find(k => /fecha.*afil|afil.*fecha/i.test(k));
+  if (!k) return 1;
+  const f = fmtFechaP(String(cols[k] ?? '').trim());
+  const m = f.match(/^\d{1,2}\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return 1;
+  return parseInt(m[2], 10) < 2026 ? 1 : parseInt(m[1], 10);
+}
+/* Meses del año (0=matrícula, 2-12 = feb-dic) */
+const MESES_AÑO = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const MES_ACTUAL = new Date().getMonth() + 1; // 1-based
+
 export default function PagosPage() {
   const router = useRouter();
 
@@ -72,10 +96,13 @@ export default function PagosPage() {
   }, [deportistas, busqueda, filtroCodigo, filtroPrograma, filtroProyecto]);
 
   /* Resumen de pagos por deportista */
-  function resumenPago(id: string) {
-    const filas: PagoRow[] = allPagos[id] ?? [];
+  function resumenPago(dep: Deportista) {
+    const filas: PagoRow[] = (allPagos[dep.id] ?? []).filter((r: any) => r.estado !== 'ELIM');
+    const mesAfil   = getMesAfilP(dep._columnas);
+    const cargados  = MESES_AÑO.filter(n => n === 0 || n >= mesAfil).length;
     const pagados   = filas.filter(r => r.estado === 'PAGÓ').length;
     const pendientes = filas.filter(r => r.estado === 'PEND').length;
+    const proximos  = filas.filter(r => r.estado === 'PROX').length;
     const totalPag  = filas.reduce((s, r) => {
       if (r.estado !== 'PAGÓ') return s;
       const n = parseInt((r.vPagado || '0').replace(/\D/g, ''));
@@ -86,7 +113,7 @@ export default function PagosPage() {
       const n = parseInt((r.vCargado || '0').replace(/\D/g, ''));
       return s + (isNaN(n) ? 0 : n);
     }, 0);
-    return { pagados, pendientes, totalPag, totalPend, total: filas.length };
+    return { cargados, pagados, pendientes, proximos, totalPag, totalPend, total: filas.length };
   }
 
   function fmt(n: number) {
@@ -202,23 +229,26 @@ export default function PagosPage() {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  {['CÓDIGO','NOMBRE DEL DEPORTISTA','PROGRAMA','PAGADOS','PENDIENTES','ESTADO'].map((h, i) => (
+                  {[
+                    { h: 'CÓDIGO',                align: 'center' },
+                    { h: 'NOMBRE DEL DEPORTISTA', align: 'left'   },
+                    { h: 'PROGRAMA',              align: 'center' },
+                    { h: 'CARGADOS',              align: 'center' },
+                    { h: 'PAGADOS',               align: 'center' },
+                    { h: 'PENDIENTES',            align: 'center' },
+                    { h: 'PRÓXIMOS',              align: 'center' },
+                    { h: 'ESTADO',                align: 'center' },
+                    { h: 'VER CUENTA',            align: 'center' },
+                  ].map(({ h, align }) => (
                     <th key={h} style={{
                       background: '#16a34a', color: 'white',
                       border: '1px solid white',
-                      padding: '10px 10px',
-                      textAlign: i === 1 ? 'left' : 'center',
+                      padding: '10px 8px',
+                      textAlign: align as any,
                       fontSize: 10, fontWeight: 900,
                       letterSpacing: '0.05em',
                     }}>{h}</th>
                   ))}
-                  <th style={{
-                    background: G, color: 'white',
-                    border: '1px solid white',
-                    padding: '10px 10px',
-                    textAlign: 'center',
-                    fontSize: 10, fontWeight: 900,
-                  }}>VER CUENTA</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,7 +256,7 @@ export default function PagosPage() {
                   const bg  = '#f1f5f9';
                   const cod = codigoDe(dep);
                   const prog = getCol(dep, /^program/i);
-                  const { pagados, pendientes, totalPag, totalPend, total } = resumenPago(dep.id);
+                  const { cargados, pagados, pendientes, proximos, totalPag, totalPend, total } = resumenPago(dep);
                   const tieneDatos = total > 0;
 
                   return (
@@ -255,11 +285,13 @@ export default function PagosPage() {
                         fontSize: 11, whiteSpace: 'nowrap',
                       }}>{prog || '—'}</td>
 
+                      {/* CARGADOS */}
+                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
+                        <span className="font-black text-gray-600 text-sm">{cargados}</span>
+                      </td>
+
                       {/* PAGADOS */}
-                      <td style={{
-                        background: bg, border: '1px solid white',
-                        padding: '6px 10px', textAlign: 'center',
-                      }}>
+                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
                         {tieneDatos ? (
                           <div>
                             <span className="font-black text-green-600 text-sm">{pagados}</span>
@@ -269,10 +301,7 @@ export default function PagosPage() {
                       </td>
 
                       {/* PENDIENTES */}
-                      <td style={{
-                        background: bg, border: '1px solid white',
-                        padding: '6px 10px', textAlign: 'center',
-                      }}>
+                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
                         {tieneDatos ? (
                           <div>
                             <span className={cn('font-black text-sm', pendientes > 0 ? 'text-red-500' : 'text-gray-300')}>
@@ -283,11 +312,15 @@ export default function PagosPage() {
                         ) : <span className="text-gray-300 text-xs">—</span>}
                       </td>
 
+                      {/* PRÓXIMOS */}
+                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
+                        <span className={cn('font-black text-sm', proximos > 0 ? 'text-blue-500' : 'text-gray-300')}>
+                          {proximos || '—'}
+                        </span>
+                      </td>
+
                       {/* ESTADO chip */}
-                      <td style={{
-                        background: bg, border: '1px solid white',
-                        padding: '6px 10px', textAlign: 'center',
-                      }}>
+                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
                         {tieneDatos ? (
                           pendientes === 0
                             ? <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full">AL DÍA</span>
