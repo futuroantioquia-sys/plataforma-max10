@@ -28,13 +28,60 @@ function getCol(cols: Record<string, string>, rx: RegExp): string {
   return k ? String(cols[k] ?? '').trim() : '';
 }
 
-function resumenPagos(depId: string, allPagos: Record<string, any[]>) {
-  const filas   = allPagos[depId] ?? [];
-  const activos = DETALLE_ROWS.filter(d => !esFuturo(d));
-  const pagados = activos.filter(d =>
-    filas.find((r: any) => r.detalle === d)?.estado === 'PAGÓ'
-  ).length;
-  return { pagados, total: activos.length };
+function formatFechaP(v: string): string {
+  if (!v) return '';
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v)) return v;
+  const num = Number(v);
+  if (!isNaN(num) && num > 40000 && num < 60000) {
+    const date = new Date(Math.round((num - 25569) * 86400 * 1000));
+    const d = date.getUTCDate().toString().padStart(2, '0');
+    const m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    return `${d}/${m}/${date.getUTCFullYear()}`;
+  }
+  const iso = v.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  return v;
+}
+
+/** Mes de afiliación. Si el año < 2026 → 1 (mostrar todos los meses). */
+function getMesAfil(cols: Record<string, string>): number {
+  const k = Object.keys(cols).find(k => /fecha.*afil|afil.*fecha/i.test(k));
+  if (!k) return 1;
+  const f = formatFechaP(String(cols[k] ?? '').trim());
+  const m = f.match(/^\d{1,2}\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return 1;
+  const mes  = parseInt(m[1], 10);
+  const anio = parseInt(m[2], 10);
+  return anio < 2026 ? 1 : mes;
+}
+
+function resumenPagos(dep: Deportista, allPagos: Record<string, any[]>) {
+  const filas   = allPagos[dep.id] ?? [];
+  const mesAfil = getMesAfil(dep._columnas);
+
+  /* Filas cargadas = MATRÍCULA + meses desde la afiliación */
+  const rowsCargados = DETALLE_ROWS.filter(d => {
+    const n = MES_NUM[d];
+    return n === 0 || n >= mesAfil;
+  });
+
+  const getEstado = (detalle: string): string => {
+    const row = filas.find((r: any) =>
+      r.detalle === detalle || r.detalle === detalle + ' 2026'
+    );
+    if (row) return row.estado;
+    return esFuturo(detalle) ? 'PROX' : 'PEND';
+  };
+
+  let pagados = 0, pendientes = 0, proximos = 0;
+  for (const d of rowsCargados) {
+    const e = getEstado(d);
+    if      (e === 'PAGÓ') pagados++;
+    else if (e === 'PEND') pendientes++;
+    else                   proximos++;
+  }
+
+  return { cargados: rowsCargados.length, pagados, pendientes, proximos };
 }
 
 // Orden fijo de programas
@@ -107,8 +154,8 @@ export default function PagosProyectoPage() {
 
   // KPIs
   const alDia = depsFiltrados.filter(d => {
-    const r = resumenPagos(d.id, allPagos);
-    return r.pagados === r.total && r.total > 0;
+    const { pendientes, cargados } = resumenPagos(d, allPagos);
+    return pendientes === 0 && cargados > 0;
   }).length;
 
   return (
@@ -211,10 +258,10 @@ export default function PagosProyectoPage() {
                   {depsFiltrados.map(dep => {
                     const cod      = getCol(dep._columnas, /^c[oó]d/i);
                     const initials = dep._nombre.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
-                    const { pagados, total } = resumenPagos(dep.id, allPagos);
-                    const aldiaD  = pagados === total && total > 0;
-                    const pct     = total > 0 ? Math.round((pagados / total) * 100) : 0;
-                    const color   = aldiaD ? G : pagados > 0 ? '#f97316' : '#ef4444';
+                    const { cargados, pagados, pendientes, proximos } = resumenPagos(dep, allPagos);
+                    const aldiaD = pendientes === 0 && cargados > 0;
+                    const pct    = cargados > 0 ? Math.round((pagados / cargados) * 100) : 0;
+                    const color  = aldiaD ? G : pendientes > 0 ? '#ef4444' : '#f97316';
 
                     return (
                       <button key={dep.id}
@@ -227,10 +274,16 @@ export default function PagosProyectoPage() {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <p className="font-black text-[#111827] text-sm leading-tight truncate">{dep._nombre}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {cod && <span className="text-[10px] font-black text-[#16a34a] bg-green-50 px-1.5 py-0.5 rounded">{cod}</span>}
-                            <span className="text-[10px] text-gray-400 font-semibold">{pagados}/{total} pagos</span>
+                          <div className="flex items-center gap-2">
+                            <p className="font-black text-[#111827] text-sm leading-tight truncate">{dep._nombre}</p>
+                            {cod && <span className="text-[10px] font-black text-[#16a34a] bg-green-50 px-1.5 py-0.5 rounded flex-shrink-0">{cod}</span>}
+                          </div>
+                          {/* Stats: CARGADOS · PAGADOS · PENDIENTES · PRÓXIMOS */}
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            <span className="text-[9px] font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">CARG&nbsp;{cargados}</span>
+                            <span className="text-[9px] font-black text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full">PAG&nbsp;{pagados}</span>
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${pendientes > 0 ? 'text-red-600 bg-red-50' : 'text-gray-400 bg-gray-50'}`}>PEND&nbsp;{pendientes}</span>
+                            <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">PRÓX&nbsp;{proximos}</span>
                           </div>
                           <div className="mt-1.5 h-1 bg-gray-100 rounded-full overflow-hidden w-full">
                             <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }}/>
