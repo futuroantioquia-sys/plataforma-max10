@@ -473,7 +473,7 @@ export default function ValoracionPage() {
               <td colSpan={4} style={{ padding: 0 }}>
                 {/* Título - verde degradado */}
                 <div style={{ background: VERDE_GRAD, color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 15, letterSpacing: 3, padding: '9px 16px', textTransform: 'uppercase', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
-                  Valoración Cualitativa del Deportista
+                  VALORACIÓN INTEGRAL DEL DEPORTISTA
                 </div>
                 {/* Hero - fondo blanco */}
                 <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
@@ -751,7 +751,7 @@ export default function ValoracionPage() {
             ];
             return (
               <tbody>
-                <tr>{celda(C.negro, '#fff', 'PERFIL INDIVIDUAL', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '6px 8px' } as any)}</tr>
+                <tr>{celda(VERDE_GRAD, '#fff', 'PERFIL INDIVIDUAL', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '6px 8px' } as any)}</tr>
                 <tr style={{ background: '#d0dae6' }}>
                   <td colSpan={2} style={{ padding: '5px 12px', fontSize: 10, fontWeight: 700, color: '#333', letterSpacing: 1 }}>ASPECTO</td>
                   <td colSpan={2} style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#333', textAlign: 'center' }}>CALIFICACIÓN</td>
@@ -771,10 +771,10 @@ export default function ValoracionPage() {
                   const promedioGeneral = avg([condicional, tecnico, tactico, socioAfectiva, comportamental]);
                   return (
                     <tr>
-                      <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '9px 12px', fontSize: 12, fontWeight: 900, letterSpacing: 1, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                      <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '6px 12px', fontSize: 11, fontWeight: 900, letterSpacing: 1, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
                         VALORACIÓN DEPORTISTA
                       </td>
-                      <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '9px 8px', textAlign: 'center', fontSize: 20, fontWeight: 900, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                      <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '6px 8px', textAlign: 'center', fontSize: 15, fontWeight: 900, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
                         {promedioGeneral === 0 ? '—' : promedioGeneral.toFixed(2)}
                       </td>
                     </tr>
@@ -786,7 +786,7 @@ export default function ValoracionPage() {
 
           {/* OBSERVACIONES */}
           <tbody>
-            <tr>{celda(C.negro, '#fff', 'OBSERVACIONES GENERALES', { colSpan: 4, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'OBSERVACIONES GENERALES', { colSpan: 4, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
             <tr>
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.observaciones} onChange={e => set('observaciones', e.target.value)}
