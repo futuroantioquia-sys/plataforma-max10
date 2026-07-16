@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ClipboardList, Users } from 'lucide-react';
+import { ArrowLeft, Users } from 'lucide-react';
 import { getProfes, getDeportistas } from '@/lib/db';
 
 function getCol(dep: any, rx: RegExp): string {
@@ -142,9 +142,6 @@ export default function MisProyectosPage() {
               Estos son tus proyectos,{' '}
               <span className="text-[#111827]">cuida mucho de ellos.</span>
             </p>
-            <p className="text-gray-400 text-xs mt-2">
-              Toca <strong className="text-[#16a34a]">GESTIONAR ASISTENCIA</strong> para registrar la asistencia de tus grupos.
-            </p>
           </div>
         </div>
 
@@ -171,8 +168,10 @@ export default function MisProyectosPage() {
             {proyectosProfe.map(proy => {
               const alumnos = conteoProyecto[proy] ?? 0;
               return (
-                <div key={proy}
-                  className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <button
+                  key={proy}
+                  onClick={() => router.push(`/alumnos?proyecto=${encodeURIComponent(proy)}`)}
+                  className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left active:scale-[.98] transition-transform hover:shadow-md">
                   <div className="flex items-center gap-4 p-4">
                     {/* Ícono proyecto */}
                     <div className="w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-inner"
@@ -193,16 +192,12 @@ export default function MisProyectosPage() {
                         {alumnos > 0 ? `${alumnos} deportistas` : 'Cargando…'}
                       </p>
                     </div>
+                    {/* Flecha */}
+                    <svg className="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+                    </svg>
                   </div>
-                  {/* Botón GESTIONAR */}
-                  <button
-                    onClick={() => router.push(`/asistencia?proyecto=${encodeURIComponent(proy)}`)}
-                    className="w-full flex items-center justify-center gap-2 py-3 font-black text-sm text-white transition active:scale-[.98]"
-                    style={{ background: G }}>
-                    <ClipboardList className="w-4 h-4"/>
-                    GESTIONAR ASISTENCIA →
-                  </button>
-                </div>
+                </button>
               );
             })}
           </div>

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Users, Search, FileSpreadsheet, Trash2,
   ChevronRight, ArrowLeft, Camera, GraduationCap,
-  LayoutGrid, TableProperties, ChevronDown, Download, Loader2,
+  LayoutGrid, TableProperties, ChevronDown, Download, Loader2, ClipboardList,
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
@@ -699,8 +699,9 @@ function DashboardProyecto({
 }
 
 // ─────────────────────────────────────────────────────────────
-export default function AlumnosPage() {
+function AlumnosPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const [fotos,       setFotos]       = useState<Record<string, string>>({});
   const [fotosProfe,  setFotosProfe]  = useState<Record<string, string>>({});
@@ -709,8 +710,14 @@ export default function AlumnosPage() {
   const [busqueda,    setBusqueda]    = useState('');
   const [proyEdits,   setProyEdits]   = useState<Record<string, string>>({});
   const [cargando,    setCargando]    = useState(true);
+  const [esProfe,     setEsProfe]     = useState(false);
+  const autoNavRef = useRef(false);
 
   useEffect(() => {
+    // Detectar si es profe (cookie)
+    try {
+      if (document.cookie.includes('futuro-session=profesor')) setEsProfe(true);
+    } catch {}
     // Cargar deportistas desde Supabase (con fallback a localStorage)
     getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
     try {
@@ -720,6 +727,28 @@ export default function AlumnosPage() {
       if (fp) setFotosProfe(JSON.parse(fp));
     } catch {}
   }, []);
+
+  // Auto-navegar al proyecto cuando viene desde mis-proyectos con ?proyecto=
+  useEffect(() => {
+    const proyParam = searchParams.get('proyecto');
+    if (!proyParam || deportistas.length === 0 || autoNavRef.current) return;
+    autoNavRef.current = true;
+    // Buscar el programa que contiene este proyecto
+    const activos = deportistas.filter(d => !esRetirado(d) && !esSinProy(d));
+    const porProg: Record<string, Deportista[]> = {};
+    activos.forEach(d => {
+      const p = colPrograma(d);
+      (porProg[p] = porProg[p] || []).push(d);
+    });
+    for (const [progNombre, deps] of Object.entries(porProg)) {
+      if (deps.some(d => colProy(d) === proyParam)) {
+        setPrograma(progNombre);
+        setProy(proyParam);
+        return;
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deportistas]);
 
   function guardarProy(depId: string, valor: string) {
     if (!valor.trim()) return;
@@ -1220,13 +1249,21 @@ export default function AlumnosPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
-        <button onClick={() => setProy(null)}
+        <button onClick={() => esProfe ? router.push('/mis-proyectos') : setProy(null)}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <span className="text-xs text-white/60 hidden sm:block">{programa}</span>
         <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block" />
         <span className={cn('text-xs font-black px-2.5 py-1 rounded-full', palProy.chip)}>{proy}</span>
+        {esProfe && proy && (
+          <button
+            onClick={() => router.push(`/asistencia?proyecto=${encodeURIComponent(proy)}`)}
+            className="ml-auto flex items-center gap-1.5 bg-white text-[#16a34a] px-3 py-1.5 rounded-xl text-xs font-black hover:bg-green-50 transition shadow-sm whitespace-nowrap">
+            <ClipboardList className="w-3.5 h-3.5" />
+            GESTIONAR ASISTENCIA
+          </button>
+        )}
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-5">
@@ -1243,5 +1280,13 @@ export default function AlumnosPage() {
         />
       </main>
     </div>
+  );
+}
+
+export default function AlumnosPage() {
+  return (
+    <Suspense>
+      <AlumnosPageContent />
+    </Suspense>
   );
 }
