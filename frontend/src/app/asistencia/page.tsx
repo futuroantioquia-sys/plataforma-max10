@@ -174,12 +174,13 @@ function AsistenciaInner() {
     if (proyecto && !proyectos.includes(proyecto)) setProyecto('');
   }, [proyectos, deportistas.length]);
 
-  // Si es profe y llegó sin proyecto seleccionado → redirigir a mis-proyectos
+  // Si es profe y llegó sin proyecto seleccionado → redirigir INMEDIATAMENTE a mis-proyectos
   useEffect(() => {
-    if (esProfe && !searchParams.get('proyecto') && deportistas.length > 0) {
+    if (esProfe && !searchParams.get('proyecto')) {
       router.replace('/mis-proyectos');
     }
-  }, [esProfe, deportistas.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Dispara en mount, sin esperar deportistas
 
   // Deportistas del proyecto seleccionado
   const atletas = useMemo(() => {
