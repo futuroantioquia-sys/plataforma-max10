@@ -173,9 +173,10 @@ const POSICIONES = ['', 'PORTERO', 'CENTRAL', 'LATERAL DERECHO', 'LATERAL IZQUIE
 const PERFILES = ['', 'DERECHO', 'IZQUIERDO', 'AMBIDIESTRO'];
 
 const C = {
-  negro: '#1a1a1a', verde: '#1a6b2e', naranja: '#e85d04',
-  verdeClaro: '#2d8a48', grisClaro: '#f0f0f0',
+  negro: '#1a1a1a', verde: '#15803d', naranja: '#e85d04',
+  verdeClaro: '#166534', grisClaro: '#f0f0f0', grisAzul: '#475569',
 };
+const VERDE_GRAD = 'linear-gradient(135deg, #16a34a 0%, #052a10 100%)';
 
 type Valoracion = {
   fecha: string; codigo: string; nombre: string; fechaNac: string;
@@ -248,15 +249,15 @@ function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descri
   return (
     <tbody>
       <tr>
-        <td colSpan={4} style={{ background: C.negro, color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 12, padding: '4px 8px', letterSpacing: 1 }}>
+        <td colSpan={4} style={{ background: '#fff', color: '#16a34a', textAlign: 'center', fontWeight: 900, fontSize: 13, padding: '5px 8px', letterSpacing: 1 }}>
           {titulo}
         </td>
       </tr>
       <tr>
-        <td colSpan={2} style={{ background: C.verdeClaro, color: '#fff', fontWeight: 700, fontSize: 11, padding: '3px 10px' }}>
+        <td colSpan={2} style={{ background: C.grisAzul, color: '#fff', fontWeight: 700, fontSize: 11, padding: '3px 10px' }}>
           ({subtitulo})
         </td>
-        <td colSpan={2} style={{ background: C.verde, color: '#fff', padding: '2px 8px' }}>
+        <td colSpan={2} style={{ background: C.grisAzul, color: '#fff', padding: '2px 8px' }}>
           <select value={nivel} onChange={e => {
             const v = e.target.value;
             onNivel(v);
@@ -466,101 +467,90 @@ export default function ValoracionPage() {
       <div style={{ maxWidth: 780, margin: '16px auto', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', fontFamily: 'Arial, sans-serif' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
 
-          {/* ── ENCABEZADO REDISEÑADO ── */}
+          {/* ── ENCABEZADO ── */}
           <tbody>
             <tr>
               <td colSpan={4} style={{ padding: 0 }}>
-                {/* Título superior */}
-                <div style={{ background: '#111', color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 13, letterSpacing: 3, padding: '7px 16px', textTransform: 'uppercase' }}>
-                  Valoración Cuantitativa del Deportista
+                {/* Título - verde degradado */}
+                <div style={{ background: VERDE_GRAD, color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 15, letterSpacing: 3, padding: '9px 16px', textTransform: 'uppercase', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                  Valoración Cualitativa del Deportista
                 </div>
-
-                {/* Tarjeta hero verde oscura */}
-                <div style={{ background: 'linear-gradient(135deg, #0a2e12 0%, #052a10 55%, #000 100%)', padding: 12, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-
-                    {/* Foto 3×4 */}
-                    <div style={{ flexShrink: 0 }}>
-                      <input ref={fotoRef} type="file" accept="image/*" onChange={onFoto} style={{ display: 'none' }} />
-                      <div onClick={() => fotoRef.current?.click()}
-                        style={{ width: 68, height: 90, borderRadius: 10, overflow: 'hidden', background: '#0d3d1a', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                        {data.foto
-                          ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
-                          : <>
-                              <span style={{ color: '#fff', fontWeight: 900, fontSize: 22, lineHeight: 1 }}>
-                                {data.nombre.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'FA'}
-                              </span>
-                              <Camera size={13} color="rgba(255,255,255,0.4)" style={{ marginTop: 4 }} />
-                            </>
-                        }
-                      </div>
+                {/* Hero - fondo blanco */}
+                <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                  {/* Foto proporcional */}
+                  <div style={{ flexShrink: 0 }}>
+                    <input ref={fotoRef} type="file" accept="image/*" onChange={onFoto} style={{ display: 'none' }} />
+                    <div onClick={() => fotoRef.current?.click()}
+                      style={{ width: 90, height: 118, borderRadius: 8, overflow: 'hidden', background: VERDE_GRAD, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                      {data.foto
+                        ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+                        : <span style={{ color: '#fff', fontWeight: 900, fontSize: 30, lineHeight: 1 }}>
+                            {data.nombre.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'FA'}
+                          </span>
+                      }
                     </div>
-
-                    {/* Nombre + filas de datos */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {/* Nombre */}
-                      <div style={{ color: '#fff', fontWeight: 900, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, lineHeight: 1.2 }}>
-                        <input value={data.nombre} onChange={e => set('nombre', e.target.value)}
-                          placeholder="NOMBRE DEL DEPORTISTA"
-                          style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 900, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Arial, sans-serif', padding: 0 }} />
+                  </div>
+                  {/* Nombre + filas */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <input value={data.nombre} onChange={e => set('nombre', e.target.value)}
+                      placeholder="NOMBRE DEL DEPORTISTA"
+                      style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '2px solid #e5e7eb', outline: 'none', color: '#111', fontWeight: 900, fontSize: 16, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Arial, sans-serif', padding: '0 0 4px 0', marginBottom: 10 }} />
+                    {encontrado && (
+                      <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#dcfce7', borderRadius: 5, padding: '2px 6px', fontSize: 9, color: '#16a34a', fontWeight: 700, marginBottom: 6, width: 'fit-content' }}>
+                        <CheckCircle size={10} /> {encontrado}
                       </div>
-                      {/* Código (pantalla) + encontrado */}
-                      <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-                        <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 5px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>CÓDIGO</span>
-                        <input value={data.codigo} onChange={e => set('codigo', e.target.value)}
-                          placeholder="Ej: 24228"
-                          style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 700, fontSize: 10, fontFamily: 'Arial, sans-serif', width: 70, padding: 0 }} />
-                        {encontrado && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#dcfce7', borderRadius: 5, padding: '2px 6px', fontSize: 9, color: '#16a34a', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            <CheckCircle size={10} /> {encontrado}
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {/* PROGRAMA */}
+                      {(['PROGRAMA', 'PROYECTO'] as const).map(lbl => {
+                        const field = lbl === 'PROGRAMA' ? 'programa' : 'proyecto';
+                        return (
+                          <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>{lbl}</span>
+                            <input value={data[field as keyof Valoracion]} onChange={e => set(field as keyof Valoracion, e.target.value)} placeholder="Auto-cargado del perfil"
+                              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', flex: 1, padding: 0 }} />
                           </div>
-                        )}
+                        );
+                      })}
+                      {/* FECHA INF. + POSICIÓN */}
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>FECHA INF.</span>
+                          <input value={data.fecha} onChange={e => set('fecha', e.target.value)} placeholder="dd/mm/aaaa"
+                            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 82, padding: 0 }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>POSICIÓN</span>
+                          <select value={data.posicion} onChange={e => set('posicion', e.target.value)}
+                            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                            {POSICIONES.map(o => <option key={o} value={o}>{o || '— Seleccionar —'}</option>)}
+                          </select>
+                        </div>
                       </div>
-                      {/* Filas de info */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {([
-                          { label: 'PROGRAMA',    field: 'programa',      placeholder: 'Auto-cargado del perfil', editable: true  },
-                          { label: 'PROYECTO',    field: 'proyecto',      placeholder: 'Auto-cargado del perfil', editable: true  },
-                          { label: 'FECHA INF.',  field: 'fecha',         placeholder: 'dd/mm/aaaa',             editable: true  },
-                          { label: '# INFORME',   field: 'numeroInforme', placeholder: '01',                     editable: true  },
-                        ] as { label: string; field: keyof Valoracion; placeholder: string; editable: boolean }[]).map(({ label, field, placeholder }) => (
-                          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 5px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>
-                              {label}
-                            </span>
-                            <input value={data[field]} onChange={e => set(field, e.target.value)}
-                              placeholder={placeholder}
-                              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 600, fontSize: 10, fontFamily: 'Arial, sans-serif', flex: 1, padding: 0 }} />
-                          </div>
-                        ))}
-                        {/* POSICIÓN y PERFIL con selects */}
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
-                          {([
-                            { label: 'POSICIÓN', field: 'posicion' as keyof Valoracion, opts: POSICIONES },
-                            { label: 'PERFIL',   field: 'perfil'   as keyof Valoracion, opts: PERFILES   },
-                          ]).map(({ label, field, opts }) => (
-                            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 5px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>
-                                {label}
-                              </span>
-                              <select value={data[field]} onChange={e => set(field, e.target.value)}
-                                style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 600, fontSize: 10, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
-                                {opts.map(o => <option key={o} value={o} style={{ color: '#000', background: '#fff' }}>{o || '— Seleccionar —'}</option>)}
-                              </select>
-                            </div>
-                          ))}
+                      {/* # INFORME + PERFIL */}
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}># INFORME</span>
+                          <input value={data.numeroInforme} onChange={e => set('numeroInforme', e.target.value)} placeholder="01"
+                            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 40, padding: 0 }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>PERFIL</span>
+                          <select value={data.perfil} onChange={e => set('perfil', e.target.value)}
+                            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                            {PERFILES.map(o => <option key={o} value={o}>{o || '— Seleccionar —'}</option>)}
+                          </select>
                         </div>
                       </div>
                     </div>
-
-                    {/* CÓDIGO badge (para imprimir) */}
-                    <div style={{ flexShrink: 0, textAlign: 'center', alignSelf: 'flex-start' }}>
-                      <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 8, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 3 }}>CÓDIGO</div>
-                      <div style={{ background: '#16a34a', color: '#fff', fontWeight: 900, fontSize: 17, padding: '8px 10px', borderRadius: 10, minWidth: 55, textAlign: 'center', lineHeight: 1 }}>
-                        {data.codigo || '—'}
-                      </div>
+                  </div>
+                  {/* CÓDIGO - solo derecha, editable */}
+                  <div style={{ flexShrink: 0, textAlign: 'center', alignSelf: 'flex-start' }}>
+                    <div style={{ color: '#374151', fontSize: 9, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>CÓDIGO</div>
+                    <div style={{ background: VERDE_GRAD, borderRadius: 10, minWidth: 65, textAlign: 'center', padding: '8px 10px', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                      <input value={data.codigo} onChange={e => set('codigo', e.target.value)} placeholder="—"
+                        style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 900, fontSize: 20, width: 60, textAlign: 'center', fontFamily: 'Arial, sans-serif', padding: 0 }} />
                     </div>
-
                   </div>
                 </div>
               </td>
@@ -569,7 +559,7 @@ export default function ValoracionPage() {
 
           {/* ASPECTOS CONDICIONALES */}
           <tbody>
-            <tr>{celda(C.naranja, '#fff', 'ASPECTOS CONDICIONALES', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'ASPECTOS CONDICIONALES', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
           <BloqueAspecto titulo="FUERZA" subtitulo="Potencia y Duelo"
             nivel={data.fuerzaNivel} onNivel={v => set('fuerzaNivel', v)}
@@ -586,7 +576,7 @@ export default function ValoracionPage() {
 
           {/* TÉCNICA */}
           <tbody>
-            <tr>{celda(C.naranja, '#fff', 'TÉCNICA (RELACIONAMIENTO CON EL BALÓN)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'TÉCNICA (RELACIONAMIENTO CON EL BALÓN)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Evalúa la ejecución de los fundamentos básicos del juego</td></tr>
           </tbody>
           <BloqueAspecto titulo="CONTROL Y PASE" subtitulo="Recepción, Manejo y Precisión"
@@ -612,7 +602,7 @@ export default function ValoracionPage() {
 
           {/* TÁCTICA */}
           <tbody>
-            <tr>{celda(C.naranja, '#fff', 'TÁCTICA', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'TÁCTICA', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Comprensión del juego y toma de decisiones</td></tr>
           </tbody>
           <BloqueAspecto titulo="UBICACIÓN ESPACIAL" subtitulo="Posicionamiento y Orientación"
@@ -646,7 +636,7 @@ export default function ValoracionPage() {
 
           {/* SOCIO-AFECTIVA Y ACTITUDINAL */}
           <tbody>
-            <tr>{celda(C.naranja, '#fff', 'Socio-Afectiva y Actitudinal', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'Socio-Afectiva y Actitudinal', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
           <BloqueAspecto titulo="TRABAJO EN EQUIPO" subtitulo="Compañerismo y Comunicación"
             nivel={data.trabajoNivel} onNivel={v => set('trabajoNivel', v)}
@@ -663,7 +653,7 @@ export default function ValoracionPage() {
 
           {/* EVALUACIÓN DE DESEMPEÑO COLECTIVO */}
           <tbody>
-            <tr>{celda(C.naranja, '#fff', 'Evaluación de Desempeño Colectivo (El Equipo)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'Evaluación de Desempeño Colectivo (El Equipo)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
           <BloqueAspecto titulo="IDENTIDAD Y ESTILO DE JUEGO" subtitulo="Coherencia y Modelo de Juego"
             nivel={data.identidadNivel} onNivel={v => set('identidadNivel', v)}
@@ -684,7 +674,7 @@ export default function ValoracionPage() {
 
           {/* LOGROS DEL TRIMESTRE */}
           <tbody>
-            <tr>{celda(C.naranja, '#fff', 'LOGROS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'LOGROS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr>
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.logrosTrimestre} onChange={e => set('logrosTrimestre', e.target.value)}
@@ -696,7 +686,7 @@ export default function ValoracionPage() {
 
           {/* OBJETIVOS DEL TRIMESTRE */}
           <tbody>
-            <tr>{celda(C.naranja, '#fff', 'OBJETIVOS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'OBJETIVOS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr>
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.objetivosTrimestre} onChange={e => set('objetivosTrimestre', e.target.value)}
@@ -708,7 +698,7 @@ export default function ValoracionPage() {
 
           {/* ASPECTO COMPORTAMENTAL */}
           <tbody>
-            <tr>{celda(C.naranja, '#fff', 'ASPECTO COMPORTAMENTAL', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'ASPECTO COMPORTAMENTAL', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             {([
               ['responsabilidad',    'RESPONSABILIDAD'],
               ['puntualidad',        'PUNTUALIDAD'],
