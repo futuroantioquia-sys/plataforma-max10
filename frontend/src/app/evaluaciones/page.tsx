@@ -725,11 +725,11 @@ export default function ValoracionPage() {
                   <select value={(data as any)[key]} onChange={e => set(key as any, e.target.value)}
                     style={{ width: '100%', fontSize: 11, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#333' }}>
                     <option value="">— Seleccionar —</option>
-                    <option value="SIEMPRE">1. SIEMPRE</option>
-                    <option value="CASI SIEMPRE">2. CASI SIEMPRE</option>
-                    <option value="ALGUNAS VECES">3. ALGUNAS VECES</option>
-                    <option value="CASI NUNCA">4. CASI NUNCA</option>
-                    <option value="NUNCA">5. NUNCA</option>
+                    <option value="SIEMPRE">SIEMPRE</option>
+                    <option value="CASI SIEMPRE">CASI SIEMPRE</option>
+                    <option value="ALGUNAS VECES">ALGUNAS VECES</option>
+                    <option value="CASI NUNCA">CASI NUNCA</option>
+                    <option value="NUNCA">NUNCA</option>
                   </select>
                 </td>
               </tr>
@@ -771,7 +771,7 @@ export default function ValoracionPage() {
                     <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
                       <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333' }}>{nombre}</td>
                       <td colSpan={2} style={{ padding: '7px 8px', textAlign: 'center', fontSize: esComp ? 11 : 14, fontWeight: 700, color: color(val) }}>
-                        {val === 0 ? '—' : esComp ? etiquetaComp(val) : val.toFixed(1)}
+                        {val === 0 ? '—' : val.toFixed(1)}
                       </td>
                     </tr>
                   );
