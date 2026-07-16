@@ -763,20 +763,19 @@ export default function ValoracionPage() {
                 <tr>{celda(C.negro, '#fff', 'PERFIL INDIVIDUAL', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '6px 8px' } as any)}</tr>
                 <tr style={{ background: '#d0dae6' }}>
                   <td colSpan={2} style={{ padding: '5px 12px', fontSize: 10, fontWeight: 700, color: '#333', letterSpacing: 1 }}>ASPECTO</td>
-                  <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#333', textAlign: 'center' }}>PROMEDIO / 5</td>
-                  <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#333', textAlign: 'center' }}>CATEGORÍA</td>
+                  <td colSpan={2} style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#333', textAlign: 'center' }}>CALIFICACIÓN</td>
                 </tr>
-                {filas.map(([nombre, val], i) => (
-                  <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
-                    <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333' }}>{nombre}</td>
-                    <td style={{ padding: '7px 8px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: color(val) }}>
-                      {val > 0 ? val.toFixed(1) : '—'}
-                    </td>
-                    <td style={{ padding: '7px 8px', textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#fff', background: val > 0 ? color(val) : '#ccc', borderRadius: 3 }}>
-                      {etiqueta(val)}
-                    </td>
-                  </tr>
-                ))}
+                {filas.map(([nombre, val], i) => {
+                  const esComp = nombre === 'Aspecto Comportamental';
+                  return (
+                    <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
+                      <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333' }}>{nombre}</td>
+                      <td colSpan={2} style={{ padding: '7px 8px', textAlign: 'center', fontSize: esComp ? 11 : 14, fontWeight: 700, color: color(val) }}>
+                        {val === 0 ? '—' : esComp ? etiqueta(val) : val.toFixed(1)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             );
           })()}
