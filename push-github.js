@@ -8,11 +8,13 @@ const https  = require('https');
 const fs     = require('fs');
 const path   = require('path');
 
-const TOKEN  = process.argv[2] || process.env.GH_TOKEN;
-const OWNER  = 'futuroantioquia-sys';
-const REPO   = 'plataforma-max10';
-const BRANCH = 'main';
-const ROOT   = __dirname;
+const TOKEN   = process.argv[2] || process.env.GH_TOKEN;
+const OWNER   = 'futuroantioquia-sys';
+const REPO    = 'plataforma-max10';
+const BRANCH  = 'main';
+// Ramas adicionales que también se actualizan con el mismo commit (para Vercel)
+const RAMAS_EXTRA = ['principal'];
+const ROOT    = __dirname;
 
 // Archivos/carpetas a excluir
 const EXCLUIR = [
@@ -190,12 +192,40 @@ async function main() {
   }
 
   if (refUpdateRes.status === 200 || refUpdateRes.status === 201) {
-    console.log(`\n🎉 CÓDIGO SUBIDO EXITOSAMENTE A GITHUB!`);
-    console.log(`   https://github.com/${OWNER}/${REPO}\n`);
+    console.log(`✅ Rama ${BRANCH} actualizada: ${newCommitSha.slice(0,7)}`);
   } else {
     console.error('❌ Error actualizando rama:', refUpdateRes.body);
     process.exit(1);
   }
+
+  // 7. Sincronizar ramas extra (principal, etc.) con el mismo commit
+  for (const rama of RAMAS_EXTRA) {
+    // Verificar si la rama existe
+    const ramRef = await apiCall('GET', `/git/refs/heads/${rama}`);
+    let syncRes;
+    if (ramRef.status === 200) {
+      // Actualizar rama existente
+      syncRes = await apiCall('PATCH', `/git/refs/heads/${rama}`, {
+        sha:   newCommitSha,
+        force: true,
+      });
+    } else {
+      // Crear rama nueva
+      syncRes = await apiCall('POST', '/git/refs', {
+        ref: `refs/heads/${rama}`,
+        sha: newCommitSha,
+      });
+    }
+    if (syncRes.status === 200 || syncRes.status === 201) {
+      console.log(`✅ Rama '${rama}' sincronizada → ${newCommitSha.slice(0,7)}`);
+    } else {
+      console.warn(`⚠️  No se pudo sincronizar '${rama}':`, syncRes.body?.message ?? '');
+    }
+  }
+
+  console.log(`\n🎉 CÓDIGO SUBIDO EXITOSAMENTE A GITHUB!`);
+  console.log(`   https://github.com/${OWNER}/${REPO}`);
+  console.log(`   Vercel detectará el push y redesplegará en ~1 min.\n`);
 }
 
 main().catch(err => {
