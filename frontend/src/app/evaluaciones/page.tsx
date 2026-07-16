@@ -247,7 +247,7 @@ interface BloqueProps {
 }
 function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descripciones }: BloqueProps) {
   return (
-    <tbody>
+    <tbody style={{ breakInside: 'avoid', pageBreakInside: 'avoid' } as React.CSSProperties}>
       <tr>
         <td colSpan={4} style={{ background: '#fff', color: '#16a34a', textAlign: 'center', fontWeight: 900, fontSize: 13, padding: '5px 8px', letterSpacing: 1 }}>
           {titulo}
@@ -833,6 +833,7 @@ export default function ValoracionPage() {
           .hidden { display: none !important; }
           @page { margin: 8mm; size: A4; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          tbody { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
     </div>
