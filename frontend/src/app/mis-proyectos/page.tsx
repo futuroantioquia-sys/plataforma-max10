@@ -53,12 +53,19 @@ export default function MisProyectosPage() {
           const profe = listaProfes.find(
             p => p.usuario.toUpperCase() === nombre.toUpperCase()
           );
-          if (profe && profe.proyectos.length > 0) {
-            setProyectosProfe(profe.proyectos);
-            // Actualizar localStorage también
-            try {
-              localStorage.setItem('futuro-profe-proyectos', JSON.stringify(profe.proyectos));
-            } catch {}
+          if (profe) {
+            // Proyectos
+            if (profe.proyectos.length > 0) {
+              setProyectosProfe(profe.proyectos);
+              try {
+                localStorage.setItem('futuro-profe-proyectos', JSON.stringify(profe.proyectos));
+              } catch {}
+            }
+            // Foto desde Supabase si no está en localStorage
+            if (profe.foto) {
+              setFotoProfe(profe.foto);
+              try { localStorage.setItem(`futuro-foto-profe-${nombre.toUpperCase()}`, profe.foto); } catch {}
+            }
           }
         }
       } catch {}

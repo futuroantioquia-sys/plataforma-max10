@@ -45,8 +45,9 @@ export default function UsuariosPage() {
   const [profes,    setProfes]    = useState<Profe[]>([]);
   const [fotos,     setFotos]     = useState<Record<string, string>>({}); // usuario → base64
   const [proyectos, setProyectos] = useState<string[]>([]);
-  const [guardando, setGuardando] = useState(false);
-  const [guardado,  setGuardado]  = useState(false);
+  const [guardando,  setGuardando]  = useState(false);
+  const [guardado,   setGuardado]   = useState(false);
+  const [errorGuard, setErrorGuard] = useState(false);
   const [claveVis,  setClaveVis]  = useState<Record<string, boolean>>({});
   const [nuevo,     setNuevo]     = useState({ usuario: '', clave: '' });
   const [agregando, setAgregando] = useState(false);
@@ -56,10 +57,17 @@ export default function UsuariosPage() {
       const inicial = lista.length ? lista : PROFES_INICIALES.map(p => ({ ...p, id: uuid() }));
       if (!lista.length) saveProfes(inicial);
       setProfes(inicial);
-      // Cargar fotos guardadas en localStorage
+      // Cargar fotos: primero desde Supabase (foto field), luego desde localStorage
       const mapa: Record<string, string> = {};
       inicial.forEach(p => {
-        try { const f = localStorage.getItem(fotoKey(p.usuario)); if (f) mapa[p.usuario] = f; } catch {}
+        // Si el profe tiene foto en Supabase, usarla y sincronizar a localStorage
+        if (p.foto) {
+          mapa[p.usuario] = p.foto;
+          try { localStorage.setItem(fotoKey(p.usuario), p.foto); } catch {}
+        } else {
+          // Fallback a localStorage
+          try { const f = localStorage.getItem(fotoKey(p.usuario)); if (f) mapa[p.usuario] = f; } catch {}
+        }
       });
       setFotos(mapa);
     });
@@ -79,10 +87,13 @@ export default function UsuariosPage() {
   }, []);
 
   async function guardar() {
-    setGuardando(true);
-    await saveProfes(profes);
-    setGuardando(false); setGuardado(true);
-    setTimeout(() => setGuardado(false), 2500);
+    setGuardando(true); setErrorGuard(false);
+    // Incluir fotos actuales en cada profe antes de guardar
+    const profesConFoto = profes.map(p => ({ ...p, foto: fotos[p.usuario] ?? '' }));
+    const ok = await saveProfes(profesConFoto);
+    setGuardando(false);
+    if (ok) { setGuardado(true); setTimeout(() => setGuardado(false), 2500); }
+    else     { setErrorGuard(true); setTimeout(() => setErrorGuard(false), 4000); }
   }
 
   function eliminar(id: string) {
@@ -187,9 +198,9 @@ export default function UsuariosPage() {
           </button>
           <button onClick={guardar} disabled={guardando}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition ${
-              guardado ? 'bg-white text-green-700' : 'bg-white/20 hover:bg-white/30 text-white'}`}>
+              guardado ? 'bg-white text-green-700' : errorGuard ? 'bg-red-500 text-white' : 'bg-white/20 hover:bg-white/30 text-white'}`}>
             <Save className="w-3.5 h-3.5" />
-            {guardando ? 'Guardando…' : guardado ? '¡Guardado!' : 'Guardar cambios'}
+            {guardando ? 'Guardando…' : guardado ? '¡Guardado en la nube! ✓' : errorGuard ? 'Error al guardar ⚠' : 'Guardar cambios'}
           </button>
         </div>
         <div className="relative text-right leading-tight ml-2">

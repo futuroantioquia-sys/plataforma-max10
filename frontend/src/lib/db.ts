@@ -530,6 +530,7 @@ export interface Profe {
   usuario:   string;   // apellido en mayúsculas (login)
   clave:     string;   // cédula
   proyectos: string[]; // proyectos a los que puede acceder
+  foto?:     string;   // base64 foto de perfil (sync cross-device)
 }
 
 const LS_PROFES = 'futuro_profes';
@@ -573,9 +574,20 @@ export async function getProfes(): Promise<Profe[]> {
         usuario:   r.usuario,
         clave:     r.clave,
         proyectos: r.proyectos ?? [],
+        foto:      r.foto ?? '',
       }));
       lsSet(LS_PROFES, lista);  // actualizar caché local
       return lista;
+    }
+
+    // Supabase vacío → intentar sincronizar desde localStorage
+    if (!error && data && data.length === 0) {
+      const cached = lsGet<Profe[]>(LS_PROFES, []);
+      if (cached && cached.length) {
+        // Hay datos en localStorage que nunca llegaron a Supabase — subirlos ahora
+        saveProfes(cached).catch(() => {});
+        return cached;
+      }
     }
   } catch {}
 
@@ -588,19 +600,21 @@ export async function getProfes(): Promise<Profe[]> {
   return PROFES_INICIALES;
 }
 
-export async function saveProfes(lista: Profe[]): Promise<void> {
+export async function saveProfes(lista: Profe[]): Promise<boolean> {
   lsSet(LS_PROFES, lista);
 
   try {
-    // Upsert de todos los profes
+    // Upsert de todos los profes (incluye foto para sync cross-device)
     const rows = lista.map(p => ({
       id:        p.id,
       usuario:   p.usuario,
       clave:     p.clave,
       proyectos: p.proyectos,
+      foto:      p.foto ?? '',
     }));
     if (rows.length) {
-      await supabase().from('profes').upsert(rows, { onConflict: 'id' });
+      const { error } = await supabase().from('profes').upsert(rows, { onConflict: 'id' });
+      if (error) { console.error('[db] saveProfes upsert:', error); return false; }
     }
     // Eliminar los que ya no están
     const ids = lista.map(p => p.id);
@@ -609,8 +623,10 @@ export async function saveProfes(lista: Profe[]): Promise<void> {
     } else {
       await supabase().from('profes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     }
+    return true;
   } catch (e) {
     console.error('[db] saveProfes:', e);
+    return false;
   }
 }
 
