@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Download, Save, RefreshCw, Camera, CheckCircle, History } from 'lucide-react';
-import { getDeportistas, getEvaluaciones, saveEvaluacion } from '@/lib/db';
-import type { Deportista, Evaluacion } from '@/lib/db';
+import { getDeportistas, getEvaluaciones, saveEvaluacion, getProfes } from '@/lib/db';
+import type { Deportista, Evaluacion, Profe } from '@/lib/db';
 
 const NIVELES = ['', 'Nivel 1 (Iniciación)', 'Nivel 2 (En Desarrollo)', 'Nivel 3 (Competente)', 'Nivel 4 (Avanzado)', 'Nivel 5 (Dominante)'];
 
@@ -324,14 +324,19 @@ export default function ValoracionPage() {
   const [historial,   setHistorial]   = useState<Evaluacion[]>([]);
   const [verHistorial, setVerHistorial] = useState(false);
   const [nombreEntrenador, setNombreEntrenador] = useState('');
+  const [profes, setProfes] = useState<Profe[]>([]);
   const [intentoDescarga, setIntentoDescarga] = useState(false);
   const err = (campo: keyof Valoracion) => intentoDescarga && !data[campo]?.trim();
   useEffect(() => {
-    try { setNombreEntrenador(localStorage.getItem('futuro-profe-nombre') ?? ''); } catch {}
+    try {
+      const raw = localStorage.getItem('futuro-profe-nombre');
+      if (raw) setNombreEntrenador(JSON.parse(raw) as string);
+    } catch {}
   }, []);
 
   useEffect(() => {
     getDeportistas().then(setDeportistas);
+    getProfes().then(setProfes);
   }, []);
 
   useEffect(() => {
@@ -366,6 +371,13 @@ export default function ValoracionPage() {
         fechaNac: fechaNac || p.fechaNac,
         ...(posicion ? { posicion } : {}),
       }));
+      // Buscar entrenador según el proyecto del deportista
+      if (proyecto && profes.length > 0) {
+        const profe = profes.find(p =>
+          p.proyectos.some(pr => pr.trim().toUpperCase() === proyecto.trim().toUpperCase())
+        );
+        if (profe) setNombreEntrenador(profe.usuario);
+      }
       setEncontrado(dep._nombre ?? '');
       setTimeout(() => setEncontrado(''), 3000);
     }
