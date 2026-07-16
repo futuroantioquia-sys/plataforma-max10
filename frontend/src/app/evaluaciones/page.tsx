@@ -341,6 +341,34 @@ export default function ValoracionPage() {
     }
   }, [data.codigo]);
 
+  // Re-buscar deportista cuando deportistas cargue y ya haya un código escrito
+  useEffect(() => {
+    if (deportistas.length === 0) return;
+    const cod = data.codigo.trim().toUpperCase();
+    if (cod.length < 2) return;
+    const dep = deportistas.find(d =>
+      Object.entries(d._columnas ?? {}).some(([key, val]) =>
+        /^c[oó]d/i.test(key.trim()) && String(val).trim().toUpperCase() === cod
+      )
+    );
+    if (dep) {
+      const proyecto = buscarCampo(dep, /^proy/i);
+      const programa = buscarCampo(dep, /^program/i) || buscarCampo(dep, /^categ/i) || buscarCampo(dep, /^sub/i);
+      const posicion = buscarCampo(dep, /^posici[oó]n/i) || buscarCampo(dep, /^pos$/i);
+      const fechaNac = construirFechaNac(dep);
+      setData(p => ({
+        ...p,
+        nombre: p.nombre || dep._nombre ?? '',
+        proyecto: p.proyecto || proyecto,
+        programa: p.programa || programa,
+        fechaNac: p.fechaNac || fechaNac,
+        ...(posicion && !p.posicion ? { posicion } : {}),
+      }));
+      setEncontrado(dep._nombre ?? '');
+      setTimeout(() => setEncontrado(''), 3000);
+    }
+  }, [deportistas]);
+
   /* set genérico — sin definir componentes dentro */
   const set = (k: keyof Valoracion, v: string) => {
     let extra: Partial<Valoracion> = {};
