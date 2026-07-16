@@ -113,6 +113,14 @@ const DESC_LECTURA_ALTURAS: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Reconoce los momentos para acelerar el juego o pausarlo para reorganizar al equipo.',
   'Nivel 5 (Dominante)':    'Maestro de la "pausa"; atrae rivales para liberar compañeros y detecta debilidades en el sistema rival.',
 };
+const DESC_IDENTIDAD_ESTILO: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'No hay un estilo claro; el equipo juega al azar y depende de individualidades.',
+  'Nivel 2 (En Desarrollo)':'Se intentan seguir algunas ideas del DT, pero el equipo pierde la forma rápidamente.',
+  'Nivel 3 (Competente)':   'El equipo tiene una idea clara (ej: salir jugando, presionar alto) y la mantiene gran parte del tiempo.',
+  'Nivel 4 (Avanzado)':     'Estilo de juego definido y reconocible. Los jugadores saben a qué juegan incluso en situaciones difíciles.',
+  'Nivel 5 (Dominante)':    'El equipo domina múltiples variantes tácticas y tiene una identidad inquebrantable sin importar el rival.',
+};
+
 const DESC_COMUNICACION_ASERTIVA: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'No habla en el campo; juega de forma aislada sin interactuar con el entorno.',
   'Nivel 2 (En Desarrollo)':'Se comunica solo para pedir el balón; comunicación verbal limitada y reactiva.',
@@ -626,7 +634,8 @@ export default function ValoracionPage() {
           </tbody>
           <BloqueAspecto titulo="IDENTIDAD Y ESTILO DE JUEGO" subtitulo="Coherencia y Modelo de Juego"
             nivel={data.identidadNivel} onNivel={v => set('identidadNivel', v)}
-            desc={data.identidadDesc}   onDesc={v => set('identidadDesc', v)} />
+            desc={data.identidadDesc}   onDesc={v => set('identidadDesc', v)}
+            descripciones={DESC_IDENTIDAD_ESTILO} />
           <BloqueAspecto titulo="BLOQUE Y COHESIÓN TÁCTICA" subtitulo="Organización Colectiva"
             nivel={data.bloqueNivel} onNivel={v => set('bloqueNivel', v)}
             desc={data.bloqueDesc}   onDesc={v => set('bloqueDesc', v)} />
