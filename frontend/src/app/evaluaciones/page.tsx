@@ -168,6 +168,10 @@ type Valoracion = {
   actitudNivel: string; actitudDesc: string;
   disciplinaNivel: string; disciplinaDesc: string;
   trabajoNivel: string; trabajoDesc: string;
+  identidadNivel: string; identidadDesc: string;
+  bloqueNivel: string; bloqueDesc: string;
+  climaNivel: string; climaDesc: string;
+  gestionCompNivel: string; gestionCompDesc: string;
   observaciones: string;
 };
 
@@ -185,7 +189,12 @@ const INICIAL: Valoracion = {
   superioridadNivel: '', superioridadDesc: '',
   basculacionNivel: '', basculacionDesc: '',
   actitudNivel: '', actitudDesc: '', disciplinaNivel: '', disciplinaDesc: '',
-  trabajoNivel: '', trabajoDesc: '', observaciones: '',
+  trabajoNivel: '', trabajoDesc: '',
+  identidadNivel: '', identidadDesc: '',
+  bloqueNivel: '', bloqueDesc: '',
+  climaNivel: '', climaDesc: '',
+  gestionCompNivel: '', gestionCompDesc: '',
+  observaciones: '',
 };
 
 /* ── Bloque de aspecto: definido FUERA del componente principal ── */
@@ -610,6 +619,23 @@ export default function ValoracionPage() {
             nivel={data.actitudNivel} onNivel={v => set('actitudNivel', v)}
             desc={data.actitudDesc}   onDesc={v => set('actitudDesc', v)}
             descripciones={DESC_COMUNICACION_ASERTIVA} />
+
+          {/* EVALUACIÓN DE DESEMPEÑO COLECTIVO */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'Evaluación de Desempeño Colectivo (El Equipo)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+          </tbody>
+          <BloqueAspecto titulo="IDENTIDAD Y ESTILO DE JUEGO" subtitulo="Coherencia y Modelo de Juego"
+            nivel={data.identidadNivel} onNivel={v => set('identidadNivel', v)}
+            desc={data.identidadDesc}   onDesc={v => set('identidadDesc', v)} />
+          <BloqueAspecto titulo="BLOQUE Y COHESIÓN TÁCTICA" subtitulo="Organización Colectiva"
+            nivel={data.bloqueNivel} onNivel={v => set('bloqueNivel', v)}
+            desc={data.bloqueDesc}   onDesc={v => set('bloqueDesc', v)} />
+          <BloqueAspecto titulo="CLIMA INTERNO Y COMUNICACIÓN" subtitulo="Ambiente y Vínculos del Grupo"
+            nivel={data.climaNivel} onNivel={v => set('climaNivel', v)}
+            desc={data.climaDesc}   onDesc={v => set('climaDesc', v)} />
+          <BloqueAspecto titulo="GESTIÓN DE LA COMPETICIÓN" subtitulo="Rendimiento Bajo Presión"
+            nivel={data.gestionCompNivel} onNivel={v => set('gestionCompNivel', v)}
+            desc={data.gestionCompDesc}   onDesc={v => set('gestionCompDesc', v)} />
 
           {/* OBSERVACIONES */}
           <tbody>
