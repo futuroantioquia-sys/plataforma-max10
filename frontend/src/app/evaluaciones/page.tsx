@@ -273,8 +273,9 @@ function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descri
       <tr>
         <td colSpan={4} style={{ background: C.grisClaro, padding: '6px 10px' }}>
           <textarea value={desc} onChange={e => onDesc(e.target.value)}
-            rows={2} placeholder="Descripción del desempeño..."
-            style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+            rows={2} placeholder="Selecciona un nivel para ver la descripción..."
+            readOnly
+            style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333', cursor: 'default' }} />
         </td>
       </tr>
     </tbody>
@@ -539,7 +540,9 @@ export default function ValoracionPage() {
           if (!data.companerismo)       camposVacios.push('Compañerismo');
           if (!data.liderazgo)          camposVacios.push('Liderazgo');
           if (!data.trabajoEquipoComp)  camposVacios.push('Trabajo en Equipo');
-          if (!data.sentidoPertenencia) camposVacios.push('Sentido de Pertenencia');
+          if (!data.sentidoPertenencia)    camposVacios.push('Sentido de Pertenencia');
+          if (!data.logrosTrimestre.trim())   camposVacios.push('Logros del Trimestre');
+          if (!data.objetivosTrimestre.trim()) camposVacios.push('Objetivos del Trimestre');
           if (camposVacios.length > 0) {
             alert(`Completa los siguientes campos antes de descargar:\n\n• ${camposVacios.join('\n• ')}`);
             return;
@@ -916,16 +919,16 @@ export default function ValoracionPage() {
           </tbody>
 
           {/* FIRMAS */}
-          <tbody>
+          <tbody style={{ breakInside: 'avoid', pageBreakInside: 'avoid', breakBefore: 'avoid', pageBreakBefore: 'avoid' } as React.CSSProperties}>
             <tr>
-              <td colSpan={2} style={{ padding: '16px 24px 10px', textAlign: 'center', verticalAlign: 'bottom' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 18, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <td colSpan={2} style={{ padding: '8px 24px 6px', textAlign: 'center', verticalAlign: 'bottom' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   {nombreEntrenador || '___________________________'}
                 </div>
                 <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Entrenador</div>
               </td>
-              <td colSpan={2} style={{ padding: '16px 24px 10px', textAlign: 'center', verticalAlign: 'bottom' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 18, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <td colSpan={2} style={{ padding: '8px 24px 6px', textAlign: 'center', verticalAlign: 'bottom' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   STEVEN MARULANDA GRISALES
                 </div>
                 <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Directivo</div>
