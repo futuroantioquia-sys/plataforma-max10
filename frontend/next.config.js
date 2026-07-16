@@ -2,7 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   typescript: {
-    // Los errores de tipo no bloquean el build de producción
     ignoreBuildErrors: true,
   },
   eslint: {
@@ -13,6 +12,17 @@ const nextConfig = {
       'fykdyalpuydkwfjqguip.supabase.co',
       'lh3.googleusercontent.com',
     ],
+  },
+  // Forzar que el navegador siempre pida la versión más nueva
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+        ],
+      },
+    ];
   },
 };
 
