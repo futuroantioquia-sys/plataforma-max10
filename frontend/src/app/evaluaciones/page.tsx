@@ -521,8 +521,16 @@ export default function ValoracionPage() {
             <tr>
               <td colSpan={4} style={{ padding: 0 }}>
                 {/* Título - verde degradado */}
-                <div style={{ background: VERDE_GRAD, color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 15, letterSpacing: 3, padding: '9px 16px', textTransform: 'uppercase', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
-                  VALORACIÓN INTEGRAL DEL DEPORTISTA
+                <div style={{ background: VERDE_GRAD, display: 'flex', alignItems: 'center', padding: '7px 14px', gap: 10, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                  {/* Logo Max10 izquierda */}
+                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <img src="/MAX 10.png" alt="Max10 Sport" style={{ height: 36, width: 'auto', objectFit: 'contain' }} />
+                    <span style={{ color: '#fff', fontSize: 8, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Conecta, Gestiona, Gana</span>
+                  </div>
+                  {/* Título derecha */}
+                  <div style={{ flex: 1, textAlign: 'right', color: '#fff', fontWeight: 900, fontSize: 14, letterSpacing: 2, textTransform: 'uppercase' }}>
+                    Valoración Integral del Deportista
+                  </div>
                 </div>
                 {/* Hero - fondo blanco */}
                 <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
