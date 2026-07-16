@@ -463,7 +463,7 @@ export default function ValoracionPage() {
       )}
 
       {/* FORMULARIO */}
-      <div style={{ width: '100%', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', fontFamily: 'Arial, sans-serif' }}>
+      <div style={{ maxWidth: 780, margin: '16px auto', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', fontFamily: 'Arial, sans-serif' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
 
           {/* ── ENCABEZADO REDISEÑADO ── */}
