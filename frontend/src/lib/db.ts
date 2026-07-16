@@ -611,41 +611,49 @@ export async function getProfes(): Promise<Profe[]> {
 export async function saveProfes(lista: Profe[]): Promise<{ ok: boolean; msg?: string }> {
   lsSet(LS_PROFES, lista);
 
+  if (!lista.length) return { ok: true };
+
+  const rows = lista.map(p => ({
+    id:        p.id,
+    usuario:   p.usuario,
+    clave:     p.clave,
+    proyectos: p.proyectos,
+    foto:      p.foto ?? '',
+  }));
+
+  // Intento 1: upsert por id (funciona si el id ya existe en Supabase)
   try {
-    if (!lista.length) return { ok: true };
-
-    const usuarios = lista.map(p => p.usuario);
-
-    // Paso 1: eliminar filas con los mismos usuarios (clean slate por usuario)
-    const { error: delErr } = await supabase()
+    const { error } = await supabase()
       .from('profes')
-      .delete()
-      .in('usuario', usuarios);
-    if (delErr) {
-      console.error('[db] saveProfes delete:', delErr);
-      return { ok: false, msg: `DEL: ${delErr.message}` };
+      .upsert(rows, { onConflict: 'id' });
+    if (!error) return { ok: true };
+    console.warn('[db] saveProfes upsert/id:', error.message);
+  } catch (e: any) {
+    console.warn('[db] saveProfes upsert/id catch:', e?.message);
+  }
+
+  // Intento 2: actualizar fila por fila (no usa DELETE, solo UPDATE/INSERT)
+  try {
+    for (const row of rows) {
+      // Intentar UPDATE por usuario
+      const { data, error: updErr } = await supabase()
+        .from('profes')
+        .update({ clave: row.clave, proyectos: row.proyectos, foto: row.foto })
+        .eq('usuario', row.usuario)
+        .select('id');
+      if (updErr) {
+        console.warn('[db] update', row.usuario, updErr.message);
+        continue;
+      }
+      // Si no actualizó ninguna fila, insertar
+      if (!data || data.length === 0) {
+        const { error: insErr } = await supabase().from('profes').insert(row);
+        if (insErr) console.warn('[db] insert', row.usuario, insErr.message);
+      }
     }
-
-    // Paso 2: insertar todos los profes frescos
-    const rows = lista.map(p => ({
-      id:        p.id,
-      usuario:   p.usuario,
-      clave:     p.clave,
-      proyectos: p.proyectos,
-      foto:      p.foto ?? '',
-    }));
-    const { error: insErr } = await supabase().from('profes').insert(rows);
-    if (insErr) {
-      console.error('[db] saveProfes insert:', insErr);
-      return { ok: false, msg: `INS: ${insErr.message}` };
-    }
-
-    // Paso 3: eliminar cualquier otro usuario que no esté en la lista
-    await supabase().from('profes').delete().not('usuario', 'in', usuarios);
-
     return { ok: true };
   } catch (e: any) {
-    console.error('[db] saveProfes:', e);
+    console.error('[db] saveProfes fallback:', e);
     return { ok: false, msg: String(e?.message ?? e) };
   }
 }
