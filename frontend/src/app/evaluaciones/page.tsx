@@ -593,9 +593,10 @@ export default function ValoracionPage() {
                       </div>
                     </div>
                   </div>
-                  {/* CÓDIGO - solo derecha, editable */}
-                  <div style={{ flexShrink: 0, textAlign: 'center', alignSelf: 'flex-start' }}>
-                    <div style={{ color: '#374151', fontSize: 9, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>CÓDIGO</div>
+                  {/* LOGO + CÓDIGO - derecha */}
+                  <div style={{ flexShrink: 0, textAlign: 'center', alignSelf: 'flex-start', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <img src="/logo-fa.png" alt="Futuro Antioquia" style={{ width: 72, height: 72, objectFit: 'contain' }} />
+                    <div style={{ color: '#374151', fontSize: 9, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 }}>CÓDIGO</div>
                     <div style={{ background: VERDE_GRAD, borderRadius: 10, minWidth: 65, textAlign: 'center', padding: '8px 10px', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact', outline: err('codigo') ? '2px solid #ef4444' : 'none' } as React.CSSProperties}>
                       <input value={data.codigo} onChange={e => set('codigo', e.target.value)} placeholder="—"
                         style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 900, fontSize: 20, width: 85, textAlign: 'center', fontFamily: 'Arial, sans-serif', padding: 0 }} />
