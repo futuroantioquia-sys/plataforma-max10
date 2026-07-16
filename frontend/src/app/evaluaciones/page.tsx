@@ -204,6 +204,8 @@ type Valoracion = {
   bloqueNivel: string; bloqueDesc: string;
   climaNivel: string; climaDesc: string;
   gestionCompNivel: string; gestionCompDesc: string;
+  logrosTrimestre: string;
+  objetivosTrimestre: string;
   observaciones: string;
 };
 
@@ -226,6 +228,8 @@ const INICIAL: Valoracion = {
   bloqueNivel: '', bloqueDesc: '',
   climaNivel: '', climaDesc: '',
   gestionCompNivel: '', gestionCompDesc: '',
+  logrosTrimestre: '',
+  objetivosTrimestre: '',
   observaciones: '',
 };
 
@@ -672,6 +676,30 @@ export default function ValoracionPage() {
             nivel={data.gestionCompNivel} onNivel={v => set('gestionCompNivel', v)}
             desc={data.gestionCompDesc}   onDesc={v => set('gestionCompDesc', v)}
             descripciones={DESC_GESTION_COMPETICION} />
+
+          {/* LOGROS DEL TRIMESTRE */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'LOGROS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>
+              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
+                <textarea value={data.logrosTrimestre} onChange={e => set('logrosTrimestre', e.target.value)}
+                  rows={4} placeholder="Describe los logros del trimestre..."
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+              </td>
+            </tr>
+          </tbody>
+
+          {/* OBJETIVOS DEL TRIMESTRE */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'OBJETIVOS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>
+              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
+                <textarea value={data.objetivosTrimestre} onChange={e => set('objetivosTrimestre', e.target.value)}
+                  rows={4} placeholder="Describe los objetivos del trimestre..."
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+              </td>
+            </tr>
+          </tbody>
 
           {/* OBSERVACIONES */}
           <tbody>
