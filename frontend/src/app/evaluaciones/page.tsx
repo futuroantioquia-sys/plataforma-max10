@@ -323,6 +323,10 @@ export default function ValoracionPage() {
   const [encontrado,  setEncontrado]  = useState('');
   const [historial,   setHistorial]   = useState<Evaluacion[]>([]);
   const [verHistorial, setVerHistorial] = useState(false);
+  const [nombreEntrenador, setNombreEntrenador] = useState('');
+  useEffect(() => {
+    try { setNombreEntrenador(localStorage.getItem('futuro-profe-nombre') ?? ''); } catch {}
+  }, []);
 
   useEffect(() => {
     getDeportistas().then(setDeportistas);
@@ -558,7 +562,7 @@ export default function ValoracionPage() {
                     <div style={{ color: '#374151', fontSize: 9, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>CÓDIGO</div>
                     <div style={{ background: VERDE_GRAD, borderRadius: 10, minWidth: 65, textAlign: 'center', padding: '8px 10px', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
                       <input value={data.codigo} onChange={e => set('codigo', e.target.value)} placeholder="—"
-                        style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 900, fontSize: 20, width: 60, textAlign: 'center', fontFamily: 'Arial, sans-serif', padding: 0 }} />
+                        style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 900, fontSize: 20, width: 85, textAlign: 'center', fontFamily: 'Arial, sans-serif', padding: 0 }} />
                     </div>
                   </div>
                 </div>
@@ -687,7 +691,7 @@ export default function ValoracionPage() {
             <tr>
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.logrosTrimestre} onChange={e => set('logrosTrimestre', e.target.value)}
-                  rows={4} placeholder="Describe los logros del trimestre..."
+                  rows={2} placeholder="Describe los logros del trimestre..."
                   style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
               </td>
             </tr>
@@ -699,7 +703,7 @@ export default function ValoracionPage() {
             <tr>
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.objetivosTrimestre} onChange={e => set('objetivosTrimestre', e.target.value)}
-                  rows={4} placeholder="Describe los objetivos del trimestre..."
+                  rows={2} placeholder="Describe los objetivos del trimestre..."
                   style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
               </td>
             </tr>
@@ -768,8 +772,8 @@ export default function ValoracionPage() {
                 {filas.map(([nombre, val], i) => {
                   return (
                     <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
-                      <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333' }}>{nombre}</td>
-                      <td colSpan={2} style={{ padding: '7px 8px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: color(val) }}>
+                      <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333', textTransform: 'uppercase' }}>{nombre}</td>
+                      <td colSpan={2} style={{ padding: '7px 8px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: '#111' }}>
                         {val === 0 ? '—' : val.toFixed(1)}
                       </td>
                     </tr>
@@ -799,7 +803,7 @@ export default function ValoracionPage() {
             <tr>
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.observaciones} onChange={e => set('observaciones', e.target.value)}
-                  rows={4} placeholder="Observaciones generales del entrenador..."
+                  rows={2} placeholder="Observaciones generales del entrenador..."
                   style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
               </td>
             </tr>
@@ -808,11 +812,17 @@ export default function ValoracionPage() {
           {/* FIRMAS */}
           <tbody>
             <tr>
-              <td colSpan={2} style={{ padding: '24px 24px 10px', textAlign: 'center', verticalAlign: 'bottom' }}>
-                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Firma del Entrenador</div>
+              <td colSpan={2} style={{ padding: '16px 24px 10px', textAlign: 'center', verticalAlign: 'bottom' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 18, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {nombreEntrenador || '___________________________'}
+                </div>
+                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Entrenador</div>
               </td>
-              <td colSpan={2} style={{ padding: '24px 24px 10px', textAlign: 'center', verticalAlign: 'bottom' }}>
-                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Firma del Directivo</div>
+              <td colSpan={2} style={{ padding: '16px 24px 10px', textAlign: 'center', verticalAlign: 'bottom' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 18, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  STEVEN MARULANDA GRISALES
+                </div>
+                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Directivo</div>
               </td>
             </tr>
             <tr>
@@ -834,6 +844,7 @@ export default function ValoracionPage() {
           @page { margin: 8mm; size: A4; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           tbody { break-inside: avoid; page-break-inside: avoid; }
+          select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
         }
       `}</style>
     </div>

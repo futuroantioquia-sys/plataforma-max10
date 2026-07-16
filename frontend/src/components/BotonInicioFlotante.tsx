@@ -22,7 +22,7 @@ export function BotonInicioFlotante() {
   if (ocultar) return null;
 
   return (
-    <div className="fixed bottom-5 right-4 z-50 flex flex-col gap-2 items-end">
+    <div className="fixed bottom-5 right-4 z-50 flex flex-col gap-2 items-end print:hidden">
       <button
         onClick={() => router.push('/dashboard')}
         title="Volver al inicio"
