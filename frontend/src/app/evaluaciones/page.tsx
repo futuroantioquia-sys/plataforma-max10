@@ -757,7 +757,6 @@ export default function ValoracionPage() {
                   <td colSpan={2} style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#333', textAlign: 'center' }}>CALIFICACIÓN</td>
                 </tr>
                 {filas.map(([nombre, val], i) => {
-                  const esComp = nombre === 'Aspecto Comportamental';
                   return (
                     <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
                       <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333' }}>{nombre}</td>
@@ -767,6 +766,20 @@ export default function ValoracionPage() {
                     </tr>
                   );
                 })}
+                {/* Promedio general */}
+                {(() => {
+                  const promedioGeneral = avg([condicional, tecnico, tactico, socioAfectiva, comportamental]);
+                  return (
+                    <tr>
+                      <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '9px 12px', fontSize: 12, fontWeight: 900, letterSpacing: 1, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                        VALORACIÓN DEPORTISTA
+                      </td>
+                      <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '9px 8px', textAlign: 'center', fontSize: 20, fontWeight: 900, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                        {promedioGeneral === 0 ? '—' : promedioGeneral.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })()}
               </tbody>
             );
           })()}
