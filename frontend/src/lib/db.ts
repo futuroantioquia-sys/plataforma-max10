@@ -535,29 +535,30 @@ export interface Profe {
 
 const LS_PROFES = 'futuro_profes';
 
-// Profes iniciales — fallback garantizado si no hay BD ni caché
+// Profes iniciales — fallback garantizado si no hay BD ni caché.
+// PROYECTOS SINCRONIZADOS con Supabase — actualizar aquí cuando cambien asignaciones.
 const PROFES_INICIALES: Profe[] = [
-  { id: 'pi-01', usuario: 'CASTRO',   clave: '1214734807', proyectos: [] },
+  { id: 'pi-01', usuario: 'CASTRO',   clave: '1214734807', proyectos: ['SUB 8A','SUB 8B'] },
   { id: 'pi-02', usuario: 'MEJIA',    clave: '1152192324', proyectos: [] },
-  { id: 'pi-03', usuario: 'RAMIREZ',  clave: '1017258984', proyectos: [] },
-  { id: 'pi-04', usuario: 'SAMUEL',   clave: '1000415036', proyectos: [] },
-  { id: 'pi-05', usuario: 'TABARES',  clave: '1000084856', proyectos: [] },
-  { id: 'pi-06', usuario: 'CHALARCA', clave: '1128389946', proyectos: [] },
-  { id: 'pi-07', usuario: 'RIOS',     clave: '1036639022', proyectos: [] },
-  { id: 'pi-08', usuario: 'JESUS',    clave: '1003404311', proyectos: [] },
-  { id: 'pi-09', usuario: 'MARTIN',   clave: '1013458275', proyectos: [] },
-  { id: 'pi-10', usuario: 'MARLON',   clave: '1017192180', proyectos: [] },
-  { id: 'pi-11', usuario: 'ALEX',     clave: '1020464354', proyectos: [] },
-  { id: 'pi-12', usuario: 'DORIA',    clave: '1003050289', proyectos: [] },
-  { id: 'pi-13', usuario: 'MUÑOZ',    clave: '1034776238', proyectos: [] },
-  { id: 'pi-14', usuario: 'ALVAREZ',  clave: '1033180115', proyectos: [] },
-  { id: 'pi-15', usuario: 'DUVAN',    clave: '1002066215', proyectos: [] },
-  { id: 'pi-16', usuario: 'GIRALDO',  clave: '1127792656', proyectos: [] },
-  { id: 'pi-17', usuario: 'NICOLAS',  clave: '1005372826', proyectos: [] },
-  { id: 'pi-18', usuario: 'KAREN',    clave: '1000870631', proyectos: [] },
-  { id: 'pi-19', usuario: 'CAMILA',   clave: '1193081467', proyectos: [] },
-  { id: 'pi-20', usuario: 'EDGAR',    clave: '98539787',   proyectos: [] },
-  { id: 'pi-21', usuario: 'JIMENEZ',  clave: '1036864427', proyectos: [] },
+  { id: 'pi-03', usuario: 'RAMIREZ',  clave: '1017258984', proyectos: ['SUB 11A'] },
+  { id: 'pi-04', usuario: 'SAMUEL',   clave: '1000415036', proyectos: ['SUB 12A','SUB 12B'] },
+  { id: 'pi-05', usuario: 'TABARES',  clave: '1000084856', proyectos: ['SUB 9A','SUB 9B'] },
+  { id: 'pi-06', usuario: 'CHALARCA', clave: '1128389946', proyectos: ['3','SUB 11B','SUB 15A'] },
+  { id: 'pi-07', usuario: 'RIOS',     clave: '1036639022', proyectos: ['2','5','SUB 14A','SUB 14B','SUB 8C'] },
+  { id: 'pi-08', usuario: 'JESUS',    clave: '1003404311', proyectos: ['SUB 10A','SUB 10B'] },
+  { id: 'pi-09', usuario: 'MARTIN',   clave: '1013458275', proyectos: ['10','6','SUB 7A'] },
+  { id: 'pi-10', usuario: 'MARLON',   clave: '1017192180', proyectos: ['4','8','80'] },
+  { id: 'pi-11', usuario: 'ALEX',     clave: '1020464354', proyectos: ['40','45','46','47','48','48A','48B'] },
+  { id: 'pi-12', usuario: 'DORIA',    clave: '1003050289', proyectos: ['20','21','52','55','57','59','SUB 8C'] },
+  { id: 'pi-13', usuario: 'MUÑOZ',    clave: '1034776238', proyectos: ['22','33','34','35','36'] },
+  { id: 'pi-14', usuario: 'ALVAREZ',  clave: '1033180115', proyectos: ['41','42','SUB 13C','SUB 15B'] },
+  { id: 'pi-15', usuario: 'DUVAN',    clave: '1002066215', proyectos: ['51','54','56','60','SUB 9C'] },
+  { id: 'pi-16', usuario: 'GIRALDO',  clave: '1127792656', proyectos: ['31','SUB 10C','SUB 12C'] },
+  { id: 'pi-17', usuario: 'NICOLAS',  clave: '1005372826', proyectos: ['30','50','53','61','SUB 7B'] },
+  { id: 'pi-18', usuario: 'KAREN',    clave: '1000870631', proyectos: ['11','12A','12B','13'] },
+  { id: 'pi-19', usuario: 'CAMILA',   clave: '1193081467', proyectos: ['23','24','25'] },
+  { id: 'pi-20', usuario: 'EDGAR',    clave: '98539787',   proyectos: ['32','34','7','SUB 11C','SUB 13C'] },
+  { id: 'pi-21', usuario: 'JIMENEZ',  clave: '1036864427', proyectos: ['43','44'] },
   { id: 'pi-22', usuario: 'GUZMAN',   clave: '1000203538', proyectos: [] },
 ];
 

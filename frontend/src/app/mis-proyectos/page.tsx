@@ -142,7 +142,7 @@ export default function MisProyectosPage() {
         <div className="bg-gray-900 rounded-2xl overflow-hidden text-xs">
           <button onClick={() => setMostrarDebug(v => !v)}
             className="w-full text-left px-4 py-2 text-gray-400 font-mono flex justify-between items-center">
-            <span>🔧 DEBUG (toca para {mostrarDebug ? 'ocultar' : 'ver'})</span>
+            <span>🔧 DEBUG v4 (toca para {mostrarDebug ? 'ocultar' : 'ver'})</span>
             <span className="text-green-400">{proyectosProfe.length} proyectos</span>
           </button>
           {mostrarDebug && (
