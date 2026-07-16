@@ -736,6 +736,51 @@ export default function ValoracionPage() {
             ))}
           </tbody>
 
+          {/* PERFIL INDIVIDUAL */}
+          {(() => {
+            const nv = (s: string) => { const i = NIVELES.indexOf(s); return i > 0 ? i : 0; };
+            const cv = (s: string) => ({'SIEMPRE':5,'CASI SIEMPRE':4,'ALGUNAS VECES':3,'CASI NUNCA':2,'NUNCA':1}[s] ?? 0);
+            const avg = (vals: number[]) => {
+              const filled = vals.filter(v => v > 0);
+              return filled.length ? filled.reduce((a,b) => a+b, 0) / filled.length : 0;
+            };
+            const condicional    = avg([nv(data.fuerzaNivel), nv(data.velocidadNivel), nv(data.resistenciaNivel)]);
+            const tecnico        = avg([nv(data.controlNivel), nv(data.conductaNivel), nv(data.paseNivel), nv(data.remataNivel), nv(data.proteccionNivel)]);
+            const tactico        = avg([nv(data.posicionNivel), nv(data.visionNivel), nv(data.defensaNivel), nv(data.amplitudNivel), nv(data.transicionNivel), nv(data.superioridadNivel), nv(data.basculacionNivel)]);
+            const socioAfectiva  = avg([nv(data.trabajoNivel), nv(data.disciplinaNivel), nv(data.actitudNivel)]);
+            const comportamental = avg([cv(data.responsabilidad), cv(data.puntualidad), cv(data.disciplinaComp), cv(data.respeto), cv(data.tolerancia), cv(data.companerismo), cv(data.liderazgo), cv(data.trabajoEquipoComp), cv(data.sentidoPertenencia)]);
+            const color = (v: number) => v === 0 ? '#aaa' : v >= 4 ? '#1a7c4f' : v >= 3 ? '#1d4e89' : v >= 2 ? '#e85d04' : '#c62a47';
+            const etiqueta = (v: number) => v === 0 ? '—' : v >= 4.5 ? 'Dominante' : v >= 3.5 ? 'Avanzado' : v >= 2.5 ? 'Competente' : v >= 1.5 ? 'En Desarrollo' : 'Iniciación';
+            const filas: [string, number][] = [
+              ['Aspecto Condicional',            condicional],
+              ['Aspecto Técnico',                tecnico],
+              ['Aspecto Táctico',                tactico],
+              ['Socio-Afectiva y Actitudinal',   socioAfectiva],
+              ['Aspecto Comportamental',         comportamental],
+            ];
+            return (
+              <tbody>
+                <tr>{celda(C.negro, '#fff', 'PERFIL INDIVIDUAL', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '6px 8px' } as any)}</tr>
+                <tr style={{ background: '#d0dae6' }}>
+                  <td colSpan={2} style={{ padding: '5px 12px', fontSize: 10, fontWeight: 700, color: '#333', letterSpacing: 1 }}>ASPECTO</td>
+                  <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#333', textAlign: 'center' }}>PROMEDIO / 5</td>
+                  <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#333', textAlign: 'center' }}>CATEGORÍA</td>
+                </tr>
+                {filas.map(([nombre, val], i) => (
+                  <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
+                    <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333' }}>{nombre}</td>
+                    <td style={{ padding: '7px 8px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: color(val) }}>
+                      {val > 0 ? val.toFixed(1) : '—'}
+                    </td>
+                    <td style={{ padding: '7px 8px', textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#fff', background: val > 0 ? color(val) : '#ccc', borderRadius: 3 }}>
+                      {etiqueta(val)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            );
+          })()}
+
           {/* OBSERVACIONES */}
           <tbody>
             <tr>{celda(C.negro, '#fff', 'OBSERVACIONES GENERALES', { colSpan: 4, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
