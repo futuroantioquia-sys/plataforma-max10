@@ -271,7 +271,7 @@ function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descri
         <td colSpan={4} style={{ background: C.grisClaro, padding: '6px 10px' }}>
           <textarea value={desc} onChange={e => onDesc(e.target.value)}
             rows={2} placeholder="Descripción del desempeño..."
-            style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+            style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 13, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
         </td>
       </tr>
     </tbody>
@@ -689,7 +689,7 @@ export default function ValoracionPage() {
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.logrosTrimestre} onChange={e => set('logrosTrimestre', e.target.value)}
                   rows={4} placeholder="Describe los logros del trimestre..."
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 13, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
               </td>
             </tr>
           </tbody>
@@ -701,7 +701,7 @@ export default function ValoracionPage() {
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.objetivosTrimestre} onChange={e => set('objetivosTrimestre', e.target.value)}
                   rows={4} placeholder="Describe los objetivos del trimestre..."
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 13, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
               </td>
             </tr>
           </tbody>
@@ -771,7 +771,7 @@ export default function ValoracionPage() {
                   return (
                     <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
                       <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333' }}>{nombre}</td>
-                      <td colSpan={2} style={{ padding: '7px 8px', textAlign: 'center', fontSize: esComp ? 11 : 14, fontWeight: 700, color: color(val) }}>
+                      <td colSpan={2} style={{ padding: '7px 8px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: color(val) }}>
                         {val === 0 ? '—' : val.toFixed(1)}
                       </td>
                     </tr>
@@ -788,7 +788,7 @@ export default function ValoracionPage() {
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.observaciones} onChange={e => set('observaciones', e.target.value)}
                   rows={4} placeholder="Observaciones generales del entrenador..."
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 13, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
               </td>
             </tr>
           </tbody>
