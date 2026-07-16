@@ -90,10 +90,18 @@ function AsistenciaInner() {
   const [guardando,   setGuardando]   = useState(false);
   const [guardado,    setGuardado]    = useState(false);
 
-  // Detectar si la sesión es de profe por cookie (no por conteo de proyectos)
+  // Detectar si la sesión es de profe: cookie (nuevas sesiones) O localStorage (sesiones anteriores)
   const esProfe = useMemo(() => {
     if (typeof document === 'undefined') return false;
-    return document.cookie.split(';').some(c => c.trim() === 'futuro-session=profesor');
+    // Cookie (sesiones nuevas)
+    if (document.cookie.split(';').some(c => c.trim() === 'futuro-session=profesor')) return true;
+    // Fallback localStorage (sesiones creadas antes del cookie)
+    try {
+      const grupos = localStorage.getItem('futuro-profe-proyectos');
+      const nombre = localStorage.getItem('futuro-profe-nombre');
+      if (grupos && nombre) return true;
+    } catch {}
+    return false;
   }, []);
 
   // Proyectos asignados al profe (solo relevante si esProfe === true)
