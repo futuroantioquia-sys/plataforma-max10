@@ -113,6 +113,14 @@ const DESC_LECTURA_ALTURAS: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Reconoce los momentos para acelerar el juego o pausarlo para reorganizar al equipo.',
   'Nivel 5 (Dominante)':    'Maestro de la "pausa"; atrae rivales para liberar compañeros y detecta debilidades en el sistema rival.',
 };
+const DESC_TRABAJO_EQUIPO: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Juega de forma individualista; le cuesta seguir instrucciones grupales.',
+  'Nivel 2 (En Desarrollo)':'Empieza a colaborar con compañeros cercanos; acepta las reglas.',
+  'Nivel 3 (Competente)':   'Muestra compañerismo; acepta críticas constructivas y apoya al equipo.',
+  'Nivel 4 (Avanzado)':     'Liderazgo positivo; se comunica activamente para ayudar al grupo.',
+  'Nivel 5 (Dominante)':    'Referente dentro y fuera del campo; gestiona la frustración y motiva al resto.',
+};
+
 const POSICIONES = ['', 'PORTERO', 'CENTRAL', 'LATERAL DERECHO', 'LATERAL IZQUIERDO', 'EXTREMO DERECHO', 'EXTREMO IZQUIERDO', 'VOLANTE', 'MEDIOCAMPISTA', 'DELANTERO CENTRO'];
 const PERFILES = ['', 'DERECHO', 'IZQUIERDO', 'AMBIDIESTRO'];
 
@@ -576,7 +584,8 @@ export default function ValoracionPage() {
           </tbody>
           <BloqueAspecto titulo="TRABAJO EN EQUIPO" subtitulo="Compañerismo y Comunicación"
             nivel={data.trabajoNivel} onNivel={v => set('trabajoNivel', v)}
-            desc={data.trabajoDesc}   onDesc={v => set('trabajoDesc', v)} />
+            desc={data.trabajoDesc}   onDesc={v => set('trabajoDesc', v)}
+            descripciones={DESC_TRABAJO_EQUIPO} />
           <BloqueAspecto titulo="GESTIÓN DE LA FRUSTRACIÓN" subtitulo="Autocontrol y Resiliencia"
             nivel={data.disciplinaNivel} onNivel={v => set('disciplinaNivel', v)}
             desc={data.disciplinaDesc}   onDesc={v => set('disciplinaDesc', v)} />
