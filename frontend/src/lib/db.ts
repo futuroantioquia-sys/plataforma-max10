@@ -88,43 +88,65 @@ function lsSet(key: string, val: unknown) {
 
 // ── DEPORTISTAS ───────────────────────────────────────────────
 
-/** Lee deportistas: caché en memoria → Supabase → localStorage. */
+/** Convierte fila cruda de Supabase al tipo Deportista */
+function rowToDeportista(r: any): Deportista {
+  return {
+    id:        r.id,
+    _nombre:   derivarNombre(r.nombre ?? '', r.columnas ?? {}),
+    _columnas: r.columnas ?? {},
+  };
+}
+
+/** Lee deportistas: fetch() directo → SDK → caché en memoria → localStorage. */
 export async function getDeportistas(): Promise<Deportista[]> {
   if (_cacheDeportistas) return _cacheDeportistas;
+
+  // ── Intento 1: fetch() nativo al REST API ──
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas&order=nombre`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const deps = data.map(rowToDeportista);
+        lsSet(LS_DEPS, deps);
+        _cacheDeportistas = deps;
+        return deps;
+      }
+    }
+  } catch { /* intentar SDK */ }
+
+  // ── Intento 2: SDK de Supabase ──
   try {
     const { data, error } = await supabase()
       .from('deportistas')
       .select('id, nombre, columnas')
       .order('nombre');
 
-    if (error) throw error;
-    if (!data || !data.length) {
-      // Normalizar nombres en el caché local también
-      const cached = lsGet<Deportista[]>(LS_DEPS, []);
-      return cached.map(d => ({
-        ...d,
-        _nombre: derivarNombre(d._nombre, d._columnas ?? {}),
-      }));
+    if (!error && data && data.length) {
+      const deps = data.map(rowToDeportista);
+      lsSet(LS_DEPS, deps);
+      _cacheDeportistas = deps;
+      return deps;
     }
+  } catch { /* ignorar */ }
 
-    const deps: Deportista[] = data.map((r: any) => ({
-      id:        r.id,
-      _nombre:   derivarNombre(r.nombre, r.columnas ?? {}),
-      _columnas: r.columnas ?? {},
-    }));
-
-    lsSet(LS_DEPS, deps);
-    _cacheDeportistas = deps;
-    return deps;
-  } catch {
-    const cached = lsGet<Deportista[]>(LS_DEPS, []);
-    const result = cached.map(d => ({
-      ...d,
-      _nombre: derivarNombre(d._nombre, d._columnas ?? {}),
-    }));
-    if (result.length) _cacheDeportistas = result;
-    return result;
-  }
+  // ── Fallback: localStorage ──
+  const cached = lsGet<Deportista[]>(LS_DEPS, []);
+  const result = cached.map(d => ({
+    ...d,
+    _nombre: derivarNombre(d._nombre, d._columnas ?? {}),
+  }));
+  if (result.length) _cacheDeportistas = result;
+  return result;
 }
 
 /** Elimina TODOS los deportistas de Supabase y localStorage. */
@@ -169,13 +191,46 @@ export async function saveDeportistas(deps: Deportista[]): Promise<void> {
 
 // ── PAGOS ────────────────────────────────────────────────────
 
-/** Lee todos los pagos: fusiona Supabase + localStorage.
- *  Para deportistas que existen en ambos → Supabase tiene prioridad (más confiable).
- *  Para deportistas solo en localStorage → usa localStorage
- *  (cubre el caso donde el upsert a Supabase falló pero localStorage sí se actualizó). */
+/** Lee todos los pagos: fetch() directo → SDK → localStorage. */
 export async function getPagos(): Promise<AllPagos> {
+  // ── Intento 1: fetch() nativo ──
   try {
-    // 1. Supabase PRIMERO — fuente de verdad (incluye libro contable + manuales)
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/pagos_estado?select=deportista_id,detalle,estado,v_pagado,v_cargado,destino,fecha&limit=5000`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const sbAll: AllPagos = {};
+        for (const r of data) {
+          if (!sbAll[r.deportista_id]) sbAll[r.deportista_id] = [];
+          sbAll[r.deportista_id].push({
+            detalle: r.detalle, estado: r.estado,
+            vPagado: r.v_pagado ?? '', vCargado: r.v_cargado ?? '',
+            destino: r.destino ?? '', fecha: r.fecha ?? '',
+          });
+        }
+        const libroKeys: AllPagos = {};
+        const depKeys:   AllPagos = {};
+        for (const [k, v] of Object.entries(sbAll)) {
+          if (/^\d{1,6}$/.test(k)) libroKeys[k] = v; else depKeys[k] = v;
+        }
+        lsSet(LS_LIBRO, libroKeys);
+        lsSet(LS_PAGOS, depKeys);
+        return sbAll;
+      }
+    }
+  } catch { /* intentar SDK */ }
+
+  try {
+    // 2. SDK — fuente de verdad (incluye libro contable + manuales)
     const { data, error } = await supabase()
       .from('pagos_estado')
       .select('deportista_id, detalle, estado, v_pagado, v_cargado, destino, fecha')
@@ -358,8 +413,42 @@ export type AsistenciaData = Record<string, Record<string, Record<string, Record
 
 const LS_ASIST = 'futuro_asistencia';
 
-/** Lee asistencia completa: Supabase primero, localStorage como fallback. */
+/** Lee asistencia completa: fetch() directo → SDK → localStorage. */
 export async function getAsistencia(): Promise<AsistenciaData> {
+  const parseAsistRows = (data: any[]): AsistenciaData => {
+    const result: AsistenciaData = {};
+    for (const r of data) {
+      if (!result[r.proyecto]) result[r.proyecto] = {};
+      if (!result[r.proyecto][r.anio_mes]) result[r.proyecto][r.anio_mes] = {};
+      if (!result[r.proyecto][r.anio_mes][r.deportista_id]) result[r.proyecto][r.anio_mes][r.deportista_id] = {};
+      result[r.proyecto][r.anio_mes][r.deportista_id][r.fecha] = r.estado;
+    }
+    return result;
+  };
+
+  // ── Intento 1: fetch() nativo ──
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const result = parseAsistRows(data);
+        lsSet(LS_ASIST, result);
+        return result;
+      }
+    }
+  } catch { /* intentar SDK */ }
+
+  // ── Intento 2: SDK ──
   try {
     const { data, error } = await supabase()
       .from('asistencia')
@@ -368,13 +457,7 @@ export async function getAsistencia(): Promise<AsistenciaData> {
     if (error) throw error;
     if (!data || !data.length) return lsGet<AsistenciaData>(LS_ASIST, {});
 
-    const result: AsistenciaData = {};
-    for (const r of data) {
-      if (!result[r.proyecto])                         result[r.proyecto] = {};
-      if (!result[r.proyecto][r.anio_mes])             result[r.proyecto][r.anio_mes] = {};
-      if (!result[r.proyecto][r.anio_mes][r.deportista_id]) result[r.proyecto][r.anio_mes][r.deportista_id] = {};
-      result[r.proyecto][r.anio_mes][r.deportista_id][r.fecha] = r.estado;
-    }
+    const result = parseAsistRows(data);
     lsSet(LS_ASIST, result);
     return result;
   } catch {
