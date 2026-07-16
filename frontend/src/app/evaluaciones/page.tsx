@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Printer, Save, RefreshCw, Camera, CheckCircle, History } from 'lucide-react';
+import { Download, Save, RefreshCw, Camera, CheckCircle, History } from 'lucide-react';
 import { getDeportistas, getEvaluaciones, saveEvaluacion } from '@/lib/db';
 import type { Deportista, Evaluacion } from '@/lib/db';
 
@@ -442,8 +442,17 @@ export default function ValoracionPage() {
         <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.verde, color: '#fff', cursor: guardando ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, opacity: guardando ? 0.7 : 1 }}>
           <Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}
         </button>
-        <button onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.naranja, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-          <Printer size={13} /> Imprimir / PDF
+        <button onClick={() => {
+          const codigo = data.codigo?.trim() || 'SIN-CODIGO';
+          const nombre = data.nombre?.trim().replace(/\s+/g, '-') || 'SIN-NOMBRE';
+          const informe = data.numeroInforme?.trim() || 'SIN-INFORME';
+          const titulo = `${codigo}_${nombre}_Informe-${informe}`;
+          const prev = document.title;
+          document.title = titulo;
+          window.print();
+          setTimeout(() => { document.title = prev; }, 1000);
+        }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.naranja, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+          <Download size={13} /> Descargar
         </button>
       </div>
 
