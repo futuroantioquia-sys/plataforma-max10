@@ -464,12 +464,12 @@ export default function ValoracionPage() {
 
       {/* FORMULARIO */}
       <div style={{ width: '100%', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', fontFamily: 'Arial, sans-serif' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
 
           {/* ── ENCABEZADO REDISEÑADO ── */}
           <tbody>
             <tr>
-              <td colSpan={3} style={{ padding: 0 }}>
+              <td colSpan={4} style={{ padding: 0 }}>
                 {/* Título superior */}
                 <div style={{ background: '#111', color: '#fff', textAlign: 'center', fontWeight: 900, fontSize: 13, letterSpacing: 3, padding: '7px 16px', textTransform: 'uppercase' }}>
                   Valoración Cuantitativa del Deportista
