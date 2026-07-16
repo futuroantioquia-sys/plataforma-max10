@@ -491,10 +491,57 @@ export default function ValoracionPage() {
         </button>
         <button onClick={() => {
           setIntentoDescarga(true);
-          const ok = data.codigo?.trim() && data.nombre?.trim() && data.programa?.trim() &&
-                     data.proyecto?.trim() && data.fecha?.trim() && data.numeroInforme?.trim() &&
-                     data.posicion?.trim() && data.perfil?.trim();
-          if (!ok) return;
+          const camposVacios: string[] = [];
+          // Encabezado
+          if (!data.codigo.trim())        camposVacios.push('Código');
+          if (!data.nombre.trim())        camposVacios.push('Nombre');
+          if (!data.programa.trim())      camposVacios.push('Programa');
+          if (!data.proyecto.trim())      camposVacios.push('Proyecto');
+          if (!data.fecha.trim())         camposVacios.push('Fecha Informe');
+          if (!data.numeroInforme.trim()) camposVacios.push('# Informe');
+          if (!data.posicion.trim())      camposVacios.push('Posición');
+          if (!data.perfil.trim())        camposVacios.push('Perfil');
+          // Aspectos Condicionales
+          if (!data.fuerzaNivel)      camposVacios.push('Nivel — Fuerza');
+          if (!data.velocidadNivel)   camposVacios.push('Nivel — Velocidad');
+          if (!data.resistenciaNivel) camposVacios.push('Nivel — Resistencia');
+          // Aspectos Técnicos
+          if (!data.controlNivel)    camposVacios.push('Nivel — Control y Pase');
+          if (!data.conductaNivel)   camposVacios.push('Nivel — Conducción y Dribbling');
+          if (!data.paseNivel)       camposVacios.push('Nivel — Control Orientado');
+          if (!data.remataNivel)     camposVacios.push('Nivel — Remate a Portería');
+          if (!data.proteccionNivel) camposVacios.push('Nivel — Protección del Balón');
+          // Aspectos Tácticos
+          if (!data.posicionNivel)    camposVacios.push('Nivel — Ubicación Espacial');
+          if (!data.visionNivel)      camposVacios.push('Nivel — Velocidad de Procesamiento');
+          if (!data.defensaNivel)     camposVacios.push('Nivel — Lectura de Alturas');
+          if (!data.amplitudNivel)    camposVacios.push('Nivel — Amplitud y Profundidad');
+          if (!data.transicionNivel)  camposVacios.push('Nivel — Transiciones');
+          if (!data.superioridadNivel)camposVacios.push('Nivel — Lectura de Superioridad');
+          if (!data.basculacionNivel) camposVacios.push('Nivel — Basculación y Coberturas');
+          // Socio-Afectiva
+          if (!data.trabajoNivel)    camposVacios.push('Nivel — Trabajo en Equipo');
+          if (!data.disciplinaNivel) camposVacios.push('Nivel — Gestión de la Frustración');
+          if (!data.actitudNivel)    camposVacios.push('Nivel — Comunicación Asertiva');
+          // Colectivo
+          if (!data.identidadNivel)   camposVacios.push('Nivel — Identidad y Estilo');
+          if (!data.bloqueNivel)      camposVacios.push('Nivel — Bloque y Cohesión');
+          if (!data.climaNivel)       camposVacios.push('Nivel — Clima Interno');
+          if (!data.gestionCompNivel) camposVacios.push('Nivel — Gestión de Competición');
+          // Comportamental
+          if (!data.responsabilidad)    camposVacios.push('Responsabilidad');
+          if (!data.puntualidad)        camposVacios.push('Puntualidad');
+          if (!data.disciplinaComp)     camposVacios.push('Disciplina');
+          if (!data.respeto)            camposVacios.push('Respeto');
+          if (!data.tolerancia)         camposVacios.push('Tolerancia');
+          if (!data.companerismo)       camposVacios.push('Compañerismo');
+          if (!data.liderazgo)          camposVacios.push('Liderazgo');
+          if (!data.trabajoEquipoComp)  camposVacios.push('Trabajo en Equipo');
+          if (!data.sentidoPertenencia) camposVacios.push('Sentido de Pertenencia');
+          if (camposVacios.length > 0) {
+            alert(`Completa los siguientes campos antes de descargar:\n\n• ${camposVacios.join('\n• ')}`);
+            return;
+          }
           const codigo  = data.codigo.trim();
           const nombre  = data.nombre.trim().replace(/\s+/g, '-');
           const informe = data.numeroInforme.trim();
