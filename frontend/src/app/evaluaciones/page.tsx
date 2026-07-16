@@ -750,7 +750,7 @@ export default function ValoracionPage() {
             const socioAfectiva  = avg([nv(data.trabajoNivel), nv(data.disciplinaNivel), nv(data.actitudNivel)]);
             const comportamental = avg([cv(data.responsabilidad), cv(data.puntualidad), cv(data.disciplinaComp), cv(data.respeto), cv(data.tolerancia), cv(data.companerismo), cv(data.liderazgo), cv(data.trabajoEquipoComp), cv(data.sentidoPertenencia)]);
             const color = (v: number) => v === 0 ? '#aaa' : v >= 4 ? '#1a7c4f' : v >= 3 ? '#1d4e89' : v >= 2 ? '#e85d04' : '#c62a47';
-            const etiqueta = (v: number) => v === 0 ? '—' : v >= 4.5 ? 'Dominante' : v >= 3.5 ? 'Avanzado' : v >= 2.5 ? 'Competente' : v >= 1.5 ? 'En Desarrollo' : 'Iniciación';
+            const etiquetaComp = (v: number) => v === 0 ? '—' : v >= 4.5 ? 'SIEMPRE' : v >= 3.5 ? 'CASI SIEMPRE' : v >= 2.5 ? 'ALGUNAS VECES' : v >= 1.5 ? 'CASI NUNCA' : 'NUNCA';
             const filas: [string, number][] = [
               ['Aspecto Condicional',            condicional],
               ['Aspecto Técnico',                tecnico],
@@ -771,7 +771,7 @@ export default function ValoracionPage() {
                     <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
                       <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333' }}>{nombre}</td>
                       <td colSpan={2} style={{ padding: '7px 8px', textAlign: 'center', fontSize: esComp ? 11 : 14, fontWeight: 700, color: color(val) }}>
-                        {val === 0 ? '—' : esComp ? etiqueta(val) : val.toFixed(1)}
+                        {val === 0 ? '—' : esComp ? etiquetaComp(val) : val.toFixed(1)}
                       </td>
                     </tr>
                   );
