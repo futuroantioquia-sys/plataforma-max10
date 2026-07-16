@@ -588,7 +588,7 @@ export default function ValoracionPage() {
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}># INFORME</span>
-                          <input value={data.numeroInforme} onChange={e => set('numeroInforme', e.target.value)} placeholder="01"
+                          <input value={data.numeroInforme} onChange={e => set('numeroInforme', e.target.value)} placeholder="000"
                             style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('numeroInforme') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 40, padding: 0 }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
