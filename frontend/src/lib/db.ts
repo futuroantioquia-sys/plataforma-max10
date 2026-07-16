@@ -580,13 +580,21 @@ export async function getProfes(): Promise<Profe[]> {
       return lista;
     }
 
-    // Supabase vacío → intentar sincronizar desde localStorage
+    // Supabase vacío → sincronizar desde localStorage (incluye proyectos y fotos)
     if (!error && data && data.length === 0) {
       const cached = lsGet<Profe[]>(LS_PROFES, []);
       if (cached && cached.length) {
-        // Hay datos en localStorage que nunca llegaron a Supabase — subirlos ahora
-        saveProfes(cached).catch(() => {});
-        return cached;
+        // Añadir fotos desde localStorage antes de subir a Supabase
+        const cachedConFoto = cached.map(p => ({
+          ...p,
+          foto: p.foto || (
+            typeof window !== 'undefined'
+              ? (localStorage.getItem(`futuro-foto-profe-${p.usuario.toUpperCase()}`) ?? '')
+              : ''
+          ),
+        }));
+        saveProfes(cachedConFoto).catch(() => {});
+        return cachedConFoto;
       }
     }
   } catch {}
@@ -613,15 +621,13 @@ export async function saveProfes(lista: Profe[]): Promise<boolean> {
       foto:      p.foto ?? '',
     }));
     if (rows.length) {
-      const { error } = await supabase().from('profes').upsert(rows, { onConflict: 'id' });
+      const { error } = await supabase().from('profes').upsert(rows, { onConflict: 'usuario' });
       if (error) { console.error('[db] saveProfes upsert:', error); return false; }
     }
-    // Eliminar los que ya no están
-    const ids = lista.map(p => p.id);
-    if (ids.length) {
-      await supabase().from('profes').delete().not('id', 'in', `(${ids.map(i => `'${i}'`).join(',')})`);
-    } else {
-      await supabase().from('profes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    // Eliminar los que ya no están (por nombre de usuario)
+    const usuarios = lista.map(p => p.usuario);
+    if (usuarios.length) {
+      await supabase().from('profes').delete().not('usuario', 'in', `(${usuarios.map(u => `'${u}'`).join(',')})`);
     }
     return true;
   } catch (e) {

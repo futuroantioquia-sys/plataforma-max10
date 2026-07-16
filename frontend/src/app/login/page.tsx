@@ -80,9 +80,16 @@ export default function LoginPage() {
           try {
             localStorage.setItem('futuro-profe-proyectos', JSON.stringify(profe.proyectos));
             localStorage.setItem('futuro-profe-nombre',    JSON.stringify(profe.usuario));
-            const foto = localStorage.getItem(`futuro-foto-profe-${profe.usuario.toUpperCase()}`);
-            if (foto) localStorage.setItem('futuro-profe-foto', foto);
-            else      localStorage.removeItem('futuro-profe-foto');
+            // Foto: primero desde Supabase, luego desde localStorage del dispositivo
+            const fotoNube  = profe.foto ?? '';
+            const fotoLocal = localStorage.getItem(`futuro-foto-profe-${profe.usuario.toUpperCase()}`) ?? '';
+            const foto = fotoNube || fotoLocal;
+            if (foto) {
+              localStorage.setItem('futuro-profe-foto', foto);
+              localStorage.setItem(`futuro-foto-profe-${profe.usuario.toUpperCase()}`, foto);
+            } else {
+              localStorage.removeItem('futuro-profe-foto');
+            }
           } catch {}
           router.push('/mis-proyectos');
         } else {
