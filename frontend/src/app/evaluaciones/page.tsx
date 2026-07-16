@@ -244,20 +244,22 @@ interface BloqueProps {
   nivel: string; onNivel: (v: string) => void;
   desc: string; onDesc: (v: string) => void;
   descripciones?: Record<string, string>;
+  showError?: boolean;
 }
-function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descripciones }: BloqueProps) {
+function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descripciones, showError }: BloqueProps) {
+  const hayError = showError && !nivel;
   return (
     <tbody style={{ breakInside: 'avoid', pageBreakInside: 'avoid' } as React.CSSProperties}>
       <tr>
-        <td colSpan={4} style={{ background: '#fff', color: '#16a34a', textAlign: 'center', fontWeight: 900, fontSize: 13, padding: '5px 8px', letterSpacing: 1 }}>
-          {titulo}
+        <td colSpan={4} style={{ background: hayError ? '#fff5f5' : '#fff', color: hayError ? '#ef4444' : '#16a34a', textAlign: 'center', fontWeight: 900, fontSize: 13, padding: '5px 8px', letterSpacing: 1, borderLeft: hayError ? '3px solid #ef4444' : 'none' }}>
+          {titulo}{hayError && ' ⚠'}
         </td>
       </tr>
       <tr>
-        <td colSpan={2} style={{ background: C.grisAzul, color: '#fff', fontWeight: 700, fontSize: 11, padding: '3px 10px', textTransform: 'uppercase' }}>
+        <td colSpan={2} style={{ background: hayError ? '#dc2626' : C.grisAzul, color: '#fff', fontWeight: 700, fontSize: 11, padding: '3px 10px', textTransform: 'uppercase' }}>
           ({subtitulo})
         </td>
-        <td colSpan={2} style={{ background: C.grisAzul, color: '#fff', padding: '2px 8px' }}>
+        <td colSpan={2} style={{ background: hayError ? '#dc2626' : C.grisAzul, color: '#fff', padding: '2px 8px' }}>
           <select value={nivel} onChange={e => {
             const v = e.target.value;
             onNivel(v);
@@ -679,15 +681,15 @@ export default function ValoracionPage() {
             <tr>{celda(VERDE_GRAD, '#fff', 'ASPECTOS CONDICIONALES', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
           <BloqueAspecto titulo="FUERZA" subtitulo="Potencia y Duelo"
-            nivel={data.fuerzaNivel} onNivel={v => set('fuerzaNivel', v)}
+            nivel={data.fuerzaNivel} onNivel={v => set('fuerzaNivel', v)} showError={intentoDescarga}
             desc={data.fuerzaDesc}   onDesc={v => set('fuerzaDesc', v)}
             descripciones={DESC_FUERZA} />
           <BloqueAspecto titulo="VELOCIDAD" subtitulo="Reacción y Desplazamiento"
-            nivel={data.velocidadNivel} onNivel={v => set('velocidadNivel', v)}
+            nivel={data.velocidadNivel} onNivel={v => set('velocidadNivel', v)} showError={intentoDescarga}
             desc={data.velocidadDesc}   onDesc={v => set('velocidadDesc', v)}
             descripciones={DESC_VELOCIDAD} />
           <BloqueAspecto titulo="RESISTENCIA" subtitulo="Capacidad Aeróbica y Recuperación"
-            nivel={data.resistenciaNivel} onNivel={v => set('resistenciaNivel', v)}
+            nivel={data.resistenciaNivel} onNivel={v => set('resistenciaNivel', v)} showError={intentoDescarga}
             desc={data.resistenciaDesc}   onDesc={v => set('resistenciaDesc', v)}
             descripciones={DESC_RESISTENCIA} />
 
@@ -697,23 +699,23 @@ export default function ValoracionPage() {
             <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Evalúa la ejecución de los fundamentos básicos del juego</td></tr>
           </tbody>
           <BloqueAspecto titulo="CONTROL Y PASE" subtitulo="Recepción, Manejo y Precisión"
-            nivel={data.controlNivel} onNivel={v => set('controlNivel', v)}
+            nivel={data.controlNivel} onNivel={v => set('controlNivel', v)} showError={intentoDescarga}
             desc={data.controlDesc}   onDesc={v => set('controlDesc', v)}
             descripciones={DESC_CONTROL_PASE} />
           <BloqueAspecto titulo="CONDUCCIÓN Y DRIBBLING" subtitulo="Desplazamiento con Balón"
-            nivel={data.conductaNivel} onNivel={v => set('conductaNivel', v)}
+            nivel={data.conductaNivel} onNivel={v => set('conductaNivel', v)} showError={intentoDescarga}
             desc={data.conductaDesc}   onDesc={v => set('conductaDesc', v)}
             descripciones={DESC_CONDUCCION} />
           <BloqueAspecto titulo="CONTROL ORIENTADO" subtitulo="Primer Toque y Salida"
-            nivel={data.paseNivel} onNivel={v => set('paseNivel', v)}
+            nivel={data.paseNivel} onNivel={v => set('paseNivel', v)} showError={intentoDescarga}
             desc={data.paseDesc}   onDesc={v => set('paseDesc', v)}
             descripciones={DESC_CONTROL_ORIENTADO} />
           <BloqueAspecto titulo="REMATE A PORTERÍA" subtitulo="Potencia y Definición"
-            nivel={data.remataNivel} onNivel={v => set('remataNivel', v)}
+            nivel={data.remataNivel} onNivel={v => set('remataNivel', v)} showError={intentoDescarga}
             desc={data.remataDesc}   onDesc={v => set('remataDesc', v)}
             descripciones={DESC_REMATE} />
           <BloqueAspecto titulo="PROTECCIÓN DEL BALÓN" subtitulo="Resguardo y Dominio"
-            nivel={data.proteccionNivel} onNivel={v => set('proteccionNivel', v)}
+            nivel={data.proteccionNivel} onNivel={v => set('proteccionNivel', v)} showError={intentoDescarga}
             desc={data.proteccionDesc}   onDesc={v => set('proteccionDesc', v)}
             descripciones={DESC_PROTECCION} />
 
@@ -723,31 +725,31 @@ export default function ValoracionPage() {
             <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Comprensión del juego y toma de decisiones</td></tr>
           </tbody>
           <BloqueAspecto titulo="UBICACIÓN ESPACIAL" subtitulo="Posicionamiento y Orientación"
-            nivel={data.posicionNivel} onNivel={v => set('posicionNivel', v)}
+            nivel={data.posicionNivel} onNivel={v => set('posicionNivel', v)} showError={intentoDescarga}
             desc={data.posicionDesc}   onDesc={v => set('posicionDesc', v)}
             descripciones={DESC_UBICACION} />
           <BloqueAspecto titulo="VELOCIDAD DE PROCESAMIENTO" subtitulo="Toma de Decisiones Rápida"
-            nivel={data.visionNivel} onNivel={v => set('visionNivel', v)}
+            nivel={data.visionNivel} onNivel={v => set('visionNivel', v)} showError={intentoDescarga}
             desc={data.visionDesc}   onDesc={v => set('visionDesc', v)}
             descripciones={DESC_VELOCIDAD_PROC} />
           <BloqueAspecto titulo="LECTURA DE ALTURAS Y ESPACIOS" subtitulo="Análisis del Terreno"
-            nivel={data.defensaNivel} onNivel={v => set('defensaNivel', v)}
+            nivel={data.defensaNivel} onNivel={v => set('defensaNivel', v)} showError={intentoDescarga}
             desc={data.defensaDesc}   onDesc={v => set('defensaDesc', v)}
             descripciones={DESC_LECTURA_ALTURAS} />
           <BloqueAspecto titulo="AMPLITUD Y PROFUNDIDAD" subtitulo="Uso del Espacio"
-            nivel={data.amplitudNivel} onNivel={v => set('amplitudNivel', v)}
+            nivel={data.amplitudNivel} onNivel={v => set('amplitudNivel', v)} showError={intentoDescarga}
             desc={data.amplitudDesc}   onDesc={v => set('amplitudDesc', v)}
             descripciones={DESC_AMPLITUD} />
           <BloqueAspecto titulo="TRANSICIONES (ATAQUE-DEFENSA)" subtitulo="Cambio de Rol Ofensivo/Defensivo"
-            nivel={data.transicionNivel} onNivel={v => set('transicionNivel', v)}
+            nivel={data.transicionNivel} onNivel={v => set('transicionNivel', v)} showError={intentoDescarga}
             desc={data.transicionDesc}   onDesc={v => set('transicionDesc', v)}
             descripciones={DESC_TRANSICION} />
           <BloqueAspecto titulo="LECTURA DE SUPERIORIDAD (2vs1)" subtitulo="Situaciones de Ventaja Numérica"
-            nivel={data.superioridadNivel} onNivel={v => set('superioridadNivel', v)}
+            nivel={data.superioridadNivel} onNivel={v => set('superioridadNivel', v)} showError={intentoDescarga}
             desc={data.superioridadDesc}   onDesc={v => set('superioridadDesc', v)}
             descripciones={DESC_SUPERIORIDAD} />
           <BloqueAspecto titulo="BASCULACIÓN Y COBERTURAS" subtitulo="Desplazamiento Colectivo"
-            nivel={data.basculacionNivel} onNivel={v => set('basculacionNivel', v)}
+            nivel={data.basculacionNivel} onNivel={v => set('basculacionNivel', v)} showError={intentoDescarga}
             desc={data.basculacionDesc}   onDesc={v => set('basculacionDesc', v)}
             descripciones={DESC_BASCULACION} />
 
@@ -756,15 +758,15 @@ export default function ValoracionPage() {
             <tr>{celda(VERDE_GRAD, '#fff', 'Socio-Afectiva y Actitudinal', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
           <BloqueAspecto titulo="TRABAJO EN EQUIPO" subtitulo="Compañerismo y Comunicación"
-            nivel={data.trabajoNivel} onNivel={v => set('trabajoNivel', v)}
+            nivel={data.trabajoNivel} onNivel={v => set('trabajoNivel', v)} showError={intentoDescarga}
             desc={data.trabajoDesc}   onDesc={v => set('trabajoDesc', v)}
             descripciones={DESC_TRABAJO_EQUIPO} />
           <BloqueAspecto titulo="GESTIÓN DE LA FRUSTRACIÓN" subtitulo="Autocontrol y Resiliencia"
-            nivel={data.disciplinaNivel} onNivel={v => set('disciplinaNivel', v)}
+            nivel={data.disciplinaNivel} onNivel={v => set('disciplinaNivel', v)} showError={intentoDescarga}
             desc={data.disciplinaDesc}   onDesc={v => set('disciplinaDesc', v)}
             descripciones={DESC_GESTION_FRUSTRACION} />
           <BloqueAspecto titulo="COMUNICACIÓN ACERTIVA" subtitulo="Expresión y Asertividad"
-            nivel={data.actitudNivel} onNivel={v => set('actitudNivel', v)}
+            nivel={data.actitudNivel} onNivel={v => set('actitudNivel', v)} showError={intentoDescarga}
             desc={data.actitudDesc}   onDesc={v => set('actitudDesc', v)}
             descripciones={DESC_COMUNICACION_ASERTIVA} />
 
@@ -773,19 +775,19 @@ export default function ValoracionPage() {
             <tr>{celda(VERDE_GRAD, '#fff', 'Evaluación de Desempeño Colectivo (El Equipo)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
           <BloqueAspecto titulo="IDENTIDAD Y ESTILO DE JUEGO" subtitulo="Coherencia y Modelo de Juego"
-            nivel={data.identidadNivel} onNivel={v => set('identidadNivel', v)}
+            nivel={data.identidadNivel} onNivel={v => set('identidadNivel', v)} showError={intentoDescarga}
             desc={data.identidadDesc}   onDesc={v => set('identidadDesc', v)}
             descripciones={DESC_IDENTIDAD_ESTILO} />
           <BloqueAspecto titulo="BLOQUE Y COHESIÓN TÁCTICA" subtitulo="Organización Colectiva"
-            nivel={data.bloqueNivel} onNivel={v => set('bloqueNivel', v)}
+            nivel={data.bloqueNivel} onNivel={v => set('bloqueNivel', v)} showError={intentoDescarga}
             desc={data.bloqueDesc}   onDesc={v => set('bloqueDesc', v)}
             descripciones={DESC_BLOQUE_COHESION} />
           <BloqueAspecto titulo="CLIMA INTERNO Y COMUNICACIÓN" subtitulo="Ambiente y Vínculos del Grupo"
-            nivel={data.climaNivel} onNivel={v => set('climaNivel', v)}
+            nivel={data.climaNivel} onNivel={v => set('climaNivel', v)} showError={intentoDescarga}
             desc={data.climaDesc}   onDesc={v => set('climaDesc', v)}
             descripciones={DESC_CLIMA_INTERNO} />
           <BloqueAspecto titulo="GESTIÓN DE LA COMPETICIÓN" subtitulo="Rendimiento Bajo Presión"
-            nivel={data.gestionCompNivel} onNivel={v => set('gestionCompNivel', v)}
+            nivel={data.gestionCompNivel} onNivel={v => set('gestionCompNivel', v)} showError={intentoDescarga}
             desc={data.gestionCompDesc}   onDesc={v => set('gestionCompDesc', v)}
             descripciones={DESC_GESTION_COMPETICION} />
 
@@ -827,11 +829,11 @@ export default function ValoracionPage() {
               ['trabajoEquipoComp',  'TRABAJO EN EQUIPO'],
               ['sentidoPertenencia', 'SENTIDO DE PERTENENCIA'],
             ] as [string, string][]).map(([key, label], i) => (
-              <tr key={key} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
-                <td colSpan={2} style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#333', letterSpacing: 1 }}>{label}</td>
+              <tr key={key} style={{ background: (intentoDescarga && !(data as any)[key]) ? '#fff5f5' : i % 2 === 0 ? C.grisClaro : '#fff' }}>
+                <td colSpan={2} style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, color: (intentoDescarga && !(data as any)[key]) ? '#ef4444' : '#333', letterSpacing: 1 }}>{label}{(intentoDescarga && !(data as any)[key]) && ' ⚠'}</td>
                 <td colSpan={2} style={{ padding: '4px 10px' }}>
                   <select value={(data as any)[key]} onChange={e => set(key as any, e.target.value)}
-                    style={{ width: '100%', fontSize: 11, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#333' }}>
+                    style={{ width: '100%', fontSize: 11, padding: '4px 6px', border: `1px solid ${(intentoDescarga && !(data as any)[key]) ? '#ef4444' : '#ccc'}`, borderRadius: 4, background: (intentoDescarga && !(data as any)[key]) ? '#fee2e2' : '#fff', color: '#333' }}>
                     <option value="">— Seleccionar —</option>
                     <option value="SIEMPRE">SIEMPRE</option>
                     <option value="CASI SIEMPRE">CASI SIEMPRE</option>
