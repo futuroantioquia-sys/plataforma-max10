@@ -3,7 +3,7 @@
  * Supabase es la fuente de verdad. localStorage = caché local.
  */
 
-import { createClient } from '@/lib/supabase/client';
+import { createClient, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
 
 // ── Tipos ────────────────────────────────────────────────────
 
@@ -561,50 +561,62 @@ const PROFES_INICIALES: Profe[] = [
   { id: 'pi-22', usuario: 'GUZMAN',   clave: '1000203538', proyectos: [] },
 ];
 
+/** Convierte una fila cruda de Supabase al tipo Profe */
+function rowToProfe(r: any): Profe {
+  return {
+    id:        r.id        ?? '',
+    usuario:   r.usuario   ?? '',
+    clave:     r.clave     ?? '',
+    proyectos: Array.isArray(r.proyectos) ? r.proyectos : [],
+    foto:      r.foto      ?? '',
+  };
+}
+
 export async function getProfes(): Promise<Profe[]> {
-  // 1. Supabase PRIMERO — fuente de verdad (garantiza proyectos actualizados)
+
+  // ── Intento 1: fetch() nativo al REST API (más compatible con mobile) ──
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profes?select=*&order=usuario`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const lista: Profe[] = data.map(rowToProfe);
+        lsSet(LS_PROFES, lista);
+        return lista;
+      }
+    }
+  } catch { /* sin red → intentar SDK */ }
+
+  // ── Intento 2: SDK de Supabase ──
   try {
     const { data, error } = await supabase()
       .from('profes')
       .select('*')
       .order('usuario');
-    if (!error && data && data.length) {
-      const lista: Profe[] = data.map((r: any) => ({
-        id:        r.id,
-        usuario:   r.usuario,
-        clave:     r.clave,
-        proyectos: r.proyectos ?? [],
-        foto:      r.foto ?? '',
-      }));
-      lsSet(LS_PROFES, lista);  // actualizar caché local
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const lista: Profe[] = data.map(rowToProfe);
+      lsSet(LS_PROFES, lista);
       return lista;
     }
+  } catch { /* ignorar */ }
 
-    // Supabase vacío → sincronizar desde localStorage (incluye proyectos y fotos)
-    if (!error && data && data.length === 0) {
-      const cached = lsGet<Profe[]>(LS_PROFES, []);
-      if (cached && cached.length) {
-        // Añadir fotos desde localStorage antes de subir a Supabase
-        const cachedConFoto = cached.map(p => ({
-          ...p,
-          foto: p.foto || (
-            typeof window !== 'undefined'
-              ? (localStorage.getItem(`futuro-foto-profe-${p.usuario.toUpperCase()}`) ?? '')
-              : ''
-          ),
-        }));
-        saveProfes(cachedConFoto).catch(() => {}); // sin await — best-effort
-        return cachedConFoto;
-      }
-    }
-  } catch {}
-
-  // 2. localStorage como fallback (sin red / Supabase no disponible)
+  // ── Intento 3: localStorage (caché local) ──
   const cached = lsGet<Profe[]>(LS_PROFES, []);
-  if (cached && cached.length) return cached;
+  // Solo usar caché si tiene proyectos reales (evitar devolver PROFES_INICIALES stale)
+  if (cached && cached.length && cached.some(p => p.proyectos.length > 0)) {
+    return cached;
+  }
 
-  // 3. Fallback garantizado: lista inicial hardcodeada
-  lsSet(LS_PROFES, PROFES_INICIALES);
+  // ── Fallback final: lista hardcodeada sin proyectos ──
   return PROFES_INICIALES;
 }
 

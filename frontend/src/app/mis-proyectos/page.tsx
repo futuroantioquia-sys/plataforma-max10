@@ -58,11 +58,12 @@ export default function MisProyectosPage() {
           try {
             addDebug('Llamando getProfes()...');
             const listaProfes = await getProfes();
-            addDebug(`getProfes() → ${listaProfes.length} profes`);
+            const conProys = listaProfes.filter(p => p.proyectos.length > 0).length;
+            addDebug(`getProfes() → ${listaProfes.length} profes, ${conProys} con proyectos`);
             const profe = listaProfes.find(
               p => p.usuario.toUpperCase() === nombre.toUpperCase()
             );
-            addDebug(`profe encontrado: ${profe ? JSON.stringify(profe.proyectos) : 'NO'}`);
+            addDebug(`profe: ${profe ? JSON.stringify(profe.proyectos) : 'NO ENCONTRADO'}`);
             if (profe) {
               if (profe.proyectos.length > 0) {
                 setProyectosProfe(profe.proyectos);
