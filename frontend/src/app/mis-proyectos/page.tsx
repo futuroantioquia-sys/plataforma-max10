@@ -19,12 +19,17 @@ export default function MisProyectosPage() {
   const [proyectosProfe, setProyectosProfe] = useState<string[]>([]);
   const [deportistas,    setDeportistas]    = useState<any[]>([]);
   const [cargando,       setCargando]       = useState(true);
+  const [debug,          setDebug]          = useState<string[]>([]);
+  const [mostrarDebug,   setMostrarDebug]   = useState(false);
+
+  const addDebug = (msg: string) => setDebug(prev => [...prev, msg]);
 
   useEffect(() => {
     // 1. Nombre y foto desde localStorage (inmediato)
     try {
       const rawNombre = localStorage.getItem('futuro-profe-nombre');
       const nombre = rawNombre ? JSON.parse(rawNombre) : '';
+      addDebug(`LS nombre: "${nombre}"`);
       if (nombre) {
         setNombreProfe(nombre);
         const f1 = localStorage.getItem(`futuro-foto-profe-${nombre.toUpperCase()}`);
@@ -34,7 +39,7 @@ export default function MisProyectosPage() {
           if (f2) setFotoProfe(f2);
         }
       }
-    } catch {}
+    } catch (e: any) { addDebug(`ERROR nombre: ${e?.message}`); }
 
     // 2. Proyectos: primero localStorage (rápido), luego Supabase (preciso)
     async function cargar() {
@@ -45,30 +50,36 @@ export default function MisProyectosPage() {
         // Intentar desde localStorage primero (rápido)
         const rawLS = localStorage.getItem('futuro-profe-proyectos');
         const proyLS: string[] = rawLS ? JSON.parse(rawLS) : [];
+        addDebug(`LS proyectos: ${JSON.stringify(proyLS)}`);
         if (proyLS.length) setProyectosProfe(proyLS);
 
         // Luego desde Supabase para garantizar data fresca
         if (nombre) {
-          const listaProfes = await getProfes();
-          const profe = listaProfes.find(
-            p => p.usuario.toUpperCase() === nombre.toUpperCase()
-          );
-          if (profe) {
-            // Proyectos
-            if (profe.proyectos.length > 0) {
-              setProyectosProfe(profe.proyectos);
-              try {
-                localStorage.setItem('futuro-profe-proyectos', JSON.stringify(profe.proyectos));
-              } catch {}
+          try {
+            addDebug('Llamando getProfes()...');
+            const listaProfes = await getProfes();
+            addDebug(`getProfes() → ${listaProfes.length} profes`);
+            const profe = listaProfes.find(
+              p => p.usuario.toUpperCase() === nombre.toUpperCase()
+            );
+            addDebug(`profe encontrado: ${profe ? JSON.stringify(profe.proyectos) : 'NO'}`);
+            if (profe) {
+              if (profe.proyectos.length > 0) {
+                setProyectosProfe(profe.proyectos);
+                try {
+                  localStorage.setItem('futuro-profe-proyectos', JSON.stringify(profe.proyectos));
+                } catch {}
+              }
+              if (profe.foto) {
+                setFotoProfe(profe.foto);
+                try { localStorage.setItem(`futuro-foto-profe-${nombre.toUpperCase()}`, profe.foto); } catch {}
+              }
             }
-            // Foto desde Supabase si no está en localStorage
-            if (profe.foto) {
-              setFotoProfe(profe.foto);
-              try { localStorage.setItem(`futuro-foto-profe-${nombre.toUpperCase()}`, profe.foto); } catch {}
-            }
+          } catch (e: any) {
+            addDebug(`ERROR getProfes: ${e?.message}`);
           }
         }
-      } catch {}
+      } catch (e: any) { addDebug(`ERROR cargar: ${e?.message}`); }
 
       // 3. Cargar deportistas para contar alumnos por proyecto
       try {
@@ -125,6 +136,21 @@ export default function MisProyectosPage() {
       </header>
 
       <main className="px-4 py-6 max-w-lg mx-auto space-y-6">
+
+        {/* ── Panel de diagnóstico temporal ── */}
+        <div className="bg-gray-900 rounded-2xl overflow-hidden text-xs">
+          <button onClick={() => setMostrarDebug(v => !v)}
+            className="w-full text-left px-4 py-2 text-gray-400 font-mono flex justify-between items-center">
+            <span>🔧 DEBUG (toca para {mostrarDebug ? 'ocultar' : 'ver'})</span>
+            <span className="text-green-400">{proyectosProfe.length} proyectos</span>
+          </button>
+          {mostrarDebug && (
+            <div className="px-4 pb-3 space-y-1 font-mono text-green-300 max-h-60 overflow-y-auto">
+              {debug.map((d, i) => <div key={i}>{d}</div>)}
+              {debug.length === 0 && <div className="text-gray-500">Sin mensajes aún…</div>}
+            </div>
+          )}
+        </div>
 
         {/* ── Tarjeta Bienvenida con foto grande ── */}
         <div className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">
