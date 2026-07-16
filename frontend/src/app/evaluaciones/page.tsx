@@ -113,6 +113,14 @@ const DESC_LECTURA_ALTURAS: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Reconoce los momentos para acelerar el juego o pausarlo para reorganizar al equipo.',
   'Nivel 5 (Dominante)':    'Maestro de la "pausa"; atrae rivales para liberar compañeros y detecta debilidades en el sistema rival.',
 };
+const DESC_COMUNICACION_ASERTIVA: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'No habla en el campo; juega de forma aislada sin interactuar con el entorno.',
+  'Nivel 2 (En Desarrollo)':'Se comunica solo para pedir el balón; comunicación verbal limitada y reactiva.',
+  'Nivel 3 (Competente)':   'Da indicaciones básicas ("solo", "pasa", "mío") que ayudan a la fluidez del juego.',
+  'Nivel 4 (Avanzado)':     'Habla constantemente para organizar la defensa o alertar a compañeros sobre peligros.',
+  'Nivel 5 (Dominante)':    'Líder comunicativo; utiliza un lenguaje positivo y técnico para coordinar al equipo en todo momento.',
+};
+
 const DESC_GESTION_FRUSTRACION: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Se rinde o llora ante el error o la derrota; se desconecta del partido si algo sale mal.',
   'Nivel 2 (En Desarrollo)':'Muestra enfado ante el error; le cuesta retomar el ritmo de juego tras una falla.',
@@ -600,7 +608,8 @@ export default function ValoracionPage() {
             descripciones={DESC_GESTION_FRUSTRACION} />
           <BloqueAspecto titulo="COMUNICACIÓN ACERTIVA" subtitulo="Expresión y Asertividad"
             nivel={data.actitudNivel} onNivel={v => set('actitudNivel', v)}
-            desc={data.actitudDesc}   onDesc={v => set('actitudDesc', v)} />
+            desc={data.actitudDesc}   onDesc={v => set('actitudDesc', v)}
+            descripciones={DESC_COMUNICACION_ASERTIVA} />
 
           {/* OBSERVACIONES */}
           <tbody>
