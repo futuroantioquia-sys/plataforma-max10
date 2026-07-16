@@ -254,7 +254,7 @@ function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descri
         </td>
       </tr>
       <tr>
-        <td colSpan={2} style={{ background: C.grisAzul, color: '#fff', fontWeight: 700, fontSize: 11, padding: '3px 10px' }}>
+        <td colSpan={2} style={{ background: C.grisAzul, color: '#fff', fontWeight: 700, fontSize: 11, padding: '3px 10px', textTransform: 'uppercase' }}>
           ({subtitulo})
         </td>
         <td colSpan={2} style={{ background: C.grisAzul, color: '#fff', padding: '2px 8px' }}>
