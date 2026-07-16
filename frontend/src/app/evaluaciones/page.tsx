@@ -417,9 +417,10 @@ export default function ValoracionPage() {
     </select>
   );
 
-  const celda = (bg: string, color: string, content: React.ReactNode, extra?: React.CSSProperties) => (
-    <td style={{ background: bg, color, padding: '3px 8px', fontSize: 11, fontWeight: 700, ...extra }}>{content}</td>
-  );
+  const celda = (bg: string, color: string, content: React.ReactNode, extra?: React.CSSProperties & { colSpan?: number }) => {
+    const { colSpan, ...styleProps } = (extra ?? {}) as any;
+    return <td colSpan={colSpan} style={{ background: bg, color, padding: '3px 8px', fontSize: 11, fontWeight: 700, ...styleProps }}>{content}</td>;
+  };
 
   /* ════════════════════════════════════════════════════════════ */
   return (
@@ -462,7 +463,7 @@ export default function ValoracionPage() {
       )}
 
       {/* FORMULARIO */}
-      <div style={{ maxWidth: 780, margin: '16px auto', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', fontFamily: 'Arial, sans-serif' }}>
+      <div style={{ width: '100%', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', fontFamily: 'Arial, sans-serif' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
 
           {/* ── ENCABEZADO REDISEÑADO ── */}
