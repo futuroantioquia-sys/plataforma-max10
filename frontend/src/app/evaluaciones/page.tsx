@@ -324,6 +324,8 @@ export default function ValoracionPage() {
   const [historial,   setHistorial]   = useState<Evaluacion[]>([]);
   const [verHistorial, setVerHistorial] = useState(false);
   const [nombreEntrenador, setNombreEntrenador] = useState('');
+  const [intentoDescarga, setIntentoDescarga] = useState(false);
+  const err = (campo: keyof Valoracion) => intentoDescarga && !data[campo]?.trim();
   useEffect(() => {
     try { setNombreEntrenador(localStorage.getItem('futuro-profe-nombre') ?? ''); } catch {}
   }, []);
@@ -341,7 +343,7 @@ export default function ValoracionPage() {
     }
   }, [data.codigo]);
 
-  // Re-buscar deportista cuando deportistas cargue y ya haya un código escrito
+  // Buscar deportista cuando cambia el código O cuando cargan los deportistas
   useEffect(() => {
     if (deportistas.length === 0) return;
     const cod = data.codigo.trim().toUpperCase();
@@ -358,16 +360,17 @@ export default function ValoracionPage() {
       const fechaNac = construirFechaNac(dep);
       setData(p => ({
         ...p,
-        nombre: p.nombre || dep._nombre ?? '',
-        proyecto: p.proyecto || proyecto,
-        programa: p.programa || programa,
-        fechaNac: p.fechaNac || fechaNac,
-        ...(posicion && !p.posicion ? { posicion } : {}),
+        nombre: dep._nombre ?? p.nombre,
+        proyecto: proyecto || p.proyecto,
+        programa: programa || p.programa,
+        fechaNac: fechaNac || p.fechaNac,
+        ...(posicion ? { posicion } : {}),
       }));
       setEncontrado(dep._nombre ?? '');
       setTimeout(() => setEncontrado(''), 3000);
     }
-  }, [deportistas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.codigo, deportistas]);
 
   /* set genérico — sin definir componentes dentro */
   const set = (k: keyof Valoracion, v: string) => {
@@ -475,11 +478,16 @@ export default function ValoracionPage() {
           <Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}
         </button>
         <button onClick={() => {
-          const codigo = data.codigo?.trim() || 'SIN-CODIGO';
-          const nombre = data.nombre?.trim().replace(/\s+/g, '-') || 'SIN-NOMBRE';
-          const informe = data.numeroInforme?.trim() || 'SIN-INFORME';
-          const titulo = `${codigo}_${nombre}_Informe-${informe}`;
-          const prev = document.title;
+          setIntentoDescarga(true);
+          const ok = data.codigo?.trim() && data.nombre?.trim() && data.programa?.trim() &&
+                     data.proyecto?.trim() && data.fecha?.trim() && data.numeroInforme?.trim() &&
+                     data.posicion?.trim() && data.perfil?.trim();
+          if (!ok) return;
+          const codigo  = data.codigo.trim();
+          const nombre  = data.nombre.trim().replace(/\s+/g, '-');
+          const informe = data.numeroInforme.trim();
+          const titulo  = `${codigo}_${nombre}_Informe-${informe}`;
+          const prev    = document.title;
           document.title = titulo;
           window.print();
           setTimeout(() => { document.title = prev; }, 1000);
@@ -535,7 +543,7 @@ export default function ValoracionPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <input value={data.nombre} onChange={e => set('nombre', e.target.value)}
                       placeholder="NOMBRE DEL DEPORTISTA"
-                      style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '2px solid #e5e7eb', outline: 'none', color: '#111', fontWeight: 900, fontSize: 16, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Arial, sans-serif', padding: '0 0 4px 0', marginBottom: 10 }} />
+                      style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: `2px solid ${err('nombre') ? '#ef4444' : '#e5e7eb'}`, outline: 'none', color: '#111', fontWeight: 900, fontSize: 16, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Arial, sans-serif', padding: '0 0 4px 0', marginBottom: 10 }} />
                     {encontrado && (
                       <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#dcfce7', borderRadius: 5, padding: '2px 6px', fontSize: 9, color: '#16a34a', fontWeight: 700, marginBottom: 6, width: 'fit-content' }}>
                         <CheckCircle size={10} /> {encontrado}
@@ -549,7 +557,7 @@ export default function ValoracionPage() {
                           <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>{lbl}</span>
                             <input value={data[field as keyof Valoracion]} onChange={e => set(field as keyof Valoracion, e.target.value)} placeholder="Auto-cargado del perfil"
-                              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', flex: 1, padding: 0 }} />
+                              style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err(field as keyof Valoracion) ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', flex: 1, padding: 0 }} />
                           </div>
                         );
                       })}
@@ -558,12 +566,12 @@ export default function ValoracionPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>FECHA INF.</span>
                           <input value={data.fecha} onChange={e => set('fecha', e.target.value)} placeholder="dd/mm/aaaa"
-                            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 82, padding: 0 }} />
+                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('fecha') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 82, padding: 0 }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>POSICIÓN</span>
                           <select value={data.posicion} onChange={e => set('posicion', e.target.value)}
-                            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('posicion') ? '#ef4444' : 'transparent'}`, outline: 'none', color: err('posicion') ? '#ef4444' : '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
                             {POSICIONES.map(o => <option key={o} value={o}>{o || '— Seleccionar —'}</option>)}
                           </select>
                         </div>
@@ -573,12 +581,12 @@ export default function ValoracionPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}># INFORME</span>
                           <input value={data.numeroInforme} onChange={e => set('numeroInforme', e.target.value)} placeholder="01"
-                            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 40, padding: 0 }} />
+                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('numeroInforme') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 40, padding: 0 }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>PERFIL</span>
                           <select value={data.perfil} onChange={e => set('perfil', e.target.value)}
-                            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('perfil') ? '#ef4444' : 'transparent'}`, outline: 'none', color: err('perfil') ? '#ef4444' : '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
                             {PERFILES.map(o => <option key={o} value={o}>{o || '— Seleccionar —'}</option>)}
                           </select>
                         </div>
@@ -588,7 +596,7 @@ export default function ValoracionPage() {
                   {/* CÓDIGO - solo derecha, editable */}
                   <div style={{ flexShrink: 0, textAlign: 'center', alignSelf: 'flex-start' }}>
                     <div style={{ color: '#374151', fontSize: 9, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>CÓDIGO</div>
-                    <div style={{ background: VERDE_GRAD, borderRadius: 10, minWidth: 65, textAlign: 'center', padding: '8px 10px', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                    <div style={{ background: VERDE_GRAD, borderRadius: 10, minWidth: 65, textAlign: 'center', padding: '8px 10px', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact', outline: err('codigo') ? '2px solid #ef4444' : 'none' } as React.CSSProperties}>
                       <input value={data.codigo} onChange={e => set('codigo', e.target.value)} placeholder="—"
                         style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 900, fontSize: 20, width: 85, textAlign: 'center', fontFamily: 'Arial, sans-serif', padding: 0 }} />
                     </div>
