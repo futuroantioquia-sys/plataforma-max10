@@ -97,11 +97,25 @@ function rowToDeportista(r: any): Deportista {
   };
 }
 
-/** Lee deportistas: fetch() directo → SDK → caché en memoria → localStorage. */
+/** Lee deportistas: proxy Vercel → fetch directo → SDK → localStorage. */
 export async function getDeportistas(): Promise<Deportista[]> {
   if (_cacheDeportistas) return _cacheDeportistas;
 
-  // ── Intento 1: fetch() nativo al REST API ──
+  // ── Intento 1: API route de Vercel (proxy — siempre alcanzable desde mobile) ──
+  try {
+    const res = await fetch('/api/deportistas', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const deps = data.map(rowToDeportista);
+        lsSet(LS_DEPS, deps);
+        _cacheDeportistas = deps;
+        return deps;
+      }
+    }
+  } catch { /* intentar fetch directo */ }
+
+  // ── Intento 2: fetch() nativo directo a Supabase ──
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas&order=nombre`,
@@ -124,7 +138,7 @@ export async function getDeportistas(): Promise<Deportista[]> {
     }
   } catch { /* intentar SDK */ }
 
-  // ── Intento 2: SDK de Supabase ──
+  // ── Intento 3: SDK de Supabase ──
   try {
     const { data, error } = await supabase()
       .from('deportistas')
@@ -658,7 +672,20 @@ function rowToProfe(r: any): Profe {
 
 export async function getProfes(): Promise<Profe[]> {
 
-  // ── Intento 1: fetch() nativo al REST API (más compatible con mobile) ──
+  // ── Intento 1: API route de Vercel (proxy — siempre alcanzable desde mobile) ──
+  try {
+    const res = await fetch('/api/profes', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const lista: Profe[] = data.map(rowToProfe);
+        lsSet(LS_PROFES, lista);
+        return lista;
+      }
+    }
+  } catch { /* intentar fetch directo */ }
+
+  // ── Intento 2: fetch() nativo directo a Supabase ──
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/profes?select=*&order=usuario`,
@@ -678,9 +705,9 @@ export async function getProfes(): Promise<Profe[]> {
         return lista;
       }
     }
-  } catch { /* sin red → intentar SDK */ }
+  } catch { /* intentar SDK */ }
 
-  // ── Intento 2: SDK de Supabase ──
+  // ── Intento 3: SDK de Supabase ──
   try {
     const { data, error } = await supabase()
       .from('profes')
@@ -693,14 +720,13 @@ export async function getProfes(): Promise<Profe[]> {
     }
   } catch { /* ignorar */ }
 
-  // ── Intento 3: localStorage (caché local) ──
+  // ── Intento 4: localStorage ──
   const cached = lsGet<Profe[]>(LS_PROFES, []);
-  // Solo usar caché si tiene proyectos reales (evitar devolver PROFES_INICIALES stale)
   if (cached && cached.length && cached.some(p => p.proyectos.length > 0)) {
     return cached;
   }
 
-  // ── Fallback final: lista hardcodeada sin proyectos ──
+  // ── Fallback final: lista hardcodeada con proyectos actualizados ──
   return PROFES_INICIALES;
 }
 
