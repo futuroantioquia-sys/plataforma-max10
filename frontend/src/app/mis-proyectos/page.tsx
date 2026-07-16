@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Users, ClipboardList } from 'lucide-react';
 import { getDeportistas } from '@/lib/db';
-import type { Deportista } from '@/lib/db';
 
 const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
 
@@ -13,24 +12,15 @@ const ORDEN_PROGRAMA = [
   'Pre-Progresión','Selección','Desarrollo',
 ];
 
-function getCol(dep: Deportista, rx: RegExp): string {
-  const k = Object.keys(dep._columnas).find(k => rx.test(k.trim()));
-  return k ? (dep._columnas[k] ?? '') : '';
+function getCol(dep: any, rx: RegExp): string {
+  const cols = dep._columnas ?? {};
+  const k = Object.keys(cols).find((c: string) => rx.test(c.trim()));
+  return k ? String(cols[k] ?? '') : '';
 }
 
 function ordenProg(p: string) {
   const i = ORDEN_PROGRAMA.findIndex(x => x.toLowerCase() === p.trim().toLowerCase());
   return i >= 0 ? i : 999;
-}
-
-interface ProyRow {
-  programa: string;
-  proyecto: string;
-  profe:    string;
-  sede:     string;
-  jornada:  string;
-  horario:  string;
-  count:    number;
 }
 
 export default function MisProyectosPage() {
@@ -39,8 +29,8 @@ export default function MisProyectosPage() {
   const [misGrupos,   setMisGrupos]   = useState<string[]>([]);
   const [nombreProfe, setNombreProfe] = useState('');
   const [fotoProfe,   setFotoProfe]   = useState('');
-  const [deportistas, setDeportistas] = useState<Deportista[]>([]);
-  const [meta,        setMeta]        = useState<Record<string, { horario: string; calificacion: string }>>({});
+  const [deportistas, setDeportistas] = useState<any[]>([]);
+  const [meta,        setMeta]        = useState<Record<string, any>>({});
   const [cargando,    setCargando]    = useState(true);
 
   useEffect(() => {
@@ -75,11 +65,10 @@ export default function MisProyectosPage() {
   const grupos = useMemo(() => {
     if (!deportistas.length) return [];
 
-    const map: Record<string, Record<string, Deportista[]>> = {};
+    const map: Record<string, Record<string, any[]>> = {};
     deportistas.forEach(dep => {
       const prog = getCol(dep, /^program/i).trim() || '__SIN_PROGRAMA__';
       const proy = getCol(dep, /^proyecto/i).trim() || '__SIN_PROYECTO__';
-      // Filtrar solo proyectos asignados al profe
       if (misGrupos.length > 0 && !misGrupos.includes(proy)) return;
       if (!map[prog]) map[prog] = {};
       if (!map[prog][proy]) map[prog][proy] = [];
@@ -89,7 +78,7 @@ export default function MisProyectosPage() {
     return Object.entries(map)
       .sort(([a], [b]) => ordenProg(a) - ordenProg(b))
       .map(([programa, proyMap]) => {
-        const filas: ProyRow[] = Object.entries(proyMap)
+        const filas = Object.entries(proyMap)
           .sort(([a], [b]) => a.localeCompare(b, 'es'))
           .map(([proyecto, deps]) => {
             const k = `${programa}::${proyecto}`;
@@ -142,7 +131,7 @@ export default function MisProyectosPage() {
           }
           <div>
             <h1 className="text-white font-black text-base leading-tight">
-              ¡Bienvenido, Profe {primerNombre}!
+              Bienvenido, Profe {primerNombre}
             </h1>
             <p className="text-white/60 text-[11px]">Mis proyectos · Futuro Antioquia</p>
           </div>
@@ -160,7 +149,7 @@ export default function MisProyectosPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4">
           <p className="font-black text-[#111827] text-base leading-snug">
             Estos son tus proyectos,{' '}
-            <span className="text-[#16a34a]">cuida mucho de ellos.</span>
+            <span className="text-[#16a34a]">cuida muchísimo de ellos.</span>
           </p>
           <p className="text-gray-400 text-sm mt-0.5">
             Toca <strong className="text-[#16a34a]">GESTIONAR</strong> para registrar asistencia de cada grupo.
@@ -189,13 +178,13 @@ export default function MisProyectosPage() {
           grupos.map(({ programa, filas }) => (
             <div key={programa} className="rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
 
-              {/* Cabecera programa — gris oscuro igual que proyectos */}
+              {/* Cabecera programa */}
               <div style={{ background: AZUL }} className="px-5 py-3 flex items-center gap-3">
                 <span className="text-white font-black text-sm uppercase tracking-widest">
                   {programa === '__SIN_PROGRAMA__' ? 'Sin Programa' : programa}
                 </span>
                 <span className="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                  {filas.reduce((s, f) => s + f.count, 0)} deportistas
+                  {filas.reduce((s: number, f: any) => s + f.count, 0)} deportistas
                 </span>
               </div>
 
@@ -231,7 +220,7 @@ export default function MisProyectosPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filas.map(row => (
+                    {filas.map((row: any) => (
                       <tr key={row.proyecto}
                         style={{ background: '#f1f5f9', borderTop: '2px solid white' }}>
                         <td className="px-4 py-2.5 font-black text-[#111827] whitespace-nowrap"
