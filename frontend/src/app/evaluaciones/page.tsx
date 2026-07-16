@@ -570,19 +570,19 @@ export default function ValoracionPage() {
             desc={data.basculacionDesc}   onDesc={v => set('basculacionDesc', v)}
             descripciones={DESC_BASCULACION} />
 
-          {/* ASPECTOS FORMATIVOS */}
+          {/* SOCIO-AFECTIVA Y ACTITUDINAL */}
           <tbody>
-            <tr>{celda(C.naranja, '#fff', 'ASPECTOS FORMATIVOS', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(C.naranja, '#fff', 'Socio-Afectiva y Actitudinal', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
-          <BloqueAspecto titulo="ACTITUD Y COMPROMISO" subtitulo="Esfuerzo y Responsabilidad"
-            nivel={data.actitudNivel} onNivel={v => set('actitudNivel', v)}
-            desc={data.actitudDesc}   onDesc={v => set('actitudDesc', v)} />
-          <BloqueAspecto titulo="DISCIPLINA Y RESPETO" subtitulo="Comportamiento y Valores"
-            nivel={data.disciplinaNivel} onNivel={v => set('disciplinaNivel', v)}
-            desc={data.disciplinaDesc}   onDesc={v => set('disciplinaDesc', v)} />
           <BloqueAspecto titulo="TRABAJO EN EQUIPO" subtitulo="Compañerismo y Comunicación"
             nivel={data.trabajoNivel} onNivel={v => set('trabajoNivel', v)}
             desc={data.trabajoDesc}   onDesc={v => set('trabajoDesc', v)} />
+          <BloqueAspecto titulo="GESTIÓN DE LA FRUSTRACIÓN" subtitulo="Autocontrol y Resiliencia"
+            nivel={data.disciplinaNivel} onNivel={v => set('disciplinaNivel', v)}
+            desc={data.disciplinaDesc}   onDesc={v => set('disciplinaDesc', v)} />
+          <BloqueAspecto titulo="COMUNICACIÓN ACERTIVA" subtitulo="Expresión y Asertividad"
+            nivel={data.actitudNivel} onNivel={v => set('actitudNivel', v)}
+            desc={data.actitudDesc}   onDesc={v => set('actitudDesc', v)} />
 
           {/* OBSERVACIONES */}
           <tbody>
