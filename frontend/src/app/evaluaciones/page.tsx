@@ -204,6 +204,8 @@ type Valoracion = {
   bloqueNivel: string; bloqueDesc: string;
   climaNivel: string; climaDesc: string;
   gestionCompNivel: string; gestionCompDesc: string;
+  responsabilidad: string; puntualidad: string; disciplinaComp: string; respeto: string;
+  tolerancia: string; companerismo: string; liderazgo: string; trabajoEquipoComp: string; sentidoPertenencia: string;
   logrosTrimestre: string;
   objetivosTrimestre: string;
   observaciones: string;
@@ -228,6 +230,8 @@ const INICIAL: Valoracion = {
   bloqueNivel: '', bloqueDesc: '',
   climaNivel: '', climaDesc: '',
   gestionCompNivel: '', gestionCompDesc: '',
+  responsabilidad: '', puntualidad: '', disciplinaComp: '', respeto: '',
+  tolerancia: '', companerismo: '', liderazgo: '', trabajoEquipoComp: '', sentidoPertenencia: '',
   logrosTrimestre: '',
   objetivosTrimestre: '',
   observaciones: '',
@@ -676,6 +680,37 @@ export default function ValoracionPage() {
             nivel={data.gestionCompNivel} onNivel={v => set('gestionCompNivel', v)}
             desc={data.gestionCompDesc}   onDesc={v => set('gestionCompDesc', v)}
             descripciones={DESC_GESTION_COMPETICION} />
+
+          {/* ASPECTO COMPORTAMENTAL */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'ASPECTO COMPORTAMENTAL', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            {([
+              ['responsabilidad',    'RESPONSABILIDAD'],
+              ['puntualidad',        'PUNTUALIDAD'],
+              ['disciplinaComp',     'DISCIPLINA'],
+              ['respeto',            'RESPETO'],
+              ['tolerancia',         'TOLERANCIA'],
+              ['companerismo',       'COMPAÑERISMO'],
+              ['liderazgo',          'LIDERAZGO'],
+              ['trabajoEquipoComp',  'TRABAJO EN EQUIPO'],
+              ['sentidoPertenencia', 'SENTIDO DE PERTENENCIA'],
+            ] as [string, string][]).map(([key, label], i) => (
+              <tr key={key} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
+                <td colSpan={2} style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#333', letterSpacing: 1 }}>{label}</td>
+                <td colSpan={2} style={{ padding: '4px 10px' }}>
+                  <select value={(data as any)[key]} onChange={e => set(key as any, e.target.value)}
+                    style={{ width: '100%', fontSize: 11, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#333' }}>
+                    <option value="">— Seleccionar —</option>
+                    <option value="SIEMPRE">1. SIEMPRE</option>
+                    <option value="CASI SIEMPRE">2. CASI SIEMPRE</option>
+                    <option value="ALGUNAS VECES">3. ALGUNAS VECES</option>
+                    <option value="CASI NUNCA">4. CASI NUNCA</option>
+                    <option value="NUNCA">5. NUNCA</option>
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
 
           {/* LOGROS DEL TRIMESTRE */}
           <tbody>
