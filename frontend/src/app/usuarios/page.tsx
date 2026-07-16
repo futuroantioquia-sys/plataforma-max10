@@ -47,7 +47,7 @@ export default function UsuariosPage() {
   const [proyectos, setProyectos] = useState<string[]>([]);
   const [guardando,  setGuardando]  = useState(false);
   const [guardado,   setGuardado]   = useState(false);
-  const [errorGuard, setErrorGuard] = useState(false);
+  const [errorGuard, setErrorGuard] = useState('');
   const [claveVis,  setClaveVis]  = useState<Record<string, boolean>>({});
   const [nuevo,     setNuevo]     = useState({ usuario: '', clave: '' });
   const [agregando, setAgregando] = useState(false);
@@ -55,7 +55,7 @@ export default function UsuariosPage() {
   useEffect(() => {
     getProfes().then(lista => {
       const inicial = lista.length ? lista : PROFES_INICIALES.map(p => ({ ...p, id: uuid() }));
-      if (!lista.length) saveProfes(inicial);
+      if (!lista.length) saveProfes(inicial).catch(() => {});
       setProfes(inicial);
       // Cargar fotos: primero desde Supabase (foto field), luego desde localStorage
       const mapa: Record<string, string> = {};
@@ -87,13 +87,13 @@ export default function UsuariosPage() {
   }, []);
 
   async function guardar() {
-    setGuardando(true); setErrorGuard(false);
+    setGuardando(true); setErrorGuard('');
     // Incluir fotos actuales en cada profe antes de guardar
     const profesConFoto = profes.map(p => ({ ...p, foto: fotos[p.usuario] ?? '' }));
-    const ok = await saveProfes(profesConFoto);
+    const { ok, msg } = await saveProfes(profesConFoto);
     setGuardando(false);
     if (ok) { setGuardado(true); setTimeout(() => setGuardado(false), 2500); }
-    else     { setErrorGuard(true); setTimeout(() => setErrorGuard(false), 4000); }
+    else     { setErrorGuard(msg ?? 'Error desconocido'); setTimeout(() => setErrorGuard(''), 8000); }
   }
 
   function eliminar(id: string) {
@@ -196,12 +196,19 @@ export default function UsuariosPage() {
             className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition">
             <Plus className="w-3.5 h-3.5" /> Nuevo profe
           </button>
-          <button onClick={guardar} disabled={guardando}
-            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition ${
-              guardado ? 'bg-white text-green-700' : errorGuard ? 'bg-red-500 text-white' : 'bg-white/20 hover:bg-white/30 text-white'}`}>
-            <Save className="w-3.5 h-3.5" />
-            {guardando ? 'Guardando…' : guardado ? '¡Guardado en la nube! ✓' : errorGuard ? 'Error al guardar ⚠' : 'Guardar cambios'}
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button onClick={guardar} disabled={guardando}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition ${
+                guardado ? 'bg-white text-green-700' : errorGuard ? 'bg-red-500 text-white' : 'bg-white/20 hover:bg-white/30 text-white'}`}>
+              <Save className="w-3.5 h-3.5" />
+              {guardando ? 'Guardando…' : guardado ? '¡Guardado en la nube! ✓' : errorGuard ? 'Error ⚠' : 'Guardar cambios'}
+            </button>
+            {errorGuard && (
+              <span className="text-red-200 text-[10px] max-w-[200px] text-right leading-tight">
+                {errorGuard}
+              </span>
+            )}
+          </div>
         </div>
         <div className="relative text-right leading-tight ml-2">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>

@@ -593,7 +593,7 @@ export async function getProfes(): Promise<Profe[]> {
               : ''
           ),
         }));
-        saveProfes(cachedConFoto).catch(() => {});
+        saveProfes(cachedConFoto).catch(() => {}); // sin await — best-effort
         return cachedConFoto;
       }
     }
@@ -608,11 +608,25 @@ export async function getProfes(): Promise<Profe[]> {
   return PROFES_INICIALES;
 }
 
-export async function saveProfes(lista: Profe[]): Promise<boolean> {
+export async function saveProfes(lista: Profe[]): Promise<{ ok: boolean; msg?: string }> {
   lsSet(LS_PROFES, lista);
 
   try {
-    // Upsert de todos los profes (incluye foto para sync cross-device)
+    if (!lista.length) return { ok: true };
+
+    const usuarios = lista.map(p => p.usuario);
+
+    // Paso 1: eliminar filas con los mismos usuarios (clean slate por usuario)
+    const { error: delErr } = await supabase()
+      .from('profes')
+      .delete()
+      .in('usuario', usuarios);
+    if (delErr) {
+      console.error('[db] saveProfes delete:', delErr);
+      return { ok: false, msg: `DEL: ${delErr.message}` };
+    }
+
+    // Paso 2: insertar todos los profes frescos
     const rows = lista.map(p => ({
       id:        p.id,
       usuario:   p.usuario,
@@ -620,19 +634,19 @@ export async function saveProfes(lista: Profe[]): Promise<boolean> {
       proyectos: p.proyectos,
       foto:      p.foto ?? '',
     }));
-    if (rows.length) {
-      const { error } = await supabase().from('profes').upsert(rows, { onConflict: 'usuario' });
-      if (error) { console.error('[db] saveProfes upsert:', error); return false; }
+    const { error: insErr } = await supabase().from('profes').insert(rows);
+    if (insErr) {
+      console.error('[db] saveProfes insert:', insErr);
+      return { ok: false, msg: `INS: ${insErr.message}` };
     }
-    // Eliminar los que ya no están (por nombre de usuario)
-    const usuarios = lista.map(p => p.usuario);
-    if (usuarios.length) {
-      await supabase().from('profes').delete().not('usuario', 'in', `(${usuarios.map(u => `'${u}'`).join(',')})`);
-    }
-    return true;
-  } catch (e) {
+
+    // Paso 3: eliminar cualquier otro usuario que no esté en la lista
+    await supabase().from('profes').delete().not('usuario', 'in', usuarios);
+
+    return { ok: true };
+  } catch (e: any) {
     console.error('[db] saveProfes:', e);
-    return false;
+    return { ok: false, msg: String(e?.message ?? e) };
   }
 }
 
