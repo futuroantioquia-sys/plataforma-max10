@@ -681,6 +681,30 @@ export default function ValoracionPage() {
             desc={data.gestionCompDesc}   onDesc={v => set('gestionCompDesc', v)}
             descripciones={DESC_GESTION_COMPETICION} />
 
+          {/* LOGROS DEL TRIMESTRE */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'LOGROS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>
+              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
+                <textarea value={data.logrosTrimestre} onChange={e => set('logrosTrimestre', e.target.value)}
+                  rows={4} placeholder="Describe los logros del trimestre..."
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+              </td>
+            </tr>
+          </tbody>
+
+          {/* OBJETIVOS DEL TRIMESTRE */}
+          <tbody>
+            <tr>{celda(C.naranja, '#fff', 'OBJETIVOS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>
+              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
+                <textarea value={data.objetivosTrimestre} onChange={e => set('objetivosTrimestre', e.target.value)}
+                  rows={4} placeholder="Describe los objetivos del trimestre..."
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+              </td>
+            </tr>
+          </tbody>
+
           {/* ASPECTO COMPORTAMENTAL */}
           <tbody>
             <tr>{celda(C.naranja, '#fff', 'ASPECTO COMPORTAMENTAL', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
@@ -710,30 +734,6 @@ export default function ValoracionPage() {
                 </td>
               </tr>
             ))}
-          </tbody>
-
-          {/* LOGROS DEL TRIMESTRE */}
-          <tbody>
-            <tr>{celda(C.naranja, '#fff', 'LOGROS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
-            <tr>
-              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
-                <textarea value={data.logrosTrimestre} onChange={e => set('logrosTrimestre', e.target.value)}
-                  rows={4} placeholder="Describe los logros del trimestre..."
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
-              </td>
-            </tr>
-          </tbody>
-
-          {/* OBJETIVOS DEL TRIMESTRE */}
-          <tbody>
-            <tr>{celda(C.naranja, '#fff', 'OBJETIVOS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
-            <tr>
-              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
-                <textarea value={data.objetivosTrimestre} onChange={e => set('objetivosTrimestre', e.target.value)}
-                  rows={4} placeholder="Describe los objetivos del trimestre..."
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 11, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
-              </td>
-            </tr>
           </tbody>
 
           {/* OBSERVACIONES */}
