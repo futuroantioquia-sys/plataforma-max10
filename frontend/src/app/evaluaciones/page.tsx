@@ -113,6 +113,14 @@ const DESC_LECTURA_ALTURAS: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Reconoce los momentos para acelerar el juego o pausarlo para reorganizar al equipo.',
   'Nivel 5 (Dominante)':    'Maestro de la "pausa"; atrae rivales para liberar compañeros y detecta debilidades en el sistema rival.',
 };
+const DESC_CLIMA_INTERNO: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Hay discusiones frecuentes, reproches ante el error o silencio absoluto.',
+  'Nivel 2 (En Desarrollo)':'La comunicación es escasa o solo ocurre cuando van ganando. Hay subgrupos marcados.',
+  'Nivel 3 (Competente)':   'Comunicación funcional y positiva. Se alientan entre sí y aceptan las correcciones del líder/DT.',
+  'Nivel 4 (Avanzado)':     'Existe un lenguaje común en el campo; se apoyan en los momentos críticos y celebran el éxito ajeno.',
+  'Nivel 5 (Dominante)':    'Fraternidad y resiliencia. El equipo es una familia donde la confianza permite máxima exigencia sin conflicto.',
+};
+
 const DESC_BLOQUE_COHESION: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Equipo "partido" o estirado; mucha distancia entre defensas y delanteros.',
   'Nivel 2 (En Desarrollo)':'Hay intentos de moverse juntos, pero se generan huecos grandes al defender o atacar.',
@@ -650,7 +658,8 @@ export default function ValoracionPage() {
             descripciones={DESC_BLOQUE_COHESION} />
           <BloqueAspecto titulo="CLIMA INTERNO Y COMUNICACIÓN" subtitulo="Ambiente y Vínculos del Grupo"
             nivel={data.climaNivel} onNivel={v => set('climaNivel', v)}
-            desc={data.climaDesc}   onDesc={v => set('climaDesc', v)} />
+            desc={data.climaDesc}   onDesc={v => set('climaDesc', v)}
+            descripciones={DESC_CLIMA_INTERNO} />
           <BloqueAspecto titulo="GESTIÓN DE LA COMPETICIÓN" subtitulo="Rendimiento Bajo Presión"
             nivel={data.gestionCompNivel} onNivel={v => set('gestionCompNivel', v)}
             desc={data.gestionCompDesc}   onDesc={v => set('gestionCompDesc', v)} />
