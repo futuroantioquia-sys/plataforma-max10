@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 // Rutas que no requieren autenticación
 const RUTAS_PUBLICAS = ['/login', '/afiliacion'];
 
-// Rutas permitidas para el rol profesor — los 4 formatos deportivos
-const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/sesiones', '/postpartido'];
+// Rutas permitidas para el rol profesor — asistencia + portal propio
+const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/sesiones', '/postpartido', '/mis-proyectos'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
