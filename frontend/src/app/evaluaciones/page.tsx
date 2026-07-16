@@ -113,6 +113,14 @@ const DESC_LECTURA_ALTURAS: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Reconoce los momentos para acelerar el juego o pausarlo para reorganizar al equipo.',
   'Nivel 5 (Dominante)':    'Maestro de la "pausa"; atrae rivales para liberar compañeros y detecta debilidades en el sistema rival.',
 };
+const DESC_BLOQUE_COHESION: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Equipo "partido" o estirado; mucha distancia entre defensas y delanteros.',
+  'Nivel 2 (En Desarrollo)':'Hay intentos de moverse juntos, pero se generan huecos grandes al defender o atacar.',
+  'Nivel 3 (Competente)':   'El equipo se mueve como un bloque; hay ayudas mutuas y las líneas mantienen distancias correctas.',
+  'Nivel 4 (Avanzado)':     'Basculaciones y coberturas automáticas. El equipo se encoge y se estira con mucha fluidez.',
+  'Nivel 5 (Dominante)':    'Unidad total; el bloque se mueve de forma coordinada y asfixiante. Compacto en todas sus líneas.',
+};
+
 const DESC_IDENTIDAD_ESTILO: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'No hay un estilo claro; el equipo juega al azar y depende de individualidades.',
   'Nivel 2 (En Desarrollo)':'Se intentan seguir algunas ideas del DT, pero el equipo pierde la forma rápidamente.',
@@ -638,7 +646,8 @@ export default function ValoracionPage() {
             descripciones={DESC_IDENTIDAD_ESTILO} />
           <BloqueAspecto titulo="BLOQUE Y COHESIÓN TÁCTICA" subtitulo="Organización Colectiva"
             nivel={data.bloqueNivel} onNivel={v => set('bloqueNivel', v)}
-            desc={data.bloqueDesc}   onDesc={v => set('bloqueDesc', v)} />
+            desc={data.bloqueDesc}   onDesc={v => set('bloqueDesc', v)}
+            descripciones={DESC_BLOQUE_COHESION} />
           <BloqueAspecto titulo="CLIMA INTERNO Y COMUNICACIÓN" subtitulo="Ambiente y Vínculos del Grupo"
             nivel={data.climaNivel} onNivel={v => set('climaNivel', v)}
             desc={data.climaDesc}   onDesc={v => set('climaDesc', v)} />
