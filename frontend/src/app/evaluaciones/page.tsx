@@ -113,6 +113,14 @@ const DESC_LECTURA_ALTURAS: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Reconoce los momentos para acelerar el juego o pausarlo para reorganizar al equipo.',
   'Nivel 5 (Dominante)':    'Maestro de la "pausa"; atrae rivales para liberar compañeros y detecta debilidades en el sistema rival.',
 };
+const DESC_GESTION_COMPETICION: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Se desmoronan ante el primer gol en contra; falta de orden en la adversidad.',
+  'Nivel 2 (En Desarrollo)':'Compiten bien a ratos, pero pierden la concentración en los minutos finales o tras errores.',
+  'Nivel 3 (Competente)':   'Equipo competitivo que lucha hasta el final, manteniendo la calma y el orden la mayor parte del tiempo.',
+  'Nivel 4 (Avanzado)':     'Gran madurez competitiva; saben manejar los tiempos del partido (cuándo acelerar y cuándo pausar).',
+  'Nivel 5 (Dominante)':    'Mentalidad ganadora colectiva; el equipo crece en la dificultad y gestiona la presión con absoluta seguridad.',
+};
+
 const DESC_CLIMA_INTERNO: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Hay discusiones frecuentes, reproches ante el error o silencio absoluto.',
   'Nivel 2 (En Desarrollo)':'La comunicación es escasa o solo ocurre cuando van ganando. Hay subgrupos marcados.',
@@ -662,7 +670,8 @@ export default function ValoracionPage() {
             descripciones={DESC_CLIMA_INTERNO} />
           <BloqueAspecto titulo="GESTIÓN DE LA COMPETICIÓN" subtitulo="Rendimiento Bajo Presión"
             nivel={data.gestionCompNivel} onNivel={v => set('gestionCompNivel', v)}
-            desc={data.gestionCompDesc}   onDesc={v => set('gestionCompDesc', v)} />
+            desc={data.gestionCompDesc}   onDesc={v => set('gestionCompDesc', v)}
+            descripciones={DESC_GESTION_COMPETICION} />
 
           {/* OBSERVACIONES */}
           <tbody>
