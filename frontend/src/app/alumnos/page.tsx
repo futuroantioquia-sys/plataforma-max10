@@ -831,6 +831,15 @@ function AlumnosPageContent() {
           </p>
         </div>
       );
+      // Datos cargando o auto-nav aún no corrió → mantener spinner
+      if (deportistas.length > 0) return (
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
+          <BalonCargando />
+          <p className="text-sm font-semibold text-gray-500 text-center px-6">
+            Cargando proyecto <strong className="text-[#064e1e]">{proyParam}</strong>…
+          </p>
+        </div>
+      );
       // Cargó pero vacío → error de conexión (no "Importar Excel")
       return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 p-6 text-center">
