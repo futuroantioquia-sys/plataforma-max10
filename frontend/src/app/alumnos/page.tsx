@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
-import { getDeportistas, saveDeportistas } from '@/lib/db';
+import { getDeportistas, getDeportistasPorProyecto, saveDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 
 const FOTOS_PROFE_KEY = 'futuro_fotos_profes';
@@ -718,8 +718,23 @@ function AlumnosPageContent() {
   const autoNavRef = useRef(false);
 
   useEffect(() => {
-    // Cargar deportistas desde Supabase (con fallback a localStorage)
-    getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
+    const proyParam = searchParams.get('proyecto');
+    if (esProfe && proyParam) {
+      // Profe mode: carga solo los deportistas de ESE proyecto (liviano para mobile)
+      getDeportistasPorProyecto(proyParam).then(lista => {
+        setCargando(false);
+        if (lista.length > 0) {
+          setDeportistas(lista);
+          // Detectar el programa y saltar directo a Level 3
+          const prog = lista[0]?._columnas?.['PROGRAMA'] ?? lista[0]?._columnas?.['Programa'] ?? 'Sin programa';
+          setPrograma(prog);
+          setProy(proyParam);
+        }
+      });
+    } else {
+      // Admin mode: carga todos los deportistas
+      getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
+    }
     try {
       const f = localStorage.getItem('futuro_fotos_deportistas');
       if (f) setFotos(JSON.parse(f));

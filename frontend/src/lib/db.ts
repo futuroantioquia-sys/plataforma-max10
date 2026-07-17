@@ -163,6 +163,59 @@ export async function getDeportistas(): Promise<Deportista[]> {
   return result;
 }
 
+/**
+ * Carga SOLO los deportistas de un proyecto específico.
+ * Mucho más liviano para mobile — devuelve 10-20 atletas en lugar de 1127.
+ */
+export async function getDeportistasPorProyecto(proyecto: string): Promise<Deportista[]> {
+  const proyEnc = encodeURIComponent(proyecto);
+
+  // Intento 1: proxy Vercel filtrado (pequeño payload — ideal para mobile)
+  try {
+    const res = await fetch(`/api/deportistas?proyecto=${proyEnc}`, { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map(rowToDeportista);
+      }
+    }
+  } catch { /* intentar directo */ }
+
+  // Intento 2: fetch directo a Supabase con filtro JSONB
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas&columnas->>PROY=eq.${proyEnc}&order=nombre`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map(rowToDeportista);
+      }
+    }
+  } catch { /* ignorar */ }
+
+  // Intento 3: SDK de Supabase con filtro
+  try {
+    const { data, error } = await supabase()
+      .from('deportistas')
+      .select('id, nombre, columnas')
+      .eq('columnas->>PROY', proyecto)
+      .order('nombre');
+    if (!error && data && data.length) {
+      return data.map(rowToDeportista);
+    }
+  } catch { /* ignorar */ }
+
+  return [];
+}
+
 /** Elimina TODOS los deportistas de Supabase y localStorage. */
 export async function deleteAllDeportistas(): Promise<void> {
   _cacheDeportistas = null;
