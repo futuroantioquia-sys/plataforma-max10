@@ -182,6 +182,7 @@ export async function getDeportistasPorProyecto(proyecto: string): Promise<Depor
   } catch { /* intentar directo */ }
 
   // Intento 2: fetch directo a Supabase con filtro JSONB
+  // Nota: sin Content-Type en GET para evitar CORS preflight en mobile
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas&columnas->>PROY=eq.${proyEnc}&order=nombre`,
@@ -189,7 +190,6 @@ export async function getDeportistasPorProyecto(proyecto: string): Promise<Depor
         headers: {
           'apikey':        SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type':  'application/json',
         },
       }
     );
