@@ -710,6 +710,7 @@ function AlumnosPageContent() {
   const [busqueda,    setBusqueda]    = useState('');
   const [proyEdits,   setProyEdits]   = useState<Record<string, string>>({});
   const [cargando,    setCargando]    = useState(true);
+  const [errorCarga,  setErrorCarga]  = useState<string | null>(null);
   // Detección sincrónica (evita flash de Level 1 al cargar)
   const [esProfe,     setEsProfe]     = useState(() => {
     if (typeof document === 'undefined') return false;
@@ -721,7 +722,7 @@ function AlumnosPageContent() {
     const proyParam = searchParams.get('proyecto');
     if (esProfe && proyParam) {
       // Profe mode: carga solo los deportistas de ESE proyecto (liviano para mobile)
-      getDeportistasPorProyecto(proyParam).then(lista => {
+      getDeportistasPorProyecto(proyParam).then(({ data: lista, error }) => {
         setCargando(false);
         if (lista.length > 0) {
           setDeportistas(lista);
@@ -729,6 +730,8 @@ function AlumnosPageContent() {
           const prog = lista[0]?._columnas?.['PROGRAMA'] ?? lista[0]?._columnas?.['Programa'] ?? 'Sin programa';
           setPrograma(prog);
           setProy(proyParam);
+        } else if (error) {
+          setErrorCarga(error);
         }
       });
     } else {
@@ -855,7 +858,7 @@ function AlumnosPageContent() {
           </p>
         </div>
       );
-      // Cargó pero vacío → error de conexión (no "Importar Excel")
+      // Cargó pero vacío → error de conexión con detalle real
       return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 p-6 text-center">
           <div className="w-20 h-20 bg-orange-50 rounded-3xl flex items-center justify-center mb-1">
@@ -865,6 +868,12 @@ function AlumnosPageContent() {
           <p className="text-gray-400 text-sm max-w-xs">
             Verifica tu conexión a internet e intenta de nuevo.
           </p>
+          {errorCarga && (
+            <details className="text-left w-full max-w-sm">
+              <summary className="text-xs text-gray-400 cursor-pointer">Ver detalle técnico</summary>
+              <p className="text-xs text-red-400 mt-1 break-all bg-red-50 rounded p-2">{errorCarga}</p>
+            </details>
+          )}
           <button onClick={() => window.location.reload()}
             className="mt-2 bg-[#16a34a] text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-[#064e1e] transition">
             🔄 Reintentar

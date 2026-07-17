@@ -9,6 +9,7 @@ const nextConfig = {
   },
   images: {
     domains: [
+      'gsovtgtrsqzoruvgmhed.supabase.co',
       'fykdyalpuydkwfjqguip.supabase.co',
       'lh3.googleusercontent.com',
     ],

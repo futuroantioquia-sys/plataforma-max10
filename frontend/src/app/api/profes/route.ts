@@ -4,10 +4,9 @@
  */
 import { NextResponse } from 'next/server';
 
-const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-  ?? 'https://gsovtgtrsqzoruvgmhed.supabase.co';
-const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
+// Hardcodeado — no usar process.env (pueden apuntar al proyecto Supabase viejo).
+const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
 
 export async function GET() {
   try {

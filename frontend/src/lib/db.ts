@@ -165,55 +165,88 @@ export async function getDeportistas(): Promise<Deportista[]> {
 
 /**
  * Carga SOLO los deportistas de un proyecto específico.
- * Mucho más liviano para mobile — devuelve 10-20 atletas en lugar de 1127.
+ * Timeout 8s por intento para evitar spinner infinito.
+ * Devuelve { data, error } para que la UI muestre el problema real.
  */
-export async function getDeportistasPorProyecto(proyecto: string): Promise<Deportista[]> {
+export async function getDeportistasPorProyecto(
+  proyecto: string
+): Promise<{ data: Deportista[]; error: string | null }> {
   const proyEnc = encodeURIComponent(proyecto);
+  const errores: string[] = [];
 
-  // Intento 1: proxy Vercel filtrado (pequeño payload — ideal para mobile)
+  function withTimeout(promise: Promise<Response>, ms: number): Promise<Response> {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    return promise.finally(() => clearTimeout(timer));
+  }
+
+  // Intento 1: proxy Vercel /api/deportistas (server-side, evita CORS)
   try {
-    const res = await fetch(`/api/deportistas?proyecto=${proyEnc}`, { cache: 'no-store' });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(`/api/deportistas?proyecto=${proyEnc}`, {
+      cache: 'no-store',
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        return data.map(rowToDeportista);
+        return { data: data.map(rowToDeportista), error: null };
       }
+      if (Array.isArray(data) && data.length === 0) {
+        errores.push(`Proxy OK pero 0 deportistas para proyecto "${proyecto}"`);
+      }
+    } else {
+      const body = await res.text().catch(() => '');
+      errores.push(`Proxy HTTP ${res.status}: ${body.slice(0, 120)}`);
     }
-  } catch { /* intentar directo */ }
+  } catch (e: any) {
+    errores.push(`Proxy error: ${e?.name === 'AbortError' ? 'timeout 8s' : e?.message}`);
+  }
 
-  // Intento 2: fetch directo a Supabase con filtro JSONB
-  // Nota: sin Content-Type en GET para evitar CORS preflight en mobile
+  // Intento 2: fetch directo a Supabase REST (sin Content-Type → evita preflight CORS)
   try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas&columnas->>PROY=eq.${proyEnc}&order=nombre`,
       {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        },
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        signal: ctrl.signal,
       }
-    );
+    ).finally(() => clearTimeout(timer));
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        return data.map(rowToDeportista);
+        return { data: data.map(rowToDeportista), error: null };
       }
+      errores.push(`Supabase REST OK pero ${Array.isArray(data) ? data.length : 'no-array'} filas`);
+    } else {
+      const body = await res.text().catch(() => '');
+      errores.push(`Supabase REST HTTP ${res.status}: ${body.slice(0, 120)}`);
     }
-  } catch { /* ignorar */ }
+  } catch (e: any) {
+    errores.push(`Supabase REST error: ${e?.name === 'AbortError' ? 'timeout 8s' : e?.message}`);
+  }
 
-  // Intento 3: SDK de Supabase con filtro
+  // Intento 3: SDK Supabase
   try {
     const { data, error } = await supabase()
       .from('deportistas')
       .select('id, nombre, columnas')
       .eq('columnas->>PROY', proyecto)
       .order('nombre');
-    if (!error && data && data.length) {
-      return data.map(rowToDeportista);
+    if (!error && data && data.length > 0) {
+      return { data: data.map(rowToDeportista), error: null };
     }
-  } catch { /* ignorar */ }
+    errores.push(`SDK: ${error?.message ?? `0 filas devueltas`}`);
+  } catch (e: any) {
+    errores.push(`SDK error: ${e?.message}`);
+  }
 
-  return [];
+  const resumen = errores.join(' | ');
+  console.error('[getDeportistasPorProyecto]', resumen);
+  return { data: [], error: resumen };
 }
 
 /** Elimina TODOS los deportistas de Supabase y localStorage. */
