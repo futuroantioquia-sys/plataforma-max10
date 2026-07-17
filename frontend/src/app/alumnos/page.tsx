@@ -710,14 +710,14 @@ function AlumnosPageContent() {
   const [busqueda,    setBusqueda]    = useState('');
   const [proyEdits,   setProyEdits]   = useState<Record<string, string>>({});
   const [cargando,    setCargando]    = useState(true);
-  const [esProfe,     setEsProfe]     = useState(false);
+  // Detección sincrónica (evita flash de Level 1 al cargar)
+  const [esProfe,     setEsProfe]     = useState(() => {
+    if (typeof document === 'undefined') return false;
+    try { return document.cookie.includes('futuro-session=profesor'); } catch { return false; }
+  });
   const autoNavRef = useRef(false);
 
   useEffect(() => {
-    // Detectar si es profe (cookie)
-    try {
-      if (document.cookie.includes('futuro-session=profesor')) setEsProfe(true);
-    } catch {}
     // Cargar deportistas desde Supabase (con fallback a localStorage)
     getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
     try {
@@ -818,6 +818,42 @@ function AlumnosPageContent() {
   }
 
   // ══ NIVEL 1: PROGRAMAS ═══════════════════════════════════════
+  // Guard: profe con ?proyecto= → nunca mostrar Level 1, solo loading o error de conexión
+  if (!programa) {
+    const proyParam = searchParams.get('proyecto');
+    if (esProfe && proyParam) {
+      // Mientras carga → spinner
+      if (cargando) return (
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
+          <BalonCargando />
+          <p className="text-sm font-semibold text-gray-500 text-center px-6">
+            Cargando proyecto <strong className="text-[#064e1e]">{proyParam}</strong>…
+          </p>
+        </div>
+      );
+      // Cargó pero vacío → error de conexión (no "Importar Excel")
+      return (
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <div className="w-20 h-20 bg-orange-50 rounded-3xl flex items-center justify-center mb-1">
+            <Users className="w-10 h-10 text-orange-300" />
+          </div>
+          <h2 className="text-lg font-black text-gray-700">No se pudo cargar el proyecto</h2>
+          <p className="text-gray-400 text-sm max-w-xs">
+            Verifica tu conexión a internet e intenta de nuevo.
+          </p>
+          <button onClick={() => window.location.reload()}
+            className="mt-2 bg-[#16a34a] text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-[#064e1e] transition">
+            🔄 Reintentar
+          </button>
+          <button onClick={() => router.push('/mis-proyectos')}
+            className="text-sm text-[#16a34a] font-bold underline underline-offset-2">
+            ← Volver a mis proyectos
+          </button>
+        </div>
+      );
+    }
+  }
+
   if (!programa) return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
@@ -835,15 +871,17 @@ function AlumnosPageContent() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {deportistas.length > 0 && (
+          {!esProfe && deportistas.length > 0 && (
             <button onClick={limpiar} className="w-9 h-9 flex items-center justify-center rounded-xl border border-red-200 text-red-400 hover:bg-red-50 transition">
               <Trash2 className="w-4 h-4" />
             </button>
           )}
-          <button onClick={() => router.push('/alumnos/importar')}
-            className="flex items-center gap-2 bg-white text-[#16a34a] px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-green-50 transition shadow-sm">
-            <FileSpreadsheet className="w-4 h-4" /> Importar
-          </button>
+          {!esProfe && (
+            <button onClick={() => router.push('/alumnos/importar')}
+              className="flex items-center gap-2 bg-white text-[#16a34a] px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-green-50 transition shadow-sm">
+              <FileSpreadsheet className="w-4 h-4" /> Importar
+            </button>
+          )}
           <div className="text-right leading-tight border-l border-white/20 pl-3">
             <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
             <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
@@ -1158,11 +1196,11 @@ function AlumnosPageContent() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-2 min-w-0">
-          <button onClick={() => setPrograma(null)}
+          <button onClick={() => esProfe ? router.push('/mis-proyectos') : setPrograma(null)}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <span className="text-xs text-white/60 font-medium hidden sm:block flex-shrink-0">Programas</span>
+          <span className="text-xs text-white/60 font-medium hidden sm:block flex-shrink-0">{esProfe ? 'Mis proyectos' : 'Programas'}</span>
           <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block flex-shrink-0" />
           <span className={cn('text-xs font-black px-3 py-1.5 rounded-full flex-shrink-0', palProg.chip)}>{programa}</span>
         </div>
