@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 // Rutas que no requieren autenticación
-const RUTAS_PUBLICAS = ['/login', '/afiliacion'];
+const RUTAS_PUBLICAS = ['/login', '/afiliacion', '/api'];
 
 // Rutas permitidas para el rol profesor — asistencia + portal propio + vista alumnos
 const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/sesiones', '/postpartido', '/mis-proyectos', '/alumnos'];
