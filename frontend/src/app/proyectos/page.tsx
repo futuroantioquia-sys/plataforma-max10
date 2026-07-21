@@ -8,12 +8,43 @@ import type { Deportista } from '@/lib/db';
 
 const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
 
-const CAL_OPTIONS = ['', ...Array.from({ length: 46 }, (_, i) => ((i + 5) / 10).toFixed(1))];
+const CAL_OPTIONS   = ['', ...Array.from({ length: 46 }, (_, i) => ((i + 5) / 10).toFixed(1))];
+const COM_OPTIONS   = ['', 'SI', 'N.Q', 'N.A', 'ESP', 'INV'];
+const DIAS_SEMANA   = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+const DIAS_ORDEN_JS = [1, 2, 3, 4, 5, 6, 0]; // lun=1 … dom=0
+const AÑOS_EDAD     = ['', ...Array.from({ length: 14 }, (_, i) => String(2011 + i))];
 
 const ORDEN_PROGRAMA = [
   'Estimulación','Formación','Progresión',
   'Pre-Progresión','Selección','Desarrollo',
 ];
+
+/* ── Proyectos/líneas a ocultar del módulo de información ──────────────
+   Estos no existen como proyectos reales o son entradas sobrantes.
+   Comparación sin distinción de mayúsculas/minúsculas y sin tildes.
+   '*' = ocultar TODOS los proyectos del programa. */
+const OCULTAR_PROYECTOS: Record<string, string[]> = {
+  'estimulacion':   ['retirado'],
+  'formacion':      ['enr', 'retirado', 'sub 9c', 'sub-9c', 'sub9c', 'ubicar'],
+  'progresion':     ['retirado', '34'],
+  'seleccion':      ['retirado'],
+  'desarrollo':     ['proyecto 40', '40', 'proyecto 43', '43',
+                     'proyecto retirado', 'retirado'],
+  'pre-progresion': ['*'],
+};
+
+function sinTildesProy(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+function ocultarFila(programa: string, proyecto: string): boolean {
+  const lProg = sinTildesProy(programa);
+  const lProy = sinTildesProy(proyecto);
+  const lista = OCULTAR_PROYECTOS[lProg];
+  if (!lista) return false;
+  if (lista.includes('*')) return true;
+  return lista.some(excluido => lProy === excluido || lProy.includes(excluido));
+}
 
 function getCol(dep: Deportista, rx: RegExp): string {
   const k = Object.keys(dep._columnas).find(k => rx.test(k.trim()));
@@ -25,16 +56,20 @@ function ordenProg(p: string) {
   return i >= 0 ? i : 999;
 }
 
-interface ProyMeta { horario: string; calificacion: string; }
+interface ProyMeta { horario: string; calificacion: string; competencia: string; dias: number[]; edad: string; usuario: string; contrasena: string; }
 
 interface ProyRow {
   programa:      string;
   proyecto:      string;
   profe:         string;
   sede:          string;
-  jornada:       string;
+  dias:          number[];
   horario:       string;
   calificacion:  string;
+  competencia:   string;
+  edad:          string;
+  usuario:       string;
+  contrasena:    string;
   count:         number;
   deps:          Deportista[];
 }
@@ -45,6 +80,7 @@ export default function GestionProyectosPage() {
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const [meta,        setMeta]        = useState<Record<string, ProyMeta>>({});
   const [edits,       setEdits]       = useState<Record<string, Partial<ProyRow>>>({});
+  const [diasEdits,   setDiasEdits]   = useState<Record<string, number[]>>({});
   const [guardado,    setGuardado]    = useState(false);
   const [tab,         setTab]         = useState<'proyectos'|'sedes'>('proyectos');
 
@@ -64,7 +100,7 @@ export default function GestionProyectosPage() {
     const map: Record<string, Record<string, Deportista[]>> = {};
     deportistas.forEach(dep => {
       const prog = getCol(dep, /^program/i).trim() || '__SIN_PROGRAMA__';
-      const proy = getCol(dep, /^proyecto/i).trim() || '__SIN_PROYECTO__';
+      const proy = getCol(dep, /^proy/i).trim() || '__SIN_PROYECTO__';
       if (!map[prog]) map[prog] = {};
       if (!map[prog][proy]) map[prog][proy] = [];
       map[prog][proy].push(dep);
@@ -74,23 +110,33 @@ export default function GestionProyectosPage() {
       .sort(([a], [b]) => ordenProg(a) - ordenProg(b))
       .map(([programa, proyMap]) => {
         const filas: ProyRow[] = Object.entries(proyMap)
+          .filter(([proyecto]) => !ocultarFila(programa, proyecto))
           .sort(([a], [b]) => a.localeCompare(b, 'es'))
           .map(([proyecto, deps]) => {
             const k = `${programa}::${proyecto}`;
+            const sedeRaw = getCol(deps[0], /^sede/i).trim();
+            const esProy6 = /^(proyecto\s*6|6)$/i.test(sinTildesProy(proyecto));
+            const sede = sedeRaw || (esProy6 ? 'SANTA MÓNICA' : '');
             return {
               programa,
               proyecto,
               profe:   getCol(deps[0], /^prof/i),
-              sede:    getCol(deps[0], /^sede/i),
-              jornada: getCol(deps[0], /^jornada/i),
-              horario:      meta[k]?.horario      ?? '',
+              sede,
+              dias:    meta[k]?.dias ?? [],
+              horario: meta[k]?.horario ?? '',
               calificacion: meta[k]?.calificacion ?? '',
+              competencia:  meta[k]?.competencia  ?? '',
+              edad:    meta[k]?.edad       ?? '',
+              usuario: meta[k]?.usuario    ?? '',
+              contrasena: meta[k]?.contrasena ?? '',
               count:   deps.length,
               deps,
             };
           });
         return { programa, filas };
-      });
+      })
+      /* Ocultar programas que quedaron sin filas (ej: Pre-Progresión completo) */
+      .filter(g => g.filas.length > 0);
   }, [deportistas, meta]);
 
   // ── Agrupación Programa → Sede → Proyectos (para tab Sedes) ─────
@@ -126,6 +172,29 @@ export default function GestionProyectosPage() {
     setEdits(prev => ({ ...prev, [key(row)]: { ...prev[key(row)], [field]: value } }));
   }
 
+  function getDias(row: ProyRow): number[] {
+    return diasEdits[key(row)] ?? row.dias;
+  }
+
+  function toggleDiaRow(row: ProyRow, jsDay: number) {
+    const curr    = getDias(row);
+    const newDias = curr.includes(jsDay)
+      ? curr.filter(d => d !== jsDay)
+      : [...curr, jsDay].sort();
+    setDiasEdits(prev => ({ ...prev, [key(row)]: newDias }));
+
+    // Auto-guardar días inmediatamente — no esperar al botón Guardar
+    try {
+      const raw = localStorage.getItem(PROYECTOS_META_KEY);
+      const currentMeta = raw ? JSON.parse(raw) : {};
+      const k = key(row);
+      currentMeta[k] = { ...(currentMeta[k] ?? {}), dias: newDias };
+      localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(currentMeta));
+      // Clave de acceso rápido para asistencia (sin prefijo de programa)
+      localStorage.setItem(`futuro_dias_${row.proyecto}`, JSON.stringify(newDias));
+    } catch {}
+  }
+
   function toggleAbierto(k: string) {
     setAbiertos(prev => {
       const next = new Set(prev);
@@ -134,49 +203,79 @@ export default function GestionProyectosPage() {
     });
   }
 
-  const hayEdits = Object.keys(edits).length > 0;
+  const hayEdits = Object.keys(edits).length > 0 || Object.keys(diasEdits).length > 0;
 
   // ── Guardar ────────────────────────────────────────────────────
   function guardar() {
     const updated = deportistas.map(dep => {
       const prog = getCol(dep, /^program/i).trim() || '__SIN_PROGRAMA__';
-      const proy = getCol(dep, /^proyecto/i).trim() || '__SIN_PROYECTO__';
+      const proy = getCol(dep, /^proy/i).trim() || '__SIN_PROYECTO__';
       const k    = `${prog}::${proy}`;
       const e    = edits[k];
-      if (!e) return dep;
+      const d    = diasEdits[k];
+
+      // Días efectivos: usar los recién editados, o los que ya estaban en meta.
+      // Así, aunque el admin no toque los días en esta sesión, siempre se
+      // sincronizan a Supabase cuando da "Guardar cambios".
+      const diasEfectivos = d !== undefined ? d : (meta[k]?.dias ?? []);
+
+      // Si no hay edits de texto Y no hay días que sincronizar → no tocar este dep
+      if (!e && diasEfectivos.length === 0) return dep;
 
       const cols = { ...dep._columnas };
-      if (e.profe !== undefined) {
-        const pk = Object.keys(cols).find(c => /^prof/i.test(c.trim()));
-        if (pk) cols[pk] = e.profe as string;
+      if (e) {
+        if (e.profe !== undefined) {
+          const pk = Object.keys(cols).find(c => /^prof/i.test(c.trim()));
+          if (pk) cols[pk] = e.profe as string;
+        }
+        if (e.sede !== undefined) {
+          const sk = Object.keys(cols).find(c => /^sede/i.test(c.trim()));
+          if (sk) cols[sk] = e.sede as string;
+        }
       }
-      if (e.sede !== undefined) {
-        const sk = Object.keys(cols).find(c => /^sede/i.test(c.trim()));
-        if (sk) cols[sk] = e.sede as string;
-      }
-      if (e.jornada !== undefined) {
+      // Guardar días en la columna jornada → persiste en Supabase
+      // Se escribe SIEMPRE (no solo cuando cambian) para que el profesor los
+      // reciba aunque admin y profe estén en navegadores distintos.
+      if (diasEfectivos.length > 0) {
         const jk = Object.keys(cols).find(c => /^jornada/i.test(c.trim()));
-        if (jk) cols[jk] = e.jornada as string;
+        if (jk) cols[jk] = JSON.stringify(diasEfectivos);
+        else     cols['JORNADA'] = JSON.stringify(diasEfectivos);
       }
       return { ...dep, _columnas: cols };
     });
 
     const newMeta = { ...meta };
-    Object.entries(edits).forEach(([k, e]) => {
-      if (e.horario !== undefined || e.calificacion !== undefined) {
+    const allKeys = new Set([...Object.keys(edits), ...Object.keys(diasEdits)]);
+    allKeys.forEach(k => {
+      const e = edits[k] ?? {};
+      const d = diasEdits[k];
+      if (e.horario !== undefined || e.calificacion !== undefined || e.competencia !== undefined || e.edad !== undefined || e.usuario !== undefined || e.contrasena !== undefined || d !== undefined) {
         newMeta[k] = {
           ...(newMeta[k] ?? {}),
-          ...(e.horario      !== undefined ? { horario:      e.horario      as string } : {}),
+          ...(e.horario     !== undefined ? { horario:     e.horario     as string } : {}),
           ...(e.calificacion !== undefined ? { calificacion: e.calificacion as string } : {}),
+          ...(e.competencia !== undefined ? { competencia: e.competencia as string } : {}),
+          ...(e.edad        !== undefined ? { edad:        e.edad        as string } : {}),
+          ...(e.usuario     !== undefined ? { usuario:     e.usuario     as string } : {}),
+          ...(e.contrasena  !== undefined ? { contrasena:  e.contrasena  as string } : {}),
+          ...(d             !== undefined ? { dias: d } : {}),
         };
       }
     });
 
     saveDeportistas(updated).catch(console.error);
     localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(newMeta));
+    // Claves rápidas por proyecto (para que asistencia las lea sin necesitar el programa)
+    Object.entries(newMeta).forEach(([compKey, v]) => {
+      const proy = compKey.split('::').slice(1).join('::');
+      if (proy && Array.isArray((v as any)?.dias)) {
+        localStorage.setItem(`futuro_dias_${proy}`, JSON.stringify((v as any).dias));
+      }
+    });
     setDeportistas(updated);
     setMeta(newMeta);
     setEdits({});
+    setDiasEdits({});
     setGuardado(true);
     setTimeout(() => setGuardado(false), 2500);
   }
@@ -234,7 +333,7 @@ export default function GestionProyectosPage() {
       </header>
 
       {/* ── Tabs ── */}
-      <div className="px-4 pt-4 flex gap-2">
+      <div className="px-4 pt-4 flex gap-2 max-w-[1300px] mx-auto">
         {(['proyectos', 'sedes'] as const).map(t => (
           <button
             key={t}
@@ -250,7 +349,7 @@ export default function GestionProyectosPage() {
       </div>
 
       {/* ── Contenido ── */}
-      <main className="px-3 py-4 space-y-6">
+      <main className="px-3 py-4 space-y-6 max-w-[1300px] mx-auto">
 
         {grupos.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
@@ -276,14 +375,18 @@ export default function GestionProyectosPage() {
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr style={{ background: G }}>
-                      <th style={{ border: '2px solid white' }} className="px-4 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Proyecto</th>
-                      <th style={{ border: '2px solid white' }} className="px-4 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Formador / Profe</th>
-                      <th style={{ border: '2px solid white' }} className="px-4 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Sede</th>
-                      <th style={{ border: '2px solid white' }} className="px-4 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Días de Entrenamiento</th>
-                      <th style={{ border: '2px solid white' }} className="px-4 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Horario</th>
-                      <th style={{ border: '2px solid white', background: '#1d4ed8' }} className="px-4 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">CAL</th>
-                      <th style={{ border: '2px solid white', background: '#4b5563' }} className="px-4 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">
-                        <Users className="w-3.5 h-3.5 inline mr-1" />Deportistas
+                      <th style={{ border: '2px solid white', width: '1px' }} className="px-3 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Proyecto</th>
+                      <th style={{ border: '2px solid white' }} className="px-3 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Formador</th>
+                      <th style={{ border: '2px solid white', width: '80px' }} className="px-2 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Usuario</th>
+                      <th style={{ border: '2px solid white', width: '80px' }} className="px-2 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Contraseña</th>
+                      <th style={{ border: '2px solid white' }} className="px-3 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Sede</th>
+                      <th style={{ border: '2px solid white', width: '160px' }} className="px-2 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Días Entreno</th>
+                      <th style={{ border: '2px solid white' }} className="px-3 py-2.5 text-left text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Horario</th>
+                      <th style={{ border: '2px solid white', background: '#1d4ed8', width: '60px' }} className="px-2 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">CAL</th>
+                      <th style={{ border: '2px solid white', background: '#7c3aed', width: '60px' }} className="px-2 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap" title="¿Compite en torneo?">COM</th>
+                      <th style={{ border: '2px solid white', background: '#0369a1', width: '70px' }} className="px-2 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">Edad</th>
+                      <th style={{ border: '2px solid white', background: '#4b5563', width: '60px' }} className="px-2 py-2.5 text-center text-white font-black text-xs uppercase tracking-wider whitespace-nowrap">
+                        <Users className="w-3 h-3 inline mr-0.5" />Dep.
                       </th>
                     </tr>
                   </thead>
@@ -294,44 +397,88 @@ export default function GestionProyectosPage() {
                         <tr key={row.proyecto}
                           style={{ background: '#f1f5f9', borderTop: '2px solid white' }}
                           className="transition">
-                          <td className="px-4 py-2 font-black text-[#111827] whitespace-nowrap" style={{ border: '2px solid white' }}>
+                          {/* PROYECTO — auto-ajusta al texto */}
+                          <td className="px-3 py-2 font-black text-[#111827] whitespace-nowrap" style={{ border: '2px solid white', width: '1px' }}>
                             {row.proyecto === '__SIN_PROYECTO__' ? '— Sin Proyecto —' : row.proyecto}
                           </td>
-                          <td className="px-2 py-1 min-w-[160px]" style={{ border: '2px solid white' }}>
+                          {/* FORMADOR */}
+                          <td className="px-2 py-1" style={{ border: '2px solid white', minWidth: 130 }}>
                             <input value={val(row, 'profe')} onChange={e => set(row, 'profe', e.target.value)}
-                              placeholder="Nombre del formador…" className={inputCls} />
+                              placeholder="Formador…" className={inputCls} />
                           </td>
-                          <td className="px-2 py-1 min-w-[160px]" style={{ border: '2px solid white' }}>
+                          {/* USUARIO — angosto */}
+                          <td className="px-1 py-1" style={{ border: '2px solid white', width: 80 }}>
+                            <input value={val(row, 'usuario')} onChange={e => set(row, 'usuario', e.target.value)}
+                              placeholder="usuario" className={inputCls} style={{ maxWidth: 72, textAlign: 'center' }} />
+                          </td>
+                          {/* CONTRASEÑA — angosto */}
+                          <td className="px-1 py-1" style={{ border: '2px solid white', width: 80 }}>
+                            <input value={val(row, 'contrasena')} onChange={e => set(row, 'contrasena', e.target.value)}
+                              placeholder="clave" className={inputCls} style={{ maxWidth: 72, textAlign: 'center' }} />
+                          </td>
+                          {/* SEDE */}
+                          <td className="px-2 py-1" style={{ border: '2px solid white', minWidth: 120 }}>
                             <input value={val(row, 'sede')} onChange={e => set(row, 'sede', e.target.value)}
                               placeholder="Sede…" className={inputCls} />
                           </td>
-                          <td className="px-2 py-1 min-w-[180px]" style={{ border: '2px solid white' }}>
-                            <input value={val(row, 'jornada')} onChange={e => set(row, 'jornada', e.target.value)}
-                              placeholder="Ej: Lunes y Miércoles…" className={inputCls} />
+                          {/* DÍAS ENTRENO — botones más pequeños */}
+                          <td className="px-2 py-1.5" style={{ border: '2px solid white', width: 160 }}>
+                            <div className="flex gap-0.5 flex-wrap justify-center">
+                              {DIAS_ORDEN_JS.map((jsDay, i) => {
+                                const sel = getDias(row).includes(jsDay);
+                                return (
+                                  <button key={jsDay} onClick={() => toggleDiaRow(row, jsDay)}
+                                    className={`w-6 h-6 rounded text-[9px] font-black transition select-none ${
+                                      sel ? 'bg-[#16a34a] text-white shadow-sm' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                    }`}>
+                                    {DIAS_SEMANA[i].slice(0, 2)}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </td>
-                          <td className="px-2 py-1 min-w-[140px]" style={{ border: '2px solid white' }}>
+                          {/* HORARIO */}
+                          <td className="px-2 py-1" style={{ border: '2px solid white', minWidth: 110 }}>
                             <input value={val(row, 'horario')} onChange={e => set(row, 'horario', e.target.value)}
-                              placeholder="Ej: 8:00 - 10:00 am…" className={inputCls} />
+                              placeholder="8:00-10:00am" className={inputCls} />
                           </td>
-                          <td className="px-2 py-1 text-center" style={{ border: '2px solid white', minWidth: '80px' }}>
+                          {/* CAL */}
+                          <td className="px-1 py-1 text-center" style={{ border: '2px solid white', width: 60 }}>
                             {(() => {
                               const calVal = val(row, 'calificacion');
                               const calNum = parseFloat(calVal);
                               const calColor = !calVal ? '#9ca3af' : calNum >= 4.5 ? '#16a34a' : calNum >= 3.0 ? '#f59e0b' : '#ef4444';
                               return (
-                                <select
-                                  value={calVal}
-                                  onChange={e => set(row, 'calificacion', e.target.value)}
-                                  style={{ color: calColor, fontWeight: 900, fontSize: '0.8rem', background: 'transparent', outline: 'none', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
-                                  {CAL_OPTIONS.map(v => (
-                                    <option key={v} value={v}>{v || '—'}</option>
-                                  ))}
+                                <select value={calVal} onChange={e => set(row, 'calificacion', e.target.value)}
+                                  style={{ color: calColor, fontWeight: 900, fontSize: '0.75rem', background: 'transparent', outline: 'none', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
+                                  {CAL_OPTIONS.map(v => <option key={v} value={v}>{v || '—'}</option>)}
                                 </select>
                               );
                             })()}
                           </td>
-                          <td className="px-4 py-2 text-center whitespace-nowrap" style={{ background: '#f1f5f9', border: '2px solid white' }}>
-                            <span className="inline-flex items-center gap-1 font-black text-[#111827] text-base">{row.count}</span>
+                          {/* COM */}
+                          <td className="px-1 py-1 text-center" style={{ border: '2px solid white', width: 60, background: '#f5f3ff' }}>
+                            {(() => {
+                              const comVal = val(row, 'competencia');
+                              const comColor = comVal === 'SI' ? '#16a34a' : comVal === 'N.Q' ? '#ef4444' : comVal === 'N.A' ? '#6b7280' : comVal === 'ESP' ? '#f97316' : comVal === 'INV' ? '#2563eb' : '#9ca3af';
+                              return (
+                                <select value={comVal} onChange={e => set(row, 'competencia', e.target.value)}
+                                  style={{ color: comColor, fontWeight: 900, fontSize: '0.75rem', background: 'transparent', outline: 'none', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
+                                  {COM_OPTIONS.map(v => <option key={v} value={v}>{v || '—'}</option>)}
+                                </select>
+                              );
+                            })()}
+                          </td>
+                          {/* EDAD — dropdown 2011-2024 */}
+                          <td className="px-1 py-1 text-center" style={{ border: '2px solid white', width: 70, background: '#e0f2fe' }}>
+                            <select value={val(row, 'edad')} onChange={e => set(row, 'edad', e.target.value)}
+                              style={{ fontWeight: 900, fontSize: '0.75rem', background: 'transparent', outline: 'none', cursor: 'pointer', width: '100%', textAlign: 'center', color: '#0369a1' }}>
+                              {AÑOS_EDAD.map(a => <option key={a} value={a}>{a || '—'}</option>)}
+                            </select>
+                          </td>
+                          {/* DEP COUNT */}
+                          <td className="px-2 py-2 text-center whitespace-nowrap" style={{ background: '#f1f5f9', border: '2px solid white', width: 60 }}>
+                            <span className="font-black text-[#111827] text-sm">{row.count}</span>
                           </td>
                         </tr>
                       );
@@ -405,7 +552,11 @@ export default function GestionProyectosPage() {
                                       {row.proyecto === '__SIN_PROYECTO__' ? '— Sin Proyecto —' : row.proyecto}
                                     </td>
                                     <td className="px-4 py-2 text-[#111827] whitespace-nowrap" style={{ border: '2px solid white' }}>{row.profe || '—'}</td>
-                                    <td className="px-4 py-2 text-[#111827] whitespace-nowrap" style={{ border: '2px solid white' }}>{row.jornada || '—'}</td>
+                                    <td className="px-4 py-2 text-[#111827] whitespace-nowrap" style={{ border: '2px solid white' }}>
+                                      {row.dias.length > 0
+                                        ? row.dias.map(d => DIAS_SEMANA[d === 0 ? 6 : d - 1]).join(', ')
+                                        : '—'}
+                                    </td>
                                     <td className="px-4 py-2 text-[#111827] whitespace-nowrap" style={{ border: '2px solid white' }}>{row.horario || '—'}</td>
                                     <td className="px-4 py-2 text-center font-black text-[#111827]" style={{ background: '#f1f5f9', border: '2px solid white' }}>
                                       {row.count}

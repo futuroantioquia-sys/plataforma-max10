@@ -97,57 +97,99 @@ function rowToDeportista(r: any): Deportista {
   };
 }
 
-/** Lee deportistas: proxy Vercel → fetch directo → SDK → localStorage. */
+/** Guarda deportistas solo si la nueva lista tiene MÁS registros que la actual en localStorage */
+function lsSetDeps(deps: Deportista[]) {
+  const actual = lsGet<Deportista[]>(LS_DEPS, []);
+  if (deps.length >= actual.length) lsSet(LS_DEPS, deps);
+}
+
+/** Fetch paginado: recorre páginas de 1000 hasta agotar todos los registros */
+async function fetchAllPages(
+  baseUrl: string,
+  headers: Record<string, string>,
+  pageSize = 1000
+): Promise<any[]> {
+  const all: any[] = [];
+  let offset = 0;
+  for (let i = 0; i < 20; i++) {           // máximo 20 páginas = 20 000 filas
+    const from = offset;
+    const to   = offset + pageSize - 1;
+    try {
+      const res = await fetch(`${baseUrl}&offset=${offset}&limit=${pageSize}`, {
+        headers: { ...headers, 'Range': `${from}-${to}`, 'Prefer': 'count=none' },
+      });
+      if (!res.ok) break;
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      all.push(...data);
+      if (data.length < pageSize) break;    // última página
+      offset += pageSize;
+    } catch { break; }
+  }
+  return all;
+}
+
+/** Lee deportistas: proxy Vercel → fetch paginado → SDK paginado → localStorage. */
 export async function getDeportistas(): Promise<Deportista[]> {
   if (_cacheDeportistas) return _cacheDeportistas;
 
-  // ── Intento 1: API route de Vercel (proxy — siempre alcanzable desde mobile) ──
+  // ── Intento 1: API route de Vercel (una sola llamada, el servidor pagina internamente) ──
   try {
-    const res = await fetch('/api/deportistas', { cache: 'no-store' });
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20_000);   // 20 s máx
+    const res   = await fetch('/api/deportistas', {
+      cache:  'no-store',
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         const deps = data.map(rowToDeportista);
-        lsSet(LS_DEPS, deps);
+        lsSetDeps(deps);
         _cacheDeportistas = deps;
         return deps;
       }
     }
   } catch { /* intentar fetch directo */ }
 
-  // ── Intento 2: fetch() nativo directo a Supabase ──
+  // ── Intento 2: fetch() paginado directo a Supabase ──
   try {
-    const res = await fetch(
+    const sbHeaders = {
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type':  'application/json',
+    };
+    const data = await fetchAllPages(
       `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas&order=nombre`,
-      {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type':  'application/json',
-        },
-      }
+      sbHeaders,
+      1000
     );
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const deps = data.map(rowToDeportista);
-        lsSet(LS_DEPS, deps);
-        _cacheDeportistas = deps;
-        return deps;
-      }
+    if (data.length > 0) {
+      const deps = data.map(rowToDeportista);
+      lsSetDeps(deps);
+      _cacheDeportistas = deps;
+      return deps;
     }
   } catch { /* intentar SDK */ }
 
-  // ── Intento 3: SDK de Supabase ──
+  // ── Intento 3: SDK paginado de Supabase ──
   try {
-    const { data, error } = await supabase()
-      .from('deportistas')
-      .select('id, nombre, columnas')
-      .order('nombre');
-
-    if (!error && data && data.length) {
-      const deps = data.map(rowToDeportista);
-      lsSet(LS_DEPS, deps);
+    const all: any[] = [];
+    let offset = 0;
+    for (let i = 0; i < 20; i++) {
+      const { data, error } = await supabase()
+        .from('deportistas')
+        .select('id, nombre, columnas')
+        .order('nombre')
+        .range(offset, offset + 999);
+      if (error || !data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+    if (all.length > 0) {
+      const deps = all.map(rowToDeportista);
+      lsSetDeps(deps);
       _cacheDeportistas = deps;
       return deps;
     }
@@ -161,6 +203,39 @@ export async function getDeportistas(): Promise<Deportista[]> {
   }));
   if (result.length) _cacheDeportistas = result;
   return result;
+}
+
+/**
+ * Búsqueda rápida: retorna solo los deportistas cuyo CÓDIGO coincida.
+ * Llama al endpoint /api/calidoso-login que hace UNA query a Supabase.
+ * Fallback a caché en memoria o localStorage si la red falla.
+ */
+export async function buscarPorCodigo(codigo: string): Promise<Deportista[]> {
+  const RX_COD = /^c[oó]d/i;
+
+  // ── Intento 1: endpoint rápido de Supabase (1 fila, no 1.139) ──
+  try {
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8_000);
+    const res   = await fetch(
+      `/api/calidoso-login?codigo=${encodeURIComponent(codigo)}`,
+      { cache: 'no-store', signal: ctrl.signal }
+    ).finally(() => clearTimeout(timer));
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map(rowToDeportista);
+      }
+    }
+  } catch { /* caída silenciosa → buscar en caché */ }
+
+  // ── Fallback: filtrar la caché en memoria o localStorage ──
+  const fuente = _cacheDeportistas ?? lsGet<Deportista[]>(LS_DEPS, []);
+  return fuente.filter(d => {
+    const cols   = d._columnas ?? {};
+    const codKey = Object.keys(cols).find(k => RX_COD.test(k.trim().normalize('NFC')));
+    return codKey ? String(cols[codKey]).trim().toUpperCase() === codigo : false;
+  });
 }
 
 /**
@@ -293,6 +368,35 @@ export async function saveDeportistas(deps: Deportista[]): Promise<void> {
 
 /** Lee todos los pagos: fetch() directo → SDK → localStorage. */
 export async function getPagos(): Promise<AllPagos> {
+  /* Helper: leer localStorage como base completa (última importación) */
+  const lsBase = (): AllPagos => {
+    const libroAll = lsGet<AllPagos>(LS_LIBRO, {});
+    const lsAll    = lsGet<AllPagos>(LS_PAGOS, {});
+    return { ...lsAll, ...libroAll };
+  };
+
+  /* Helper: parsear filas de Supabase → AllPagos */
+  const parseSb = (data: any[]): AllPagos => {
+    const sbAll: AllPagos = {};
+    for (const r of data) {
+      if (!sbAll[r.deportista_id]) sbAll[r.deportista_id] = [];
+      sbAll[r.deportista_id].push({
+        detalle:  r.detalle,
+        estado:   r.estado,
+        vPagado:  r.v_pagado  ?? '',
+        vCargado: r.v_cargado ?? '',
+        destino:  r.destino   ?? '',
+        fecha:    r.fecha     ?? '',
+      });
+    }
+    return sbAll;
+  };
+
+  /* ── ESTRATEGIA: localStorage = base completa (import local).
+     Supabase agrega/sobreescribe entradas que SÍ insertó.
+     Así, si Supabase falla parcialmente para algunos deportistas,
+     el localStorage los cubre sin destruir los datos del import. ──*/
+
   // ── Intento 1: fetch() nativo ──
   try {
     const res = await fetch(
@@ -308,29 +412,16 @@ export async function getPagos(): Promise<AllPagos> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        const sbAll: AllPagos = {};
-        for (const r of data) {
-          if (!sbAll[r.deportista_id]) sbAll[r.deportista_id] = [];
-          sbAll[r.deportista_id].push({
-            detalle: r.detalle, estado: r.estado,
-            vPagado: r.v_pagado ?? '', vCargado: r.v_cargado ?? '',
-            destino: r.destino ?? '', fecha: r.fecha ?? '',
-          });
-        }
-        const libroKeys: AllPagos = {};
-        const depKeys:   AllPagos = {};
-        for (const [k, v] of Object.entries(sbAll)) {
-          if (/^\d{1,6}$/.test(k)) libroKeys[k] = v; else depKeys[k] = v;
-        }
-        lsSet(LS_LIBRO, libroKeys);
-        lsSet(LS_PAGOS, depKeys);
-        return sbAll;
+        const sbAll = parseSb(data);
+        /* MERGE: localStorage (base completa) + Supabase (sobreescribe donde tiene datos).
+           Nunca sobreescribir localStorage desde aquí — solo saveAllPagos escribe LS. */
+        return { ...lsBase(), ...sbAll };
       }
     }
   } catch { /* intentar SDK */ }
 
+  // ── Intento 2: SDK ──
   try {
-    // 2. SDK — fuente de verdad (incluye libro contable + manuales)
     const { data, error } = await supabase()
       .from('pagos_estado')
       .select('deportista_id, detalle, estado, v_pagado, v_cargado, destino, fecha')
@@ -338,35 +429,17 @@ export async function getPagos(): Promise<AllPagos> {
 
     if (error) throw error;
 
-    const sbAll: AllPagos = {};
-    for (const r of (data ?? [])) {
-      if (!sbAll[r.deportista_id]) sbAll[r.deportista_id] = [];
-      sbAll[r.deportista_id].push({
-        detalle:  r.detalle,
-        estado:   r.estado,
-        vPagado:  r.v_pagado  ?? '',
-        vCargado: r.v_cargado ?? '',
-        destino:  r.destino   ?? '',
-        fecha:    r.fecha     ?? '',
-      });
+    const sbAll = parseSb(data ?? []);
+    if (Object.keys(sbAll).length > 0) {
+      /* MERGE: Supabase + localStorage (cubre gaps de INSERT parcialmente fallido) */
+      return { ...lsBase(), ...sbAll };
     }
 
-    // Actualizar caché local con datos frescos de Supabase
-    const libroKeys: AllPagos = {};
-    const depKeys:   AllPagos = {};
-    for (const [k, v] of Object.entries(sbAll)) {
-      if (/^\d{1,6}$/.test(k)) libroKeys[k] = v;
-      else depKeys[k] = v;
-    }
-    lsSet(LS_LIBRO, libroKeys);
-    lsSet(LS_PAGOS, depKeys);
-
-    return sbAll;
+    // Supabase vacío → usar solo localStorage
+    return lsBase();
   } catch {
-    // Sin Supabase: fallback a localStorage
-    const libroAll = lsGet<AllPagos>(LS_LIBRO, {});
-    const lsAll    = lsGet<AllPagos>(LS_PAGOS, {});
-    return { ...lsAll, ...libroAll };
+    // Sin Supabase: localStorage completo
+    return lsBase();
   }
 }
 
@@ -395,6 +468,37 @@ export async function savePagosDeportista(depId: string, filas: FilaPago[]): Pro
     if (error) console.error('[db] savePagosDeportista:', error.message);
   } catch (e) {
     console.error('[db] savePagosDeportista:', e);
+  }
+}
+
+/** Borra TODOS los pagos del libro contable: localStorage + Supabase. */
+export async function deleteAllPagos(): Promise<void> {
+  /* 1. Limpiar localStorage */
+  try { localStorage.removeItem(LS_LIBRO);  } catch {}
+  try { localStorage.removeItem(LS_PAGOS);  } catch {}
+  _cachePagos = null;
+
+  /* 2. Borrar en Supabase — fetch() directo */
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/pagos_estado?deportista_id=not.is.null`,
+      {
+        method: 'DELETE',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'return=minimal',
+        },
+      }
+    );
+  } catch {
+    /* Fallback SDK */
+    try {
+      await supabase().from('pagos_estado').delete().neq('deportista_id', '');
+    } catch (e) {
+      console.error('[db] deleteAllPagos:', e);
+    }
   }
 }
 

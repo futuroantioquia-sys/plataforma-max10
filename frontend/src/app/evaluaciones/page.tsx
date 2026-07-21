@@ -29,12 +29,19 @@ const DESC_REMATE: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Ejecuta con potencia y colocación incluso en carrera. Ajusta el cuerpo rápidamente para rematar balones que vienen de diferentes ángulos.',
   'Nivel 5 (Dominante)':    'Define con ambas piernas y bajo máxima presión defensiva. Domina el remate de primera intención y utiliza recursos variados (volea, cabeza, colocación sutil).',
 };
-const DESC_CONTROL_ORIENTADO: Record<string, string> = {
+const DESC_CONTROL: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'El balón se le escapa tras el primer toque; necesita varios contactos para dominarlo.',
   'Nivel 2 (En Desarrollo)':'Detiene el balón, pero queda estático. Requiere un segundo toque para empezar a moverse.',
   'Nivel 3 (Competente)':   'Controla el balón hacia una zona libre de presión en situaciones de baja intensidad.',
   'Nivel 4 (Avanzado)':     'El primer toque ya es una ventaja: prepara el balón para el siguiente pase o tiro de inmediato.',
   'Nivel 5 (Dominante)':    'Domina el control con cualquier superficie (pecho, muslo, cabeza) y elimina rivales con el primer toque.',
+};
+const DESC_PASE: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Pases sin dirección; no elige bien la superficie de contacto ni al compañero receptor.',
+  'Nivel 2 (En Desarrollo)':'Logra dar el pase a un compañero cercano, pero sin intención táctica ni variación de distancia.',
+  'Nivel 3 (Competente)':   'Pases precisos a corta y media distancia; elige correctamente al compañero libre.',
+  'Nivel 4 (Avanzado)':     'Varía la distancia, velocidad y superficie del pase con intención táctica clara.',
+  'Nivel 5 (Dominante)':    'Precisión total bajo presión; ejecuta pases filtrados, de cambio de juego y de larga distancia.',
 };
 const DESC_CONDUCCION: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Mantiene la vista fija en el balón; pierde el control al aumentar la velocidad.',
@@ -43,12 +50,12 @@ const DESC_CONDUCCION: Record<string, string> = {
   'Nivel 4 (Avanzado)':     'Domina el cambio de ritmo y fintas para superar rivales en el 1vs1.',
   'Nivel 5 (Dominante)':    'Control total del espacio y el balón; utiliza ambos perfiles para desequilibrar.',
 };
-const DESC_CONTROL_PASE: Record<string, string> = {
-  'Nivel 1 (Iniciación)':   'Dificultad para amortiguar el balón; pases con poca dirección.',
-  'Nivel 2 (En Desarrollo)':'Controla con varios toques; empieza a orientar el pase hacia un compañero.',
-  'Nivel 3 (Competente)':   'Control efectivo en estático; pases precisos a corta y media distancia.',
-  'Nivel 4 (Avanzado)':     'Control orientado (primer toque) para ganar ventaja; pases con intención táctica.',
-  'Nivel 5 (Dominante)':    'Ejecución perfecta bajo presión y a máxima velocidad; precisión en pases largos.',
+const DESC_DRIBLING: Record<string, string> = {
+  'Nivel 1 (Iniciación)':   'Evita el duelo 1vs1; pierde el balón ante el primer contacto con el rival.',
+  'Nivel 2 (En Desarrollo)':'Intenta una finta básica pero es predecible; el rival suele anticipar el movimiento.',
+  'Nivel 3 (Competente)':   'Realiza uno o dos regates básicos para superar al rival en espacios amplios.',
+  'Nivel 4 (Avanzado)':     'Domina 2-3 movimientos de dribling; supera al rival con cambio de ritmo y de dirección.',
+  'Nivel 5 (Dominante)':    'Arsenal variado de regates; supera rivales con ambos perfiles bajo presión defensiva intensa.',
 };
 const DESC_RESISTENCIA: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Muestra signos de fatiga prematura. Su participación en el juego disminuye drásticamente después de los primeros minutos de intensidad.',
@@ -187,9 +194,12 @@ type Valoracion = {
   velocidadNivel: string; velocidadDesc: string;
   resistenciaNivel: string; resistenciaDesc: string;
   controlNivel: string; controlDesc: string;
-  conductaNivel: string; conductaDesc: string;
   paseNivel: string; paseDesc: string;
+  conductaNivel: string; conductaDesc: string;
+  driblingNivel: string; driblingDesc: string;
   remataNivel: string; remataDesc: string;
+  cabeceoNivel: string; cabeceoDesc: string;
+  quiteNivel: string; quiteDesc: string;
   proteccionNivel: string; proteccionDesc: string;
   posicionNivel: string; posicionDesc: string;
   visionNivel: string; visionDesc: string;
@@ -216,9 +226,15 @@ const INICIAL: Valoracion = {
   fecha: new Date().toLocaleDateString('es-CO'), codigo: '', nombre: '', fechaNac: '',
   programa: '', proyecto: '', perfil: '', posicion: '', foto: '', numeroInforme: '',
   fuerzaNivel: '', fuerzaDesc: '', velocidadNivel: '', velocidadDesc: '',
-  resistenciaNivel: '', resistenciaDesc: '', controlNivel: '', controlDesc: '',
-  conductaNivel: '', conductaDesc: '', paseNivel: '', paseDesc: '',
-  remataNivel: '', remataDesc: '', proteccionNivel: '', proteccionDesc: '',
+  resistenciaNivel: '', resistenciaDesc: '',
+  controlNivel: '', controlDesc: '',
+  paseNivel: '', paseDesc: '',
+  conductaNivel: '', conductaDesc: '',
+  driblingNivel: '', driblingDesc: '',
+  remataNivel: '', remataDesc: '',
+  cabeceoNivel: '', cabeceoDesc: '',
+  quiteNivel: '', quiteDesc: '',
+  proteccionNivel: '', proteccionDesc: '',
   posicionNivel: '', posicionDesc: '',
   visionNivel: '', visionDesc: '', defensaNivel: '', defensaDesc: '',
   amplitudNivel: '', amplitudDesc: '',
@@ -237,6 +253,324 @@ const INICIAL: Valoracion = {
   objetivosTrimestre: '',
   observaciones: '',
 };
+
+/* ══════════════════════════════════════════════════════════════
+   VISTA GAMIFICADA — PADRES / DEPORTISTA
+   ══════════════════════════════════════════════════════════════ */
+const NIVEL_NUM = (s: string) => { const i = NIVELES.indexOf(s); return i > 0 ? i : 0; };
+const COMP_NUM = (s: string): number =>
+  ({ 'SIEMPRE': 5, 'CASI SIEMPRE': 4, 'ALGUNAS VECES': 3, 'CASI NUNCA': 2, 'NUNCA': 1 } as Record<string, number>)[s] ?? 0;
+const PROM_G = (vals: number[]) => {
+  const f = vals.filter(v => v > 0);
+  return f.length ? f.reduce((a, b) => a + b, 0) / f.length : 0;
+};
+const LVL_COLOR = ['#555', '#ef4444', '#f97316', '#eab308', '#22c55e', '#00d4ff'];
+const LVL_SHORT = ['—', 'INI', 'DEV', 'COM', 'AVZ', 'DOM'];
+
+/* ── Radar SVG ── */
+function RadarGrafico({ scores, labels }: { scores: number[]; labels: string[] }) {
+  const cx = 150, cy = 155, maxR = 100, n = scores.length;
+  const pt = (i: number, r: number) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+  };
+  const gridPoly = (pct: number) =>
+    Array.from({ length: n }, (_, i) => { const { x, y } = pt(i, pct * maxR); return `${x},${y}`; }).join(' ');
+  const playerPoly = scores.map((s, i) => { const { x, y } = pt(i, (s / 5) * maxR); return `${x},${y}`; }).join(' ');
+  return (
+    <svg width="300" height="310" viewBox="0 0 300 310" style={{ overflow: 'visible' }}>
+      {[0.2, 0.4, 0.6, 0.8, 1.0].map(pct => (
+        <polygon key={pct} points={gridPoly(pct)} fill="none" stroke="#1e3a4a" strokeWidth={pct === 1.0 ? 1.5 : 1} />
+      ))}
+      {Array.from({ length: n }, (_, i) => {
+        const { x, y } = pt(i, maxR);
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#1e3a4a" strokeWidth="1" />;
+      })}
+      <polygon points={playerPoly} fill="rgba(0,212,136,0.2)" stroke="#00d488" strokeWidth="2.5"
+        style={{ filter: 'drop-shadow(0 0 6px rgba(0,212,136,0.4))' }} />
+      {scores.map((s, i) => {
+        if (!s) return null;
+        const { x, y } = pt(i, (s / 5) * maxR);
+        return <circle key={i} cx={x} cy={y} r="5" fill="#00d488" style={{ filter: 'drop-shadow(0 0 4px #00d488)' }} />;
+      })}
+      {labels.map((lbl, i) => {
+        const { x, y } = pt(i, maxR + 24);
+        return (
+          <g key={i}>
+            <text x={x} y={y - 7} textAnchor="middle" fill="#9ca3af" fontSize="8.5" fontWeight="800" fontFamily="Arial" letterSpacing="0.5">{lbl}</text>
+            <text x={x} y={y + 6} textAnchor="middle" fill={scores[i] > 0 ? '#00d488' : '#555'} fontSize="10" fontWeight="900" fontFamily="Arial">
+              {scores[i] > 0 ? scores[i].toFixed(1) : '—'}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ── Barra de habilidad ── */
+function BarraHabilidad({ label, nivel }: { label: string; nivel: string }) {
+  const nv = NIVEL_NUM(nivel);
+  const pct = nv > 0 ? (nv / 5) * 100 : 0;
+  const color = LVL_COLOR[nv] || '#555';
+  return (
+    <div style={{ marginBottom: 11 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+        <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>
+        <span style={{ fontSize: 9, color, fontWeight: 900, background: `${color}22`, border: `1px solid ${color}55`, borderRadius: 3, padding: '1px 6px' }}>
+          {nv > 0 ? LVL_SHORT[nv] : '—'}
+        </span>
+      </div>
+      <div style={{ background: '#0f2235', borderRadius: 4, height: 7, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${color}66, ${color})`, borderRadius: 4, boxShadow: nv >= 4 ? `0 0 6px ${color}88` : 'none' }} />
+      </div>
+    </div>
+  );
+}
+
+/* ── Sección colapsable ── */
+function SeccionJuego({ icono, titulo, score, children, defaultOpen = false }: {
+  icono: string; titulo: string; score: number; children: React.ReactNode; defaultOpen?: boolean;
+}) {
+  const [abierto, setAbierto] = useState(defaultOpen);
+  const color = score === 0 ? '#555' : score >= 4.5 ? '#00d4ff' : score >= 3.5 ? '#22c55e' : score >= 2.5 ? '#eab308' : '#f97316';
+  return (
+    <div style={{ marginBottom: 8, borderRadius: 10, overflow: 'hidden', border: '1px solid #1e3a4a', background: '#0d1f2e' }}>
+      <button onClick={() => setAbierto(v => !v)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+        <span style={{ fontSize: 18 }}>{icono}</span>
+        <span style={{ flex: 1, color: '#e2e8f0', fontWeight: 800, fontSize: 12, letterSpacing: 1, textTransform: 'uppercase' }}>{titulo}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 60, height: 5, background: '#0f2235', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ width: `${(score / 5) * 100}%`, height: '100%', background: color, boxShadow: `0 0 5px ${color}` }} />
+          </div>
+          <span style={{ color, fontWeight: 900, fontSize: 13, minWidth: 28 }}>{score > 0 ? score.toFixed(1) : '—'}</span>
+          <span style={{ color: '#475569', fontSize: 12 }}>{abierto ? '▲' : '▼'}</span>
+        </div>
+      </button>
+      {abierto && (
+        <div style={{ padding: '4px 16px 16px', borderTop: '1px solid #1e3a4a' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── VISTA PADRES COMPLETA ── */
+function VistaPadres({ data, nombreEntrenador, onClose }: {
+  data: Valoracion; nombreEntrenador: string; onClose: () => void;
+}) {
+  const fisico       = PROM_G([NIVEL_NUM(data.fuerzaNivel), NIVEL_NUM(data.velocidadNivel), NIVEL_NUM(data.resistenciaNivel)]);
+  const tecnico      = PROM_G([NIVEL_NUM(data.controlNivel), NIVEL_NUM(data.paseNivel), NIVEL_NUM(data.conductaNivel), NIVEL_NUM(data.driblingNivel), NIVEL_NUM(data.remataNivel), NIVEL_NUM(data.cabeceoNivel), NIVEL_NUM(data.quiteNivel), NIVEL_NUM(data.proteccionNivel)]);
+  const tactico      = PROM_G([NIVEL_NUM(data.posicionNivel), NIVEL_NUM(data.visionNivel), NIVEL_NUM(data.defensaNivel), NIVEL_NUM(data.amplitudNivel), NIVEL_NUM(data.transicionNivel), NIVEL_NUM(data.superioridadNivel), NIVEL_NUM(data.basculacionNivel)]);
+  const mental       = PROM_G([NIVEL_NUM(data.trabajoNivel), NIVEL_NUM(data.disciplinaNivel), NIVEL_NUM(data.actitudNivel)]);
+  const comportamiento = PROM_G([COMP_NUM(data.responsabilidad), COMP_NUM(data.puntualidad), COMP_NUM(data.disciplinaComp), COMP_NUM(data.respeto), COMP_NUM(data.tolerancia), COMP_NUM(data.companerismo), COMP_NUM(data.liderazgo), COMP_NUM(data.trabajoEquipoComp), COMP_NUM(data.sentidoPertenencia)]);
+  const overall      = PROM_G([fisico, tecnico, tactico, mental, comportamiento]);
+  const overallNum   = Math.round(overall * 20);
+  const rankColor    = overallNum >= 85 ? '#a78bfa' : overallNum >= 75 ? '#00d4ff' : overallNum >= 65 ? '#22c55e' : overallNum >= 50 ? '#eab308' : '#f97316';
+  const rankLabel    = overallNum >= 85 ? 'DIAMANTE' : overallNum >= 75 ? 'PLATINO' : overallNum >= 65 ? 'ORO' : overallNum >= 50 ? 'PLATA' : 'BRONCE';
+  const iniciales    = (data.nombre || 'FA').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: '#060d18', overflowY: 'auto', fontFamily: 'Arial, sans-serif' }}>
+
+      {/* Barra superior */}
+      <div className="print:hidden" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(6,13,24,0.96)', backdropFilter: 'blur(8px)', borderBottom: '1px solid #1e3a4a', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={onClose} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #1e3a4a', background: '#0d1f2e', color: '#94a3b8', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>← Volver</button>
+        <span style={{ flex: 1, color: '#e2e8f0', fontWeight: 800, fontSize: 14 }}>Vista Deportista · {data.nombre || '—'}</span>
+        <button onClick={() => window.print()} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#22c55e', color: '#000', cursor: 'pointer', fontSize: 12, fontWeight: 800 }}>
+          🖨️ Imprimir / PDF
+        </button>
+      </div>
+
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '20px 16px 50px' }}>
+
+        {/* ── HERO CARD ── */}
+        <div style={{ borderRadius: 18, overflow: 'hidden', background: 'linear-gradient(135deg, #0d2b1a 0%, #051a2e 55%, #0d1f2e 100%)', border: '1px solid #1e3a4a', marginBottom: 14 }}>
+          <div style={{ padding: '20px 20px 18px', display: 'flex', gap: 16 }}>
+            {/* Foto */}
+            <div style={{ flexShrink: 0 }}>
+              <div style={{ width: 90, height: 114, borderRadius: 12, overflow: 'hidden', border: '2px solid #00d48840', background: 'linear-gradient(135deg, #0d4a2b, #051a2e)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(0,212,136,0.2)' }}>
+                {data.foto
+                  ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+                  : <span style={{ color: '#00d488', fontSize: 30, fontWeight: 900 }}>{iniciales}</span>}
+              </div>
+              <div style={{ marginTop: 5, textAlign: 'center', background: '#00d48820', border: '1px solid #00d48840', borderRadius: 5, padding: '2px 4px' }}>
+                <span style={{ color: '#00d488', fontSize: 8, fontWeight: 900, letterSpacing: 0.5 }}>{data.posicion || '—'}</span>
+              </div>
+            </div>
+
+            {/* Info principal */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 8, color: '#475569', fontWeight: 700, letterSpacing: 2, marginBottom: 3 }}>
+                {data.fecha} · INFORME #{data.numeroInforme || '—'}
+              </div>
+              <div style={{ fontSize: 17, color: '#f1f5f9', fontWeight: 900, letterSpacing: 0.5, lineHeight: 1.2, marginBottom: 8, textTransform: 'uppercase' }}>
+                {data.nombre || 'DEPORTISTA'}
+              </div>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' as const, marginBottom: 10 }}>
+                {data.proyecto && <span style={{ background: '#16a34a22', border: '1px solid #16a34a44', color: '#4ade80', fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4 }}>{data.proyecto}</span>}
+                {data.programa && <span style={{ background: '#0ea5e922', border: '1px solid #0ea5e944', color: '#38bdf8', fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4 }}>{data.programa}</span>}
+                {data.perfil   && <span style={{ background: '#8b5cf622', border: '1px solid #8b5cf644', color: '#c4b5fd', fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4 }}>{data.perfil}</span>}
+              </div>
+              {/* Overall */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 54, height: 54, borderRadius: 10, background: `linear-gradient(135deg, ${rankColor}22, ${rankColor}44)`, border: `2px solid ${rankColor}66`, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 16px ${rankColor}44` }}>
+                  <span style={{ color: rankColor, fontSize: 20, fontWeight: 900, lineHeight: 1 }}>{overallNum > 0 ? overallNum : '—'}</span>
+                  <span style={{ color: rankColor, fontSize: 7, fontWeight: 800 }}>OVR</span>
+                </div>
+                <div>
+                  <div style={{ color: rankColor, fontSize: 11, fontWeight: 900, letterSpacing: 1 }}>{rankLabel}</div>
+                  <div style={{ color: '#475569', fontSize: 9, marginBottom: 3 }}>Valoración global</div>
+                  <div style={{ display: 'flex', gap: 2 }}>
+                    {[1,2,3,4,5].map(star => <span key={star} style={{ fontSize: 11, color: star <= Math.round(overall) ? '#fbbf24' : '#1e3a4a' }}>★</span>)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Escudo */}
+            <div style={{ flexShrink: 0, alignSelf: 'flex-start' }}>
+              <img src="/ESCUDO F.A 2020.png" alt="FA" style={{ width: 46, height: 46, objectFit: 'contain', opacity: 0.85 }} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── RADAR ── */}
+        <div style={{ background: '#0d1f2e', borderRadius: 16, border: '1px solid #1e3a4a', padding: '14px', marginBottom: 14, textAlign: 'center' }}>
+          <div style={{ color: '#475569', fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase' as const, marginBottom: 4 }}>
+            Radar de Habilidades
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <RadarGrafico
+              scores={[fisico, tecnico, tactico, comportamiento, mental]}
+              labels={['FÍSICO', 'TÉCNICA', 'TÁCTICA', 'COMPORT.', 'MENTAL']}
+            />
+          </div>
+        </div>
+
+        {/* ── SECCIONES COLAPSABLES ── */}
+        <div style={{ color: '#475569', fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase' as const, marginBottom: 8 }}>
+          Detalle por Categorías
+        </div>
+
+        <SeccionJuego icono="💪" titulo="Físico" score={fisico} defaultOpen={true}>
+          <div style={{ paddingTop: 10 }}>
+            <BarraHabilidad label="Fuerza — Potencia y Duelo" nivel={data.fuerzaNivel} />
+            <BarraHabilidad label="Velocidad — Reacción y Desplazamiento" nivel={data.velocidadNivel} />
+            <BarraHabilidad label="Resistencia — Capacidad Aeróbica" nivel={data.resistenciaNivel} />
+          </div>
+        </SeccionJuego>
+
+        <SeccionJuego icono="⚽" titulo="Técnica" score={tecnico}>
+          <div style={{ paddingTop: 10 }}>
+            <BarraHabilidad label="Control" nivel={data.controlNivel} />
+            <BarraHabilidad label="Pase" nivel={data.paseNivel} />
+            <BarraHabilidad label="Conducción" nivel={data.conductaNivel} />
+            <BarraHabilidad label="Dribling" nivel={data.driblingNivel} />
+            <BarraHabilidad label="Remate" nivel={data.remataNivel} />
+            <BarraHabilidad label="Cabeceo" nivel={data.cabeceoNivel} />
+            <BarraHabilidad label="Quite del Balón" nivel={data.quiteNivel} />
+            <BarraHabilidad label="Protección del Balón" nivel={data.proteccionNivel} />
+          </div>
+        </SeccionJuego>
+
+        <SeccionJuego icono="🧠" titulo="Táctica" score={tactico}>
+          <div style={{ paddingTop: 10 }}>
+            <BarraHabilidad label="Ubicación Espacial" nivel={data.posicionNivel} />
+            <BarraHabilidad label="Velocidad de Procesamiento" nivel={data.visionNivel} />
+            <BarraHabilidad label="Lectura de Alturas y Espacios" nivel={data.defensaNivel} />
+            <BarraHabilidad label="Amplitud y Profundidad" nivel={data.amplitudNivel} />
+            <BarraHabilidad label="Transiciones (Ataque-Defensa)" nivel={data.transicionNivel} />
+            <BarraHabilidad label="Superioridad Numérica 2vs1" nivel={data.superioridadNivel} />
+            <BarraHabilidad label="Basculación y Coberturas" nivel={data.basculacionNivel} />
+          </div>
+        </SeccionJuego>
+
+        <SeccionJuego icono="❤️" titulo="Mental y Actitudinal" score={mental}>
+          <div style={{ paddingTop: 10 }}>
+            <BarraHabilidad label="Trabajo en Equipo" nivel={data.trabajoNivel} />
+            <BarraHabilidad label="Gestión de la Frustración" nivel={data.disciplinaNivel} />
+            <BarraHabilidad label="Comunicación Asertiva" nivel={data.actitudNivel} />
+          </div>
+        </SeccionJuego>
+
+        <SeccionJuego icono="⭐" titulo="Comportamiento" score={comportamiento}>
+          <div style={{ paddingTop: 10 }}>
+            {([
+              ['Responsabilidad', data.responsabilidad],
+              ['Puntualidad',     data.puntualidad],
+              ['Disciplina',      data.disciplinaComp],
+              ['Respeto',         data.respeto],
+              ['Tolerancia',      data.tolerancia],
+              ['Compañerismo',    data.companerismo],
+              ['Liderazgo',       data.liderazgo],
+              ['Trabajo en Equipo', data.trabajoEquipoComp],
+              ['Sentido de Pertenencia', data.sentidoPertenencia],
+            ] as [string, string][]).map(([lbl, val]) => {
+              const cv = ({ 'SIEMPRE': 5, 'CASI SIEMPRE': 4, 'ALGUNAS VECES': 3, 'CASI NUNCA': 2, 'NUNCA': 1 } as Record<string, number>)[val] ?? 0;
+              const color = LVL_COLOR[cv] || '#555';
+              return (
+                <div key={lbl} style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>{lbl}</span>
+                    <span style={{ fontSize: 9, color, fontWeight: 900, background: `${color}22`, border: `1px solid ${color}44`, borderRadius: 3, padding: '1px 5px' }}>{val || '—'}</span>
+                  </div>
+                  <div style={{ background: '#0f2235', borderRadius: 3, height: 6, overflow: 'hidden' }}>
+                    <div style={{ width: `${(cv / 5) * 100}%`, height: '100%', background: `linear-gradient(90deg, ${color}66, ${color})`, borderRadius: 3 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </SeccionJuego>
+
+        {/* ── LOGROS Y OBJETIVOS ── */}
+        {data.logrosTrimestre && (
+          <div style={{ background: '#0d2b1a', border: '1px solid #16a34a33', borderRadius: 12, padding: '14px 16px', marginBottom: 10, marginTop: 8 }}>
+            <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>🏆 LOGROS DEL TRIMESTRE</div>
+            <p style={{ color: '#d1fae5', fontSize: 12, lineHeight: 1.7, margin: 0 }}>{data.logrosTrimestre}</p>
+          </div>
+        )}
+        {data.objetivosTrimestre && (
+          <div style={{ background: '#0c1f35', border: '1px solid #0ea5e933', borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
+            <div style={{ color: '#38bdf8', fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>🎯 OBJETIVOS PRÓXIMO TRIMESTRE</div>
+            <p style={{ color: '#e0f2fe', fontSize: 12, lineHeight: 1.7, margin: 0 }}>{data.objetivosTrimestre}</p>
+          </div>
+        )}
+        {data.observaciones && (
+          <div style={{ background: '#1a1a2e', border: '1px solid #333', borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
+            <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>📝 OBSERVACIONES DEL ENTRENADOR</div>
+            <p style={{ color: '#cbd5e1', fontSize: 12, lineHeight: 1.7, margin: 0 }}>{data.observaciones}</p>
+          </div>
+        )}
+
+        {/* ── PIE ── */}
+        <div style={{ background: '#0d1f2e', borderRadius: 12, border: '1px solid #1e3a4a', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+          <img src="/ESCUDO F.A 2020.png" alt="FA" style={{ width: 34, height: 34, objectFit: 'contain', opacity: 0.8 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ color: '#4ade80', fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>FUTURO ANTIOQUIA · MAX 10 SPORT</div>
+            <div style={{ color: '#475569', fontSize: 9, marginTop: 2 }}>
+              Entrenador: {nombreEntrenador || '—'} · Directivo: STEVEN MARULANDA GRISALES
+            </div>
+          </div>
+          <div style={{ color: '#475569', fontSize: 9, textAlign: 'right' as const }}>{data.fecha}</div>
+        </div>
+
+      </div>
+
+      <style>{`
+        @media print {
+          body { background: #060d18 !important; }
+          .print\\:hidden { display: none !important; }
+          @page { margin: 6mm; size: A4; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 /* ── Bloque de aspecto: definido FUERA del componente principal ── */
 interface BloqueProps {
@@ -328,7 +662,8 @@ export default function ValoracionPage() {
   const [verHistorial, setVerHistorial] = useState(false);
   const [nombreEntrenador, setNombreEntrenador] = useState('');
   const [profes, setProfes] = useState<Profe[]>([]);
-  const [intentoDescarga, setIntentoDescarga] = useState(false);
+  const [intentoDescarga,  setIntentoDescarga]  = useState(false);
+  const [vistaGamificada, setVistaGamificada] = useState(false);
   const err = (campo: keyof Valoracion) => intentoDescarga && !data[campo]?.trim();
   useEffect(() => {
     try {
@@ -476,6 +811,9 @@ export default function ValoracionPage() {
   /* ════════════════════════════════════════════════════════════ */
   return (
     <div style={{ minHeight: '100vh', background: '#e5e7eb' }}>
+      {vistaGamificada && (
+        <VistaPadres data={data} nombreEntrenador={nombreEntrenador} onClose={() => setVistaGamificada(false)} />
+      )}
 
       {/* Barra herramientas */}
       <div className="print:hidden" style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -491,6 +829,9 @@ export default function ValoracionPage() {
         </button>
         <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.verde, color: '#fff', cursor: guardando ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, opacity: guardando ? 0.7 : 1 }}>
           <Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}
+        </button>
+        <button onClick={() => setVistaGamificada(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+          🎮 Vista Padres
         </button>
         <button onClick={() => {
           setIntentoDescarga(true);
@@ -701,26 +1042,38 @@ export default function ValoracionPage() {
             <tr>{celda(VERDE_GRAD, '#fff', 'TÉCNICA (RELACIONAMIENTO CON EL BALÓN)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Evalúa la ejecución de los fundamentos básicos del juego</td></tr>
           </tbody>
-          <BloqueAspecto titulo="CONTROL Y PASE" subtitulo="Recepción, Manejo y Precisión"
+          <BloqueAspecto titulo="CONTROL" subtitulo="Recepción y Dominio del Balón"
             nivel={data.controlNivel} onNivel={v => set('controlNivel', v)} showError={intentoDescarga}
             desc={data.controlDesc}   onDesc={v => set('controlDesc', v)}
-            descripciones={DESC_CONTROL_PASE} />
-          <BloqueAspecto titulo="CONDUCCIÓN Y DRIBBLING" subtitulo="Desplazamiento con Balón"
+            descripciones={DESC_CONTROL} />
+          <BloqueAspecto titulo="PASE" subtitulo="Precisión e Intención en la Entrega"
+            nivel={data.paseNivel} onNivel={v => set('paseNivel', v)} showError={intentoDescarga}
+            desc={data.paseDesc}   onDesc={v => set('paseDesc', v)}
+            descripciones={DESC_PASE} />
+          <BloqueAspecto titulo="CONDUCCIÓN" subtitulo="Desplazamiento con Balón"
             nivel={data.conductaNivel} onNivel={v => set('conductaNivel', v)} showError={intentoDescarga}
             desc={data.conductaDesc}   onDesc={v => set('conductaDesc', v)}
             descripciones={DESC_CONDUCCION} />
-          <BloqueAspecto titulo="CONTROL ORIENTADO" subtitulo="Primer Toque y Salida"
-            nivel={data.paseNivel} onNivel={v => set('paseNivel', v)} showError={intentoDescarga}
-            desc={data.paseDesc}   onDesc={v => set('paseDesc', v)}
-            descripciones={DESC_CONTROL_ORIENTADO} />
-          <BloqueAspecto titulo="REMATE A PORTERÍA" subtitulo="Potencia y Definición"
+          <BloqueAspecto titulo="DRIBLING" subtitulo="Superación del Rival en 1vs1"
+            nivel={data.driblingNivel} onNivel={v => set('driblingNivel', v)} showError={intentoDescarga}
+            desc={data.driblingDesc}   onDesc={v => set('driblingDesc', v)}
+            descripciones={DESC_DRIBLING} />
+          <BloqueAspecto titulo="REMATE" subtitulo="Potencia y Definición"
             nivel={data.remataNivel} onNivel={v => set('remataNivel', v)} showError={intentoDescarga}
             desc={data.remataDesc}   onDesc={v => set('remataDesc', v)}
             descripciones={DESC_REMATE} />
+          <BloqueAspecto titulo="CABECEO" subtitulo="Juego Aéreo"
+            nivel={data.cabeceoNivel} onNivel={v => set('cabeceoNivel', v)} showError={intentoDescarga}
+            desc={data.cabeceoDesc}   onDesc={v => set('cabeceoDesc', v)}
+            descripciones={{}} />
+          <BloqueAspecto titulo="QUITE DEL BALÓN" subtitulo="Recuperación Defensiva"
+            nivel={data.quiteNivel} onNivel={v => set('quiteNivel', v)} showError={intentoDescarga}
+            desc={data.quiteDesc}   onDesc={v => set('quiteDesc', v)}
+            descripciones={{}} />
           <BloqueAspecto titulo="PROTECCIÓN DEL BALÓN" subtitulo="Resguardo y Dominio"
             nivel={data.proteccionNivel} onNivel={v => set('proteccionNivel', v)} showError={intentoDescarga}
             desc={data.proteccionDesc}   onDesc={v => set('proteccionDesc', v)}
-            descripciones={DESC_PROTECCION} />
+            descripciones={{}} />
 
           {/* TÁCTICA */}
           <tbody>
@@ -858,7 +1211,7 @@ export default function ValoracionPage() {
               return filled.length ? filled.reduce((a,b) => a+b, 0) / filled.length : 0;
             };
             const condicional    = avg([nv(data.fuerzaNivel), nv(data.velocidadNivel), nv(data.resistenciaNivel)]);
-            const tecnico        = avg([nv(data.controlNivel), nv(data.conductaNivel), nv(data.paseNivel), nv(data.remataNivel), nv(data.proteccionNivel)]);
+            const tecnico        = avg([nv(data.controlNivel), nv(data.paseNivel), nv(data.conductaNivel), nv(data.driblingNivel), nv(data.remataNivel), nv(data.cabeceoNivel), nv(data.quiteNivel), nv(data.proteccionNivel)]);
             const tactico        = avg([nv(data.posicionNivel), nv(data.visionNivel), nv(data.defensaNivel), nv(data.amplitudNivel), nv(data.transicionNivel), nv(data.superioridadNivel), nv(data.basculacionNivel)]);
             const socioAfectiva  = avg([nv(data.trabajoNivel), nv(data.disciplinaNivel), nv(data.actitudNivel)]);
             const comportamental = avg([cv(data.responsabilidad), cv(data.puntualidad), cv(data.disciplinaComp), cv(data.respeto), cv(data.tolerancia), cv(data.companerismo), cv(data.liderazgo), cv(data.trabajoEquipoComp), cv(data.sentidoPertenencia)]);

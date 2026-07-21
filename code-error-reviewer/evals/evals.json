@@ -1,0 +1,62 @@
+{
+  "skill_name": "code-error-reviewer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Me aparece este error en la consola del navegador al abrir mi página de asistencia en Next.js:\n\nError: useRouter only works in Client Components. Add the 'use client' directive at the top of the file to use it.\n    at useRouter (webpack-internal:///./node_modules/next/dist/client/components/navigation.js:67:11)\n    at AsistenciaPage (webpack-internal:///./src/app/asistencia/page.tsx:23:45)\n\nMi código es:\n```tsx\nimport { useRouter } from 'next/navigation';\nimport { useState } from 'react';\n\nexport default function AsistenciaPage() {\n  const router = useRouter();\n  const [mes, setMes] = useState(0);\n  return <div>Asistencia</div>;\n}\n```\n¿Qué está mal?",
+      "expected_output": "Debe identificar que falta la directiva 'use client' al inicio del archivo, explicar por qué los hooks solo funcionan en Client Components, y mostrar el fix exacto añadiendo 'use client' en la primera línea.",
+      "assertions": [
+        {
+          "name": "identifica_causa_raiz",
+          "description": "Menciona que falta 'use client' como causa del error"
+        },
+        {
+          "name": "muestra_solucion_con_codigo",
+          "description": "Muestra código con 'use client' añadido en la primera línea"
+        },
+        {
+          "name": "explica_por_que",
+          "description": "Explica la diferencia entre Server Components y Client Components en Next.js"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Estoy haciendo una consulta a Supabase desde mi API de Next.js y siempre me retorna un array vacío aunque sé que hay datos en la tabla. Este es mi código:\n\n```typescript\nconst { data, error } = await supabase\n  .from('deportistas')\n  .select('*')\n  .eq('proyecto', 'SUB 8A');\n\nconsole.log(data); // [] siempre vacío\nconsole.log(error); // null\n```\n\nEn Supabase Studio veo los registros y el campo proyecto dice 'Sub 8a'. ¿Por qué no encuentra nada?",
+      "expected_output": "Debe identificar que el problema es case-sensitive: 'SUB 8A' != 'Sub 8a'. Debe sugerir usar .ilike() para búsqueda insensible a mayúsculas, o verificar el valor exacto. También puede mencionar RLS como causa alternativa.",
+      "assertions": [
+        {
+          "name": "identifica_case_sensitive",
+          "description": "Señala que la comparación con .eq() es case-sensitive en PostgreSQL"
+        },
+        {
+          "name": "sugiere_ilike_o_lower",
+          "description": "Propone .ilike() o una alternativa que resuelva el problema de mayúsculas"
+        },
+        {
+          "name": "menciona_rls_alternativa",
+          "description": "Menciona RLS como posible causa alternativa si el case no es el problema"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "TypeScript me da este error y no entiendo qué significa:\n\nType '{ id: string; nombre: string; proyecto: string | null; }' is not assignable to type 'Deportista'.\n  Property 'sede' is missing in type '{ id: string; nombre: string; proyecto: string | null; }' but required in type 'Deportista'.\n\nMi interfaz es:\n```typescript\ninterface Deportista {\n  id: string;\n  nombre: string;\n  proyecto: string | null;\n  sede: string;\n  fechaNacimiento?: string;\n}\n\nconst dep: Deportista = {\n  id: '123',\n  nombre: 'Carlos',\n  proyecto: 'SUB 8A',\n};\n```",
+      "expected_output": "Debe explicar que 'sede' es un campo requerido en la interfaz (sin ? hace que sea obligatorio), mostrar las dos soluciones: añadir 'sede' al objeto o hacerlo opcional con sede?: string en la interfaz, y explicar la diferencia entre campos opcionales y requeridos en TypeScript.",
+      "assertions": [
+        {
+          "name": "identifica_campo_faltante",
+          "description": "Identifica que 'sede' es obligatorio en la interfaz y falta en el objeto"
+        },
+        {
+          "name": "muestra_solucion_añadir_sede",
+          "description": "Muestra cómo añadir 'sede' al objeto literal como primera solución"
+        },
+        {
+          "name": "menciona_opcional_como_alternativa",
+          "description": "Menciona hacer sede opcional (sede?: string) como segunda solución"
+        }
+      ]
+    }
+  ]
+}

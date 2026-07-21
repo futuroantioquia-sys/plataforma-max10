@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DollarSign, Search,
   ChevronRight, User,
@@ -27,6 +27,15 @@ function getCol(dep: Deportista, rx: RegExp): string {
   const k = Object.keys(dep._columnas).find(k => rx.test(k));
   return k ? dep._columnas[k] : '';
 }
+function colorCodigo(afil: string): string {
+  const v = afil.toLowerCase();
+  if (v.includes('nuevo'))     return '#f97316';
+  if (v.includes('antigu'))    return '#16a34a';
+  if (v.includes('reingreso')) return '#2563eb';
+  if (v.includes('mb instit')) return '#374151';
+  if (v.includes('b instit'))  return '#7c3aed';
+  return '#6b7280';
+}
 
 /* ── Filas del año (mismas que estado-cuenta) ── */
 const DETALLE_ROWS = [
@@ -41,6 +50,13 @@ const MES_NUM: Record<string, number> = {
 };
 const MES_ACTUAL = new Date().getMonth() + 1;
 function esFuturo(d: string) { const n = MES_NUM[d]; return n !== undefined && n > 0 && n > MES_ACTUAL; }
+
+const MES_ABREV: Record<string, string> = {
+  'MATRÍCULA 2026':'MAT',
+  'FEBRERO 2026':'FEB','MARZO 2026':'MAR','ABRIL 2026':'ABR','MAYO 2026':'MAY','JUNIO 2026':'JUN',
+  'JULIO 2026':'JUL','AGOSTO 2026':'AGO','SEPTIEMBRE 2026':'SEP','OCTUBRE 2026':'OCT',
+  'NOVIEMBRE 2026':'NOV','DICIEMBRE 2026':'DIC',
+};
 
 /* ── Fecha afiliación → número de mes ── */
 function fmtFecha(v: string): string {
@@ -65,14 +81,27 @@ function getMesAfil(cols: Record<string, string>): number {
 
 
 export default function PagosPage() {
-  const router = useRouter();
+  const router      = useRouter();
+  const searchParams = useSearchParams();
 
+  // Inicializar filtros desde URL para que router.back() los restaure
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const [allPagos,    setAllPagos]    = useState<AllPagos>({});
-  const [busqueda,         setBusqueda]         = useState('');
-  const [filtroCodigo,     setFiltroCodigo]     = useState('');
-  const [filtroPrograma,   setFiltroPrograma]   = useState('');
-  const [filtroProyecto,   setFiltroProyecto]   = useState('');
+  const [busqueda,         setBusqueda]         = useState(() => searchParams.get('q')     ?? '');
+  const [filtroCodigo,     setFiltroCodigo]     = useState(() => searchParams.get('cod')   ?? '');
+  const [filtroPrograma,   setFiltroPrograma]   = useState(() => searchParams.get('prog')  ?? '');
+  const [filtroProyecto,   setFiltroProyecto]   = useState(() => searchParams.get('proy')  ?? '');
+
+  // Sincronizar filtros → URL (replace para no apilar historial)
+  const syncURL = useCallback((q: string, cod: string, prog: string, proy: string) => {
+    const p = new URLSearchParams();
+    if (q)    p.set('q',    q);
+    if (cod)  p.set('cod',  cod);
+    if (prog) p.set('prog', prog);
+    if (proy) p.set('proy', proy);
+    const qs = p.toString();
+    router.replace(qs ? `/pagos?${qs}` : '/pagos', { scroll: false });
+  }, [router]);
   const [cargando,         setCargando]         = useState(true);
   const [depEstados,       setDepEstados]       = useState<Record<string, DepEstado>>({});
   const [mostrarRetirados, setMostrarRetirados] = useState(false);
@@ -86,11 +115,7 @@ export default function PagosPage() {
     } catch {}
   }, []);
 
-  function cambiarEstadoDep(depId: string, estado: DepEstado) {
-    const nuevo = { ...depEstados, [depId]: estado };
-    setDepEstados(nuevo);
-    localStorage.setItem(DEP_ESTADOS_KEY, JSON.stringify(nuevo));
-  }
+  // Estado DEP es solo lectura en la tabla principal
 
   const programas = useMemo(() =>
     [...new Set(deportistas.map(d => getCol(d, /^program/i)).filter(Boolean))].sort(),
@@ -125,17 +150,42 @@ export default function PagosPage() {
   }, [deportistas, busqueda, filtroCodigo, filtroPrograma, filtroProyecto, depEstados, mostrarRetirados]);
 
   /* Resumen de pagos por deportista — busca por dep.id Y por todos los códigos numéricos */
+  function esBecadoDep(dep: Deportista): boolean {
+    const kCod = Object.keys(dep._columnas).find(k => /^c[oó]d/i.test(k));
+    const raw  = kCod ? String(dep._columnas[kCod] ?? '').trim() : '';
+    return /^b\d/i.test(raw) && !/^mb/i.test(raw);
+  }
+
   function resumenPago(dep: Deportista) {
+    // BECADO: sin pendientes de ningún tipo
+    if (esBecadoDep(dep)) {
+      return { cargados: 0, pagados: 0, pendientes: 0, proximos: 0, total: 1, mesesPendientes: [], becado: true };
+    }
+
     // 1. Reunir todos los pagos guardados (dep.id + código numérico)
     const posKeys: string[] = [dep.id];
-    for (const v of Object.values(dep._columnas)) {
+    const seen = new Set(posKeys);
+
+    // Columna CÓDIGO explícita — nunca excluir como año (ej: código "2018" es válido)
+    const kCod = Object.keys(dep._columnas).find(k => /^c[oó]d/i.test(k));
+    if (kCod) {
+      const digits = String(dep._columnas[kCod] ?? '').replace(/\D/g, '');
+      if (digits.length >= 4 && digits.length <= 5) {
+        const key = String(parseInt(digits, 10));
+        if (!seen.has(key)) { seen.add(key); posKeys.push(key); }
+        if (digits !== key && !seen.has(digits)) { seen.add(digits); posKeys.push(digits); }
+      }
+    }
+    // Otras columnas — sí excluir años (2000-2099)
+    for (const [k, v] of Object.entries(dep._columnas)) {
+      if (k === kCod) continue;
       const digits = String(v ?? '').replace(/\D/g, '');
       if (digits.length >= 4 && digits.length <= 5) {
         const n = parseInt(digits, 10);
-        if (n >= 2000 && n <= 2099 && digits.length === 4) continue; // excluir años
+        if (n >= 2000 && n <= 2099 && digits.length === 4) continue;
         const key = String(n);
-        if (!posKeys.includes(key)) posKeys.push(key);
-        if (digits !== key && !posKeys.includes(digits)) posKeys.push(digits);
+        if (!seen.has(key)) { seen.add(key); posKeys.push(key); }
+        if (digits !== key && !seen.has(digits)) { seen.add(digits); posKeys.push(digits); }
       }
     }
     const mergeMap = new Map<string, any>();
@@ -159,7 +209,23 @@ export default function PagosPage() {
     const pendientes = fullRows.filter((r: any) => r.estado === 'PEND').length;
     const proximos   = fullRows.filter((r: any) => r.estado === 'PROX').length;
     const cargados   = pagados + pendientes + proximos;
-    return { cargados, pagados, pendientes, proximos, total: fullRows.length };
+
+    /* Meses pendientes solo hasta el mes en curso (no futuros) */
+    const mesesPendientes: string[] = DETALLE_ROWS
+      .filter(det => {
+        const n = MES_NUM[det];
+        // incluir MATRÍCULA (n=0) y meses hasta el actual
+        if (n > MES_ACTUAL) return false;
+        const mesAfil2 = getMesAfil(dep._columnas);
+        if (n !== 0 && n < mesAfil2) return false;
+        const saved = mergeMap.get(det) as any;
+        if (saved?.estado === 'ELIM') return false;
+        if (saved) return saved.estado === 'PEND';
+        return true; // sin registro = PEND
+      })
+      .map(det => MES_ABREV[det] ?? det.slice(0, 3));
+
+    return { cargados, pagados, pendientes, proximos, total: fullRows.length, mesesPendientes };
   }
 
   const BL = '#4b5563';
@@ -194,7 +260,7 @@ export default function PagosPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-5 space-y-4">
+      <main className="max-w-[1400px] mx-auto px-4 py-5 space-y-4">
 
         {/* TÍTULO SECCIÓN */}
         <div className="flex items-center gap-2 pt-1">
@@ -209,7 +275,7 @@ export default function PagosPage() {
             <div className="flex-1 min-w-[140px]">
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Programa</label>
               <select value={filtroPrograma}
-                onChange={e => { setFiltroPrograma(e.target.value); setFiltroProyecto(''); }}
+                onChange={e => { setFiltroPrograma(e.target.value); setFiltroProyecto(''); syncURL(busqueda, filtroCodigo, e.target.value, ''); }}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                 <option value="">Todos los programas</option>
                 {programas.map(p => <option key={p} value={p}>{p}</option>)}
@@ -217,7 +283,7 @@ export default function PagosPage() {
             </div>
             <div className="flex-1 min-w-[140px]">
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Proyecto</label>
-              <select value={filtroProyecto} onChange={e => setFiltroProyecto(e.target.value)}
+              <select value={filtroProyecto} onChange={e => { setFiltroProyecto(e.target.value); syncURL(busqueda, filtroCodigo, filtroPrograma, e.target.value); }}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                 <option value="">Todos los proyectos</option>
                 {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
@@ -231,7 +297,7 @@ export default function PagosPage() {
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Código</label>
               <input
                 value={filtroCodigo}
-                onChange={e => setFiltroCodigo(e.target.value)}
+                onChange={e => { setFiltroCodigo(e.target.value); syncURL(busqueda, e.target.value, filtroPrograma, filtroProyecto); }}
                 placeholder="Ej: 2018"
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white"
               />
@@ -242,7 +308,7 @@ export default function PagosPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   value={busqueda}
-                  onChange={e => setBusqueda(e.target.value)}
+                  onChange={e => { setBusqueda(e.target.value); syncURL(e.target.value, filtroCodigo, filtroPrograma, filtroProyecto); }}
                   placeholder="Buscar nombre..."
                   className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white"
                 />
@@ -276,8 +342,8 @@ export default function PagosPage() {
             </p>
           </div>
         ) : (
-          <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-200">
-            <table className="w-full border-collapse text-sm">
+          <div className="rounded-2xl overflow-x-auto shadow-sm border border-gray-200">
+            <table className="w-full border-collapse text-sm" style={{ minWidth: 1100 }}>
               <thead>
                 <tr>
                   {[
@@ -289,6 +355,7 @@ export default function PagosPage() {
                     { h: 'PAGADOS',               align: 'center' },
                     { h: 'PENDIENTES',            align: 'center' },
                     { h: 'PRÓXIMOS',              align: 'center' },
+                    { h: 'MESES PENDIENTES',      align: 'left'   },
                     { h: 'ESTADO PAGO',           align: 'center' },
                     { h: 'VER CUENTA',            align: 'center' },
                   ].map(({ h, align }) => (
@@ -308,16 +375,16 @@ export default function PagosPage() {
                   const bg  = '#f1f5f9';
                   const cod = codigoDe(dep);
                   const prog = getCol(dep, /^program/i);
-                  const { cargados, pagados, pendientes, proximos, totalPag, totalPend, total } = resumenPago(dep);
+                  const { cargados, pagados, pendientes, proximos, total, mesesPendientes, becado } = resumenPago(dep) as any;
                   const tieneDatos = total > 0;
 
                   return (
                     <tr key={dep.id}
-                      className="hover:brightness-95 transition-all">
+                      onClick={() => router.push(`/alumnos/${dep.id}/estado-cuenta?edit=1`)}
+                      className="hover:brightness-95 transition-all cursor-pointer">
 
-                      {/* ESTADO DEP */}
-                      <td style={{ background: bg, border: '1px solid white', padding: '4px 6px', textAlign: 'center' }}
-                          onClick={e => e.stopPropagation()}>
+                      {/* ESTADO DEP — solo lectura */}
+                      <td style={{ background: bg, border: '1px solid white', padding: '4px 6px', textAlign: 'center' }}>
                         {(() => {
                           const est: DepEstado = depEstados[dep.id] ?? 'ACTIVO';
                           const colors: Record<DepEstado, string> = {
@@ -326,26 +393,17 @@ export default function PagosPage() {
                             RETIRADO: '#ef4444',
                           };
                           return (
-                            <select
-                              value={est}
-                              onChange={e => cambiarEstadoDep(dep.id, e.target.value as DepEstado)}
-                              style={{ color: colors[est], background: 'transparent', border: 'none', fontWeight: 900, fontSize: 10, cursor: 'pointer', outline: 'none' }}>
-                              <option value="ACTIVO">ACTIVO</option>
-                              <option value="PAUSO">PAUSO</option>
-                              <option value="RETIRADO">RETIRADO</option>
-                            </select>
+                            <span style={{ color: colors[est], fontWeight: 900, fontSize: 10 }}>{est}</span>
                           );
                         })()}
                       </td>
 
-                      {/* CÓDIGO */}
-                      <td
-                        onClick={() => router.push(`/alumnos/${dep.id}/estado-cuenta?edit=1`)}
-                        style={{
-                          background: G, color: 'white', border: '1px solid white',
-                          padding: '8px 10px', textAlign: 'center',
-                          fontWeight: 900, fontSize: 13, cursor: 'pointer',
-                        }}>{cod || '—'}</td>
+                      {/* CÓDIGO — color por afiliación */}
+                      <td style={{
+                        background: colorCodigo(getCol(dep, /tipo.*afil|^afil/i)), color: 'white', border: '1px solid white',
+                        padding: '8px 10px', textAlign: 'center',
+                        fontWeight: 900, fontSize: 13,
+                      }}>{cod || '—'}</td>
 
                       {/* NOMBRE */}
                       <td style={{
@@ -388,13 +446,37 @@ export default function PagosPage() {
                         </span>
                       </td>
 
+                      {/* MESES PENDIENTES hasta mes actual */}
+                      <td style={{
+                        background: mesesPendientes.length > 0 ? '#fef2f2' : bg,
+                        border: '1px solid white', padding: '4px 8px',
+                        maxWidth: 180,
+                      }}>
+                        {mesesPendientes.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {mesesPendientes.map(m => (
+                              <span key={m} style={{
+                                background: '#ef4444', color: 'white',
+                                fontSize: 9, fontWeight: 900,
+                                padding: '2px 5px', borderRadius: 4,
+                                whiteSpace: 'nowrap',
+                              }}>{m}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-300 text-xs font-black">—</span>
+                        )}
+                      </td>
+
                       {/* ESTADO chip */}
                       <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
-                        {pendientes === 0 && tieneDatos
-                          ? <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap">AL DÍA</span>
-                          : pendientes > 0
-                            ? <span className="bg-red-100 text-red-500 text-[10px] font-black px-2 py-0.5 rounded-full">PEND</span>
-                            : <span className="text-gray-300 text-xs">—</span>
+                        {becado
+                          ? <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap">BECADO</span>
+                          : pendientes === 0 && tieneDatos
+                            ? <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap">AL DÍA</span>
+                            : pendientes > 0
+                              ? <span className="bg-red-100 text-red-500 text-[10px] font-black px-2 py-0.5 rounded-full">PEND</span>
+                              : <span className="text-gray-300 text-xs">—</span>
                         }
                       </td>
 

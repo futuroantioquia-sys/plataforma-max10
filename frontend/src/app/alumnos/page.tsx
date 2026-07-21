@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Users, Search, FileSpreadsheet, Trash2,
   ChevronRight, ArrowLeft, Camera, GraduationCap,
-  LayoutGrid, TableProperties, ChevronDown, Download, Loader2, ClipboardList,
+  LayoutGrid, TableProperties, ChevronDown, Download, Loader2, ClipboardList, Home,
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
@@ -14,15 +14,23 @@ import { getDeportistas, getDeportistasPorProyecto, saveDeportistas } from '@/li
 import type { Deportista } from '@/lib/db';
 
 const FOTOS_PROFE_KEY = 'futuro_fotos_profes';
+const CAL_OPTIONS = ['', ...Array.from({ length: 46 }, (_, i) => ((i + 5) / 10).toFixed(1))];
 
 // ── Posición virtual ──────────────────────────────────────────
 const VPOS = '__POSICION__';
 const POSICIONES = ['Portero','Central','Lateral','Interior','Extremo','Creativo','Delantero'];
 const MAX_POS = 3;
 
-function CeldaPosicion({ depId, valor, onChange }: {
-  depId: string; valor: string; onChange: (id: string, v: string) => void;
+function CeldaPosicion({ depId, valor, onChange, readOnly = false }: {
+  depId: string; valor: string; onChange: (id: string, v: string) => void; readOnly?: boolean;
 }) {
+  if (readOnly) {
+    return (
+      <div style={{ minWidth: 110, fontSize: 11, color: '#374151', fontWeight: 600, padding: '2px 4px' }}>
+        {valor || <span style={{ color: '#d1d5db' }}>—</span>}
+      </div>
+    );
+  }
   const [open, setOpen]     = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const btnRef  = useRef<HTMLButtonElement>(null);
@@ -97,7 +105,7 @@ function CeldaPosicion({ depId, valor, onChange }: {
     : null;
 
   return (
-    <div style={{ position: 'relative', minWidth: 160 }}>
+    <div style={{ position: 'relative', minWidth: 110 }}>
       <button ref={btnRef} type="button" onClick={handleToggle}
         className="w-full text-left text-[10px] font-semibold text-[#111827] hover:text-[#16a34a] transition py-0.5">
         {sel.length > 0 ? sel.join(', ') : <span className="text-gray-300 font-normal">—</span>}
@@ -236,7 +244,7 @@ function TarjetaProyecto({
         </div>
 
         {/* Entrenador */}
-        <div className="flex items-center gap-3 mb-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4">
           <div className={cn(
             'w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0',
             fotoP ? '' : `bg-gradient-to-br ${pal.grad}`
@@ -284,12 +292,13 @@ function TarjetaProyecto({
 
 // ── Dashboard del Proyecto (tabla horizontal) ─────────────────
 function DashboardProyecto({
-  proy, lista, programa, pal, fotos, fotosProfe,
+  proy, lista, programa, pal, fotos, fotosProfe, esProfe,
   onFotoProfe, onVerPerfil, onPosicion,
 }: {
   proy: string; lista: Deportista[]; programa: string;
   pal: typeof PALETA[0]; fotos: Record<string, string>;
   fotosProfe: Record<string, string>;
+  esProfe: boolean;
   onFotoProfe: (profe: string, b64: string) => void;
   onVerPerfil: (id: string) => void;
   onPosicion: (depId: string, val: string) => void;
@@ -304,6 +313,40 @@ function DashboardProyecto({
   const [busqueda,    setBusqueda]   = useState('');
   const [vistaTabla,  setVistaTabla] = useState(true);
   const [descargando, setDescargando]= useState(false);
+
+  // ── Calificaciones (mismo localStorage que asistencia) ─────────
+  const mesKey = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  const calStorageKey = `futuro_cal_${proy}_${mesKey}`;
+  const comStorageKey = `futuro_com_${proy}_${mesKey}`;
+  const [calMap, setCalMap] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem(`futuro_cal_${proy}_${(() => { const n = new Date(); return `${n.getFullYear()}_${String(n.getMonth()+1).padStart(2,'0')}`; })()}`);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+  const [comMap, setComMap] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem(`futuro_com_${proy}_${(() => { const n = new Date(); return `${n.getFullYear()}_${String(n.getMonth()+1).padStart(2,'0')}`; })()}`);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+  function setCal(depId: string, value: string) {
+    setCalMap(prev => {
+      const updated = { ...prev, [depId]: value };
+      try { localStorage.setItem(calStorageKey, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  }
+  function setCom(depId: string, value: string) {
+    setComMap(prev => {
+      const updated = { ...prev, [depId]: value };
+      try { localStorage.setItem(comStorageKey, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  }
 
   // ── Descarga PDF tamaño carta ─────────────────────────────────
   async function descargar() {
@@ -387,12 +430,26 @@ function DashboardProyecto({
     reader.readAsDataURL(file);
   }
 
-  // Stats
-  const nuevos   = lista.filter(d => colEstado(d).toLowerCase().includes('nuevo')).length;
-  const antiguos = lista.filter(d => colEstado(d).toLowerCase().includes('antigu')).length;
-
   // Tipo de afiliación
   const colAfil = (d: Deportista) => getCol(d, /tipo.*afil|afil.*tipo/i) || getCol(d, /afiliaci[oó]n/i) || '';
+
+  // Stats por tipo de afiliación
+  const nuevos    = lista.filter(d => colAfil(d).toLowerCase().includes('nuevo')).length;
+  const antiguos  = lista.filter(d => colAfil(d).toLowerCase().includes('antigu')).length;
+  const reingreso = lista.filter(d => colAfil(d).toLowerCase().includes('reingreso')).length;
+  const mbInst    = lista.filter(d => colAfil(d).toLowerCase().includes('mb instit')).length;
+  const bInst     = lista.filter(d => colAfil(d).toLowerCase().includes('b instit')).length;
+
+  // Color del CÓDIGO según tipo de afiliación
+  function colorCodigo(afil: string): string {
+    const v = afil.toLowerCase();
+    if (v.includes('nuevo'))     return '#f97316'; // Naranja
+    if (v.includes('antigu'))    return '#16a34a'; // Verde
+    if (v.includes('reingreso')) return '#2563eb'; // Azul
+    if (v.includes('mb instit')) return '#374151'; // Gris oscuro
+    if (v.includes('b instit'))  return '#7c3aed'; // Morado
+    return '#6b7280'; // gris por defecto
+  }
 
   // Helpers celda — declarados antes del sort para que el hoisting los tenga disponibles
   function getRK(dep: Deportista, rx: RegExp) { return Object.keys(dep._columnas).find(k => rx.test(k)) ?? ''; }
@@ -421,8 +478,8 @@ function DashboardProyecto({
     return 1;
   }
 
-  // Orden AFILIACIÓN: Antiguo, Nuevo, Reingreso, Pasó, Sin afil, MB Institucional, B Institucional
-  const ORDEN_AFIL = ['antigu','nuevo','reingreso','pas','sin afil','mb instit','b instit'];
+  // Orden AFILIACIÓN: Antiguo, Nuevo, Reingreso, MB Institucional, B Institucional
+  const ORDEN_AFIL = ['antigu','nuevo','reingreso','mb instit','b instit'];
   function pesoAfil(d: Deportista): number {
     const v = val(d, 'afiliacion').toLowerCase();
     if (!v) return ORDEN_AFIL.length;
@@ -442,7 +499,7 @@ function DashboardProyecto({
                  || '';
   const ESTADO_KEY = _allKeys.find(k => /^estado/i.test(k.trim())) || '';
 
-  const ORDEN_AFIL_SORT = ['antigu','nuevo','reingreso','pas','sin afil','mb instit','b instit'];
+  const ORDEN_AFIL_SORT = ['antigu','nuevo','reingreso','mb instit','b instit'];
   const filtrada = lista
     .filter(d => !busqueda || d._nombre.toLowerCase().includes(busqueda.toLowerCase()))
     .sort((a, b) => {
@@ -483,7 +540,6 @@ function DashboardProyecto({
     ...(hayAnio   ? [{ key:'anio',       label:'AÑO',           minW:60, center:true }] : []),
     ...(hasMes    ? [{ key:'mes',        label:'MES',           minW:90            }] : []),
     ...(hasDia    ? [{ key:'dia',        label:'DÍA',           minW:50, center:true }] : []),
-    ...(hayCal    ? [{ key:'cal',        label:'CAL',           minW:60, center:true }] : []),
   ];
 
   return (
@@ -511,10 +567,13 @@ function DashboardProyecto({
               <p className="text-white font-black text-base leading-tight">{profe||'Sin asignar'}</p>
               <p className="text-white/70 text-xs font-semibold">{proy} · {programa}</p>
             </div>
-            <div className="flex gap-4 text-center flex-shrink-0">
+            <div className="flex gap-3 text-center flex-shrink-0 flex-wrap">
               <div><p className="text-xl font-black">{lista.length}</p><p className="text-white/60 text-[10px]">Total</p></div>
-              <div className="border-l border-white/20 pl-4"><p className="text-xl font-black">{nuevos}</p><p className="text-white/60 text-[10px]">Nuevos</p></div>
-              <div className="border-l border-white/20 pl-4"><p className="text-xl font-black">{antiguos}</p><p className="text-white/60 text-[10px]">Antiguos</p></div>
+              <div className="border-l border-white/20 pl-3"><p className="text-xl font-black">{antiguos}</p><p className="text-white/60 text-[10px]">Antiguos</p></div>
+              <div className="border-l border-white/20 pl-3"><p className="text-xl font-black">{nuevos}</p><p className="text-white/60 text-[10px]">Nuevos</p></div>
+              <div className="border-l border-white/20 pl-3"><p className="text-xl font-black">{reingreso}</p><p className="text-white/60 text-[10px]">Reingreso</p></div>
+              <div className="border-l border-white/20 pl-3"><p className="text-xl font-black">{mbInst}</p><p className="text-white/60 text-[10px]">MB</p></div>
+              <div className="border-l border-white/20 pl-3"><p className="text-xl font-black">{bInst}</p><p className="text-white/60 text-[10px]">B</p></div>
             </div>
           </div>
         </div>
@@ -532,27 +591,6 @@ function DashboardProyecto({
           <button onClick={() => setBusqueda('')} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
         )}
         <span className="text-xs text-gray-400 font-bold flex-shrink-0">{filtrada.length}/{lista.length}</span>
-        {/* Botón descargar PDF */}
-        <button
-          onClick={descargar}
-          disabled={descargando}
-          title="Descargar PDF tamaño carta"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#16a34a] hover:bg-[#064e1e] text-white rounded-lg text-[10px] font-black transition disabled:opacity-60 flex-shrink-0">
-          {descargando
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin"/>
-            : <Download className="w-3.5 h-3.5"/>}
-          <span className="hidden sm:inline">{descargando ? 'Generando...' : 'PDF'}</span>
-        </button>
-        <div className="flex border border-gray-200 rounded-lg overflow-hidden">
-          <button onClick={() => setVistaTabla(true)} title="Tabla"
-            className={cn('px-2.5 py-1.5 transition', vistaTabla ? 'bg-[#16a34a] text-white' : 'text-gray-400 hover:bg-gray-50')}>
-            <TableProperties className="w-3.5 h-3.5"/>
-          </button>
-          <button onClick={() => setVistaTabla(false)} title="Tarjetas"
-            className={cn('px-2.5 py-1.5 border-l border-gray-200 transition', !vistaTabla ? 'bg-[#16a34a] text-white' : 'text-gray-400 hover:bg-gray-50')}>
-            <LayoutGrid className="w-3.5 h-3.5"/>
-          </button>
-        </div>
       </div>
 
       {/* ── Vista tarjetas ── */}
@@ -616,8 +654,18 @@ function DashboardProyecto({
                       {c.label}
                     </th>
                   ))}
-                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left" style={{ minWidth: 200 }}>
+                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left" style={{ minWidth: 130 }}>
                     POSICIÓN <span className="text-white/40 font-normal normal-case">(máx. 3)</span>
+                  </th>
+                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center"
+                    style={{ minWidth: 90, background: '#7c3aed' }}
+                    title="Calificación del mes actual">
+                    CAL
+                  </th>
+                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center"
+                    style={{ minWidth: 80, background: '#1d4ed8' }}
+                    title="Competencia en torneo">
+                    COM
                   </th>
                 </tr>
               </thead>
@@ -635,11 +683,11 @@ function DashboardProyecto({
 
                       {cols.map(c => {
                         const v = val(dep, c.key);
-                        // CÓDIGO — fondo verde, letra blanca, borde blanco
+                        // CÓDIGO — fondo por tipo de afiliación
                         if (c.key === 'codigo') return (
                           <td key={c.key}
                             className="border border-white px-2 py-1.5 text-center whitespace-nowrap font-black text-white text-sm"
-                            style={{ background: '#16a34a' }}>
+                            style={{ background: colorCodigo(val(dep, 'afiliacion')) }}>
                             {v || '—'}
                           </td>
                         );
@@ -674,13 +722,43 @@ function DashboardProyecto({
                           depId={dep.id}
                           valor={dep._columnas?.[VPOS] ?? ''}
                           onChange={onPosicion}
+                          readOnly={!esProfe}
                         />
+                      </td>
+                      {/* ── CAL ── */}
+                      <td className="border border-white px-0.5 py-1 text-center" style={{ background: '#f5f3ff', minWidth: 90 }}>
+                        <select value={calMap[dep.id] ?? ''}
+                          onChange={e => { if (esProfe) setCal(dep.id, e.target.value); }}
+                          disabled={!esProfe}
+                          title={esProfe ? 'Calificación del deportista' : 'Solo el formador puede editar'}
+                          style={{ fontSize: '13px', fontWeight: 900, width: '72px', textAlign: 'center',
+                            background: 'transparent', border: 'none', outline: 'none',
+                            color: '#111827', cursor: esProfe ? 'pointer' : 'default' }}>
+                          {CAL_OPTIONS.map(v2 => <option key={v2} value={v2}>{v2 || '—'}</option>)}
+                        </select>
+                      </td>
+                      {/* ── COM ── */}
+                      <td className="border border-white px-0.5 py-1 text-center" style={{ background: '#eff6ff', minWidth: 80 }}>
+                        <select value={comMap[dep.id] ?? ''}
+                          onChange={e => { if (esProfe) setCom(dep.id, e.target.value); }}
+                          disabled={!esProfe}
+                          title={esProfe ? '¿Compite en torneo?' : 'Solo el formador puede editar'}
+                          style={{ fontSize: '12px', fontWeight: 900, width: '64px', textAlign: 'center',
+                            background: 'transparent', border: 'none', outline: 'none',
+                            color: '#111827', cursor: esProfe ? 'pointer' : 'default' }}>
+                          <option value="">—</option>
+                          <option value="SI">SI</option>
+                          <option value="N.Q">N.Q</option>
+                          <option value="N.A">N.A</option>
+                          <option value="ESP">ESP</option>
+                          <option value="INV">INV</option>
+                        </select>
                       </td>
                     </tr>
                   );
                 })}
                 {filtrada.length === 0 && (
-                  <tr><td colSpan={cols.length + 2} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
+                  <tr><td colSpan={cols.length + 3} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
                 )}
               </tbody>
             </table>
@@ -711,22 +789,29 @@ function AlumnosPageContent() {
   const [proyEdits,   setProyEdits]   = useState<Record<string, string>>({});
   const [cargando,    setCargando]    = useState(true);
   const [errorCarga,  setErrorCarga]  = useState<string | null>(null);
-  // Detección sincrónica (evita flash de Level 1 al cargar)
-  const [esProfe,     setEsProfe]     = useState(() => {
-    if (typeof document === 'undefined') return false;
-    try { return document.cookie.includes('futuro-session=profesor'); } catch { return false; }
-  });
+  // Detección de profesor — se hace en useEffect (cliente) para evitar mismatch de SSR
+  const [esProfe, setEsProfe] = useState(false);
+  useEffect(() => {
+    try {
+      const cookies = document.cookie.split(';').map(c => c.trim());
+      // Admin (futuro-session=1) nunca es profe, aunque localStorage tenga datos viejos
+      if (cookies.some(c => c === 'futuro-session=1')) return;
+      if (cookies.some(c => c === 'futuro-session=profesor')) { setEsProfe(true); return; }
+      const g = localStorage.getItem('futuro-profe-proyectos');
+      const n = localStorage.getItem('futuro-profe-nombre');
+      if (g && n) setEsProfe(true);
+    } catch {}
+  }, []);
   const autoNavRef = useRef(false);
 
   useEffect(() => {
     const proyParam = searchParams.get('proyecto');
-    if (esProfe && proyParam) {
-      // Profe mode: carga solo los deportistas de ESE proyecto (liviano para mobile)
+    if (proyParam) {
+      // Profe mode (URL tiene ?proyecto=): carga solo los deportistas de ESE proyecto
       getDeportistasPorProyecto(proyParam).then(({ data: lista, error }) => {
         setCargando(false);
         if (lista.length > 0) {
           setDeportistas(lista);
-          // Detectar el programa y saltar directo a Level 3
           const prog = lista[0]?._columnas?.['PROGRAMA'] ?? lista[0]?._columnas?.['Programa'] ?? 'Sin programa';
           setPrograma(prog);
           setProy(proyParam);
@@ -744,6 +829,7 @@ function AlumnosPageContent() {
       const fp = localStorage.getItem(FOTOS_PROFE_KEY);
       if (fp) setFotosProfe(JSON.parse(fp));
     } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-navegar al proyecto cuando viene desde mis-proyectos con ?proyecto=
@@ -836,10 +922,10 @@ function AlumnosPageContent() {
   }
 
   // ══ NIVEL 1: PROGRAMAS ═══════════════════════════════════════
-  // Guard: profe con ?proyecto= → nunca mostrar Level 1, solo loading o error de conexión
+  // Guard: URL con ?proyecto= → nunca mostrar Level 1 admin, solo loading o error de conexión
   if (!programa) {
     const proyParam = searchParams.get('proyecto');
-    if (esProfe && proyParam) {
+    if (proyParam) {
       // Mientras carga → spinner
       if (cargando) return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
@@ -1090,10 +1176,11 @@ function AlumnosPageContent() {
                     const estado = colEstado(dep);
                     const prog   = colPrograma(dep);
                     const editVal = proyEdits[dep.id] ?? '';
+                    const afilDep = colAfil(dep);
                     return (
                       <tr key={dep.id} style={{ background: bg }} className="hover:brightness-95 transition-all">
                         <td className="border border-white px-2 py-1.5 text-center text-[10px] font-bold text-[#111827] select-none">{i + 1}</td>
-                        <td className="border border-white px-2 py-1.5 font-black text-white text-center" style={{ background: '#16a34a' }}>{cod || '—'}</td>
+                        <td className="border border-white px-2 py-1.5 font-black text-white text-center" style={{ background: colorCodigo(afilDep) }}>{cod || '—'}</td>
                         <td className="border border-white px-2 py-1.5">
                           <span className="font-bold text-[#111827] cursor-pointer hover:underline"
                             onClick={() => router.push(`/alumnos/${dep.id}`)}>{dep._nombre}</span>
@@ -1229,11 +1316,11 @@ function AlumnosPageContent() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-2 min-w-0">
-          <button onClick={() => esProfe ? router.push('/mis-proyectos') : setPrograma(null)}
+          <button onClick={() => (esProfe || !!searchParams.get('proyecto')) ? router.push('/mis-proyectos') : setPrograma(null)}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <span className="text-xs text-white/60 font-medium hidden sm:block flex-shrink-0">{esProfe ? 'Mis proyectos' : 'Programas'}</span>
+          <span className="text-xs text-white/60 font-medium hidden sm:block flex-shrink-0">{(esProfe || !!searchParams.get('proyecto')) ? 'Mis proyectos' : 'Programas'}</span>
           <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block flex-shrink-0" />
           <span className={cn('text-xs font-black px-3 py-1.5 rounded-full flex-shrink-0', palProg.chip)}>{programa}</span>
         </div>
@@ -1320,14 +1407,22 @@ function AlumnosPageContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
-        <button onClick={() => esProfe ? router.push('/mis-proyectos') : setProy(null)}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
+        <button onClick={() => (esProfe || !!searchParams.get('proyecto')) ? router.push('/mis-proyectos') : setProy(null)}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0"
+          title="Atrás">
           <ArrowLeft className="w-4 h-4" />
         </button>
+        {(esProfe || !!searchParams.get('proyecto')) && (
+          <button onClick={() => router.push('/mis-proyectos')}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0"
+            title="Inicio – Mis Proyectos">
+            <Home className="w-4 h-4" />
+          </button>
+        )}
         <span className="text-xs text-white/60 hidden sm:block">{programa}</span>
         <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block" />
         <span className={cn('text-xs font-black px-2.5 py-1 rounded-full', palProy.chip)}>{proy}</span>
-        {esProfe && proy && (
+        {(esProfe || !!searchParams.get('proyecto')) && proy && (
           <button
             onClick={() => router.push(`/asistencia?proyecto=${encodeURIComponent(proy)}`)}
             className="ml-auto flex items-center gap-1.5 bg-white text-[#16a34a] px-3 py-1.5 rounded-xl text-xs font-black hover:bg-green-50 transition shadow-sm whitespace-nowrap">
@@ -1345,6 +1440,7 @@ function AlumnosPageContent() {
           pal={palProy}
           fotos={fotos}
           fotosProfe={fotosProfe}
+          esProfe={esProfe}
           onFotoProfe={guardarFotoProfe}
           onVerPerfil={id => router.push(`/alumnos/${id}`)}
           onPosicion={handlePosicion}

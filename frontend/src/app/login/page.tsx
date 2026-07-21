@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Shield, AlertCircle, Loader2, Users, Star } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
-import { getProfes, getDeportistas, getVistaContable } from '@/lib/db';
+import { getProfes, getVistaContable, buscarPorCodigo } from '@/lib/db';
 
 type Tab = 'admin' | 'profe' | 'calidoso';
 
@@ -102,56 +102,71 @@ export default function LoginPage() {
       if (tab === 'calidoso') {
         const normDoc = (v: string) => v.replace(/[\s.,\-]/g, '');
         const cNorm   = normDoc(c);
+        const RX_DOC  = /num.*doc|^doc|doc|c[eé]dul|c\.c|identif|nit|no.*doc|cc\b/i;
 
+        function sesionDeportista(dep: { id: string; _nombre?: string } | undefined) {
+          document.cookie = 'futuro-session=deportista; path=/; max-age=86400; SameSite=Lax';
+          try {
+            if (dep?.id)     localStorage.setItem('futuro-calidoso-id',     dep.id);
+            if (dep?._nombre) localStorage.setItem('futuro-calidoso-nombre', dep._nombre);
+            // Guardar credenciales → próximos ingresos son instantáneos sin red
+            const credsRaw = localStorage.getItem('futuro_calidoso_credenciales');
+            const creds: Record<string, string> = credsRaw ? JSON.parse(credsRaw) : {};
+            creds[u] = c.trim();
+            localStorage.setItem('futuro_calidoso_credenciales', JSON.stringify(creds));
+          } catch {}
+          useAuthStore.setState({
+            usuario: {
+              id:       dep?.id ?? 'calidoso-' + u,
+              email:    u.toLowerCase() + '@calidoso.com',
+              nombre:   dep?._nombre ?? u,
+              apellido: '',
+              rol:      'padre' as any,
+              activo:   true,
+              academia: { id: '1', nombre: 'Futuro Antioquia' },
+            },
+            cargando: false, error: null,
+          });
+          router.push(dep?.id ? `/alumnos/${dep.id}` : '/alumnos');
+        }
+
+        // ── 1. Caché de credenciales — acceso instantáneo sin red ──
         try {
           const rawCred = localStorage.getItem('futuro_calidoso_credenciales');
           if (rawCred) {
             const creds: Record<string, string> = JSON.parse(rawCred);
             const docGuardado = creds[u] ?? '';
             if (docGuardado && normDoc(docGuardado) === cNorm) {
-              const deps = await getDeportistas();
-              const dep = deps.find(d => {
-                const cols = d._columnas ?? {};
-                const codKey = Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim()));
-                return codKey ? String(cols[codKey]).trim().toUpperCase() === u : false;
-              });
-              document.cookie = 'futuro-session=deportista; path=/; max-age=86400; SameSite=Lax';
-              try { localStorage.setItem('futuro-calidoso-id', dep?.id ?? ''); } catch {}
-              router.push(dep ? `/alumnos/${dep.id}` : '/alumnos');
+              // Buscamos solo este deportista (1 fila en Supabase)
+              const candidatos = await buscarPorCodigo(u);
+              const dep = candidatos[0];
+              sesionDeportista(dep);
               return;
             }
           }
         } catch {}
 
+        // ── 2. Búsqueda rápida por código (1 query, no 1.139 filas) ──
+        const candidatos = await buscarPorCodigo(u);
+        const dep = candidatos.find(d => {
+          const cols   = d._columnas ?? {};
+          const docKey = Object.keys(cols).find(k => RX_DOC.test(k.trim().normalize('NFC')));
+          const doc    = docKey ? normDoc(String(cols[docKey]).trim()) : '';
+          return doc === cNorm;
+        });
+
+        if (dep) {
+          sesionDeportista(dep);
+          return;
+        }
+
+        // ── 3. Fallback: vista contable ──
         let vcData: Record<string, string>[] = [];
         try {
           const raw = localStorage.getItem('futuro_vista_contable');
           if (raw) vcData = JSON.parse(raw);
         } catch {}
         if (!vcData.length) vcData = await getVistaContable();
-
-        const deportistas = await getDeportistas();
-        const RX_DOC = /num.*doc|^doc|doc|c[eé]dul|c\.c|identif|nit|no.*doc|cc\b/i;
-
-        const dep = deportistas.find(d => {
-          const cols   = d._columnas ?? {};
-          const codKey = Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim()));
-          const codigo = codKey ? String(cols[codKey]).trim().toUpperCase() : '';
-          if (codigo !== u) return false;
-          const docKey = Object.keys(cols).find(k => RX_DOC.test(k.trim()));
-          const doc    = docKey ? normDoc(String(cols[docKey]).trim()) : '';
-          return doc === cNorm;
-        });
-
-        if (dep) {
-          document.cookie = 'futuro-session=deportista; path=/; max-age=86400; SameSite=Lax';
-          try {
-            localStorage.setItem('futuro-calidoso-id',     dep.id);
-            localStorage.setItem('futuro-calidoso-nombre', dep._nombre ?? '');
-          } catch {}
-          router.push(`/alumnos/${dep.id}`);
-          return;
-        }
 
         const vcRow = vcData.find(fila => {
           const cod = String(fila.codigo ?? '').trim().toUpperCase();
@@ -160,18 +175,9 @@ export default function LoginPage() {
         });
 
         if (vcRow) {
-          const depVC = deportistas.find(d => {
-            const cols   = d._columnas ?? {};
-            const codKey = Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim()));
-            const cod    = codKey ? String(cols[codKey]).trim().toUpperCase() : '';
-            return cod === u;
-          });
-          document.cookie = 'futuro-session=deportista; path=/; max-age=86400; SameSite=Lax';
-          try {
-            localStorage.setItem('futuro-calidoso-nombre', vcRow.nombre ?? '');
-            if (depVC) localStorage.setItem('futuro-calidoso-id', depVC.id);
-          } catch {}
-          router.push(depVC ? `/alumnos/${depVC.id}` : '/alumnos');
+          // Usar candidatos ya cargados (sin re-fetch)
+          const depVC = candidatos[0];
+          sesionDeportista(depVC ?? { id: '', _nombre: vcRow.nombre ?? u });
           return;
         }
 

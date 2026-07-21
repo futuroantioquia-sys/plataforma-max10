@@ -7,7 +7,7 @@ import {
   RefreshCw, Trash2, BookOpen, Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getPagos, saveAllPagos } from '@/lib/db';
+import { getDeportistas, getPagos, saveAllPagos, deleteAllPagos } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 
 declare global { interface Window { XLSX: any } }
@@ -224,8 +224,9 @@ export default function LibroContablePage() {
         const data = new Uint8Array(ev.target?.result as ArrayBuffer);
         const wb   = XLSX.read(data, { type: 'array' });
 
-        /* 1. Buscar hoja CONTABILIDAD (o la primera si no existe) */
+        /* 1. Buscar hoja: "LIBRO CONTABLE" primero, luego "CONTABILIDAD", luego la primera */
         const sheetName: string =
+          wb.SheetNames.find((n: string) => /libro.contable/i.test(n.trim())) ??
           wb.SheetNames.find((n: string) => /contabilidad/i.test(n.trim())) ??
           wb.SheetNames[0];
 
@@ -311,9 +312,10 @@ export default function LibroContablePage() {
         const filasConMes: string[][] = [];
         for (let ri = hRow + 1; ri < rows.length && filasConMes.length < 5; ri++) {
           const r = rows[ri] as any[];
-          const codDigits = String(r[iCod] ?? '').replace(/\D/g, '');
-          /* Solo filas con código de deportista (4 o 5 dígitos) */
-          if (codDigits.length < 4 || codDigits.length > 5) continue;
+          /* Mismo filtro estricto: valor formateado, exactamente 4-5 dígitos */
+          const diagCell = ws[XLSX.utils.encode_cell({ r: ri, c: iCod })];
+          const diagCod  = (diagCell?.w ?? String(r[iCod] ?? '')).trim();
+          if (!/^\d{4,5}$/.test(diagCod)) continue;
           const detVal = limpiar(String(r[iDet] ?? ''));
           if (MESES_VALIDOS.some(m => detVal.includes(m) || detVal === m)) {
             filasConMes.push(r.map((v: any) => String(v ?? '').trim()));
@@ -354,8 +356,8 @@ export default function LibroContablePage() {
         console.log('[LibroContable] Deportistas sistema (primeros 5):',
           deportistas.slice(0, 5).map(d => `${d._nombre} | cod=${codigoDe(d)}`));
 
-        /* 5. Procesar filas */
-        const allPagos: AllPagos = (await getPagos()) as AllPagos;
+        /* 5. Procesar filas — empezar desde cero (no merge) */
+        const allPagos: AllPagos = {};
         const res: ResultRow[]   = [];
 
         const ABREV: Record<string, string> = {
@@ -394,17 +396,24 @@ export default function LibroContablePage() {
           return rawUp;
         }
 
-        for (const row of rows.slice(hRow + 1)) {
+        for (let ri = hRow + 1; ri < rows.length; ri++) {
+          const row = rows[ri] as any[];
           if (!row.some((c: any) => c !== '' && c !== null && c !== undefined)) continue;
 
-          const g      = (i: number) => i >= 0 ? String(row[i] ?? '').trim() : '';
-          const codRaw = g(iCod);
-          const codNum = codRaw.replace(/\D/g, '');  /* solo dígitos */
+          const g = (i: number) => i >= 0 ? String(row[i] ?? '').trim() : '';
 
-          /* ── FILTRO PRINCIPAL: solo filas con código de 4 o 5 dígitos ──
-             Los códigos de deportistas son de 4 o 5 dígitos.
-             Cuentas bancarias (11 dígitos), nombres, referencias → ignorar. */
-          if (codNum.length < 4 || codNum.length > 5) continue;
+          /* ── FILTRO PRINCIPAL: CÓDIGO estricto — exactamente 4 o 5 dígitos ──
+             Usamos el valor FORMATEADO del Excel (wsCell.w) para detectar
+             números que visualmente muestran dígitos extra (p.ej. "0194757"
+             con formato 0000000 que almacena el número 4757).
+             Si wsCell.w no está disponible, usamos el valor crudo.
+             REGLA: la celda debe contener SOLO 4 o 5 dígitos — sin letras,
+             sin espacios, sin otros números acompañándolo. */
+          const codCell = ws[XLSX.utils.encode_cell({ r: ri, c: iCod })];
+          const codFormatted = (codCell?.w ?? g(iCod)).trim();
+          /* Solo acepta exactamente 4 o 5 dígitos, nada más */
+          if (!/^\d{4,5}$/.test(codFormatted)) continue;
+          const codNum = codFormatted;
 
           const depNom   = g(iDep);
           const fecha    = g(iFec);
@@ -467,23 +476,15 @@ export default function LibroContablePage() {
   }
 
   /* ─────────────────────────────────────────────
-     ELIMINAR PAGOS IMPORTADOS
+     ELIMINAR PAGOS IMPORTADOS (borrado total)
   ──────────────────────────────────────────────*/
   async function handleEliminar() {
     setEliminando(true);
     try {
-      const allPagos: AllPagos = (await getPagos()) as AllPagos;
-      for (const depId of Object.keys(allPagos)) {
-        allPagos[depId] = allPagos[depId].map(row => ({
-          ...row,
-          estado:  row.estado === 'PAGÓ' ? ('PEND' as const) : row.estado,
-          fecha:   '',
-          destino: '',
-          vPagado: '',
-        }));
-      }
-      await saveAllPagos(allPagos);
+      /* DELETE real en Supabase + limpiar localStorage */
+      await deleteAllPagos();
       setResultados(null);
+      setResumen(null);
       setConfirmEliminar(false);
       setEliminadoOk(true);
     } catch (err) {
@@ -522,7 +523,7 @@ export default function LibroContablePage() {
         </button>
         <div className="relative flex-1">
           <h1 className="text-white font-black text-lg">Subir Libro Contable</h1>
-          <p className="text-white/60 text-xs">Hoja: CONTABILIDAD · Feb–Dic 2026</p>
+          <p className="text-white/60 text-xs">Hoja: LIBRO CONTABLE · Feb–Dic 2026</p>
         </div>
         <div className="relative text-right leading-tight">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
@@ -562,7 +563,7 @@ export default function LibroContablePage() {
             ))}
           </div>
           <p className="text-blue-700 text-[11px] font-semibold pt-1">
-            Hoja requerida: <strong>CONTABILIDAD</strong> · DETALLE contiene el mes: <em>FEBRERO 2026, MARZO 2026 … DICIEMBRE 2026</em>
+            Hoja requerida: <strong>LIBRO CONTABLE</strong> · DETALLE contiene el mes: <em>FEBRERO 2026, MARZO 2026 … DICIEMBRE 2026</em>
           </p>
         </div>
 
@@ -882,7 +883,7 @@ export default function LibroContablePage() {
         {confirmEliminar && (
           <div className="bg-red-50 border border-red-300 rounded-2xl p-4 space-y-3">
             <p className="text-red-700 font-black text-sm">¿Seguro que deseas eliminar todos los pagos?</p>
-            <p className="text-red-600 text-xs">Esta acción marcará todos los meses como PENDIENTE y borrará fechas y valores pagados.</p>
+            <p className="text-red-600 text-xs">Esta acción borrará completamente todos los pagos. Luego podrás subir el libro actualizado desde cero.</p>
             <div className="flex gap-2">
               <button
                 onClick={handleEliminar}
@@ -904,7 +905,7 @@ export default function LibroContablePage() {
         {eliminadoOk && (
           <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-            <p className="text-green-700 font-bold text-sm">Pagos eliminados correctamente. Todos los meses vuelven a PENDIENTE.</p>
+            <p className="text-green-700 font-bold text-sm">Pagos eliminados. Ya puedes subir el libro contable actualizado desde cero.</p>
           </div>
         )}
 

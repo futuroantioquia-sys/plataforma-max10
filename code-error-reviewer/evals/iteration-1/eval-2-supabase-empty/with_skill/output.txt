@@ -1,0 +1,54 @@
+🔍 Diagnóstico
+
+El filtro `.eq('proyecto', 'SUB 8A')` no encuentra registros porque PostgreSQL hace comparaciones de texto de forma case-sensitive por defecto. El valor en la base de datos es `'Sub 8a'` y tú estás buscando `'SUB 8A'` — son cadenas distintas para Postgres, aunque a la vista parezcan lo mismo.
+
+💡 Solución
+
+Opción 1 — La más simple: usar el valor exacto tal como está en la base de datos.
+
+**Antes:**
+```typescript
+const { data, error } = await supabase
+  .from('deportistas')
+  .select('*')
+  .eq('proyecto', 'SUB 8A');
+```
+
+**Después:**
+```typescript
+const { data, error } = await supabase
+  .from('deportistas')
+  .select('*')
+  .eq('proyecto', 'Sub 8a'); // valor exacto como aparece en Supabase Studio
+```
+
+Opción 2 — Si los datos son inconsistentes en la BD (algunos en mayúsculas, otros no), usa `ilike` para una búsqueda insensible a mayúsculas:
+
+```typescript
+const { data, error } = await supabase
+  .from('deportistas')
+  .select('*')
+  .ilike('proyecto', 'sub 8a'); // busca sin importar mayúsculas/minúsculas
+```
+
+> Nota: `ilike` es equivalente a `ILIKE` en SQL y es la forma correcta en Supabase para comparaciones case-insensitive. Evita usar `.filter()` con texto crudo a menos que sea necesario.
+
+📌 Por qué pasó
+
+PostgreSQL trata los textos con el operador `=` de forma estrictamente case-sensitive: `'SUB 8A' = 'Sub 8a'` evalúa como `false`. Supabase traduce `.eq()` directamente a un `=` en SQL, así que hereda ese comportamiento. El error no produce ningún mensaje porque la consulta es válida — simplemente no encuentra filas que cumplan el filtro, y devuelve un array vacío con `error: null`.
+
+⚡ Tips extra
+
+1. **Normaliza los datos en origen.** Si el campo `proyecto` puede llegar con distintas capitalizaciones, considera guardarlo siempre en un formato canónico (por ejemplo, todo en minúsculas o con `UPPER()` en un trigger de Postgres). Eso evita este tipo de problemas en todas las consultas futuras.
+
+2. **Crea un índice funcional si usas `ilike` frecuentemente.** Las búsquedas insensibles a mayúsculas no usan índices normales. Si consultas este campo con frecuencia, puedes añadir un índice en Supabase Studio:
+   ```sql
+   CREATE INDEX idx_deportistas_proyecto_lower
+   ON deportistas (LOWER(proyecto));
+   ```
+   Y adaptar la consulta:
+   ```typescript
+   .filter('proyecto', 'ilike', 'sub 8a')
+   ```
+
+3. **Consejo de depuración para el futuro:** cuando una consulta de Supabase devuelve `[]` con `error: null`, el primer sospechoso siempre es el filtro — especialmente comparaciones de texto. Prueba primero sin el `.eq()` para confirmar que los datos se cargan, y luego ve añadiendo filtros uno a uno.

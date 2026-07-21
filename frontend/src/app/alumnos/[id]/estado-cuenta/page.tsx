@@ -75,35 +75,37 @@ function sinTildesEC(s: string): string {
 
 /** Devuelve TODOS los posibles códigos de 4-5 dígitos del deportista,
  *  normalizados con parseInt (elimina ceros iniciales).
- *  Excluye años (2020-2099) para evitar falsos positivos. */
+ *  Nota: valores de la columna CÓDIGO nunca se filtran como "año" — un código
+ *  como "2018" es un ID válido aunque parezca un año. */
 function todosLosCodigos(dep: Deportista): string[] {
   const cols = dep._columnas ?? {};
   const result: string[] = [];
   const seen  = new Set<string>();
 
-  const add = (digits: string) => {
+  const add = (digits: string, esCodColumna = false) => {
     if (!digits) return;
     const n = parseInt(digits, 10);
     if (isNaN(n)) return;
-    // Excluir años
-    if (n >= 2000 && n <= 2099 && digits.length === 4) return;
+    // Excluir años SOLO en columnas que NO son la columna CÓDIGO explícita
+    if (!esCodColumna && n >= 2000 && n <= 2099 && digits.length === 4) return;
     const key = String(n);
     if (!seen.has(key)) { seen.add(key); result.push(key); }
     // Agregar también con ceros originales por si el import guardó con ellos
     if (digits !== key && !seen.has(digits)) { seen.add(digits); result.push(digits); }
   };
 
-  // 1. Prioridad: columna cuyo nombre empiece con "cod"
+  // 1. Prioridad: columna cuyo nombre empiece con "cod" — NUNCA filtrar como año
   const kCod = Object.keys(cols).find(k => /^cod/i.test(sinTildesEC(k)));
   if (kCod) {
     const digits = String(cols[kCod] ?? '').replace(/\D/g, '');
-    if (digits.length >= 4 && digits.length <= 5) add(digits);
+    if (digits.length >= 4 && digits.length <= 5) add(digits, true); // true = es columna CÓDIGO
   }
 
-  // 2. Cualquier columna con valor de 4-5 dígitos
-  for (const v of Object.values(cols)) {
+  // 2. Cualquier otra columna con valor de 4-5 dígitos (sí filtra años)
+  for (const [k, v] of Object.entries(cols)) {
+    if (k === kCod) continue; // ya procesada arriba
     const digits = String(v ?? '').replace(/\D/g, '');
-    if (digits.length >= 4 && digits.length <= 5) add(digits);
+    if (digits.length >= 4 && digits.length <= 5) add(digits, false);
   }
 
   return result;
@@ -112,6 +114,23 @@ function todosLosCodigos(dep: Deportista): string[] {
 /** Obtiene el código principal (primer resultado normalizado) */
 function getCodigoDeportista(dep: Deportista): string {
   return todosLosCodigos(dep)[0] ?? '';
+}
+
+/** Código completo incluyendo prefijo B/MB */
+function getCodigoRaw(dep: Deportista): string {
+  const cols = dep._columnas ?? {};
+  const kCod = Object.keys(cols).find(k => /^cod/i.test(sinTildesEC(k)));
+  return kCod ? String(cols[kCod] ?? '').trim() : '';
+}
+
+/** Deportista BECADO: código empieza con "B" pero NO con "MB" → no paga nada */
+function esBecado(codRaw: string): boolean {
+  return /^b\d/i.test(codRaw.trim()) && !/^mb/i.test(codRaw.trim());
+}
+
+/** Deportista MEDIA BECA: código empieza con "MB" → paga la mitad, funciona normal */
+function esMediaBeca(codRaw: string): boolean {
+  return /^mb/i.test(codRaw.trim());
 }
 
 function formatFecha(v: string): string {
@@ -177,13 +196,6 @@ export default function EstadoCuentaPage() {
   const [editForm,      setEditForm]      = useState<Partial<PagoRow>>({});
   const [elimConfirm,   setElimConfirm]   = useState<number | null>(null);
   const [anio,     setAnio]    = useState(new Date().getFullYear());
-  const [debugInfo, setDebugInfo] = useState<{
-    codigosDep: string[];
-    clavesPagos: string[];
-    filasPorCod: { cod: string; cant: number }[];
-    filasPorId: number;
-  } | null>(null);
-  const [showDebug, setShowDebug] = useState(false);
   const [confirmRevert, setConfirmRevert] = useState<number | null>(null);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
@@ -229,17 +241,6 @@ export default function EstadoCuentaPage() {
       }
 
       let filas: PagoRow[] = Array.from(mergeMap.values());
-
-      /* Guardar info de diagnóstico */
-      setDebugInfo({
-        codigosDep,
-        clavesPagos: Object.keys(allPagos as AllPagos),
-        filasPorCod: codigosDep.map(cod => ({
-          cod,
-          cant: ((allPagos as AllPagos)[cod] ?? []).length,
-        })),
-        filasPorId: ((allPagos as AllPagos)[id] ?? []).length,
-      });
 
       /* Migrar nombres viejos → nombres con 2026 */
       const MIGRAR: Record<string, string> = {
@@ -387,6 +388,8 @@ export default function EstadoCuentaPage() {
   const fechaNac  = construirFechaNac(dep._columnas);
   const gradiente = gradientePrograma(catVal);
   const codVal    = getCol(dep, /^c[oó]d/i);
+  const codRaw    = getCodigoRaw(dep);
+  const becado    = esBecado(codRaw);
   const sedeVal   = getCol(dep, /^sede/i);
 
   /* ─── Tarifa mensual según programa y sede ─── */
@@ -436,15 +439,16 @@ export default function EstadoCuentaPage() {
   });
 
   /* ─── Totales ─── */
-  const pagados    = pagosVista.filter(p => p.estado === 'PAGÓ').length;
-  const pendientes = pagosVista.filter(p => p.estado === 'PEND').length;
-  const proximos   = pagosVista.filter(p => p.estado === 'PROX').length;
+  // Si es BECADO: todos los meses cuentan como pagados, sin pendientes
+  const pagados    = becado ? pagosVista.length : pagosVista.filter(p => p.estado === 'PAGÓ').length;
+  const pendientes = becado ? 0 : pagosVista.filter(p => p.estado === 'PEND').length;
+  const proximos   = becado ? 0 : pagosVista.filter(p => p.estado === 'PROX').length;
   const cargados   = pagados + pendientes + proximos;
-  const totalPagado = pagosVista.reduce((s, p) => {
+  const totalPagado = becado ? 0 : pagosVista.reduce((s, p) => {
     const n = parseInt((p.vPagado || '0').replace(/\D/g, ''));
     return s + (isNaN(n) ? 0 : n);
   }, 0);
-  const totalPendiente = pagosVista.reduce((s, p) => {
+  const totalPendiente = becado ? 0 : pagosVista.reduce((s, p) => {
     if (p.estado !== 'PEND') return s;
     const n = parseInt((p.vCargado || '0').replace(/\D/g, ''));
     return s + (isNaN(n) ? 0 : n);
@@ -642,10 +646,10 @@ export default function EstadoCuentaPage() {
             </thead>
             <tbody>
               {pagosVista.map((row, idx) => {
-                const isPaid = row.estado === 'PAGÓ';
-                const isProx = row.estado === 'PROX';
+                const isPaid  = becado || row.estado === 'PAGÓ';
+                const isProx  = !becado && row.estado === 'PROX';
                 const rowBg   = isProx ? '#f9fafb' : ROW;
-                const detBg   = isProx ? '#9ca3af' : isPaid ? '#374151' : '#dc2626';
+                const detBg   = becado ? '#374151' : isProx ? '#9ca3af' : isPaid ? '#374151' : '#dc2626';
                 return (
                   <tr key={idx} style={{ opacity: isProx ? 0.6 : 1 }}>
 
@@ -688,19 +692,22 @@ export default function EstadoCuentaPage() {
 
                     {/* ESTADO PAGO */}
                     <td style={{ background: rowBg, border: BW, padding: '6px 4px', textAlign: 'center' }}>
-                      {isProx
-                        ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
-                            style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
-                        : puedeEditar
-                          ? <button onClick={() => toggleEstado(idx)}
-                              className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
-                                isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
+                      {becado
+                        ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white"
+                            style={{ background: '#16a34a' }}>BECADO</span>
+                        : isProx
+                          ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
+                              style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
+                          : puedeEditar
+                            ? <button onClick={() => toggleEstado(idx)}
+                                className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
+                                  isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
+                                  {isPaid ? 'PAGÓ' : 'PEND'}
+                              </button>
+                            : <span className={cn('px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default',
+                                isPaid ? 'bg-green-500' : 'bg-red-500')}>
                                 {isPaid ? 'PAGÓ' : 'PEND'}
-                            </button>
-                          : <span className={cn('px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default',
-                              isPaid ? 'bg-green-500' : 'bg-red-500')}>
-                              {isPaid ? 'PAGÓ' : 'PEND'}
-                            </span>
+                              </span>
                       }
                     </td>
                   </tr>
@@ -720,54 +727,6 @@ export default function EstadoCuentaPage() {
               Solo lectura · Edición disponible desde Control de Pagos
             </p>
         }
-
-        {/* ── PANEL DEBUG ── */}
-        <div className="border-t border-gray-200 pt-3">
-          <button
-            onClick={() => setShowDebug(v => !v)}
-            className="w-full text-xs text-gray-400 font-semibold py-1.5 hover:text-gray-600 transition"
-          >
-            {showDebug ? '▲ Ocultar diagnóstico' : '🔍 Ver diagnóstico de pagos'}
-          </button>
-          {showDebug && debugInfo && (
-            <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3 text-[10px] font-mono space-y-1.5 text-gray-700">
-              <p className="font-black text-gray-800 text-xs">🔍 Diagnóstico Estado de Cuenta</p>
-              <p><strong>ID deportista:</strong> {id}</p>
-              <p><strong>Códigos detectados en _columnas:</strong>{' '}
-                <span className={debugInfo.codigosDep.length ? 'text-green-700 font-bold' : 'text-red-600 font-bold'}>
-                  {debugInfo.codigosDep.length ? debugInfo.codigosDep.join(', ') : '⚠ NINGUNO'}
-                </span>
-              </p>
-              <p><strong>Filas por código:</strong>{' '}
-                {debugInfo.filasPorCod.map(fc => (
-                  <span key={fc.cod} className={`mr-2 ${fc.cant > 0 ? 'text-green-700 font-bold' : 'text-gray-400'}`}>
-                    {fc.cod}={fc.cant}
-                  </span>
-                ))}
-                {debugInfo.filasPorCod.every(fc => fc.cant === 0) &&
-                  <span className="text-red-600 font-bold">⚠ 0 filas encontradas</span>
-                }
-              </p>
-              <p><strong>Filas por dep.id:</strong>{' '}
-                <span className={debugInfo.filasPorId > 0 ? 'text-green-700 font-bold' : 'text-gray-400'}>
-                  {debugInfo.filasPorId}
-                </span>
-              </p>
-              <p><strong>Claves en allPagos ({debugInfo.clavesPagos.length} total):</strong></p>
-              <div className="bg-white rounded p-1.5 max-h-24 overflow-y-auto break-all">
-                {debugInfo.clavesPagos.length === 0
-                  ? <span className="text-red-600">⚠ allPagos está VACÍO</span>
-                  : debugInfo.clavesPagos.map((k, i) => (
-                      <span key={i} className={`mr-2 ${/^\d{4,5}$/.test(k) ? 'text-blue-700 font-bold' : 'text-gray-500'}`}>
-                        {k}
-                      </span>
-                    ))
-                }
-              </div>
-              <p className="text-[9px] text-gray-400">Azul = claves numéricas (Libro Contable) · Gris = dep.id</p>
-            </div>
-          )}
-        </div>
 
       </main>
 

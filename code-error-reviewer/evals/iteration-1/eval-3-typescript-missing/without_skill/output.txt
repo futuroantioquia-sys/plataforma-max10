@@ -1,0 +1,69 @@
+EXPLICACION DEL ERROR DE TYPESCRIPT
+====================================
+
+El error que TypeScript te muestra es:
+
+  Type '{ id: string; nombre: string; proyecto: string | null; }' is not assignable to type 'Deportista'.
+    Property 'sede' is missing in type '{ id: string; nombre: string; proyecto: string | null; }'
+    but required in type 'Deportista'.
+
+QUE SIGNIFICA ESTE ERROR
+-------------------------
+
+Tu interfaz `Deportista` define cuatro propiedades:
+
+  - id: string          -> requerida
+  - nombre: string      -> requerida
+  - proyecto: string | null  -> requerida
+  - sede: string        -> requerida (sin "?", es obligatoria)
+  - fechaNacimiento?: string -> opcional (tiene "?", puede omitirse)
+
+El objeto que asignaste a `dep` solo incluye `id`, `nombre` y `proyecto`.
+Le falta `sede`, que es una propiedad OBLIGATORIA en la interfaz.
+
+TypeScript es estricto con esto: si una propiedad en la interfaz no tiene
+el signo "?" al final de su nombre, ES OBLIGATORIA. Debes incluirla siempre
+que crees un objeto de ese tipo.
+
+COMO CORREGIRLO
+---------------
+
+OPCION 1 - Agregar la propiedad faltante al objeto:
+
+  const dep: Deportista = {
+    id: '123',
+    nombre: 'Carlos',
+    proyecto: 'SUB 8A',
+    sede: 'Sede Norte',   // <- agregar esto
+  };
+
+OPCION 2 - Hacer que `sede` sea opcional en la interfaz (si tiene sentido en tu logica):
+
+  interface Deportista {
+    id: string;
+    nombre: string;
+    proyecto: string | null;
+    sede?: string;           // <- agregar "?" para hacerla opcional
+    fechaNacimiento?: string;
+  }
+
+CUAL ELEGIR
+-----------
+
+- Si un deportista SIEMPRE debe tener sede (es un dato esencial), usa la Opcion 1
+  y simplemente agrega el valor al objeto.
+
+- Si es valido tener un deportista sin sede (por ejemplo, al registrarlo inicialmente
+  antes de asignarle una), usa la Opcion 2 y marca la propiedad como opcional.
+
+CONCEPTO CLAVE
+--------------
+
+En TypeScript, las interfaces son "contratos". Cuando dices `const dep: Deportista`,
+le dices al compilador que `dep` cumplira exactamente ese contrato. Si falta alguna
+propiedad requerida, TypeScript te avisa en tiempo de compilacion (antes de ejecutar
+el codigo), lo cual es una ventaja: detectas el error antes de que cause problemas
+en produccion.
+
+La propiedad `fechaNacimiento` en tu interfaz tiene "?" al final, por eso SI puedes
+omitirla sin error. La propiedad `sede` no tiene "?", por eso NO puedes omitirla.

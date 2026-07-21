@@ -11,12 +11,13 @@ import {
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
+import { getDeportistas } from '@/lib/db';
 
 // ── CARD DE ACCESO RÁPIDO ────────────────────────────────────────
 function AccesoCard({
-  titulo, icono: Icono, href, descripcion, color = 'verde',
+  titulo, icono: Icono, href, descripcion, color = 'verde', badge,
 }: {
-  titulo: string; icono: React.ElementType; href: string; descripcion: string; color?: string;
+  titulo: string; icono: React.ElementType; href: string; descripcion: string; color?: string; badge?: number;
 }) {
   const router = useRouter();
 
@@ -34,12 +35,17 @@ function AccesoCard({
     <button
       onClick={() => router.push(href)}
       className={cn(
-        'group bg-white rounded-xl sm:rounded-2xl border border-gray-100 p-3 sm:p-4 text-left',
+        'group relative bg-white rounded-xl sm:rounded-2xl border border-gray-100 p-3 sm:p-4 text-left',
         'transition-all duration-200',
         'hover:-translate-y-1 hover:shadow-lg',
         c.border,
       )}
     >
+      {badge != null && badge > 0 && (
+        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 shadow-md z-10">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
       <div className={cn(
         'w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-3 transition-all duration-200',
         c.icon,
@@ -181,6 +187,18 @@ function LinkInscripcionCard() {
 
 // ── DASHBOARD ADMINISTRADOR ──────────────────────────────────────
 function DashboardAdmin() {
+  const [pendientesAsign, setPendientesAsign] = useState(0);
+
+  useEffect(() => {
+    getDeportistas().then(lista => {
+      const count = lista.filter(d => {
+        const proy = (Object.entries(d._columnas).find(([k]) => /^proy/i.test(k.trim()))?.[1] ?? '').trim().toUpperCase();
+        return !proy || proy === 'UBICAR';
+      }).length;
+      setPendientesAsign(count);
+    }).catch(() => {});
+  }, []);
+
   return (
     <div className="space-y-5 sm:space-y-8">
       {/* Categoría: Deportistas */}
@@ -188,7 +206,7 @@ function DashboardAdmin() {
         <AccesoCard titulo="Consolidado Afiliados"   icono={LayoutList}    href="/general"      descripcion="Todos los deportistas"       color="verde" />
         <AccesoCard titulo="Programas y Proyectos"   icono={Users}         href="/alumnos"      descripcion="Ver y editar fichas"         color="verde" />
         <AccesoCard titulo="Formulario de Afiliación" icono={ClipboardList} href="/afiliacion"  descripcion="Registro de deportistas"     color="verde" />
-        <AccesoCard titulo="Asignación de Proyectos" icono={UserPlus}      href="/asignacion"   descripcion="Asignar nuevos deportistas"  color="verde" />
+        <AccesoCard titulo="Asignación de Proyectos" icono={UserPlus}      href="/asignacion"   descripcion="Asignar nuevos deportistas"  color="verde" badge={pendientesAsign} />
       </CategoriaSection>
 
       <div className="divider-fade" />
@@ -196,8 +214,7 @@ function DashboardAdmin() {
       {/* Categoría: Finanzas */}
       <CategoriaSection emoji="💰" titulo="Finanzas" color="azul" delay={200}>
         <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="azul" />
-        <AccesoCard titulo="Subir Valores"         icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" />
-        <AccesoCard titulo="Pagos por Proyecto"    icono={FolderKanban} href="/pagos-proyecto"          descripcion="Estado de cuenta por grupo"    color="azul" />
+        <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" />
       </CategoriaSection>
 
       <div className="divider-fade" />
@@ -216,8 +233,7 @@ function DashboardAdmin() {
 
       {/* Categoría: Gestión */}
       <CategoriaSection emoji="⚙️" titulo="Gestión" color="teal" delay={400}>
-        <AccesoCard titulo="Sedes y Horarios"   icono={Calendar}     href="/proyectos"  descripcion="Proyectos · Profe · Sede"    color="teal" />
-        <AccesoCard titulo="Gestión de Usuarios" icono={Shield}      href="/usuarios"   descripcion="Profes, claves y proyectos"  color="teal" />
+        <AccesoCard titulo="Info Proyectos y Formadores" icono={Shield} href="/usuarios" descripcion="Profes, sedes y proyectos" color="teal" />
         <AccesoCard titulo="Mensajes"            icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"    color="teal" />
       </CategoriaSection>
 

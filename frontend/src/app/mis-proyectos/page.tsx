@@ -176,7 +176,7 @@ export default function MisProyectosPage() {
                 <button
                   key={proy}
                   onClick={() => router.push(`/alumnos?proyecto=${encodeURIComponent(proy)}`)}
-                  className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left active:scale-[.98] transition-transform hover:shadow-md">
+                  className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left active:scale-[.98] transition-transform hover:shadow-md cursor-pointer">
                   <div className="flex items-center gap-4 p-4">
                     {/* Ícono proyecto */}
                     <div className="w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-inner"

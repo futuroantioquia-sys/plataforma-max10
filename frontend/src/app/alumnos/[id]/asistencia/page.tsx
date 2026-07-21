@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Calendar, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Calendar, BarChart2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDeportistas, getAsistencia, getFoto } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
@@ -73,6 +73,8 @@ export default function AsistenciaAtletaPage() {
   const [mes,        setMes]        = useState(new Date().getMonth());
   const [anio,       setAnio]       = useState(new Date().getFullYear());
   const [vista,      setVista]      = useState<'mes' | 'consolidado'>('mes');
+  const [certDesde,  setCertDesde]  = useState(1);   // Febrero
+  const [certHasta,  setCertHasta]  = useState(11);  // Diciembre
 
   useEffect(() => {
     getDeportistas().then(lista => {
@@ -134,6 +136,131 @@ export default function AsistenciaAtletaPage() {
   /* ── Loading (DESPUÉS de todos los hooks) ── */
   if (!dep) {
     return <LoadingBall />;
+  }
+
+  function generarCertificado(desdeParam?: number, hastaParam?: number) {
+    if (!dep) return;
+    const d = desdeParam ?? certDesde;
+    const h = hastaParam ?? certHasta;
+    const docDep   = getCol(dep, /num.*doc|^doc|c[eé]dul/i) || '—';
+    const programa = (catVal || 'ACADEMIA DE FÚTBOL').toUpperCase();
+    const rango    = consolidado
+      .map((r, i) => ({ ...r, idx: i }))
+      .filter(r => r.idx >= d && r.idx <= h);
+
+    const GRN = '#2e9e50';
+    const CELL = 'background:#f4f5f4;border:2px solid white;padding:7px 10px;font-size:13px;text-align:center';
+    const filas = rango.map(r => `
+      <tr>
+        <td style="background:${GRN};color:white;border:2px solid white;padding:7px 12px;font-weight:700;font-size:13px">${r.mes}</td>
+        <td style="${CELL}">${r.total > 0 ? r.total : '—'}</td>
+        <td style="${CELL}">${r.total > 0 ? r.asistio : '—'}</td>
+        <td style="${CELL}">${r.total > 0 ? r.falto : '—'}</td>
+        <td style="${CELL};font-weight:700;color:${r.pct!==null?(r.pct>=80?GRN:r.pct>=60?'#b45309':'#dc2626'):'#555'}">${r.pct !== null ? r.pct + '%' : '—'}</td>
+      </tr>`).join('');
+
+    const totalA = rango.reduce((s, r) => s + r.asistio, 0);
+    const totalF = rango.reduce((s, r) => s + r.falto, 0);
+    const totalT = totalA + totalF;
+    const totalP = totalT > 0 ? Math.round((totalA / totalT) * 100) : null;
+
+    /* Fecha con mes capitalizado: "8 de Julio de 2026" */
+    const rawFecha  = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+    const fechaHoy  = rawFecha.replace(/de ([a-záéíóúñ]+)/i, (_, m) => `de ${m.charAt(0).toUpperCase()}${m.slice(1)}`);
+
+    /* Logo real desde /public */
+    const baseUrl  = typeof window !== 'undefined' ? window.location.origin : '';
+    const logoSVG  = `<img src="${baseUrl}/ESCUDO%20F.A%202020.png" alt="Escudo Futuro Antioquia" width="90" style="display:block;height:auto"/>`;
+
+    /* Firma real desde /public */
+    const firmaSVG = `<img src="${baseUrl}/firma-diana.png.png" alt="Firma Diana Fernanda Castro Estrada" style="height:70px;width:auto;display:block;margin-bottom:4px"/>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Certificación de Pertenencia y/o Asistencia</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  body{font-family:Arial,sans-serif;padding:52px 62px;color:#1a1a1a;font-size:14px;line-height:1.5}
+  .top{display:flex;justify-content:flex-end;margin-bottom:18px}
+  .titulo{font-size:15px;font-weight:900;text-align:center;margin-bottom:28px;letter-spacing:.02em}
+  .fecha{margin-bottom:18px}
+  .saludo{margin-bottom:18px}
+  .cuerpo{text-align:justify;line-height:1.75;margin-bottom:22px}
+  table{width:100%;border-collapse:collapse;margin-bottom:22px;font-size:13px}
+  tbody td{vertical-align:middle}
+  .expide{margin-bottom:36px}
+  .atentamente{margin-bottom:10px}
+  .firma-bloque{margin-bottom:20px}
+  .firma-nombre{font-weight:900;font-size:14px;margin-bottom:2px}
+  .firma-cargo{font-size:13px;margin-bottom:1px}
+  .firma-nit{font-size:13px}
+  .footer{margin-top:36px;font-size:13px;border-top:1px solid #ccc;padding-top:14px}
+  .footer a{color:#1a1a1a;text-decoration:underline}
+  @media print{body{padding:28px 36px}}
+</style>
+</head>
+<body>
+
+<div class="top">${logoSVG}</div>
+
+<p class="titulo">CERTIFICACIÓN DE PERTENENCIA  Y/O ASISTENCIA</p>
+
+<p class="fecha">Medellín, ${fechaHoy}</p>
+
+<p class="saludo">Cordial saludo.</p>
+
+<p class="cuerpo">
+  Por medio de la presente, LA CORPORACIÓN DEPORTIVA FUTURO ANTIOQUIA,
+  certifica que el DEPORTISTA <strong>${nombre.toUpperCase()}, con D.I ${docDep},</strong>
+  Pertenece a nuestro Programa: ${programa}.
+</p>
+
+<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:22px">
+  <thead>
+    <tr>
+      <th style="background:#2e9e50;color:white;padding:9px 8px 9px 12px;font-size:10.5px;font-weight:700;text-transform:uppercase;text-align:left;border:2px solid white;letter-spacing:.04em">MES</th>
+      <th style="background:#2e9e50;color:white;padding:9px 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;text-align:center;border:2px solid white;letter-spacing:.04em">ENTRENAMIENTOS PROGRAMADOS</th>
+      <th style="background:#2e9e50;color:white;padding:9px 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;text-align:center;border:2px solid white;letter-spacing:.04em">ASISTENCIAS</th>
+      <th style="background:#2e9e50;color:white;padding:9px 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;text-align:center;border:2px solid white;letter-spacing:.04em">AUSENCIAS</th>
+      <th style="background:#2e9e50;color:white;padding:9px 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;text-align:center;border:2px solid white;letter-spacing:.04em">% ASISTENCIA</th>
+    </tr>
+  </thead>
+  <tbody>${filas}</tbody>
+  <tfoot>
+    <tr>
+      <td style="background:#2e9e50;color:white;padding:8px 10px 8px 12px;border:2px solid white;font-weight:900;font-size:13px;text-align:left">TOTAL</td>
+      <td style="background:#2e9e50;color:white;padding:8px 10px;border:2px solid white;font-weight:900;font-size:13px;text-align:center">${totalT > 0 ? totalT : '—'}</td>
+      <td style="background:#2e9e50;color:white;padding:8px 10px;border:2px solid white;font-weight:900;font-size:13px;text-align:center">${totalA > 0 ? totalA : '—'}</td>
+      <td style="background:#2e9e50;color:white;padding:8px 10px;border:2px solid white;font-weight:900;font-size:13px;text-align:center">${totalT > 0 ? totalF : '—'}</td>
+      <td style="background:#2e9e50;color:white;padding:8px 10px;border:2px solid white;font-weight:900;font-size:13px;text-align:center">${totalP !== null ? totalP + '%' : '—'}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<p class="expide">La anterior se expide a solicitud del interesado.</p>
+
+<p class="atentamente">Atentamente,</p>
+
+<div class="firma-bloque">
+  ${firmaSVG}
+  <p class="firma-nombre">DIANA FERNANDA CASTRO ESTRADA</p>
+  <p class="firma-cargo">Representante legal</p>
+  <p class="firma-nit">Nit 811.036.997-5</p>
+</div>
+
+<div class="footer">
+  <p><a href="mailto:futuroantioquia@Hotmail.com">futuroantioquia@Hotmail.com</a></p>
+  <p>Cra 92 # 37- 52 – Tel: 3045401497- Medellín - Colombia</p>
+</div>
+
+<script>window.onload=()=>window.print();</script>
+</body>
+</html>`;
+
+    const w = window.open('', '_blank', 'width=860,height=720');
+    if (w) { w.document.write(html); w.document.close(); }
   }
 
   const G    = '#16a34a';   // verde  — encabezado MES + columna mes
@@ -233,54 +360,64 @@ export default function AsistenciaAtletaPage() {
               </button>
             </div>
 
-            {/* Calendario */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="grid grid-cols-7 border-b border-gray-100">
-                {DIAS_INICIAL.map(d => (
-                  <div key={d} className="text-center py-2 text-[11px] font-black text-gray-400">{d}</div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7">
-                {Array.from({ length: new Date(anio, mes, 1).getDay() }).map((_,i) => (
-                  <div key={`e${i}`} className="aspect-square"/>
-                ))}
-                {diasMes.map(fecha => {
-                  const estado = getEstado(fecha);
-                  const esHoy = fecha.toDateString() === new Date().toDateString();
-                  const color = estadoColor(estado);
-                  const txt   = estadoTexto(estado);
-                  return (
-                    <div key={fecha.toISOString()} className="aspect-square flex items-center justify-center border border-gray-50 p-0.5">
-                      <div className={cn('w-full h-full rounded-lg flex flex-col items-center justify-center gap-0.5', esHoy && !estado ? 'ring-2 ring-[#16a34a]' : '')}
-                        style={{ background: estado ? color : 'transparent' }}>
-                        <span className={cn('text-xs font-black leading-none', estado ? 'text-white' : esHoy ? 'text-[#16a34a]' : 'text-gray-700')}>
-                          {fecha.getDate()}
-                        </span>
-                        {txt && <span className="text-[8px] font-black text-white/90 leading-none">{txt}</span>}
+            {/* ── Solo días de entrenamiento ── */}
+            {(() => {
+              const diasEnt = diasMes.filter(d => getEstado(d) !== '');
+              if (diasEnt.length === 0) return (
+                <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+                  <Calendar className="w-10 h-10 text-gray-200 mx-auto mb-2"/>
+                  <p className="text-gray-400 text-sm font-semibold">Sin entrenamientos registrados en {MESES[mes]}</p>
+                </div>
+              );
+              return (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+                  <p className="font-black text-[#111827] text-xs uppercase tracking-widest mb-3">
+                    Entrenamientos · {MESES[mes]} {anio}
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {diasEnt.map(fecha => {
+                      const estado = getEstado(fecha);
+                      const color  = estadoColor(estado);
+                      const txt    = estadoTexto(estado);
+                      const esHoy  = fecha.toDateString() === new Date().toDateString();
+                      const diaN   = fecha.toLocaleDateString('es-CO', { weekday: 'short' })
+                                         .replace('.','').toUpperCase().substring(0,3);
+                      return (
+                        <div key={fecha.toISOString()}
+                          className={cn(
+                            'flex flex-col items-center justify-center rounded-xl py-3 gap-0.5',
+                            esHoy ? 'ring-2 ring-offset-1 ring-[#16a34a]' : ''
+                          )}
+                          style={{ background: color }}>
+                          <span className="text-white/70 text-[9px] font-bold tracking-wider">{diaN}</span>
+                          <span className="text-white font-black text-2xl leading-none">{fecha.getDate()}</span>
+                          <span className="text-white/90 text-[9px] font-black mt-0.5">{txt}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Leyenda compacta — solo estados presentes */}
+                  {(() => {
+                    const presentes = [...new Set(diasEnt.map(d => getEstado(d)))];
+                    const labels: Record<string,string> = {
+                      A:'Asistió',C:'Compite',F:'Faltó',S:'Salud',
+                      ES:'Estudio',FA:'Familia',NQ:'No quizo',CAN:'Cancelado',SE:'Sin empezar',
+                    };
+                    return (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1.5 justify-center mt-3 pt-3 border-t border-gray-100">
+                        {presentes.map(e => (
+                          <span key={e} className="flex items-center gap-1 text-[10px] font-semibold text-gray-500">
+                            <span className="w-5 h-5 rounded flex items-center justify-center text-white text-[8px] font-black"
+                              style={{ background: estadoColor(e) }}>{estadoTexto(e)}</span>
+                            {labels[e] ?? e}
+                          </span>
+                        ))}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Leyenda */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-              <div className="flex flex-wrap gap-x-3 gap-y-2 justify-center">
-                {([
-                  ['A','Asistió'],['C','Compite'],['F','Faltó'],['S','Salud'],
-                  ['ES','Estudio'],['FA','Familia'],['NQ','No quizo'],['CAN','Cancelado'],['SE','Sin empezar'],
-                ] as [Estado, string][]).map(([e, label]) => (
-                  <span key={e} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600">
-                    <span className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[9px] font-black flex-shrink-0"
-                      style={{ background: estadoColor(e) }}>
-                      {estadoTexto(e)}
-                    </span>
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </div>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
 
             {/* KPIs */}
             {resumenMes.total > 0 ? (
@@ -298,12 +435,8 @@ export default function AsistenciaAtletaPage() {
                   <p className="text-[#16a34a] text-[11px] font-semibold">Asistencia</p>
                 </div>
               </div>
-            ) : (
-              <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
-                <Calendar className="w-10 h-10 text-gray-200 mx-auto mb-2"/>
-                <p className="text-gray-400 text-sm font-semibold">Sin registros en {MESES[mes]}</p>
-              </div>
-            )}
+            ) : null}
+
           </>
         )}
 
@@ -395,6 +528,42 @@ export default function AsistenciaAtletaPage() {
                   })
                 )}
               </div>
+            </div>
+
+            {/* ── CERTIFICADO DE ASISTENCIA ── */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+              <p className="font-black text-[#111827] text-xs uppercase tracking-widest mb-3">
+                Descarga tu certificado de asistencia
+              </p>
+              <div className="flex gap-3 mb-3">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Desde</label>
+                  <select
+                    value={certDesde}
+                    onChange={e => setCertDesde(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
+                  >
+                    {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Hasta</label>
+                  <select
+                    value={certHasta}
+                    onChange={e => setCertHasta(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
+                  >
+                    {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                  </select>
+                </div>
+              </div>
+              <button
+                onClick={() => generarCertificado()}
+                className="w-full py-3 bg-[#064e1e] hover:bg-[#16a34a] text-white font-black text-sm rounded-xl transition flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Descargar certificado
+              </button>
             </div>
           </>
         )}

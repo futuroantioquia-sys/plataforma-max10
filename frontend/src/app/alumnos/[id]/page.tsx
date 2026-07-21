@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Edit3, Save, X, Camera, Star, Clipboard, DollarSign, MessageCircle, Trash2 } from 'lucide-react';
+import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDeportistas, saveDeportistas, getFoto, saveFoto } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
+import { useAuthStore } from '@/store/auth.store';
 
 const FOTOS_KEY = 'futuro_fotos_deportistas';
 
@@ -118,12 +119,15 @@ function buildPestanaDeportista(cols: Record<string, string>): CampoD[] {
 export default function PerfilDeportista() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const usuario = useAuthStore(s => s.usuario);
+  const esPadre = usuario?.rol === 'padre';
 
-  const [dep,      setDep]      = useState<Deportista | null>(null);
-  const [foto,     setFoto]     = useState<string | null>(null);
-  const [editando, setEditando] = useState(false);
-  const [edits,    setEdits]    = useState<Record<string, string>>({});
-  const [tab,      setTab]      = useState(0);
+  const [dep,           setDep]          = useState<Deportista | null>(null);
+  const [foto,          setFoto]          = useState<string | null>(null);
+  const [editando,      setEditando]      = useState(false);
+  const [edits,         setEdits]         = useState<Record<string, string>>({});
+  const [tab,           setTab]           = useState(0);
+  const [procesandoFoto, setProcesandoFoto] = useState(false);
   const inputFotoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -136,16 +140,35 @@ export default function PerfilDeportista() {
     });
   }, [id]);
 
-  function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
+  async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const b64 = ev.target?.result as string;
-      setFoto(b64);
-      saveFoto(id, b64).catch(console.error);
-    };
-    reader.readAsDataURL(file);
+    setProcesandoFoto(true);
+    try {
+      // TODO: activar con `npm install @imgly/background-removal`
+      // const { removeBackground } = await import('@imgly/background-removal');
+      // const blob = await removeBackground(file, { output: { format: 'image/png', quality: 1 } });
+      // const img = new Image();
+      // img.src = URL.createObjectURL(blob);
+      // await new Promise<void>(res => { img.onload = () => res(); });
+      // const canvas = document.createElement('canvas');
+      // canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      // const ctx = canvas.getContext('2d')!;
+      // ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // ctx.drawImage(img, 0, 0); URL.revokeObjectURL(img.src);
+      // const b64 = canvas.toDataURL('image/jpeg', 0.92);
+
+      // Por ahora: guardar foto original
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const b64 = ev.target?.result as string;
+        setFoto(b64);
+        saveFoto(id, b64).catch(console.error);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setProcesandoFoto(false);
+    }
   }
 
   async function guardar() {
@@ -219,6 +242,207 @@ export default function PerfilDeportista() {
 
   const tabActual = grupos[tab];
 
+  /* ══════════════ VISTA PADRE — móvil y PC ══════════════ */
+  if (esPadre) {
+    return (
+      <div style={{
+        minHeight: '100dvh',
+        background: '#0d0d0d',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '14px 14px 24px',
+        gap: 12,
+        boxSizing: 'border-box',
+      }}>
+
+        {/* ── TARJETA SUPERIOR ── */}
+        <div style={{
+          width: '100%', maxWidth: 500,
+          background: 'linear-gradient(150deg, #0c3d1c 0%, #052a10 55%, #071510 100%)',
+          borderRadius: 22,
+          border: '1.5px solid rgba(22,163,74,0.35)',
+          padding: '18px 16px 14px',
+          boxSizing: 'border-box',
+          boxShadow: '0 4px 28px rgba(0,0,0,0.55)',
+        }}>
+
+          {/* Nombre */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <span style={{ fontSize: 26, lineHeight: 1 }}>⚽</span>
+            <h1 style={{
+              color: '#fff', fontWeight: 900, fontSize: 19,
+              textTransform: 'uppercase', letterSpacing: '0.02em',
+              lineHeight: 1.2, margin: 0,
+            }}>
+              {dep._nombre}
+            </h1>
+          </div>
+
+          {/* Filas de info + CÓDIGO */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { label: 'PROYECTO',            val: proyectoVal  },
+                { label: 'PROGRAMA',            val: programaVal  },
+                { label: 'FECHA DE AFILIACIÓN', val: fechaAfilVal },
+              ].filter(r => r.val).map(({ label, val }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    background: '#16a34a', color: '#fff',
+                    fontSize: 9, fontWeight: 900,
+                    padding: '4px 8px', borderRadius: 6,
+                    letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                    minWidth: 108, textAlign: 'center',
+                  }}>
+                    {label}
+                  </span>
+                  <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                    {val!.toUpperCase()}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {codigoVal && (
+              <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                <p style={{
+                  color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: 900,
+                  letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 0 5px',
+                }}>CÓDIGO</p>
+                <div style={{
+                  background: '#16a34a', color: '#fff',
+                  fontWeight: 900, fontSize: 24,
+                  padding: '7px 16px', borderRadius: 14,
+                  minWidth: 80, textAlign: 'center',
+                  boxShadow: '0 2px 14px rgba(22,163,74,0.45)',
+                }}>
+                  {codigoVal}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Botones */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginTop: 16 }}>
+            {[
+              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`    },
+              { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta` },
+              { label: 'INFORMES',   href: '/evaluaciones'                },
+              { label: 'MENSAJES',   href: '/mensajes'                    },
+            ].map(({ label, href }) => (
+              <button key={label} onClick={() => router.push(href)} style={{
+                background: 'rgba(255,255,255,0.11)',
+                border: '1.5px solid rgba(255,255,255,0.22)',
+                borderRadius: 13, padding: '11px 2px',
+                color: '#fff', fontWeight: 900, fontSize: 9.5,
+                letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer',
+              }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── TARJETA FOTO ── */}
+        <input ref={inputFotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={subirFoto}/>
+        <div style={{
+          width: '100%', maxWidth: 500,
+          background: '#111814',
+          borderRadius: 22,
+          border: '1.5px solid rgba(22,163,74,0.15)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center',
+          padding: '14px 14px 14px',
+          boxSizing: 'border-box',
+          boxShadow: '0 4px 28px rgba(0,0,0,0.55)',
+        }}>
+
+          {/* ── PROCESANDO ── */}
+          {procesandoFoto && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: 18, padding: '48px 24px',
+            }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%',
+                border: '4px solid rgba(22,163,74,0.2)',
+                borderTop: '4px solid #16a34a',
+                animation: 'spin 0.9s linear infinite',
+              }}/>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              <p style={{
+                color: 'rgba(255,255,255,0.7)', fontWeight: 900, fontSize: 12,
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+                textAlign: 'center', margin: 0, lineHeight: 1.7,
+              }}>
+                QUITANDO EL FONDO…{'\n'}UN MOMENTO
+              </p>
+            </div>
+          )}
+
+          {!procesandoFoto && (foto ? (
+            <>
+              <img
+                src={foto}
+                alt={dep._nombre}
+                onClick={() => inputFotoRef.current?.click()}
+                style={{
+                  width: '100%',
+                  borderRadius: 14,
+                  objectFit: 'cover', objectPosition: 'top',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
+                  display: 'block',
+                  maxHeight: '62vh',
+                }}
+              />
+              {/* Pie de foto — cambiar foto */}
+              <button
+                onClick={() => inputFotoRef.current?.click()}
+                style={{
+                  marginTop: 10,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: 700,
+                  letterSpacing: '0.06em', textTransform: 'uppercase', padding: '4px 0',
+                }}
+              >
+                <Camera size={13} color="rgba(255,255,255,0.45)"/>
+                Toca aquí para cambiar la foto
+              </button>
+            </>
+          ) : (
+            <button onClick={() => inputFotoRef.current?.click()} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20,
+              padding: '32px 0',  width: '100%',
+            }}>
+              <div style={{
+                width: 150, height: 150, borderRadius: 34,
+                border: '4px solid rgba(255,255,255,0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg viewBox="0 0 24 24" style={{ width: 84, height: 84, fill: 'rgba(255,255,255,0.25)' }}>
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                </svg>
+              </div>
+              <p style={{
+                color: 'rgba(255,255,255,0.5)', fontWeight: 900, fontSize: 13,
+                letterSpacing: '0.1em', textTransform: 'uppercase',
+                textAlign: 'center', margin: 0, lineHeight: 1.6,
+              }}>
+                SUBE TU FOTO CON UNIFORME Y FONDO BLANCO
+              </p>
+            </button>
+          ))}
+        </div>
+
+      </div>
+    );
+  }
+
+  /* ══════════════ VISTA ADMIN / PROFESOR (igual que antes) ══════════════ */
   return (
     <div className="min-h-screen bg-gray-50">
 

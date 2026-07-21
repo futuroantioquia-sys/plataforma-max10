@@ -26,6 +26,15 @@ function getCol(dep: Deportista, rx: RegExp): string {
   const k = Object.keys(dep._columnas).find(k => rx.test(k.trim()));
   return k ? (dep._columnas[k] ?? '') : '';
 }
+function colorCodigo(afil: string): string {
+  const v = afil.toLowerCase();
+  if (v.includes('nuevo'))     return '#f97316';
+  if (v.includes('antigu'))    return '#16a34a';
+  if (v.includes('reingreso')) return '#2563eb';
+  if (v.includes('mb instit')) return '#374151';
+  if (v.includes('b instit'))  return '#7c3aed';
+  return '#16a34a';
+}
 function getRK(dep: Deportista, rx: RegExp) {
   return Object.keys(dep._columnas).find(k => rx.test(k.trim())) ?? '';
 }
@@ -420,7 +429,7 @@ function DashboardEquipo({
 
                       {/* CÓDIGO */}
                       {hayCodigo && (
-                        <td style={{ border: '2px solid white', background: '#16a34a' }}
+                        <td style={{ border: '2px solid white', background: colorCodigo(afil) }}
                           className="px-2 py-1 text-center whitespace-nowrap font-black text-white text-sm">
                           {cod || '—'}
                         </td>

@@ -1,0 +1,40 @@
+**🔍 Diagnóstico**
+El componente `AsistenciaPage` usa hooks de React (`useRouter`, `useState`), pero en Next.js 14 con App Router todos los componentes son Server Components por defecto. Los hooks solo funcionan en Client Components, y el error te lo dice directamente: falta la directiva `'use client'` al inicio del archivo.
+
+**💡 Solución**
+
+Antes:
+```tsx
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+export default function AsistenciaPage() {
+  const router = useRouter();
+  const [mes, setMes] = useState(0);
+  return <div>Asistencia</div>;
+}
+```
+
+Después:
+```tsx
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+export default function AsistenciaPage() {
+  const router = useRouter();
+  const [mes, setMes] = useState(0);
+  return <div>Asistencia</div>;
+}
+```
+
+Solo agrega `'use client';` como primera línea del archivo (antes de cualquier import). Eso es todo.
+
+**📌 Por qué pasó**
+En el App Router de Next.js 13+, el modelo por defecto es que los componentes se renderizan en el servidor. Los Server Components no tienen acceso a APIs del navegador ni a estado de React, porque no corren en el cliente. Los hooks como `useRouter`, `useState`, `useEffect`, etc. dependen del ciclo de vida del cliente, así que Next.js los bloquea en Server Components para evitar errores de hidratación. La directiva `'use client'` le indica al bundler que ese módulo (y todo lo que importe) debe ejecutarse en el navegador.
+
+**⚡ Tips extra**
+- La directiva `'use client'` debe ir en la primera línea del archivo, antes de cualquier `import`. Si la pones después de un import, Next.js la ignorará o lanzará un error.
+- Si tu página tiene partes que no necesitan interactividad (títulos, listas estáticas), considera separar el componente interactivo en un archivo aparte con `'use client'` y dejar el `page.tsx` como Server Component. Esto mejora el rendimiento porque el servidor puede prerrenderizar la estructura y solo hidratar la parte interactiva.
+- Otros hooks que también requieren `'use client'`: `usePathname`, `useSearchParams`, `useParams`, `useContext`, y cualquier hook personalizado que use alguno de estos internamente.

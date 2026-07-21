@@ -1,0 +1,70 @@
+🔍 Diagnóstico
+
+El objeto que le estás asignando a `dep` no incluye la propiedad `sede`, pero en la interfaz `Deportista` esa propiedad está declarada como requerida (sin `?`). TypeScript exige que todos los campos obligatorios estén presentes en el objeto.
+
+---
+
+💡 Solución
+
+Tienes dos caminos dependiendo de tu intención:
+
+**Opción A — Agregar `sede` al objeto (lo más probable que necesitas):**
+
+// Antes (falla)
+const dep: Deportista = {
+  id: '123',
+  nombre: 'Carlos',
+  proyecto: 'SUB 8A',
+};
+
+// Después (correcto)
+const dep: Deportista = {
+  id: '123',
+  nombre: 'Carlos',
+  proyecto: 'SUB 8A',
+  sede: 'Medellín',  // agrega el valor real aquí
+};
+
+
+**Opción B — Hacer `sede` opcional en la interfaz (solo si tiene sentido que un deportista pueda no tener sede):**
+
+// Antes
+interface Deportista {
+  id: string;
+  nombre: string;
+  proyecto: string | null;
+  sede: string;         // requerida
+  fechaNacimiento?: string;
+}
+
+// Después
+interface Deportista {
+  id: string;
+  nombre: string;
+  proyecto: string | null;
+  sede?: string;        // ahora opcional
+  fechaNacimiento?: string;
+}
+
+---
+
+📌 Por qué pasó
+
+TypeScript usa tipado estructural: para que un objeto sea válido como tipo `Deportista`, debe tener TODAS las propiedades requeridas (las que no tienen `?`). En tu interfaz, `sede` no tiene `?`, así que TypeScript la trata como obligatoria y lanza el error cuando falta en el objeto.
+
+La propiedad `fechaNacimiento` sí tiene `?` y por eso no da error aunque tampoco esté en el objeto.
+
+---
+
+⚡ Tips extra
+
+1. **`Partial<Deportista>`** — Si necesitas construir el objeto de forma incremental (por ejemplo, con datos que llegan en pasos distintos), puedes usar `Partial<>` temporalmente:
+
+   const depParcial: Partial<Deportista> = {
+     id: '123',
+     nombre: 'Carlos',
+   };
+   // Luego cuando tengas todos los datos:
+   const depCompleto: Deportista = { ...depParcial, sede: 'Bello', proyecto: 'SUB 8A' };
+
+2. **El mensaje de error de TypeScript es tu amigo** — la frase "Property 'sede' is missing in type ... but required in type 'Deportista'" te dice exactamente qué falta y en qué tipo. Aprende a leerlo de izquierda a derecha: primero dice qué tienes, luego qué esperaba.

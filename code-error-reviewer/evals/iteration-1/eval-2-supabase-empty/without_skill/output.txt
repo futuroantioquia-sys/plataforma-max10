@@ -1,0 +1,89 @@
+DIAGNÓSTICO: Consulta Supabase retorna array vacío
+
+EL PROBLEMA: SENSIBILIDAD A MAYÚSCULAS/MINÚSCULAS
+
+El error está en la comparación del valor del campo 'proyecto':
+
+- Tu consulta filtra por: 'SUB 8A'  (todo en mayúsculas)
+- El valor real en la BD es: 'Sub 8a' (mayúsculas y minúsculas mixtas)
+
+PostgreSQL (que usa Supabase internamente) utiliza el operador = de forma CASE-SENSITIVE por defecto. Esto significa que 'SUB 8A' !== 'Sub 8a', por lo que el filtro no encuentra ninguna coincidencia y retorna un array vacío sin generar error.
+
+---
+
+SOLUCIONES
+
+OPCIÓN 1 – Usar el valor exacto tal como está en la base de datos (solución rápida)
+
+const { data, error } = await supabase
+  .from('deportistas')
+  .select('*')
+  .eq('proyecto', 'Sub 8a');  // <-- valor exacto como aparece en Supabase Studio
+
+Esta opción funciona pero es frágil: si alguien guarda 'SUB 8A' o 'sub 8a' en el futuro, la consulta fallará de nuevo.
+
+---
+
+OPCIÓN 2 – Usar ilike para comparación case-insensitive (recomendada)
+
+const { data, error } = await supabase
+  .from('deportistas')
+  .select('*')
+  .ilike('proyecto', 'sub 8a');  // ilike ignora mayúsculas/minúsculas
+
+ilike es el equivalente Supabase del ILIKE de PostgreSQL. Funciona igual que LIKE pero sin importar si las letras son mayúsculas o minúsculas. No requiere que el valor sea exactamente 'Sub 8a' — cualquier variante ('SUB 8A', 'sub 8a', 'Sub 8A') dará resultado.
+
+Nota: ilike soporta los comodines % y _ de SQL si los necesitas, pero sin ellos actúa como una igualdad case-insensitive exacta.
+
+---
+
+OPCIÓN 3 – Usar filter con operador eq aplicando lower() en SQL crudo (para casos avanzados)
+
+const { data, error } = await supabase
+  .from('deportistas')
+  .select('*')
+  .filter('proyecto', 'ilike', 'sub 8a');
+
+Esta sintaxis alternativa de filter con 'ilike' produce el mismo resultado que la Opción 2.
+
+---
+
+OPCIÓN 4 – Normalizar los datos en la base de datos (solución estructural a largo plazo)
+
+Si el campo proyecto siempre debe estar en un formato consistente (por ejemplo, siempre en mayúsculas o siempre en minúsculas), lo mejor es:
+
+1. Actualizar los registros existentes para normalizarlos:
+   UPDATE deportistas SET proyecto = UPPER(proyecto);
+
+2. Agregar un trigger o constraint en PostgreSQL para que los valores futuros también se normalicen automáticamente.
+
+3. Desde el lado de la aplicación, normalizar el valor antes de guardarlo:
+   const proyectoNormalizado = proyecto.toUpperCase();
+
+---
+
+RECOMENDACIÓN FINAL
+
+Para solucionar el problema de inmediato sin tocar la base de datos, usa ilike (Opción 2):
+
+const { data, error } = await supabase
+  .from('deportistas')
+  .select('*')
+  .ilike('proyecto', 'sub 8a');
+
+console.log(data);  // Ahora retornará los registros correctamente
+console.log(error); // null
+
+A largo plazo, considera normalizar los valores del campo proyecto al momento de insertar/actualizar registros para evitar inconsistencias futuras.
+
+---
+
+RESUMEN DEL ERROR
+
+| Aspecto         | Detalle                              |
+|-----------------|--------------------------------------|
+| Causa raíz      | Case-sensitivity en comparación =    |
+| Valor en la BD  | 'Sub 8a'                             |
+| Valor en query  | 'SUB 8A'                             |
+| Comportamiento  | No lanza error, retorna [] vacío     |
+| Solución rápida | .ilike('proyecto', 'sub 8a')         |

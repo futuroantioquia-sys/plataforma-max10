@@ -6,17 +6,29 @@ import { ArrowLeft, Users, ChevronRight, CheckCircle, Clock } from 'lucide-react
 import type { Deportista } from '@/lib/db';
 import { getDeportistas, getPagos } from '@/lib/db';
 
-const PAGOS_KEY = 'futuro_pagos_estado';
-const G         = '#16a34a';
+/* ─── Constantes ─────────────────────────────────────────────── */
+const G = '#16a34a';
 
 const DETALLE_ROWS = [
   'MATRÍCULA','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
   'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE',
 ];
 const MES_NUM: Record<string, number> = {
-  'MATRÍCULA':0,'FEBRERO':2,'MARZO':3,'ABRIL':4,'MAYO':5,'JUNIO':6,
-  'JULIO':7,'AGOSTO':8,'SEPTIEMBRE':9,'OCTUBRE':10,'NOVIEMBRE':11,'DICIEMBRE':12,
+  'MATRÍCULA':0,'MATRÍCULA 2026':0,
+  'FEBRERO':2,'FEBRERO 2026':2,'MARZO':3,'MARZO 2026':3,'ABRIL':4,'ABRIL 2026':4,
+  'MAYO':5,'MAYO 2026':5,'JUNIO':6,'JUNIO 2026':6,'JULIO':7,'JULIO 2026':7,
+  'AGOSTO':8,'AGOSTO 2026':8,'SEPTIEMBRE':9,'SEPTIEMBRE 2026':9,
+  'OCTUBRE':10,'OCTUBRE 2026':10,'NOVIEMBRE':11,'NOVIEMBRE 2026':11,
+  'DICIEMBRE':12,'DICIEMBRE 2026':12,
 };
+const MES_ABREV: Record<string, string> = {
+  'MATRÍCULA':'MAT','FEBRERO':'FEB','MARZO':'MAR','ABRIL':'ABR',
+  'MAYO':'MAY','JUNIO':'JUN','JULIO':'JUL','AGOSTO':'AGO',
+  'SEPTIEMBRE':'SEP','OCTUBRE':'OCT','NOVIEMBRE':'NOV','DICIEMBRE':'DIC',
+};
+
+/* Normaliza detalle quitando año: "FEBRERO 2026" → "FEBRERO" */
+const nd = (s: string) => s.replace(/\s+\d{4}$/, '').trim();
 
 function esFuturo(d: string) {
   const n = MES_NUM[d];
@@ -26,6 +38,16 @@ function esFuturo(d: string) {
 function getCol(cols: Record<string, string>, rx: RegExp): string {
   const k = Object.keys(cols).find(k => rx.test(k.trim()));
   return k ? String(cols[k] ?? '').trim() : '';
+}
+
+function colorCodigo(afil: string): string {
+  const v = afil.toLowerCase();
+  if (v.includes('antigu'))    return '#16a34a';
+  if (v.includes('nuevo'))     return '#f97316';
+  if (v.includes('reingreso')) return '#2563eb';
+  if (v.includes('mb instit')) return '#374151';
+  if (v.includes('b instit'))  return '#7c3aed';
+  return '#6b7280';
 }
 
 function formatFechaP(v: string): string {
@@ -43,58 +65,58 @@ function formatFechaP(v: string): string {
   return v;
 }
 
-/** Mes de afiliación. Si el año < 2026 → 1 (mostrar todos los meses). */
 function getMesAfil(cols: Record<string, string>): number {
   const k = Object.keys(cols).find(k => /fecha.*afil|afil.*fecha/i.test(k));
   if (!k) return 1;
   const f = formatFechaP(String(cols[k] ?? '').trim());
   const m = f.match(/^\d{1,2}\/(\d{1,2})\/(\d{4})$/);
   if (!m) return 1;
-  const mes  = parseInt(m[1], 10);
-  const anio = parseInt(m[2], 10);
+  const mes = parseInt(m[1], 10), anio = parseInt(m[2], 10);
   return anio < 2026 ? 1 : mes;
 }
 
-function resumenPagos(dep: Deportista, allPagos: Record<string, any[]>) {
-  const filas   = allPagos[dep.id] ?? [];
-  const mesAfil = getMesAfil(dep._columnas);
-
-  /* Filas cargadas = MATRÍCULA + meses desde la afiliación */
-  const rowsCargados = DETALLE_ROWS.filter(d => {
-    const n = MES_NUM[d];
-    return n === 0 || n >= mesAfil;
-  });
-
-  const getEstado = (detalle: string): string => {
-    const row = filas.find((r: any) =>
-      r.detalle === detalle || r.detalle === detalle + ' 2026'
-    );
-    if (row) return row.estado;
-    return esFuturo(detalle) ? 'PROX' : 'PEND';
-  };
-
-  let pagados = 0, pendientes = 0, proximos = 0;
-  for (const d of rowsCargados) {
-    const e = getEstado(d);
-    if      (e === 'PAGÓ') pagados++;
-    else if (e === 'PEND') pendientes++;
-    else                   proximos++;
-  }
-
-  return { cargados: rowsCargados.length, pagados, pendientes, proximos };
-}
-
-// Orden fijo de programas
 const ORDEN_PROG = ['ESTIMULACION','FORMACION','SELECCION','DESARROLLO'];
-function normStr(s: string) {
-  return s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-}
+function normStr(s: string) { return s.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 function ordenProg(nombre: string) {
   const n = normStr(nombre);
   const i = ORDEN_PROG.findIndex(o => n.startsWith(o));
   return i === -1 ? 99 : i;
 }
 
+/* ─── Resumen de pagos ──────────────────────────────────────── */
+function resumenPagos(dep: Deportista, allPagos: Record<string, any[]>) {
+  const codRaw = getCol(dep._columnas, /^c[oó]d/i).replace(/\D/g, '');
+  const codN   = codRaw ? String(parseInt(codRaw, 10)) : '';
+  /* Normalizar claves al insertar: dep.id (último) gana sobre libro */
+  const mergeMap = new Map<string, any>();
+  for (const r of (allPagos[codN]   ?? [])) mergeMap.set(nd(r.detalle), r);
+  if (codRaw !== codN)
+    for (const r of (allPagos[codRaw] ?? [])) mergeMap.set(nd(r.detalle), r);
+  for (const r of (allPagos[dep.id] ?? [])) mergeMap.set(nd(r.detalle), r);
+
+  const mesAfil = getMesAfil(dep._columnas);
+  const rowsCargados = DETALLE_ROWS.filter(d => {
+    const n = MES_NUM[d]; return n === 0 || n >= mesAfil;
+  });
+
+  const getEstado = (d: string) => {
+    const row = mergeMap.get(nd(d));
+    if (row) return row.estado;
+    return esFuturo(d) ? 'PROX' : 'PEND';
+  };
+
+  let pagados = 0, pendientes = 0, proximos = 0;
+  const mesesPendientes: string[] = [];
+  for (const d of rowsCargados) {
+    const e = getEstado(d);
+    if      (e === 'PAGÓ') pagados++;
+    else if (e === 'PEND') { pendientes++; mesesPendientes.push(MES_ABREV[d] ?? d.slice(0,3)); }
+    else                   proximos++;
+  }
+  return { cargados: rowsCargados.length, pagados, pendientes, proximos, mesesPendientes };
+}
+
+/* ══════════════════════════════════════════════════════════════ */
 export default function PagosProyectoPage() {
   const router = useRouter();
 
@@ -106,20 +128,16 @@ export default function PagosProyectoPage() {
 
   useEffect(() => {
     getDeportistas().then(deps => { if (deps.length) setLista(deps); }).catch(() => {});
-    getPagos().then(pagos => { if (Object.keys(pagos).length) setAllPagos(pagos); }).catch(() => {});
-
-    // Restaurar filtros al volver con el botón atrás
+    getPagos().then(pagos => { if (Object.keys(pagos).length) setAllPagos(pagos as any); }).catch(() => {});
     const savedProg = sessionStorage.getItem('pp_prog') ?? '';
     const savedProy = sessionStorage.getItem('pp_proy') ?? '';
     if (savedProg) setProg(savedProg);
     if (savedProy) setProy(savedProy);
   }, []);
 
-  // Guardar filtros cada vez que cambian
   useEffect(() => { sessionStorage.setItem('pp_prog', prog); }, [prog]);
   useEffect(() => { sessionStorage.setItem('pp_proy', proy); }, [proy]);
 
-  // Programas únicos con orden personalizado
   const programas = useMemo(() =>
     [...new Set(lista.map(d => getCol(d._columnas, /^prog/i)).filter(Boolean))]
       .sort((a, b) => {
@@ -128,7 +146,6 @@ export default function PagosProyectoPage() {
       }),
   [lista]);
 
-  // Proyectos del programa seleccionado
   const proyectos = useMemo(() =>
     [...new Set(
       lista
@@ -138,21 +155,26 @@ export default function PagosProyectoPage() {
     )].sort((a, b) => a.localeCompare(b, 'es')),
   [lista, prog]);
 
-  // Deportistas del proyecto seleccionado
   const depsFiltrados = useMemo(() => {
     if (!proy) return [];
-    return lista
-      .filter(d =>
-        (!prog || getCol(d._columnas, /^prog/i) === prog) &&
-        getCol(d._columnas, /^proy/i) === proy &&
-        (!busqueda ||
-          d._nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-          getCol(d._columnas, /^c[oó]d/i).toLowerCase().includes(busqueda.toLowerCase()))
-      )
-      .sort((a, b) => a._nombre.localeCompare(b._nombre, 'es'));
-  }, [lista, prog, proy, busqueda]);
+    const base = lista.filter(d =>
+      (!prog || getCol(d._columnas, /^prog/i) === prog) &&
+      getCol(d._columnas, /^proy/i) === proy &&
+      (!busqueda ||
+        d._nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+        getCol(d._columnas, /^c[oó]d/i).toLowerCase().includes(busqueda.toLowerCase()))
+    );
+    return base.sort((a, b) => {
+      const ra = resumenPagos(a, allPagos), rb = resumenPagos(b, allPagos);
+      const alDiaA = ra.pendientes === 0 && ra.cargados > 0;
+      const alDiaB = rb.pendientes === 0 && rb.cargados > 0;
+      if (alDiaA && !alDiaB) return -1;
+      if (!alDiaA && alDiaB) return 1;
+      if (ra.pendientes !== rb.pendientes) return ra.pendientes - rb.pendientes;
+      return a._nombre.localeCompare(b._nombre, 'es');
+    });
+  }, [lista, prog, proy, busqueda, allPagos]);
 
-  // KPIs
   const alDia = depsFiltrados.filter(d => {
     const { pendientes, cargados } = resumenPagos(d, allPagos);
     return pendientes === 0 && cargados > 0;
@@ -171,7 +193,7 @@ export default function PagosProyectoPage() {
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-white font-black text-base">Pagos por Proyecto</h1>
-          <p className="text-white/60 text-[11px]">Estado de cuenta por grupo</p>
+          <p className="text-white/60 text-[11px]">Estado de pagos por grupo</p>
         </div>
         <div className="text-right leading-tight hidden sm:block">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
@@ -182,38 +204,28 @@ export default function PagosProyectoPage() {
       {/* Filtros */}
       <div className="bg-white border-b border-gray-100 shadow-sm px-4 sm:px-6 py-3">
         <div className="max-w-2xl mx-auto flex gap-3 flex-wrap">
-
-          {/* PROGRAMA */}
           <div className="flex flex-col min-w-[160px] flex-1">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Programa</label>
-            <select
-              value={prog}
-              onChange={e => { setProg(e.target.value); setProy(''); setBusqueda(''); }}
+            <select value={prog} onChange={e => { setProg(e.target.value); setProy(''); setBusqueda(''); }}
               className="text-sm font-black text-[#111827] bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-[#16a34a] cursor-pointer">
               <option value="">— Todos —</option>
               {programas.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-
-          {/* PROYECTO */}
           <div className="flex flex-col min-w-[180px] flex-1">
             <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Proyecto</label>
-            <select
-              value={proy}
-              onChange={e => { setProy(e.target.value); setBusqueda(''); }}
+            <select value={proy} onChange={e => { setProy(e.target.value); setBusqueda(''); }}
               className="text-sm font-black text-[#111827] bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-[#16a34a] cursor-pointer">
               <option value="">— Selecciona —</option>
               {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-
         </div>
       </div>
 
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
 
         {!proy ? (
-          /* Estado vacío */
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
             <Users className="w-12 h-12 text-gray-200 mx-auto mb-3"/>
             <p className="text-gray-400 font-semibold text-sm">Selecciona un proyecto para ver los pagos</p>
@@ -244,9 +256,7 @@ export default function PagosProyectoPage() {
               <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
                 placeholder="Buscar por nombre o código..."
                 className="flex-1 text-sm text-[#111827] focus:outline-none bg-transparent"/>
-              {busqueda && (
-                <button onClick={() => setBusqueda('')} className="text-gray-300 hover:text-gray-500 text-lg leading-none">×</button>
-              )}
+              {busqueda && <button onClick={() => setBusqueda('')} className="text-gray-300 hover:text-gray-500 text-lg leading-none">×</button>}
             </div>
 
             {/* Lista */}
@@ -258,7 +268,7 @@ export default function PagosProyectoPage() {
                   {depsFiltrados.map(dep => {
                     const cod      = getCol(dep._columnas, /^c[oó]d/i);
                     const initials = dep._nombre.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
-                    const { cargados, pagados, pendientes, proximos } = resumenPagos(dep, allPagos);
+                    const { cargados, pagados, pendientes, mesesPendientes } = resumenPagos(dep, allPagos);
                     const aldiaD = pendientes === 0 && cargados > 0;
                     const pct    = cargados > 0 ? Math.round((pagados / cargados) * 100) : 0;
                     const color  = aldiaD ? G : pendientes > 0 ? '#ef4444' : '#f97316';
@@ -276,15 +286,16 @@ export default function PagosProyectoPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="font-black text-[#111827] text-sm leading-tight truncate">{dep._nombre}</p>
-                            {cod && <span className="text-[10px] font-black text-[#16a34a] bg-green-50 px-1.5 py-0.5 rounded flex-shrink-0">{cod}</span>}
+                            {cod && (
+                              <span className="text-[10px] font-black text-white px-1.5 py-0.5 rounded flex-shrink-0"
+                                style={{ backgroundColor: colorCodigo(getCol(dep._columnas, /^afil/i)) }}>
+                                {cod}
+                              </span>
+                            )}
                           </div>
-                          {/* Stats: CARGADOS · PAGADOS · PENDIENTES · PRÓXIMOS */}
-                          <div className="flex items-center gap-1 mt-1 flex-wrap">
-                            <span className="text-[9px] font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">CARG&nbsp;{cargados}</span>
-                            <span className="text-[9px] font-black text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full">PAG&nbsp;{pagados}</span>
-                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${pendientes > 0 ? 'text-red-600 bg-red-50' : 'text-gray-400 bg-gray-50'}`}>PEND&nbsp;{pendientes}</span>
-                            <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">PRÓX&nbsp;{proximos}</span>
-                          </div>
+                          <p className="text-[9px] font-black mt-0.5 truncate" style={{ color: aldiaD ? G : '#ef4444' }}>
+                            {aldiaD ? '✓ AL DÍA' : `PENDIENTE: ${mesesPendientes.join(' · ')}`}
+                          </p>
                           <div className="mt-1.5 h-1 bg-gray-100 rounded-full overflow-hidden w-full">
                             <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }}/>
                           </div>

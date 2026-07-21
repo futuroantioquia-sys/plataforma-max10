@@ -14,6 +14,9 @@ const DIAS_INICIAL = ['LUN','MAR','MIE','JUE','VIE','SAB','DOM'];
 const JS_DIA_A_ISO = (d: number) => d === 0 ? 7 : d;
 const DIAS_ORDEN_JS = [1, 2, 3, 4, 5, 6, 0];
 
+const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
+const CAL_OPTIONS = ['', ...Array.from({ length: 46 }, (_, i) => ((i + 5) / 10).toFixed(1))];
+
 type Estado = 'A' | 'F' | 'S' | 'ES' | 'FA' | 'NQ' | 'C' | 'CAN' | 'SE' | '';
 type AsistenciaData = Record<string, Record<string, Record<string, Record<string, Estado>>>>;
 
@@ -63,17 +66,25 @@ function semanaNum(fecha: Date) {
 
 // ── Celda memoizada — evita re-render de todo el tbody ──────────
 const CeldaEstado = memo(function CeldaEstado({
-  estado, onClick,
-}: { estado: Estado; onClick: () => void }) {
+  estado, onClick, readOnly = false,
+}: { estado: Estado; onClick: () => void; readOnly?: boolean }) {
   return (
     <td style={{ background: ROW1, borderLeft: BW, borderRight: BW, borderBottom: BW, borderTop: BW, padding: '2px' }}
       className="text-center">
-      <button
-        onClick={onClick}
-        title={ESTADO_LABEL[estado] || 'Sin registro'}
-        className={`w-[52px] sm:w-[68px] h-9 sm:h-10 rounded font-black text-[8px] sm:text-[9px] leading-tight px-0.5 transition active:scale-90 whitespace-nowrap ${ESTADO_STYLE[estado]}`}>
-        {ESTADO_LABEL[estado]}
-      </button>
+      {readOnly ? (
+        <div
+          title={ESTADO_LABEL[estado] || 'Sin registro'}
+          className={`w-[52px] sm:w-[68px] h-9 sm:h-10 rounded font-black text-[8px] sm:text-[9px] leading-tight px-0.5 flex items-center justify-center whitespace-nowrap ${ESTADO_STYLE[estado]}`}>
+          {ESTADO_LABEL[estado]}
+        </div>
+      ) : (
+        <button
+          onClick={onClick}
+          title={ESTADO_LABEL[estado] || 'Sin registro'}
+          className={`w-[52px] sm:w-[68px] h-9 sm:h-10 rounded font-black text-[8px] sm:text-[9px] leading-tight px-0.5 transition active:scale-90 whitespace-nowrap ${ESTADO_STYLE[estado]}`}>
+          {ESTADO_LABEL[estado]}
+        </button>
+      )}
     </td>
   );
 });
@@ -89,16 +100,23 @@ function AsistenciaInner() {
   const [proyecto,     setProyecto]     = useState(searchParams.get('proyecto') ?? '');
   const [mes,          setMes]          = useState(new Date().getMonth());
   const [anio,         setAnio]         = useState(new Date().getFullYear());
-  const [diasSel,      setDiasSel]      = useState<number[]>([3, 5]);
+  const [diasSel,      setDiasSel]      = useState<number[]>([]);
   const [cargando,     setCargando]     = useState(false); // cambia a false por defecto — profe no carga todo
   const [cargandoProy, setCargandoProy] = useState(false); // carga del proyecto específico
   const [guardando,    setGuardando]    = useState(false);
   const [guardado,     setGuardado]     = useState(false);
   const [controlesAbiertos, setControlesAbiertos] = useState(true);
+  const [calMap,           setCalMap]           = useState<Record<string, string>>({});
+
+  const mesKey = `${anio}_${String(mes + 1).padStart(2, '0')}`;
 
   const esProfe = useMemo(() => {
     if (typeof document === 'undefined') return false;
-    if (document.cookie.split(';').some(c => c.trim() === 'futuro-session=profesor')) return true;
+    const cookies = document.cookie.split(';').map(c => c.trim());
+    // Si la cookie dice "1" → es admin: nunca tratar como profe aunque localStorage tenga datos viejos
+    if (cookies.some(c => c === 'futuro-session=1')) return false;
+    if (cookies.some(c => c === 'futuro-session=profesor')) return true;
+    // Fallback localStorage solo si no hay cookie de admin
     try {
       const grupos = localStorage.getItem('futuro-profe-proyectos');
       const nombre = localStorage.getItem('futuro-profe-nombre');
@@ -185,6 +203,74 @@ function AsistenciaInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyecto, esProfe]);
 
+  // Cargar días del proyecto seleccionado (y resetear a [] al cambiar de proyecto)
+  useEffect(() => {
+    // Siempre resetear primero → casillas en blanco al cambiar de proyecto
+    setDiasSel([]);
+    if (!proyecto) return;
+    try {
+      // 1.ª opción: clave rápida (mismo navegador, inmediata)
+      const rawDias = localStorage.getItem(`futuro_dias_${proyecto}`);
+      if (rawDias) {
+        const dias = JSON.parse(rawDias) as number[];
+        if (Array.isArray(dias) && dias.length > 0) { setDiasSel(dias); return; }
+      }
+      // 2.ª opción: meta compuesta (búsqueda insensible a mayúsculas)
+      const rawMeta = localStorage.getItem(PROYECTOS_META_KEY);
+      if (rawMeta) {
+        const meta = JSON.parse(rawMeta) as Record<string, { dias?: number[] }>;
+        const proyLower = proyecto.trim().toLowerCase();
+        const k = Object.keys(meta).find(mk =>
+          mk.trim().toLowerCase().endsWith(`::${proyLower}`) ||
+          mk.trim().toLowerCase() === proyLower
+        );
+        if (k && Array.isArray(meta[k]?.dias) && (meta[k]!.dias!).length > 0) {
+          setDiasSel(meta[k]!.dias!);
+        }
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto]);
+
+  // 3.ª opción (definitiva): leer días desde Supabase vía columna jornada
+  // Esto funciona aunque admin y profe estén en navegadores distintos
+  useEffect(() => {
+    if (!proyecto || deportistas.length === 0) return;
+    const proyLower = proyecto.trim().toLowerCase();
+    const match = deportistas.find(dep =>
+      proyectoDe(dep).trim().toLowerCase() === proyLower
+    );
+    if (!match) return;
+    const jornadaRaw = getCol(match, /^jornada/i);
+    if (!jornadaRaw) return;
+    try {
+      const parsed = JSON.parse(jornadaRaw) as number[];
+      if (
+        Array.isArray(parsed) &&
+        parsed.length > 0 &&
+        parsed.every(n => typeof n === 'number' && n >= 0 && n <= 6)
+      ) {
+        setDiasSel(parsed);
+        // También actualizar localStorage para próximas cargas rápidas
+        try { localStorage.setItem(`futuro_dias_${proyecto}`, JSON.stringify(parsed)); } catch {}
+      }
+    } catch {
+      // jornada tiene formato texto (legacy), no hacer nada
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deportistas, proyecto]);
+
+  // Cargar calificaciones del mes desde localStorage
+  useEffect(() => {
+    if (!proyecto) return;
+    const calKey = `futuro_cal_${proyecto}_${mesKey}`;
+    try {
+      const raw = localStorage.getItem(calKey);
+      setCalMap(raw ? JSON.parse(raw) : {});
+    } catch { setCalMap({}); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto, mesKey]);
+
   // Programas y proyectos para el admin (no se usa para profe)
   const programas = useMemo(() => {
     if (esProfe) return [];
@@ -240,8 +326,6 @@ function AsistenciaInner() {
       return diff !== 0 ? diff : isoA - isoB;
     });
   }, [mes, anio, diasSel]);
-
-  const mesKey = `${anio}_${String(mes + 1).padStart(2, '0')}`;
 
   // ── Memoizar estado por celda ────────────────────────────────
   const estadoMap = useMemo(() => {
@@ -328,8 +412,37 @@ function AsistenciaInner() {
     return Math.round((totalesMap[depId] / sesionesRealizadas) * 100) + '%';
   }
 
-  function toggleDia(d: number) {
-    setDiasSel(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort());
+  function toggleDia(jsDay: number) {
+    if (!proyecto) return;
+    setDiasSel(prev => {
+      const newDias = prev.includes(jsDay)
+        ? prev.filter(x => x !== jsDay)
+        : [...prev, jsDay].sort();
+      // Auto-guardar en localStorage para este proyecto
+      try {
+        localStorage.setItem(`futuro_dias_${proyecto}`, JSON.stringify(newDias));
+        // También actualizar la clave compuesta (meta) para que proyectos.tsx la lea
+        const rawMeta = localStorage.getItem(PROYECTOS_META_KEY);
+        const meta = rawMeta ? JSON.parse(rawMeta) : {};
+        const proyLower = proyecto.toLowerCase();
+        const mk = Object.keys(meta).find(k =>
+          k.toLowerCase().endsWith(`::${proyLower}`) ||
+          k.toLowerCase() === proyLower
+        ) ?? `__SIN_PROGRAMA__::${proyecto}`;
+        meta[mk] = { ...(meta[mk] ?? {}), dias: newDias };
+        localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(meta));
+      } catch {}
+      return newDias;
+    });
+  }
+
+  function setCal(depId: string, value: string) {
+    setCalMap(prev => {
+      const updated = { ...prev, [depId]: value };
+      const calKey  = `futuro_cal_${proyecto}_${mesKey}`;
+      localStorage.setItem(calKey, JSON.stringify(updated));
+      return updated;
+    });
   }
 
   async function guardarAsistencia() {
@@ -357,18 +470,22 @@ function AsistenciaInner() {
         semLabel++; grupos.push({ semLabel, isos: [iso] });
       } else { grupos[grupos.length - 1].isos.push(iso); }
     });
-    const fila1 = [e(`ASISTENCIA ${MESES[mes].toUpperCase()} ${anio} / ${proyecto}`), ...Array(3 + diasDelMes.length + 1).fill(e(''))].join(sep);
+    const colsBase = esProfe ? 2 : 3;
+    const fila1 = [e(`ASISTENCIA ${MESES[mes].toUpperCase()} ${anio} / ${proyecto}`), ...Array(colsBase - 1 + diasDelMes.length + 1).fill(e(''))].join(sep);
     const semCeldas = grupos.flatMap(g => [e(`SEMANA ${g.semLabel}`), ...Array(g.isos.length - 1).fill(e(''))]);
-    const fila2 = [e(''), e(''), e(''), e(''), ...semCeldas, e('TOTAL'), e('%')].join(sep);
+    const fila2 = [...Array(colsBase).fill(e('')), ...semCeldas, e('TOTAL'), e('%')].join(sep);
     const colDias = diasDelMes.map(d => { const iso = JS_DIA_A_ISO(d.getDay()); return e(`${DIAS_INICIAL[iso - 1]} ${d.getDate()}`); });
-    const fila3 = [e('ESTADO'), e('CÓDIGO'), e('NOMBRE DEL DEPORTISTA'), e('AÑO'), ...colDias, e('TOTAL'), e('%')].join(sep);
+    const fila3 = esProfe
+      ? [e('CÓDIGO'), e('NOMBRE DEL DEPORTISTA'), ...colDias, e('TOTAL'), e('%')].join(sep)
+      : [e('CÓDIGO'), e('NOMBRE DEL DEPORTISTA'), e('AÑO'), ...colDias, e('TOTAL'), e('%')].join(sep);
     const filasData = atletas.map(dep => {
-      const estado = getCol(dep, /^estado$/i); const cod = getCol(dep, /^c[oó]d/i); const año = getCol(dep, /^a[ñn]o$/i);
+      const cod = getCol(dep, /^c[oó]d/i); const año = getCol(dep, /^a[ñn]o$/i);
       const tot = totalesMap[dep.id];
       const celdas = diasDelMes.map(d => { const fk = d.toISOString().split('T')[0]; return e(ESTADO_LABEL[estadoMap[dep.id]?.[fk] ?? ''] || ''); });
-      return [e(estado || ''), e(cod || ''), e(dep._nombre), e(año || ''), ...celdas, e(tot > 0 ? tot : ''), e(tot > 0 ? porcentaje(dep.id) : '')].join(sep);
+      const base = esProfe ? [e(cod || ''), e(dep._nombre)] : [e(cod || ''), e(dep._nombre), e(año || '')];
+      return [...base, ...celdas, e(tot > 0 ? tot : ''), e(tot > 0 ? porcentaje(dep.id) : '')].join(sep);
     });
-    const filaFinal = [e('SESIONES REALIZADAS'), e(''), e(''), e(''),
+    const filaFinal = [...Array(colsBase).fill(e('')),
       ...diasDelMes.map(d => { const fk = d.toISOString().split('T')[0]; const r = atletas.some(dep => { const est = estadoMap[dep.id]?.[fk] ?? ''; return est !== '' && est !== 'CAN' && est !== 'SE'; }); return e(r ? '✓' : ''); }),
       e(sesionesRealizadas), e(''),
     ].join(sep);
@@ -408,7 +525,7 @@ function AsistenciaInner() {
           {proyecto && <p className="text-white/60 text-xs truncate">{proyecto}</p>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {proyecto && atletas.length > 0 && (
+          {proyecto && atletas.length > 0 && esProfe && (
             <>
               <button onClick={guardarAsistencia} disabled={guardando}
                 className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition border ${guardado ? 'bg-white text-[#16a34a] border-white' : 'bg-[#16a34a] hover:bg-[#15803d] text-white border-white/30'}`}>
@@ -533,20 +650,42 @@ function AsistenciaInner() {
                 </div>
               </div>
 
-              {/* Días */}
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Días de entreno</label>
-                <div className="flex gap-1">
-                  {DIAS_ORDEN_JS.map((jsDay, i) => (
-                    <button key={jsDay} onClick={() => toggleDia(jsDay)}
-                      className={`w-9 h-9 rounded-lg text-[10px] font-black transition ${
-                        diasSel.includes(jsDay) ? 'bg-[#16a34a] text-white shadow-sm' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                      {DIAS_SEMANA[i].slice(0, 2)}
-                    </button>
-                  ))}
+              {/* Días de entreno — solo visible cuando hay proyecto seleccionado */}
+              {proyecto && (
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                    Días de entreno
+                    {esProfe && <span className="ml-1 text-yellow-600 font-semibold normal-case">· asignados por admin</span>}
+                  </label>
+                  <div className="flex gap-1">
+                    {DIAS_ORDEN_JS.map((jsDay, i) => {
+                      const activo = diasSel.includes(jsDay);
+                      // Profesor: span estático (no interactivo)
+                      if (esProfe) {
+                        return (
+                          <span key={jsDay}
+                            title="Los días los asigna el administrador"
+                            className={`w-9 h-9 rounded-lg text-[10px] font-black flex items-center justify-center select-none ${
+                              activo ? 'bg-[#16a34a] text-white' : 'bg-gray-100 text-gray-400'
+                            }`}>
+                            {DIAS_SEMANA[i].slice(0, 2)}
+                          </span>
+                        );
+                      }
+                      // Admin: solo lectura (los días se gestionan en /usuarios)
+                      return (
+                        <span key={jsDay}
+                          title="Los días se configuran en Información de Proyectos"
+                          className={`w-9 h-9 rounded-lg text-[10px] font-black flex items-center justify-center select-none ${
+                            activo ? 'bg-[#16a34a] text-white' : 'bg-gray-100 text-gray-400'
+                          }`}>
+                          {DIAS_SEMANA[i].slice(0, 2)}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Leyenda compacta — colapsada en mobile */}
               <details className="w-full sm:w-auto">
@@ -591,7 +730,7 @@ function AsistenciaInner() {
                 <thead className="sticky top-0 z-20">
                   {/* Fila 1: Título + Semanas */}
                   <tr>
-                    <th colSpan={4} style={{ background: AZUL, border: BW }}
+                    <th colSpan={esProfe ? 2 : 3} style={{ background: AZUL, border: BW }}
                       className="px-3 sm:px-5 py-2.5 text-left text-white font-black text-xs sm:text-sm uppercase tracking-wide whitespace-nowrap">
                       ASISTENCIA {MESES[mes].toUpperCase()} {anio} / {proyecto}
                     </th>
@@ -612,30 +751,29 @@ function AsistenciaInner() {
                   </tr>
                   {/* Fila 2: Columnas */}
                   <tr>
-                    <th style={{ background: G, border: BW, minWidth: 70 }}
-                      className="px-2 py-2 text-center text-white font-black text-[10px] uppercase whitespace-nowrap sticky left-0 z-10">
-                      EST
-                    </th>
                     <th style={{ background: G, border: BW, width: 70, minWidth: 70 }}
-                      className="px-2 py-2 text-center text-white font-black text-[10px] uppercase whitespace-nowrap">
+                      className="px-2 py-2 text-center text-white font-black text-[10px] uppercase whitespace-nowrap sticky left-0 z-10">
                       CÓD
                     </th>
                     <th style={{ background: G, border: BW, minWidth: 160 }}
-                      className="px-3 sm:px-5 py-2 text-left text-white font-black text-[10px] uppercase whitespace-nowrap">
+                      className="px-3 sm:px-5 py-2 text-left text-white font-black text-[10px] uppercase whitespace-nowrap sticky left-[74px] z-10">
                       NOMBRE
                     </th>
+                    {!esProfe && (
                     <th style={{ background: G, border: BW }}
                       className="px-2 py-2 text-center text-white font-black text-[10px] uppercase whitespace-nowrap">
                       AÑO
                     </th>
+                    )}
                     {diasDelMes.map(d => {
                       const fk = d.toISOString().split('T')[0];
                       const cancelado = atletas.length > 0 && atletas.every(dep => estadoMap[dep.id]?.[fk] === 'CAN');
                       return (
-                        <th key={fk} onClick={() => cancelarDia(d)}
-                          title={cancelado ? `Deshacer cancelado ${d.getDate()}` : `Cancelar día ${d.getDate()}`}
-                          style={{ background: cancelado ? '#1e293b' : G, borderLeft: BW, borderRight: BW, borderBottom: BW, borderTop: BW, cursor: 'pointer' }}
-                          className="py-2 text-center text-white font-black text-[10px] min-w-[52px] sm:min-w-[68px] select-none hover:opacity-80 transition-opacity">
+                        <th key={fk}
+                          onClick={esProfe ? () => cancelarDia(d) : undefined}
+                          title={esProfe ? (cancelado ? `Deshacer cancelado ${d.getDate()}` : `Cancelar día ${d.getDate()}`) : undefined}
+                          style={{ background: cancelado ? '#1e293b' : G, borderLeft: BW, borderRight: BW, borderBottom: BW, borderTop: BW, cursor: esProfe ? 'pointer' : 'default' }}
+                          className={`py-2 text-center text-white font-black text-[10px] min-w-[52px] sm:min-w-[68px] select-none ${esProfe ? 'hover:opacity-80 transition-opacity' : ''}`}>
                           <span className="block text-[10px]">{DIAS_INICIAL[JS_DIA_A_ISO(d.getDay()) - 1]}</span>
                           {cancelado
                             ? <span className="block text-[7px] font-black text-red-300 mt-0.5">✕CAN</span>
@@ -649,32 +787,25 @@ function AsistenciaInner() {
 
                 <tbody>
                   {atletas.map(dep => {
-                    const cod    = getCol(dep, /^c[oó]d/i);
-                    const año    = getCol(dep, /^a[ñn]o$/i);
-                    const estado = getCol(dep, /^estado$/i);
-                    const tot    = totalesMap[dep.id];
-                    const estadoBg =
-                      /pausa/i.test(estado) ? '#e2e8f0' :
-                      /sin.*afil|afil.*sin/i.test(estado) ? '#fee2e2' : ROW1;
-                    const estadoColor = /sin.*afil|afil.*sin/i.test(estado) ? '#7f1d1d' : '#111827';
+                    const cod = getCol(dep, /^c[oó]d/i);
+                    const año = getCol(dep, /^a[ñn]o$/i);
+                    const tot = totalesMap[dep.id];
                     return (
                       <tr key={dep.id}>
-                        <td className="px-1 sm:px-2 py-1.5 text-center font-bold text-[10px] sticky left-0 z-10 whitespace-nowrap"
-                          style={{ background: estadoBg, color: estadoColor, border: BW, minWidth: 70 }}>
-                          {estado || '—'}
-                        </td>
                         <td style={{ background: G, border: BW, width: 70, minWidth: 70 }}
-                          className="px-2 py-1.5 text-center text-white font-black text-xs whitespace-nowrap">
+                          className="px-2 py-1.5 text-center text-white font-black text-xs whitespace-nowrap sticky left-0 z-10">
                           {cod || '—'}
                         </td>
                         <td style={{ background: ROW1, border: BW, minWidth: 160 }}
-                          className="px-3 sm:px-5 py-1.5 text-left text-[#111827] font-semibold text-xs sm:text-sm whitespace-nowrap">
+                          className="px-3 sm:px-5 py-1.5 text-left text-[#111827] font-semibold text-xs sm:text-sm whitespace-nowrap sticky left-[74px] z-10">
                           {dep._nombre}
                         </td>
+                        {!esProfe && (
                         <td style={{ background: ROW1, border: BW }}
                           className="px-2 py-1.5 text-center text-[#111827] font-bold text-xs whitespace-nowrap">
                           {año}
                         </td>
+                        )}
                         {diasDelMes.map(d => {
                           const fk = d.toISOString().split('T')[0];
                           return (
@@ -682,6 +813,7 @@ function AsistenciaInner() {
                               key={fk}
                               estado={estadoMap[dep.id]?.[fk] ?? ''}
                               onClick={() => toggleEstado(dep.id, d)}
+                              readOnly={!esProfe}
                             />
                           );
                         })}
@@ -699,7 +831,7 @@ function AsistenciaInner() {
 
                   {/* Sesiones realizadas */}
                   <tr>
-                    <td colSpan={4} style={{ background: G, border: BW }}
+                    <td colSpan={esProfe ? 2 : 3} style={{ background: G, border: BW }}
                       className="px-3 sm:px-5 py-2.5 text-white font-black text-[10px] uppercase tracking-widest sticky left-0 z-10 whitespace-nowrap">
                       SES. REALIZADAS
                     </td>

@@ -38,6 +38,45 @@ function serialAFecha(val: string): string {
 
 function esFechaAfil(col: string) { return /fecha.*afil|afil.*fecha|fecha_afil/i.test(col.trim()); }
 function esCodigo(col: string)    { return /^c[oó]d/i.test(col.trim()); }
+function esTipoAfil(col: string)  { return !esFechaAfil(col) && /tipo.*afil|^afil/i.test(col.trim()); }
+
+function prioridadCodigo(cod: number): number {
+  if (cod >= 26000 && cod <= 26999) return 1;
+  if (cod >= 25000 && cod <= 25999) return 2;
+  if (cod >= 24000 && cod <= 24999) return 3;
+  if (cod >= 23000 && cod <= 23999) return 4;
+  if (cod >= 22000 && cod <= 22999) return 5;
+  if (cod >= 21000 && cod <= 21999) return 6;
+  if (cod >= 2000  && cod <= 2999)  return 7;
+  if (cod >= 9000  && cod <= 9999)  return 8;
+  if (cod >= 8000  && cod <= 8999)  return 9;
+  if (cod >= 7000  && cod <= 7999)  return 10;
+  if (cod >= 6000  && cod <= 6999)  return 11;
+  if (cod >= 5000  && cod <= 5999)  return 12;
+  if (cod >= 4000  && cod <= 4999)  return 13;
+  return 99;
+}
+
+function colorCodigo(afil: string): string {
+  const v = afil.toLowerCase();
+  if (v.includes('nuevo'))     return '#f97316'; // Naranja
+  if (v.includes('antigu'))    return '#16a34a'; // Verde
+  if (v.includes('reingreso')) return '#2563eb'; // Azul
+  if (v.includes('mb instit')) return '#374151'; // Gris oscuro
+  if (v.includes('b instit'))  return '#7c3aed'; // Morado
+  return '#6b7280';
+}
+
+/** Prioridad de orden: Nuevo→Antiguo→Reingreso→MB Inst→B Inst */
+function ordenAfil(dep: Deportista): number {
+  const v = getColVal(dep, /tipo.*afil|^afil/i).toLowerCase();
+  if (v.includes('nuevo'))     return 1;
+  if (v.includes('antigu'))    return 2;
+  if (v.includes('reingreso')) return 3;
+  if (v.includes('mb instit')) return 4;
+  if (v.includes('b instit'))  return 5;
+  return 6;
+}
 
 function getColVal(dep: Deportista, rx: RegExp): string {
   const k = Object.keys(dep._columnas).find(k => rx.test(k.trim()));
@@ -105,7 +144,15 @@ export default function GeneralPage() {
     try { return JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) ?? '{}'); } catch { return {}; }
   });
   const [colVisible,     setColVisible]     = useState<Record<string, boolean>>(() => {
-    try { return JSON.parse(localStorage.getItem(COL_VISIBLE_KEY) ?? '{}'); } catch { return {}; }
+    try {
+      const saved = JSON.parse(localStorage.getItem(COL_VISIBLE_KEY) ?? '{}') as Record<string, boolean>;
+      // Nunca ocultar columnas de nombre/deportista
+      const RX_NOMBRE = /deportista|alumno|jugador|atleta|^nombre/i;
+      Object.keys(saved).forEach(k => {
+        if (RX_NOMBRE.test(k.trim())) delete saved[k];
+      });
+      return saved;
+    } catch { return {}; }
   });
   const [panelColumnas,  setPanelColumnas]  = useState(false);
   const [resizingActive, setResizingActive] = useState<string | null>(null);
@@ -122,6 +169,17 @@ export default function GeneralPage() {
   const [torneoArrastr, setTorneoArrastr] = useState(false);
   const [borrando,      setBorrando]      = useState(false);
   const [cargando,      setCargando]      = useState(true);
+
+  // ── Subir Nuevos Deportistas ─────────────────────────────────
+  type NuevoReg = { _nombre: string; _columnas: Record<string,string>; duplicado: boolean };
+  const [modalNuevos,  setModalNuevos]  = useState(false);
+  const [nuevosPaso,   setNuevosPaso]   = useState<'subir'|'preview'|'listo'>('subir');
+  const [nuevosFilas,  setNuevosFilas]  = useState<NuevoReg[]>([]);
+  const [nuevosProc,   setNuevosProc]   = useState(false);
+  const [ultimoLote,   setUltimoLote]   = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('futuro_ultimo_lote') ?? '[]'); } catch { return []; }
+  });
+  const nuevosInputRef = useRef<HTMLInputElement>(null);
 
   async function eliminarYReimportar() {
     if (!confirm('¿Eliminar TODOS los deportistas y volver a importar desde Excel?\n\nEsta acción no se puede deshacer.')) return;
@@ -229,10 +287,12 @@ export default function GeneralPage() {
       if (Object.keys(d._columnas).length > Object.keys(ref._columnas).length) ref = d;
     });
     const todas = Object.keys(ref._columnas);
-    const fecha    = todas.filter(c => esFechaAfil(c));
-    const cod      = todas.filter(c => esCodigo(c));
-    const proyecto = todas.filter(c => /proyecto|^proy\b/i.test(c.trim()));
-    const profe    = todas.filter(c => /^prof|\bprofe\b/i.test(c.trim()));
+    const fecha      = todas.filter(c => esFechaAfil(c));
+    const tipoAfil   = todas.filter(c => esTipoAfil(c));
+    const estado     = todas.filter(c => /^estado$/i.test(c.trim()));  // ESTADO después de TIPO AFIL
+    const cod        = todas.filter(c => esCodigo(c));
+    const proyecto   = todas.filter(c => /proyecto|^proy\b/i.test(c.trim()));
+    const profe      = todas.filter(c => /^prof|\bprofe\b/i.test(c.trim()));
     const compite     = todas.filter(c => /^compite$/i.test(c.trim()));
     const competencia = todas.filter(c => /^competencia$/i.test(c.trim()));
     const torneo2     = todas.filter(c => /torneo.?2/i.test(c.trim()));
@@ -240,7 +300,7 @@ export default function GeneralPage() {
     const torneo4     = todas.filter(c => /torneo.?4/i.test(c.trim()));
     // Excluir la clave virtual POSICIÓN del bloque "resto" (la colocamos al final)
     const excluidas = new Set([
-      ...fecha, ...cod, ...proyecto, ...profe,
+      ...fecha, ...tipoAfil, ...estado, ...cod, ...proyecto, ...profe,
       ...compite, ...competencia, ...torneo2, ...torneo3, ...torneo4,
       VPOS,
     ]);
@@ -266,7 +326,7 @@ export default function GeneralPage() {
 
     // Garantía final: si PROFE aparece antes que PROYECTO en el array resultado,
     // mover PROFE a después de PROYECTO (por si los nombres no coincidían con regex)
-    const finalArr = [...fecha, ...cod, ...resto];
+    const finalArr = [...fecha, ...tipoAfil, ...estado, ...cod, ...resto];
     const iProy = finalArr.findIndex(c => /proyecto|proy/i.test(c.trim()));
     const iProf = finalArr.findIndex(c => /^prof|\bprofe\b/i.test(c.trim()));
     if (iProy > -1 && iProf > -1 && iProf < iProy) {
@@ -277,7 +337,9 @@ export default function GeneralPage() {
     return finalArr;
   }, [deportistas]);
 
-  const colVisibles  = columnas.filter(c => colVisible[c] !== false);
+  // DEPORTISTA/NOMBRE/ALUMNO/JUGADOR/ATLETA nunca se ocultan (columna crítica)
+  const RX_NOMBRE_COL = /deportista|alumno|jugador|atleta|^nombre/i;
+  const colVisibles   = columnas.filter(c => RX_NOMBRE_COL.test(c.trim()) || colVisible[c] !== false);
   const ocultasCount = columnas.length - colVisibles.length;
 
   // ── Proyectos disponibles por programa ───────────────────────
@@ -338,15 +400,13 @@ export default function GeneralPage() {
     });
 
     return lista.sort((a, b) => {
-      const rA = esRetirado(a) ? 1 : 0;
-      const rB = esRetirado(b) ? 1 : 0;
-      if (rA !== rB) return rA - rB;
-      const oA = ordenPrograma(getColVal(a, /^program/i));
-      const oB = ordenPrograma(getColVal(b, /^program/i));
-      if (oA !== oB) return oA - oB;
-      const proyA = getColVal(a, /^proyecto/i).trim();
-      const proyB = getColVal(b, /^proyecto/i).trim();
-      if (proyA !== proyB) return proyA.localeCompare(proyB, 'es');
+      // Orden puro por código — sin importar afiliación ni estado
+      const nA = Number(getColVal(a, /^c[oó]d/i).replace(/\D/g, '')) || 0;
+      const nB = Number(getColVal(b, /^c[oó]d/i).replace(/\D/g, '')) || 0;
+      const pA = prioridadCodigo(nA);
+      const pB = prioridadCodigo(nB);
+      if (pA !== pB) return pA - pB;
+      if (nA !== nB) return nA - nB;
       return a._nombre.localeCompare(b._nombre, 'es');
     });
   }, [deportistas, buscar, buscarCod]);
@@ -402,6 +462,118 @@ export default function GeneralPage() {
   function mostrarValor(col: string, rawVal: string): string {
     if (esFechaAfil(col)) return serialAFecha(rawVal);
     return rawVal || '—';
+  }
+
+  // ── Procesar Excel de Nuevos Deportistas ─────────────────────
+  async function procesarExcelNuevos(file: File) {
+    setNuevosProc(true);
+    try {
+      const XLSX   = await loadXLSX();
+      const buffer = await file.arrayBuffer();
+      const wb     = XLSX.read(buffer, { type: 'array' });
+      const hoja   = wb.Sheets[wb.SheetNames[0]];
+      const filas: Record<string,string>[] = XLSX.utils.sheet_to_json(hoja, { defval: '' });
+      if (!filas.length) { alert('El archivo está vacío.'); setNuevosProc(false); return; }
+
+      // ── Normalización: mapea encabezados del Excel a las claves exactas
+      //    del consolidado (elimina tildes, mayúsculas, espacios para comparar)
+      const sinTildes = (s: string) =>
+        s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+
+      // Columnas de referencia (el deportista con más columnas)
+      const refDep = deportistas.reduce(
+        (best, d) => Object.keys(d._columnas).length > Object.keys(best._columnas).length ? d : best,
+        deportistas[0] ?? { _columnas: {} } as Deportista
+      );
+      const existingKeys = Object.keys(refDep._columnas);
+      // mapa: clave_normalizada → clave_original del consolidado
+      const normMap = new Map<string, string>();
+      existingKeys.forEach(k => normMap.set(sinTildes(k), k));
+
+      function mapKey(excelKey: string): string {
+        // 1) coincidencia exacta
+        if (existingKeys.includes(excelKey)) return excelKey;
+        // 2) coincidencia normalizada (sin tildes, sin distinción mayúsc.)
+        return normMap.get(sinTildes(excelKey)) ?? excelKey;
+      }
+
+      // Clave de nombre real en el consolidado
+      const existingNomKey = existingKeys.find(k =>
+        /deportista|alumno|jugador|atleta|^nombre/i.test(k.trim())
+      ) ?? '';
+
+      // Índice de códigos y nombres existentes para detectar duplicados
+      const codsExist  = new Set(deportistas.map(d => getColVal(d, /^c[oó]d/i).trim().toLowerCase()).filter(Boolean));
+      const nomesExist = new Set(deportistas.map(d => d._nombre.trim().toLowerCase()).filter(Boolean));
+
+      const RX_NOM = /deportista|alumno|jugador|atleta|^nombre/i;
+      const RX_COD = /^c[oó]d/i;
+
+      const parsed: NuevoReg[] = filas
+        .filter(fila => Object.values(fila).some(v => String(v ?? '').trim()))
+        .map(fila => {
+          // Reescribir claves del Excel → claves del consolidado
+          const cols: Record<string,string> = {};
+          Object.entries(fila).forEach(([k, v]) => {
+            cols[mapKey(k)] = String(v ?? '').trim();
+          });
+
+          // Extraer nombre: buscar la clave de nombre del consolidado, o por regex
+          const kNom = existingNomKey && cols[existingNomKey]
+            ? existingNomKey
+            : (Object.keys(cols).find(k => RX_NOM.test(k.trim())) ?? '');
+          // Evitar que un código numérico puro se convierta en nombre
+          const nombre = kNom
+            ? cols[kNom]
+            : (Object.values(cols).find(v => v && !/^\d{4,6}$/.test(v)) ?? '');
+
+          // Detectar duplicado por código o nombre
+          const kCod = Object.keys(cols).find(k => RX_COD.test(k.trim())) ?? '';
+          const cod  = kCod ? cols[kCod].toLowerCase() : '';
+          const duplicado = (cod && codsExist.has(cod)) || nomesExist.has(nombre.trim().toLowerCase());
+
+          return { _nombre: nombre.trim(), _columnas: cols, duplicado };
+        })
+        .filter(r => r._nombre);
+
+      setNuevosFilas(parsed);
+      setNuevosPaso('preview');
+    } catch(e) {
+      alert('Error al leer el archivo: ' + String(e));
+    }
+    setNuevosProc(false);
+  }
+
+  async function confirmarNuevos() {
+    const nuevos = nuevosFilas.filter(r => !r.duplicado);
+    if (!nuevos.length) { setNuevosPaso('listo'); return; }
+
+    const ahora = Date.now();
+    const deportsNuevos = nuevos.map((r, i): Deportista => ({
+      id:        `nuevo_${ahora}_${i}`,
+      nombre:    r._nombre,
+      _nombre:   r._nombre,
+      _columnas: r._columnas,
+    }));
+
+    const idsLote = deportsNuevos.map(d => d.id);
+    const lista = [...deportistas, ...deportsNuevos];
+    await saveDeportistas(lista);
+    setDeportistas(lista);
+    setUltimoLote(idsLote);
+    try { localStorage.setItem('futuro_ultimo_lote', JSON.stringify(idsLote)); } catch {}
+    setNuevosPaso('listo');
+  }
+
+  async function eliminarUltimoLote() {
+    if (!ultimoLote.length) return;
+    const nombres = deportistas.filter(d => ultimoLote.includes(d.id)).map(d => d._nombre);
+    if (!confirm(`¿Eliminar los ${ultimoLote.length} deportistas del último lote subido?\n\n${nombres.slice(0,5).join('\n')}${nombres.length > 5 ? `\n…y ${nombres.length - 5} más` : ''}`)) return;
+    const lista = deportistas.filter(d => !ultimoLote.includes(d.id));
+    await saveDeportistas(lista);
+    setDeportistas(lista);
+    setUltimoLote([]);
+    try { localStorage.removeItem('futuro_ultimo_lote'); } catch {}
   }
 
   // ── Importar Excel de Torneos ─────────────────────────────────
@@ -573,15 +745,28 @@ export default function GeneralPage() {
           </button>
         )}
 
-        {/* Botón eliminar datos — oculto en móvil */}
+        {/* Botón deshacer último lote — solo visible si hay lote */}
+        {ultimoLote.length > 0 && (
+          <button
+            onClick={eliminarUltimoLote}
+            className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-500/90 hover:bg-amber-600 text-white transition flex-shrink-0"
+            title={`Eliminar los ${ultimoLote.length} deportistas del último lote subido`}>
+            <Trash2 className="w-3.5 h-3.5" />
+            Deshacer último ({ultimoLote.length})
+          </button>
+        )}
+
+        {/* Botón SUBIR NUEVOS DEPORTISTAS */}
         <button
-          onClick={eliminarYReimportar}
-          disabled={borrando}
-          className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-red-600/80 hover:bg-red-700 disabled:opacity-50 text-white transition flex-shrink-0"
-          title="Eliminar todos los deportistas y reimportar Excel">
-          <Trash2 className="w-3.5 h-3.5" />
-          {borrando ? 'Borrando…' : 'Eliminar datos'}
+          onClick={() => { setModalNuevos(true); setNuevosPaso('subir'); setNuevosFilas([]); }}
+          className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#16a34a] text-white hover:bg-[#064e1e] transition flex-shrink-0 shadow-sm">
+          <Upload className="w-3.5 h-3.5" />
+          Subir nuevos
         </button>
+
+        {/* Input oculto para nuevos deportistas */}
+        <input ref={nuevosInputRef} type="file" accept=".xlsx,.xls" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) procesarExcelNuevos(f); e.target.value = ''; }} />
 
         {/* Botón importar torneos — oculto en móvil */}
         <button
@@ -762,7 +947,7 @@ export default function GeneralPage() {
                 <colgroup>
                   <col style={{ width: 36 }} />
                   {colVisibles.map(col => (
-                    <col key={col} style={{ width: colWidths[col] ?? (esCodigo(col) ? 130 : esFechaAfil(col) ? 100 : 110) }} />
+                    <col key={col} style={{ width: colWidths[col] ?? (esCodigo(col) ? 130 : esFechaAfil(col) ? 100 : esTipoAfil(col) ? 95 : 110) }} />
                   ))}
                 </colgroup>
 
@@ -776,6 +961,7 @@ export default function GeneralPage() {
                     {colVisibles.map(col => {
                       const esCod = esCodigo(col);
                       return (
+                        <>
                         <th key={col}
                           style={{ border: '2px solid white', background: '#16a34a', color: 'white' }}
                           className={`relative px-2 py-2.5 text-center font-black text-[10px] whitespace-nowrap select-none ${
@@ -796,68 +982,34 @@ export default function GeneralPage() {
                             }`} />
                           </div>
                         </th>
+                        {/* Columna fija DEPORTISTA justo después de CÓDIGO */}
+                        {esCod && (
+                          <th key="__nombre_th__"
+                            style={{ border: '2px solid white', background: '#16a34a', color: 'white', minWidth: 180 }}
+                            className="px-3 py-2.5 text-left font-black text-[10px] whitespace-nowrap sticky left-[120px] z-30">
+                            DEPORTISTA
+                          </th>
+                        )}
+                        </>
                       );
                     })}
                   </tr>
                 </thead>
 
-                {/* ── BODY POR GRUPOS ── */}
+                {/* ── BODY PLANO — orden global por código ── */}
                 <tbody>
-                  {grupos.map(({ key, lista }) => {
-                    if (programaFiltro !== null && programaFiltro !== key) return null;
-                    const listaFiltrada = proyectoFiltro
-                      ? lista.filter(d => getColVal(d, RX_PROY).trim() === proyectoFiltro)
-                      : lista;
-                    if (listaFiltrada.length === 0) return null;
-                    const colorGrupo = COLOR_GRUPO[key] ?? 'bg-gray-600';
-                    const labelGrupo = LABEL_GRUPO[key] ?? key.toUpperCase();
-
-                    // Sub-agrupar por PROYECTO (usar listaFiltrada para respetar filtro)
-                    const subMap = new Map<string, Deportista[]>();
-                    listaFiltrada.forEach(dep => {
-                      const proy = getColVal(dep, /^proyecto/i).trim() || '— Sin Proyecto —';
-                      if (!subMap.has(proy)) subMap.set(proy, []);
-                      subMap.get(proy)!.push(dep);
+                  {(() => {
+                    const listaPlana = ordenados.filter(d => {
+                      if (programaFiltro !== null && grupoDep(d) !== programaFiltro) return false;
+                      if (proyectoFiltro && getColVal(d, RX_PROY).trim() !== proyectoFiltro) return false;
+                      return true;
                     });
-
-                    const elems: React.ReactNode[] = [];
-
-                    // Cabecera de PROGRAMA
-                    elems.push(
-                      <tr key={`hdr-${key}`}>
-                        <td colSpan={1 + colVisibles.length}
-                          className={`${colorGrupo} text-white font-black text-[11px] uppercase tracking-widest px-4 py-2 border-b-2 border-white/20`}>
-                          {labelGrupo} — {listaFiltrada.length} deportista{listaFiltrada.length !== 1 ? 's' : ''}
-                        </td>
-                      </tr>
-                    );
-
-                    let rowNum = 0;
-                    subMap.forEach((subLista, proyecto) => {
-                      // ── Franja verde de PROYECTO ──
-                      elems.push(
-                        <tr key={`proy-${key}-${proyecto}`}>
-                          <td colSpan={1 + colVisibles.length}
-                            style={{ background: '#4b5563', border: '2px solid white' }}
-                            className="px-6 py-1.5">
-                            <span className="text-white font-black text-[10px] uppercase tracking-widest">
-                              ▸ {proyecto}
-                            </span>
-                            <span className="ml-2 text-white/80 text-[10px] font-semibold">
-                              · {subLista.length} deportista{subLista.length !== 1 ? 's' : ''}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-
-                      // Filas del proyecto
-                      subLista.forEach(dep => {
-                        rowNum++;
-                        const modified = !!edits[dep.id] && Object.keys(edits[dep.id]).length > 0;
-                        const rowBg    = '#f1f5f9';
-                        const stickyBg = '#f1f5f9';
-
-                        elems.push(
+                    return listaPlana.map((dep, rowIdx) => {
+                        const rowNum   = rowIdx + 1;
+                        const retirado = esRetirado(dep);
+                        const rowBg    = retirado ? '#d1d5db' : '#f1f5f9';
+                        const stickyBg = retirado ? '#d1d5db' : '#f1f5f9';
+                        return (
                           <tr key={dep.id}
                             style={{ backgroundColor: rowBg }}
                             className="hover:brightness-95 transition-all">
@@ -876,18 +1028,34 @@ export default function GeneralPage() {
                               const opciones = opcionesCol[col];
                               const changed  = edits[dep.id]?.[col] !== undefined;
 
-                              // CÓD — verde sticky
-                              if (esCod) return (
-                                <td key={col}
-                                  className="px-0 py-0 text-center sticky left-[36px] z-10"
-                                  style={{ backgroundColor: '#16a34a', border: '2px solid white' }}>
-                                  <input
-                                    value={rawVal}
-                                    onChange={e => setCelda(dep.id, col, e.target.value)}
-                                    className="w-full text-center outline-none bg-transparent" style={{ fontSize: '16px', fontWeight: '800', color: 'white', letterSpacing: '0.08em', padding: '6px 8px' }}
-                                  />
-                                </td>
-                              );
+                              // CÓD — color por afiliación + columna DEPORTISTA fija a la derecha
+                              if (esCod) {
+                                const afilVal  = getColVal(dep, /tipo.*afil|^afil/i);
+                                const codColor = retirado ? '#9ca3af' : colorCodigo(afilVal);
+                                // Buscar el código con regex por si está bajo "CODIGO" (sin tilde) u otra variante
+                                const rawValCod = rawVal || getColVal(dep, /^c[oó]d/i);
+                                return (
+                                  <>
+                                  <td key={col}
+                                    className="px-0 py-0 text-center sticky left-[36px] z-10"
+                                    style={{ backgroundColor: codColor, border: '2px solid white' }}>
+                                    <input
+                                      value={rawValCod}
+                                      onChange={e => setCelda(dep.id, col, e.target.value)}
+                                      className="w-full text-center outline-none bg-transparent" style={{ fontSize: '16px', fontWeight: '800', color: 'white', letterSpacing: '0.08em', padding: '6px 8px' }}
+                                    />
+                                  </td>
+                                  {/* Columna DEPORTISTA fija */}
+                                  <td key="__nombre_td__"
+                                    className="px-3 py-0 sticky left-[120px] z-10 whitespace-nowrap"
+                                    style={{ backgroundColor: stickyBg, border: '2px solid white', minWidth: 180 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
+                                      {dep._nombre}
+                                    </span>
+                                  </td>
+                                  </>
+                                );
+                              }
 
                               // FECHA AFILIACIÓN
                               if (esFechaAfil(col)) {
@@ -905,7 +1073,31 @@ export default function GeneralPage() {
                                 );
                               }
 
-                              // SELECT (Tipo Afil / Programa / Estado)
+                              // TIPO AFILIACIÓN — badge coloreado (solo lectura)
+                              if (esTipoAfil(col)) {
+                                const color = colorCodigo(rawVal);
+                                return (
+                                  <td key={col}
+                                    style={{ border: '2px solid white', backgroundColor: '#f8fafc' }}
+                                    className="px-1 py-0 text-center">
+                                    <span style={{
+                                      display: 'inline-block',
+                                      backgroundColor: color,
+                                      color: 'white',
+                                      borderRadius: 4,
+                                      padding: '2px 6px',
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      letterSpacing: '0.04em',
+                                      whiteSpace: 'nowrap',
+                                    }}>
+                                      {rawVal || '—'}
+                                    </span>
+                                  </td>
+                                );
+                              }
+
+                              // SELECT (Programa / Estado)
                               if (opciones) return (
                                 <td key={col}
                                   style={{ background: '#f1f5f9', border: '2px solid white' }}
@@ -969,11 +1161,8 @@ export default function GeneralPage() {
                             })}
                           </tr>
                         );
-                      });
                     });
-
-                    return elems;
-                  })}
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -1150,6 +1339,128 @@ export default function GeneralPage() {
                   Se actualizaron <strong>{torneoFilas.filter(f => f.depId).length}</strong> deportistas con los datos de torneo.
                 </p>
                 <button onClick={() => setModalTorneo(false)}
+                  className="bg-[#16a34a] text-white px-8 py-3 rounded-xl font-black hover:bg-[#064e1e] transition">
+                  Cerrar
+                </button>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL SUBIR NUEVOS DEPORTISTAS ═══════════════════════ */}
+      {modalNuevos && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+
+            {/* Header modal */}
+            <div className="bg-gradient-to-r from-[#064e1e] to-[#16a34a] px-6 py-4 flex items-center justify-between flex-shrink-0">
+              <div>
+                <p className="text-white font-black text-base">Subir Nuevos Deportistas</p>
+                <p className="text-white/60 text-xs mt-0.5">
+                  {nuevosPaso === 'subir'   && 'Selecciona el Excel con los nuevos registros'}
+                  {nuevosPaso === 'preview' && `${nuevosFilas.length} registros encontrados — confirma antes de agregar`}
+                  {nuevosPaso === 'listo'   && '¡Deportistas agregados correctamente!'}
+                </p>
+              </div>
+              <button onClick={() => setModalNuevos(false)}
+                className="text-white/70 hover:text-white transition p-1 rounded-lg hover:bg-white/20">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Paso 1: Subir archivo */}
+            {nuevosPaso === 'subir' && (
+              <div className="flex-1 flex flex-col items-center justify-center p-10 gap-5">
+                <div className="w-20 h-20 bg-green-100 rounded-3xl flex items-center justify-center">
+                  <Upload className="w-9 h-9 text-[#16a34a]" />
+                </div>
+                <div className="text-center">
+                  <p className="font-black text-gray-800 text-lg">Sube el Excel de nuevos deportistas</p>
+                  <p className="text-gray-400 text-sm mt-1">El archivo debe tener encabezados en la primera fila (CÓDIGO, DEPORTISTA, PROGRAMA, PROYECTO…)</p>
+                </div>
+                <button
+                  onClick={() => nuevosInputRef.current?.click()}
+                  disabled={nuevosProc}
+                  className="bg-[#16a34a] text-white font-bold px-8 py-3 rounded-xl hover:bg-[#064e1e] transition disabled:opacity-50 flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  {nuevosProc ? 'Procesando…' : 'Seleccionar archivo .xlsx'}
+                </button>
+              </div>
+            )}
+
+            {/* Paso 2: Preview */}
+            {nuevosPaso === 'preview' && (
+              <div className="flex-1 overflow-y-auto flex flex-col">
+                {/* Resumen */}
+                <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 flex gap-4 text-xs font-bold flex-shrink-0">
+                  <span className="text-green-700">✓ {nuevosFilas.filter(r => !r.duplicado).length} nuevos a agregar</span>
+                  {nuevosFilas.some(r => r.duplicado) && (
+                    <span className="text-amber-600">⚠ {nuevosFilas.filter(r => r.duplicado).length} duplicados (se omitirán)</span>
+                  )}
+                </div>
+
+                {/* Tabla preview */}
+                <div className="flex-1 overflow-auto px-4 py-3">
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr style={{ background: '#16a34a' }}>
+                        <th style={{ border: '1px solid white', padding: '6px 10px', color: 'white', fontWeight: 900 }}>ESTADO</th>
+                        {nuevosFilas[0] && Object.keys(nuevosFilas[0]._columnas).slice(0, 7).map(k => (
+                          <th key={k} style={{ border: '1px solid white', padding: '6px 10px', color: 'white', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                            {k.toUpperCase()}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {nuevosFilas.map((r, i) => (
+                        <tr key={i} style={{ background: r.duplicado ? '#fef3c7' : '#f1f5f9', borderTop: '1px solid white' }}>
+                          <td style={{ border: '1px solid white', padding: '5px 8px', textAlign: 'center', fontWeight: 900, fontSize: 10 }}>
+                            {r.duplicado
+                              ? <span style={{ color: '#d97706' }}>DUPLICADO</span>
+                              : <span style={{ color: '#16a34a' }}>NUEVO</span>}
+                          </td>
+                          {Object.keys(nuevosFilas[0]._columnas).slice(0, 7).map(k => (
+                            <td key={k} style={{ border: '1px solid white', padding: '5px 8px', whiteSpace: 'nowrap', color: '#111827' }}>
+                              {r._columnas[k] || '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Botones */}
+                <div className="flex gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+                  <button onClick={() => { setNuevosPaso('subir'); setNuevosFilas([]); }}
+                    className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-bold py-2.5 rounded-xl transition text-sm">
+                    ← Volver
+                  </button>
+                  <button onClick={confirmarNuevos}
+                    disabled={nuevosFilas.filter(r => !r.duplicado).length === 0}
+                    className="flex-1 bg-[#16a34a] text-white font-bold py-2.5 rounded-xl hover:bg-[#064e1e] transition disabled:opacity-40 text-sm flex items-center justify-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Agregar {nuevosFilas.filter(r => !r.duplicado).length} deportistas
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Paso 3: Listo */}
+            {nuevosPaso === 'listo' && (
+              <div className="flex-1 flex flex-col items-center justify-center p-10 gap-4 text-center">
+                <div className="w-20 h-20 bg-green-100 rounded-3xl flex items-center justify-center">
+                  <CheckCircle className="w-10 h-10 text-green-500" />
+                </div>
+                <p className="font-black text-gray-800 text-lg">¡Listo!</p>
+                <p className="text-gray-500 text-sm">
+                  Se agregaron <strong>{nuevosFilas.filter(r => !r.duplicado).length}</strong> deportistas al consolidado.
+                  Ya aparecen en la tabla.
+                </p>
+                <button onClick={() => setModalNuevos(false)}
                   className="bg-[#16a34a] text-white px-8 py-3 rounded-xl font-black hover:bg-[#064e1e] transition">
                   Cerrar
                 </button>

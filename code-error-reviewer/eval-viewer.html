@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eval Viewer — code-error-reviewer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f8fafc; color: #1e293b; }
+  header { background: #1e293b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 700; }
+  header .badge { background: #22c55e; color: white; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tabs { display: flex; gap: 2px; background: #e2e8f0; padding: 4px; border-radius: 8px; margin: 20px 24px 0; width: fit-content; }
+  .tab { padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; color: #64748b; border: none; background: transparent; }
+  .tab.active { background: white; color: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .panel { display: none; padding: 24px; }
+  .panel.active { display: block; }
+
+  /* Outputs tab */
+  .eval-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .eval-nav button { padding: 8px 16px; border: 1px solid #e2e8f0; border-radius: 8px; background: white; cursor: pointer; font-size: 14px; }
+  .eval-nav button:hover { background: #f1f5f9; }
+  .eval-nav .counter { font-size: 14px; color: #64748b; }
+  .eval-title { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+  .eval-prompt { background: #f1f5f9; border-left: 4px solid #6366f1; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #475569; margin-bottom: 20px; white-space: pre-wrap; font-family: monospace; max-height: 200px; overflow-y: auto; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .col-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .col-header .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-skill { background: #22c55e; }
+  .dot-base { background: #94a3b8; }
+  .output-box { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; font-size: 13px; line-height: 1.7; min-height: 200px; white-space: pre-wrap; overflow-y: auto; max-height: 500px; }
+  .output-box code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 12px; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; margin: 8px 0; }
+
+  /* Benchmark tab */
+  .benchmark-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .metric-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; }
+  .metric-card .label { font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .metric-card .value { font-size: 28px; font-weight: 800; color: #1e293b; }
+  .metric-card .sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+  .assertions-table { background: white; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f8fafc; padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
+  td { padding: 12px 16px; border-top: 1px solid #f1f5f9; font-size: 13px; }
+  .pass { color: #16a34a; font-weight: 700; }
+  .fail { color: #dc2626; font-weight: 700; }
+  .neutral { color: #64748b; }
+  .analyst { background: #fefce8; border: 1px solid #fde047; border-radius: 10px; padding: 16px; margin-top: 20px; font-size: 13px; line-height: 1.6; }
+  .analyst strong { color: #854d0e; }
+
+  @media (max-width: 768px) { .cols { grid-template-columns: 1fr; } .benchmark-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🔍 Eval Viewer — code-error-reviewer</h1>
+  </div>
+  <span class="badge">Iteración 1</span>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('outputs')">Outputs</button>
+  <button class="tab" onclick="showTab('benchmark')">Benchmark</button>
+</div>
+
+<!-- OUTPUTS TAB -->
+<div id="tab-outputs" class="panel active">
+  <div class="eval-nav">
+    <button onclick="changeEval(-1)">← Anterior</button>
+    <span class="counter" id="counter">1 / 3</span>
+    <button onclick="changeEval(1)">Siguiente →</button>
+  </div>
+
+  <div id="eval-1" class="eval-block">
+    <div class="eval-title">📋 Eval 1 — Error useRouter en Next.js (Client Component)</div>
+    <div class="eval-prompt">Me aparece este error en la consola del navegador al abrir mi página de asistencia en Next.js:
+
+Error: useRouter only works in Client Components. Add the 'use client' directive at the top of the file to use it.
+    at AsistenciaPage (./src/app/asistencia/page.tsx:23:45)
+
+Mi código es:
+```
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+export default function AsistenciaPage() {
+  const router = useRouter();
+  const [mes, setMes] = useState(0);
+  return &lt;div&gt;Asistencia&lt;/div&gt;;
+}
+```</div>
+    <div class="cols">
+      <div>
+        <div class="col-header"><span class="dot dot-skill"></span> CON Skill</div>
+        <div class="output-box">🔍 <strong>Diagnóstico</strong>
+El componente AsistenciaPage usa hooks de React (useRouter, useState), pero en Next.js 14 con App Router todos los componentes son Server Components por defecto. Los hooks solo funcionan en Client Components, y el error te lo dice directamente: falta la directiva 'use client' al inicio del archivo.
+
+💡 <strong>Solución</strong>
+
+<pre>'use client';  // ← AGREGAR ESTA LÍNEA
+
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+export default function AsistenciaPage() {
+  const router = useRouter();
+  const [mes, setMes] = useState(0);
+  return &lt;div&gt;Asistencia&lt;/div&gt;;
+}</pre>
+
+Solo agrega 'use client'; como primera línea del archivo (antes de cualquier import). Eso es todo.
+
+📌 <strong>Por qué pasó</strong>
+En el App Router de Next.js 13+, el modelo por defecto es que los componentes se renderizan en el servidor. Los hooks como useRouter, useState, useEffect, etc. dependen del ciclo de vida del cliente, así que Next.js los bloquea en Server Components.
+
+⚡ <strong>Tips extra</strong>
+- La directiva 'use client' debe ir en la primera línea del archivo, antes de cualquier import.
+- Si tu página tiene partes que no necesitan interactividad, considera separar el componente interactivo en un archivo aparte. Mejora el rendimiento.
+- Otros hooks que también requieren 'use client': usePathname, useSearchParams, useParams, useContext.</div>
+      </div>
+      <div>
+        <div class="col-header"><span class="dot dot-base"></span> SIN Skill (baseline)</div>
+        <div class="output-box">CAUSA DEL PROBLEMA:
+En Next.js 13+ con el App Router, todos los componentes son Server Components por defecto. Los hooks como useRouter y useState son exclusivos de Client Components.
+
+SOLUCIÓN:
+Agrega la directiva 'use client' como la primera línea del archivo:
+
+<pre>'use client';
+
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+export default function AsistenciaPage() {
+  const router = useRouter();
+  const [mes, setMes] = useState(0);
+  return &lt;div&gt;Asistencia&lt;/div&gt;;
+}</pre>
+
+REGLA GENERAL:
+Siempre que uses hooks de React, hooks de Next.js del lado del cliente, manejadores de eventos o APIs del navegador, debes agregar 'use client' al inicio del archivo.
+
+NOTAS ADICIONALES:
+- La directiva debe ser la primera línea — antes de los imports.
+- Cuando un componente tiene 'use client', todos sus hijos también se convierten en Client Components.
+- Considera extraer solo la parte interactiva en un componente separado con 'use client' para mejor rendimiento.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="eval-2" class="eval-block" style="display:none">
+    <div class="eval-title">📋 Eval 2 — Supabase devuelve array vacío (case-sensitive)</div>
+    <div class="eval-prompt">Estoy haciendo una consulta a Supabase y siempre me retorna [] aunque sé que hay datos. Mi código:
+
+const { data, error } = await supabase
+  .from('deportistas')
+  .select('*')
+  .eq('proyecto', 'SUB 8A');
+
+console.log(data); // [] siempre vacío
+console.log(error); // null
+
+En Supabase Studio veo los registros y el campo proyecto dice 'Sub 8a'.</div>
+    <div class="cols">
+      <div>
+        <div class="col-header"><span class="dot dot-skill"></span> CON Skill</div>
+        <div class="output-box">🔍 <strong>Diagnóstico</strong>
+El filtro .eq('proyecto', 'SUB 8A') no encuentra registros porque PostgreSQL hace comparaciones de texto de forma case-sensitive por defecto. El valor en la BD es 'Sub 8a' y buscas 'SUB 8A' — son cadenas distintas para Postgres.
+
+💡 <strong>Solución</strong>
+
+Opción 1 — La más simple: usar el valor exacto tal como está en la BD.
+<pre>// Antes:
+.eq('proyecto', 'SUB 8A')
+// Después:
+.eq('proyecto', 'Sub 8a') // valor exacto como aparece en Supabase Studio</pre>
+
+Opción 2 — Si los datos son inconsistentes en la BD, usa ilike para búsqueda case-insensitive:
+<pre>.ilike('proyecto', 'sub 8a') // no importa mayúsculas/minúsculas</pre>
+
+📌 <strong>Por qué pasó</strong>
+PostgreSQL trata los textos con el operador = de forma estrictamente case-sensitive: 'SUB 8A' = 'Sub 8a' evalúa como false. Supabase traduce .eq() directamente a = en SQL. El error no produce ningún mensaje porque la consulta es válida — simplemente no encuentra filas y devuelve [] con error: null.
+
+⚡ <strong>Tips extra</strong>
+1. Normaliza los datos en origen — guarda siempre en un formato canónico.
+2. Si usas ilike frecuentemente, crea un índice funcional: CREATE INDEX ON deportistas (LOWER(proyecto)).
+3. Consejo debug: cuando Supabase devuelve [] con error: null, el primer sospechoso es siempre el filtro. Prueba primero sin .eq() para confirmar que los datos cargan.</div>
+      </div>
+      <div>
+        <div class="col-header"><span class="dot dot-base"></span> SIN Skill (baseline)</div>
+        <div class="output-box">El problema es de sensibilidad a mayúsculas y minúsculas (case-sensitivity).
+
+CAUSA: PostgreSQL (y por lo tanto Supabase) es case-sensitive en sus comparaciones de texto por defecto. Tu código busca 'SUB 8A' pero en la base de datos está guardado como 'Sub 8a'. Para PostgreSQL son valores distintos.
+
+SOLUCIONES:
+
+Opción 1 — Usar el valor exacto:
+<pre>.eq('proyecto', 'Sub 8a')  // valor exacto del campo en BD</pre>
+
+Opción 2 — Usar ilike para case-insensitive:
+<pre>.ilike('proyecto', 'sub 8a')</pre>
+
+Opción 3 — Normalizar al insertar, guardando siempre en mayúsculas o minúsculas.
+
+NOTA IMPORTANTE: Que error sea null con data: [] es el comportamiento correcto cuando la consulta es válida pero no encuentra registros. No es un error de Supabase — es un caso de no-match.
+
+También verifica que no tengas RLS (Row Level Security) activado en la tabla deportistas, ya que podría estar bloqueando las consultas incluso con el valor correcto.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="eval-3" class="eval-block" style="display:none">
+    <div class="eval-title">📋 Eval 3 — TypeScript "Property is missing" en interfaz</div>
+    <div class="eval-prompt">TypeScript me da este error:
+
+Type '{ id: string; nombre: string; proyecto: string | null; }' is not assignable to type 'Deportista'.
+  Property 'sede' is missing in type '{ ... }' but required in type 'Deportista'.
+
+Mi interfaz es:
+interface Deportista {
+  id: string;
+  nombre: string;
+  proyecto: string | null;
+  sede: string;
+  fechaNacimiento?: string;
+}
+
+const dep: Deportista = {
+  id: '123',
+  nombre: 'Carlos',
+  proyecto: 'SUB 8A',   // falta sede
+};</div>
+    <div class="cols">
+      <div>
+        <div class="col-header"><span class="dot dot-skill"></span> CON Skill</div>
+        <div class="output-box">🔍 <strong>Diagnóstico</strong>
+El objeto asignado a dep no incluye la propiedad sede, pero en la interfaz Deportista esa propiedad está declarada como requerida (sin ?). TypeScript exige que todos los campos obligatorios estén presentes en el objeto.
+
+💡 <strong>Solución</strong>
+
+Tienes dos caminos según tu intención:
+
+Opción A — Agregar sede al objeto:
+<pre>const dep: Deportista = {
+  id: '123',
+  nombre: 'Carlos',
+  proyecto: 'SUB 8A',
+  sede: 'Medellín',  // ← agregar
+};</pre>
+
+Opción B — Hacer sede opcional en la interfaz (solo si un deportista puede no tener sede):
+<pre>interface Deportista {
+  // ...
+  sede?: string;   // ← añadir el ?
+  // ...
+}</pre>
+
+📌 <strong>Por qué pasó</strong>
+TypeScript usa tipado estructural: para que un objeto sea válido como Deportista, debe tener TODAS las propiedades requeridas. sede no tiene ?, así que es obligatoria. fechaNacimiento sí tiene ? por eso no da error aunque falte.
+
+⚡ <strong>Tips extra</strong>
+- Partial&lt;Deportista&gt; — si necesitas construir el objeto de forma incremental: const depParcial: Partial&lt;Deportista&gt; = { id: '123', nombre: 'Carlos' };
+- El mensaje de error de TypeScript es tu amigo: "Property 'sede' is missing in type... but required in type 'Deportista'" te dice exactamente qué falta y en qué tipo.</div>
+      </div>
+      <div>
+        <div class="col-header"><span class="dot dot-base"></span> SIN Skill (baseline)</div>
+        <div class="output-box">El error de TypeScript indica que al objeto que estás asignando a dep le falta la propiedad sede, que es requerida en la interfaz Deportista.
+
+EXPLICACIÓN:
+- sede: string → sin ?, es REQUERIDA — debe estar siempre presente.
+- sede?: string → con ?, es OPCIONAL — puede omitirse.
+- fechaNacimiento?: string → opcional, por eso no da error aunque no esté en el objeto.
+
+SOLUCIÓN 1 — Agregar la propiedad al objeto:
+<pre>const dep: Deportista = {
+  id: '123',
+  nombre: 'Carlos',
+  proyecto: 'SUB 8A',
+  sede: 'Sede Norte',  // añadir esto
+};</pre>
+
+SOLUCIÓN 2 — Hacer sede opcional en la interfaz (si tiene sentido que un deportista pueda no tener sede):
+<pre>interface Deportista {
+  id: string;
+  nombre: string;
+  proyecto: string | null;
+  sede?: string;        // agregar "?"
+  fechaNacimiento?: string;
+}</pre>
+
+Cuál opción usar depende de tu lógica de negocio: si todo deportista DEBE tener una sede, usa la Solución 1. Si puede registrarse sin sede inicial, usa la Solución 2.
+
+También puedes usar Partial&lt;Deportista&gt; si construyes el objeto en pasos:
+<pre>const depParcial: Partial&lt;Deportista&gt; = { id: '123' };
+const dep: Deportista = { ...depParcial, sede: 'Bello', proyecto: 'SUB 8A', nombre: 'Carlos' };</pre></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BENCHMARK TAB -->
+<div id="tab-benchmark" class="panel">
+  <div class="benchmark-grid">
+    <div class="metric-card">
+      <div class="label">Con Skill — Tasa de aprobación</div>
+      <div class="value" style="color:#16a34a">100%</div>
+      <div class="sub">9/9 assertions ✓</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Sin Skill — Tasa de aprobación</div>
+      <div class="value" style="color:#f59e0b">78%</div>
+      <div class="sub">7/9 assertions ✓ (falta formato estructurado)</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Diferencia</div>
+      <div class="value" style="color:#6366f1">+22%</div>
+      <div class="sub">Ganancia neta del skill</div>
+    </div>
+  </div>
+
+  <div class="assertions-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Eval</th>
+          <th>Assertion</th>
+          <th>Con Skill</th>
+          <th>Sin Skill</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Eval 1</td><td>Identifica causa raíz ('use client')</td><td class="pass">✓ Pasa</td><td class="pass">✓ Pasa</td></tr>
+        <tr><td>Eval 1</td><td>Muestra solución con código antes/después</td><td class="pass">✓ Pasa</td><td class="pass">✓ Pasa</td></tr>
+        <tr><td>Eval 1</td><td>Explica diferencia Server/Client Components</td><td class="pass">✓ Pasa</td><td class="pass">✓ Pasa</td></tr>
+        <tr><td>Eval 2</td><td>Identifica case-sensitive como causa</td><td class="pass">✓ Pasa</td><td class="pass">✓ Pasa</td></tr>
+        <tr><td>Eval 2</td><td>Sugiere .ilike() o alternativa</td><td class="pass">✓ Pasa</td><td class="pass">✓ Pasa</td></tr>
+        <tr><td>Eval 2</td><td>Menciona RLS como alternativa</td><td class="pass">✓ Pasa</td><td class="pass">✓ Pasa (en baseline)</td></tr>
+        <tr><td>Eval 3</td><td>Identifica campo faltante</td><td class="pass">✓ Pasa</td><td class="pass">✓ Pasa</td></tr>
+        <tr><td>Eval 3</td><td>Muestra solución añadir sede</td><td class="pass">✓ Pasa</td><td class="pass">✓ Pasa</td></tr>
+        <tr><td>Eval 3</td><td>Menciona opcional como alternativa</td><td class="pass">✓ Pasa</td><td class="pass">✓ Pasa</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="analyst">
+    <strong>🔎 Observaciones del analista</strong><br><br>
+    <strong>Diferencia principal:</strong> ambas versiones resuelven los problemas técnicos correctamente. La ventaja del skill es el <em>formato consistente</em>: Diagnóstico → Solución → Por qué pasó → Tips, que hace las respuestas más fáciles de escanear. Sin el skill las respuestas también son correctas pero con formato variable (algunas usan secciones ALL CAPS, otras no tienen estructura clara).<br><br>
+    <strong>Punto fuerte:</strong> el skill genera el bloque "Por qué pasó" de forma consistente, lo que ayuda al usuario a entender el error y no repetirlo. Sin el skill este bloque a veces aparece, a veces no.<br><br>
+    <strong>Mejora posible:</strong> añadir al skill una sección sobre cómo pedir más contexto cuando el error está incompleto — actualmente solo hay una línea al respecto.
+  </div>
+</div>
+
+<script>
+  function showTab(name) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    document.querySelectorAll('.tab').forEach(t => { if (t.textContent.toLowerCase().includes(name === 'outputs' ? 'output' : 'bench')) t.classList.add('active'); });
+  }
+  let current = 1;
+  function changeEval(dir) {
+    document.getElementById('eval-' + current).style.display = 'none';
+    current = Math.max(1, Math.min(3, current + dir));
+    document.getElementById('eval-' + current).style.display = 'block';
+    document.getElementById('counter').textContent = current + ' / 3';
+  }
+</script>
+</body>
+</html>

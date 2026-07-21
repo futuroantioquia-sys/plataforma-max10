@@ -1,0 +1,82 @@
+PREGUNTA: Error useRouter en Next.js con App Router
+
+ERROR:
+Error: useRouter only works in Client Components. Add the 'use client' directive at the top of the file to use it.
+    at useRouter (webpack-internal:///./node_modules/next/dist/client/components/navigation.js:67:11)
+    at AsistenciaPage (webpack-internal:///./src/app/asistencia/page.tsx:23:45)
+
+CAUSA DEL PROBLEMA:
+
+En Next.js 13+ con el App Router, todos los componentes son Server Components por defecto. Los Server Components se ejecutan en el servidor y no tienen acceso al estado del navegador ni a los hooks de React.
+
+Los hooks como `useRouter` (de `next/navigation`) y `useState` son exclusivos de Client Components porque:
+- `useRouter` necesita acceder al historial de navegación del navegador.
+- `useState` gestiona estado reactivo en el cliente.
+
+Usar cualquiera de estos hooks sin declarar el componente como Client Component produce este error.
+
+SOLUCIÓN:
+
+Agrega la directiva `'use client'` como la primera línea del archivo (antes de cualquier import):
+
+```tsx
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+export default function AsistenciaPage() {
+  const router = useRouter();
+  const [mes, setMes] = useState(0);
+  return <div>Asistencia</div>;
+}
+```
+
+REGLA GENERAL:
+
+Siempre que uses cualquiera de los siguientes elementos en un componente del App Router, debes agregar `'use client'` al inicio del archivo:
+
+- Hooks de React: useState, useEffect, useReducer, useContext, useRef, useCallback, useMemo, etc.
+- Hooks de Next.js del lado del cliente: useRouter, usePathname, useSearchParams, useParams.
+- Manejadores de eventos del navegador: onClick, onChange, onSubmit, etc.
+- APIs del navegador: localStorage, sessionStorage, window, document, navigator, etc.
+
+NOTAS ADICIONALES:
+
+1. La directiva `'use client'` debe ser literalmente la primera línea del archivo — antes de los imports. Si la pones después de un import, Next.js puede no reconocerla correctamente.
+
+2. Cuando un componente tiene `'use client'`, todos sus componentes hijos también se convierten en Client Components automáticamente (aunque no tengan la directiva explícita).
+
+3. Si solo una parte pequeña de tu página necesita interactividad, considera extraer solo esa parte en un componente separado con `'use client'`, y mantener el resto de la página como Server Component para mejor rendimiento.
+
+Ejemplo de separación:
+
+```tsx
+// app/asistencia/page.tsx — Server Component (sin 'use client')
+import AsistenciaControles from './AsistenciaControles';
+
+export default function AsistenciaPage() {
+  return (
+    <div>
+      <h1>Asistencia</h1>
+      <AsistenciaControles />
+    </div>
+  );
+}
+
+// app/asistencia/AsistenciaControles.tsx — Client Component
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+export default function AsistenciaControles() {
+  const router = useRouter();
+  const [mes, setMes] = useState(0);
+  return <div>Controles de asistencia</div>;
+}
+```
+
+RESUMEN:
+
+El error se soluciona agregando `'use client'` como primera línea del archivo que usa `useRouter` o `useState`. Esta directiva le indica a Next.js que el componente debe ejecutarse en el cliente, habilitando el uso de hooks y APIs del navegador.

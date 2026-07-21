@@ -1,29 +1,45 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { MessageCircle, Send, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const CONVERSACIONES = [
+const LS_KEY = 'futuro_mensajes';
+
+type Mensaje = { de: 'yo' | 'ellos'; texto: string; hora: string };
+
+type Conversacion = {
+  id:       string;
+  nombre:   string;
+  rol:      string;
+  avatar:   string;
+  ultimo:   string;
+  hora:     string;
+  noLeidos: number;
+  mensajes: Mensaje[];
+};
+
+/* ── Datos iniciales (solo la primera vez) ── */
+const INICIAL: Conversacion[] = [
   {
     id: '1', nombre: 'Hernán Marulanda', rol: 'Padre de Santiago', avatar: 'HR',
     ultimo: 'Hola, ¿cómo le fue a Santiago en el entrenamiento?',
-    hora: '10:30 a.m.', noLeidos: 2,
+    hora: '10:30', noLeidos: 2,
     mensajes: [
-      { de: 'ellos', texto: 'Buenos días profesor', hora: '10:00' },
+      { de: 'ellos', texto: 'Buenos días profesor',                                        hora: '10:00' },
       { de: 'yo',    texto: '¡Buenos días! Santiago tuvo un excelente entrenamiento hoy.', hora: '10:05' },
-      { de: 'ellos', texto: 'Qué bueno saberlo 😊', hora: '10:10' },
-      { de: 'ellos', texto: 'Hola, ¿cómo le fue a Santiago en el entrenamiento?', hora: '10:30' },
+      { de: 'ellos', texto: 'Qué bueno saberlo 😊',                                       hora: '10:10' },
+      { de: 'ellos', texto: 'Hola, ¿cómo le fue a Santiago en el entrenamiento?',         hora: '10:30' },
     ],
   },
   {
     id: '2', nombre: 'María García', rol: 'Padre de Mateo', avatar: 'MG',
     ultimo: 'Gracias por el informe de evaluación',
-    hora: '9:15 a.m.', noLeidos: 0,
+    hora: '9:15', noLeidos: 0,
     mensajes: [
       { de: 'yo',    texto: 'Aquí le comparto el informe de evaluación de Mateo', hora: '9:00' },
-      { de: 'ellos', texto: 'Gracias por el informe de evaluación', hora: '9:15' },
+      { de: 'ellos', texto: 'Gracias por el informe de evaluación',               hora: '9:15' },
     ],
   },
   {
@@ -36,30 +52,72 @@ const CONVERSACIONES = [
   },
 ];
 
+function cargar(): Conversacion[] {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return INICIAL;
+}
+
+function guardar(data: Conversacion[]) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
+}
+
+function horaActual(): string {
+  return new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
 export default function MensajesPage() {
   const router = useRouter();
-  const [convActiva, setConvActiva] = useState<string | null>('1');
-  const [nuevoMsg, setNuevoMsg]     = useState('');
-  const [mensajes, setMensajes]     = useState(CONVERSACIONES);
+  const [convs,      setConvs]      = useState<Conversacion[]>([]);
+  const [convActiva, setConvActiva] = useState<string | null>(null);
+  const [nuevoMsg,   setNuevoMsg]   = useState('');
+  const [busqueda,   setBusqueda]   = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const conv = mensajes.find((c) => c.id === convActiva);
+  /* Cargar desde localStorage al montar */
+  useEffect(() => {
+    const data = cargar();
+    setConvs(data);
+    if (data.length) setConvActiva(data[0].id);
+  }, []);
 
+  /* Auto-scroll al último mensaje */
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [convActiva, convs]);
+
+  const conv = convs.find(c => c.id === convActiva);
+
+  /* Marcar como leídos al abrir */
+  function abrirConv(id: string) {
+    setConvActiva(id);
+    const updated = convs.map(c => c.id === id ? { ...c, noLeidos: 0 } : c);
+    setConvs(updated);
+    guardar(updated);
+  }
+
+  /* Enviar mensaje */
   function enviar() {
     if (!nuevoMsg.trim() || !convActiva) return;
-    setMensajes((prev) =>
-      prev.map((c) =>
-        c.id === convActiva
-          ? {
-              ...c,
-              ultimo: nuevoMsg,
-              hora: 'Ahora',
-              mensajes: [...c.mensajes, { de: 'yo', texto: nuevoMsg, hora: 'Ahora' }],
-            }
-          : c
-      )
+    const hora  = horaActual();
+    const texto = nuevoMsg.trim();
+    const updated = convs.map(c =>
+      c.id === convActiva
+        ? { ...c, ultimo: texto, hora, mensajes: [...c.mensajes, { de: 'yo' as const, texto, hora }] }
+        : c
     );
+    setConvs(updated);
+    guardar(updated);
     setNuevoMsg('');
   }
+
+  /* Filtrar por búsqueda */
+  const convsFiltradas = convs.filter(c =>
+    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    c.ultimo.toLowerCase().includes(busqueda.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -86,15 +144,17 @@ export default function MensajesPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   placeholder="Buscar..."
+                  value={busqueda}
+                  onChange={e => setBusqueda(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-gray-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
                 />
               </div>
             </div>
             <div className="overflow-y-auto flex-1">
-              {mensajes.map((c) => (
+              {convsFiltradas.map(c => (
                 <button
                   key={c.id}
-                  onClick={() => setConvActiva(c.id)}
+                  onClick={() => abrirConv(c.id)}
                   className={cn(
                     'w-full p-4 flex items-start gap-3 text-left hover:bg-gray-50 transition border-b border-gray-50',
                     convActiva === c.id && 'bg-[#E8F5E9]'
@@ -106,7 +166,7 @@ export default function MensajesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-gray-900 truncate">{c.nombre}</p>
-                      <span className="text-xs text-gray-400 flex-shrink-0">{c.hora}</span>
+                      <span className="text-xs text-gray-400 flex-shrink-0 ml-1">{c.hora}</span>
                     </div>
                     <p className="text-xs text-gray-400 truncate mt-0.5">{c.ultimo}</p>
                   </div>
@@ -122,7 +182,7 @@ export default function MensajesPage() {
 
           {/* Chat activo */}
           {conv ? (
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-w-0">
               {/* Cabecera chat */}
               <div className="p-4 border-b border-gray-100 flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#064e1e] to-[#16a34a] flex items-center justify-center">
@@ -151,6 +211,7 @@ export default function MensajesPage() {
                     </div>
                   </div>
                 ))}
+                <div ref={bottomRef}/>
               </div>
 
               {/* Input */}
@@ -159,8 +220,8 @@ export default function MensajesPage() {
                   type="text"
                   placeholder="Escribe un mensaje..."
                   value={nuevoMsg}
-                  onChange={(e) => setNuevoMsg(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && enviar()}
+                  onChange={e => setNuevoMsg(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && enviar()}
                   className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
                 />
                 <button

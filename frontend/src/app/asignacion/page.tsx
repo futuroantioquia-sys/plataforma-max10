@@ -2,38 +2,52 @@
 
 /**
  * Asignación de Proyecto — Futuro Antioquia
- * Panel administrativo para asignar PROGRAMA, PROYECTO y CÓDIGO
- * a deportistas nuevos que llenaron el formulario de afiliación.
+ * Muestra TODOS los deportistas sin proyecto asignado.
+ * Columnas: CÓDIGO · NOMBRE · AÑO · MES · DÍA · SEDE ESCOGIDA · JORNADA · PROGRAMA ESCOGIDO
+ * Panel derecho: selector en cascada PROGRAMA → PROYECTO
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle, UserPlus, AlertCircle, ChevronRight, Search } from 'lucide-react';
+import { ArrowLeft, CheckCircle, UserPlus, AlertCircle, Search } from 'lucide-react';
 import { getDeportistas, saveDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { cn } from '@/lib/utils';
 
-// Helpers
 function getCol(dep: Deportista, rx: RegExp): string {
   const k = Object.keys(dep._columnas).find(c => rx.test(c));
   return k ? dep._columnas[k] ?? '' : '';
 }
-function colEstado(d: Deportista)   { return getCol(d, /^estado/i); }
 function colPrograma(d: Deportista) { return getCol(d, /^program/i); }
 function colProy(d: Deportista)     { return getCol(d, /^proy/i); }
 function colCodigo(d: Deportista)   { return getCol(d, /^c[oó]d/i); }
+function colAfil(d: Deportista)    { return getCol(d, /tipo.*afil|^afil/i); }
+
+function colorCodigo(afil: string): string {
+  const v = afil.toLowerCase();
+  if (v.includes('nuevo'))     return '#f97316';
+  if (v.includes('antigu'))    return '#16a34a';
+  if (v.includes('reingreso')) return '#2563eb';
+  if (v.includes('mb instit')) return '#374151';
+  if (v.includes('b instit'))  return '#7c3aed';
+  return '#16a34a'; // default verde
+}
 function colSede(d: Deportista)     { return getCol(d, /^sede/i); }
 function colJornada(d: Deportista)  { return getCol(d, /^jorn/i); }
+function colAno(d: Deportista)      { return getCol(d, /^a[ñn]o$/i); }
+function colMes(d: Deportista)      { return getCol(d, /^mes$/i); }
+function colDia(d: Deportista)      { return getCol(d, /^d[ií]a$/i) || getCol(d, /^dia_nac/i); }
 
-// Un deportista pendiente es nuevo (sin código asignado aún)
-function esPendiente(d: Deportista): boolean {
-  return !colCodigo(d).trim() && d.id.startsWith('nuevo_');
+/** Sin proyecto asignado */
+function sinProyecto(d: Deportista): boolean {
+  const p = colProy(d).trim().toUpperCase();
+  return !p || p === 'UBICAR';
 }
 
-// Obtener lista única de programas y proyectos del sistema
+/** Programas y proyectos del sistema (de deportistas YA asignados) */
 function getProgramasExistentes(todos: Deportista[]): Record<string, string[]> {
   const mapa: Record<string, Set<string>> = {};
-  todos.filter(d => !esPendiente(d)).forEach(d => {
+  todos.filter(d => !sinProyecto(d)).forEach(d => {
     const prog = colPrograma(d).trim();
     const proy = colProy(d).trim();
     if (!prog || !proy) return;
@@ -46,93 +60,87 @@ function getProgramasExistentes(todos: Deportista[]): Record<string, string[]> {
 }
 
 type AsignForm = {
-  programa:    string;
-  proyecto:    string;
-  proyNuevo:   string; // si quiere crear proyecto nuevo
-  codigo:      string;
-  estado:      string;
+  programa:  string;
+  proyecto:  string;
+  proyNuevo: string;
 };
 
-// ─────────────────────────────────────────────────────────────
+const G_COL   = ['CÓDIGO','NOMBRE','AÑO','MES','DÍA','SEDE ESCOGIDA','JORNADA','PROGRAMA ESCOGIDO'];
+const G_STYLE  = { background: '#16a34a', color: 'white', border: '1px solid white', padding: '8px 10px', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', whiteSpace: 'nowrap' as const, textAlign: 'center' as const };
+const R_STYLE  = { background: '#f1f5f9', color: '#374151', border: '1px solid white', padding: '7px 10px', fontSize: 12, whiteSpace: 'nowrap' as const };
+
 export default function AsignacionPage() {
   const router = useRouter();
-  const [todos,       setTodos]       = useState<Deportista[]>([]);
-  const [pendientes,  setPendientes]  = useState<Deportista[]>([]);
-  const [programas,   setProgramas]   = useState<Record<string, string[]>>({});
-  const [busqueda,    setBusqueda]    = useState('');
-  const [selected,    setSelected]    = useState<Deportista | null>(null);
-  const [form,        setForm]        = useState<AsignForm>({ programa:'', proyecto:'', proyNuevo:'', codigo:'', estado:'1. Nuevo' });
-  const [guardando,   setGuardando]   = useState(false);
-  const [exito,       setExito]       = useState(false);
-  const [error,       setError]       = useState('');
+
+  const [todos,      setTodos]      = useState<Deportista[]>([]);
+  const [programas,  setProgramas]  = useState<Record<string, string[]>>({});
+  const [busqueda,   setBusqueda]   = useState('');
+  const [selected,   setSelected]   = useState<Deportista | null>(null);
+  const [form,       setForm]       = useState<AsignForm>({ programa: '', proyecto: '', proyNuevo: '' });
+  const [guardando,  setGuardando]  = useState(false);
+  const [exito,      setExito]      = useState(false);
+  const [error,      setError]      = useState('');
 
   useEffect(() => {
     getDeportistas().then(lista => {
       setTodos(lista);
-      setPendientes(lista.filter(esPendiente));
       setProgramas(getProgramasExistentes(lista));
     });
   }, []);
+
+  const sinProyectoLista = useMemo(() =>
+    todos.filter(sinProyecto).sort((a, b) => a._nombre.localeCompare(b._nombre, 'es')),
+    [todos]
+  );
+
+  const filtrados = useMemo(() => {
+    if (!busqueda) return sinProyectoLista;
+    const q = busqueda.toLowerCase();
+    return sinProyectoLista.filter(d =>
+      d._nombre.toLowerCase().includes(q) ||
+      colCodigo(d).toLowerCase().includes(q) ||
+      colPrograma(d).toLowerCase().includes(q)
+    );
+  }, [sinProyectoLista, busqueda]);
 
   function seleccionar(dep: Deportista) {
     setSelected(dep);
     setExito(false);
     setError('');
-    // Pre-llenar programa desde los datos del deportista (si ya lo escogió en el formulario)
-    const progExistente = colPrograma(dep).trim();
-    setForm({ programa: progExistente, proyecto:'', proyNuevo:'', codigo:'', estado:'1. Nuevo' });
+    const prog = colPrograma(dep).trim();
+    setForm({ programa: prog, proyecto: '', proyNuevo: '' });
   }
 
   function cancelar() { setSelected(null); setExito(false); setError(''); }
 
   function guardar() {
     if (!selected) return;
-    if (!form.programa.trim())                        { setError('Selecciona un programa.'); return; }
+    if (!form.programa.trim()) { setError('Selecciona un programa.'); return; }
     const proy = form.proyNuevo.trim() || form.proyecto.trim();
-    if (!proy)                                        { setError('Selecciona o escribe un proyecto.'); return; }
-    if (!form.codigo.trim())                          { setError('Asigna un código al deportista.'); return; }
+    if (!proy) { setError('Selecciona o escribe un proyecto.'); return; }
 
     setGuardando(true); setError('');
     try {
-      const lista: Deportista[] = todos;
-
-      const actualizada = lista.map(d => {
+      const actualizada = todos.map(d => {
         if (d.id !== selected.id) return d;
         const cols = { ...d._columnas };
-
-        // Buscar clave real de cada columna o crear una nueva
         const setCampo = (rx: RegExp, nombre: string, valor: string) => {
           const k = Object.keys(cols).find(c => rx.test(c)) ?? nombre;
           cols[k] = valor;
         };
-
-        setCampo(/^program/i,  'PROGRAMA', form.programa);
-        setCampo(/^proy/i,     'PROY',     proy);
-        setCampo(/^c[oó]d/i,   'CODIGO',   form.codigo);
-        setCampo(/^estado/i,   'ESTADO',   form.estado);
-
-        return {
-          ...d,
-          id: d.id, // mantiene el id interno
-          _columnas: cols,
-        };
+        setCampo(/^program/i, 'PROGRAMA', form.programa);
+        setCampo(/^proy/i,    'PROY',     proy);
+        return { ...d, _columnas: cols };
       });
-
       saveDeportistas(actualizada);
       setTodos(actualizada);
-      setPendientes(actualizada.filter(esPendiente));
       setProgramas(getProgramasExistentes(actualizada));
       setExito(true);
       setSelected(null);
-    } catch { setError('Error al guardar. Intenta de nuevo.'); }
+    } catch { setError('Error al guardar.'); }
     setGuardando(false);
   }
 
-  const filtrados = pendientes.filter(d =>
-    !busqueda || d._nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
-
-  // ── RENDER ─────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50">
 
@@ -147,187 +155,154 @@ export default function AsignacionPage() {
         </div>
         <div className="flex-1">
           <p className="font-black text-white text-sm leading-tight">Asignación de Proyecto</p>
-          <p className="text-[10px] text-white/60">Deportistas nuevos pendientes de asignar</p>
+          <p className="text-[10px] text-white/60">Deportistas sin proyecto asignado</p>
         </div>
         <span className="text-xs font-bold bg-white/20 text-white px-3 py-1 rounded-full">
-          {pendientes.length} pendientes
+          {sinProyectoLista.length} sin proyecto
         </span>
-        <div className="ml-auto text-right leading-tight">
+        <div className="hidden sm:block text-right leading-tight">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
           <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 py-4 space-y-4">
 
-        {/* Éxito global */}
         {exito && (
           <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-5 py-4">
             <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-            <p className="text-sm font-bold text-green-800">Deportista asignado correctamente. Ahora aparece en su programa y proyecto.</p>
+            <p className="text-sm font-bold text-green-800">Proyecto asignado correctamente.</p>
           </div>
         )}
 
-        {pendientes.length === 0 ? (
-          /* Sin pendientes */
+        {sinProyectoLista.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-20 h-20 bg-green-100 rounded-3xl flex items-center justify-center mb-5">
               <CheckCircle className="w-10 h-10 text-green-400" />
             </div>
-            <h2 className="text-lg font-black text-gray-700">Sin pendientes</h2>
-            <p className="text-gray-400 text-sm mt-1">
-              No hay deportistas nuevos esperando asignación.
-            </p>
+            <h2 className="text-lg font-black text-gray-700">¡Todo asignado!</h2>
+            <p className="text-gray-400 text-sm mt-1">No hay deportistas sin proyecto.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
-            {/* ── Lista pendientes ── */}
-            <div className="space-y-3">
+            {/* ── Lista con tabla ── */}
+            <div className="xl:col-span-2 space-y-3">
+
+              {/* Buscador */}
               <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 px-3 py-2 shadow-sm">
-                <Search className="w-3.5 h-3.5 text-gray-300" />
-                <input type="text" placeholder="Buscar deportista..." value={busqueda}
-                  onChange={e => setBusqueda(e.target.value)}
-                  className="flex-1 text-xs focus:outline-none placeholder:text-gray-300" />
+                <Search className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                <input type="text" placeholder="Buscar nombre, código o programa..."
+                  value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                  className="flex-1 text-sm focus:outline-none placeholder:text-gray-300 text-[#111827]" />
               </div>
 
-              {filtrados.length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-6">Sin resultados</p>
-              )}
-
-              {filtrados.map(dep => {
-                const doc     = dep._columnas['DOCUMENTO'] ?? dep._columnas['DOCUMENTO_INGRESO'] ?? '—';
-                const prog    = colPrograma(dep);
-                const sede    = colSede(dep);
-                const jornada = colJornada(dep);
-                const isSel   = selected?.id === dep.id;
-                return (
-                  <button key={dep.id} onClick={() => seleccionar(dep)}
-                    className={cn(
-                      'w-full text-left rounded-2xl border-2 p-4 transition-all',
-                      isSel
-                        ? 'border-[#16a34a] bg-[#f0fdf4] shadow-md'
-                        : 'border-gray-100 bg-white hover:border-green-300 hover:shadow-sm'
-                    )}>
-                    <div className="flex items-start gap-3">
-                      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
-                        isSel ? 'bg-[#dcfce7]' : 'bg-[#dbeafe]')}>
-                        <UserPlus className={cn('w-5 h-5', isSel ? 'text-[#16a34a]' : 'text-[#1d4ed8]')} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-gray-900 text-sm truncate">{dep._nombre}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">Doc: {doc}</p>
-                        {/* Programa, Sede, Jornada */}
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {prog && (
-                            <span className="bg-[#16a34a] text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">
-                              {prog}
-                            </span>
-                          )}
-                          {sede && (
-                            <span className="bg-[#1d4ed8] text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">
-                              {sede}
-                            </span>
-                          )}
-                          {jornada && (
-                            <span className="bg-gray-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">
-                              {jornada}
-                            </span>
-                          )}
-                          {!prog && !sede && !jornada && (
-                            <span className="text-[10px] text-gray-400 italic">Sin datos de programa/sede</span>
-                          )}
-                        </div>
-                      </div>
-                      <ChevronRight className={cn('w-4 h-4 flex-shrink-0 mt-1 transition-colors',
-                        isSel ? 'text-[#16a34a]' : 'text-gray-300')} />
-                    </div>
-                  </button>
-                );
-              })}
+              {/* Tabla */}
+              <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-200">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-xs" style={{ minWidth: 700 }}>
+                    <thead>
+                      <tr>
+                        {G_COL.map(h => (
+                          <th key={h} style={G_STYLE}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtrados.length === 0 ? (
+                        <tr>
+                          <td colSpan={G_COL.length} className="py-10 text-center text-gray-400 font-semibold border border-white">
+                            Sin resultados
+                          </td>
+                        </tr>
+                      ) : filtrados.map(dep => {
+                        const isSel = selected?.id === dep.id;
+                        return (
+                          <tr key={dep.id}
+                            onClick={() => seleccionar(dep)}
+                            className={cn(
+                              'cursor-pointer transition-all',
+                              isSel ? 'outline outline-2 outline-[#16a34a]' : 'hover:brightness-95'
+                            )}>
+                            <td style={{ ...R_STYLE, background: colorCodigo(colAfil(dep)), color: 'white', fontWeight: 900, textAlign: 'center' }}>
+                              {colCodigo(dep) || '—'}
+                            </td>
+                            <td style={{ ...R_STYLE, fontWeight: 700, color: '#111827', minWidth: 180 }}>
+                              {dep._nombre}
+                            </td>
+                            <td style={{ ...R_STYLE, textAlign: 'center' }}>{colAno(dep) || '—'}</td>
+                            <td style={{ ...R_STYLE, textAlign: 'center' }}>{colMes(dep) || '—'}</td>
+                            <td style={{ ...R_STYLE, textAlign: 'center' }}>{colDia(dep) || '—'}</td>
+                            <td style={{ ...R_STYLE, textAlign: 'center' }}>{colSede(dep) || '—'}</td>
+                            <td style={{ ...R_STYLE, textAlign: 'center' }}>{colJornada(dep) || '—'}</td>
+                            <td style={{ ...R_STYLE, textAlign: 'center' }}>
+                              {colPrograma(dep)
+                                ? <span className="bg-[#16a34a] text-white text-[9px] font-black px-2 py-0.5 rounded-full">{colPrograma(dep)}</span>
+                                : <span className="text-gray-300">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
             {/* ── Panel de asignación ── */}
             <div>
               {!selected ? (
-                <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-10 flex flex-col items-center justify-center text-center h-full">
+                <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-10 flex flex-col items-center justify-center text-center h-full min-h-[200px]">
                   <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mb-3">
                     <UserPlus className="w-7 h-7 text-gray-300" />
                   </div>
                   <p className="font-bold text-gray-500 text-sm">Selecciona un deportista</p>
-                  <p className="text-xs text-gray-400 mt-1">para asignarle programa, proyecto y código</p>
+                  <p className="text-xs text-gray-400 mt-1">de la tabla para asignarle programa y proyecto</p>
                 </div>
               ) : (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-20">
                   {/* Cabecera */}
                   <div className="bg-gradient-to-r from-[#064e1e] to-[#16a34a] px-5 py-4">
                     <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest">Asignando a</p>
                     <p className="text-white font-black text-lg leading-tight">{selected._nombre}</p>
                   </div>
 
-                  {/* Badges: Programa, Sede, Jornada */}
-                  {(() => {
-                    const prog    = colPrograma(selected);
-                    const sede    = colSede(selected);
-                    const jornada = colJornada(selected);
-                    if (!prog && !sede && !jornada) return null;
-                    return (
-                      <div className="px-5 py-3 bg-[#f0fdf4] border-b border-green-100 flex flex-wrap gap-2">
-                        {prog && (
-                          <div className="flex flex-col items-start">
-                            <span className="text-[9px] font-black text-green-700 uppercase tracking-widest">Programa</span>
-                            <span className="bg-[#16a34a] text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{prog}</span>
-                          </div>
-                        )}
-                        {sede && (
-                          <div className="flex flex-col items-start">
-                            <span className="text-[9px] font-black text-blue-700 uppercase tracking-widest">Sede</span>
-                            <span className="bg-[#1d4ed8] text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{sede}</span>
-                          </div>
-                        )}
-                        {jornada && (
-                          <div className="flex flex-col items-start">
-                            <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Jornada</span>
-                            <span className="bg-gray-600 text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{jornada}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Datos del formulario de afiliación */}
-                  <div className="px-5 py-3 bg-[#eff6ff] border-b border-blue-100">
-                    <p className="text-[10px] font-bold text-[#1e3a8a] uppercase tracking-wide mb-2">Datos registrados</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                      {['DOCUMENTO','FECHA_NAC','AÑO','MES','DÍA','TELEFONO','EMAIL','ACUDIENTE','BARRIO','MUNICIPIO','POSICION']
-                        .map(k => {
-                          const v = selected._columnas[k] ?? '';
-                          if (!v) return null;
-                          return (
-                            <div key={k}>
-                              <span className="text-[10px] text-[#1d4ed8] font-bold uppercase">{k.replace(/_/g,' ')}: </span>
-                              <span className="text-[11px] text-gray-700">{v}</span>
-                            </div>
-                          );
-                        })}
+                  {/* Info del deportista */}
+                  {(colSede(selected) || colJornada(selected) || colPrograma(selected)) && (
+                    <div className="px-5 py-3 bg-[#f0fdf4] border-b border-green-100 flex flex-wrap gap-2">
+                      {colPrograma(selected) && (
+                        <div className="flex flex-col items-start">
+                          <span className="text-[9px] font-black text-green-700 uppercase tracking-widest">Programa escogido</span>
+                          <span className="bg-[#16a34a] text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{colPrograma(selected)}</span>
+                        </div>
+                      )}
+                      {colSede(selected) && (
+                        <div className="flex flex-col items-start">
+                          <span className="text-[9px] font-black text-blue-700 uppercase tracking-widest">Sede</span>
+                          <span className="bg-[#1d4ed8] text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{colSede(selected)}</span>
+                        </div>
+                      )}
+                      {colJornada(selected) && (
+                        <div className="flex flex-col items-start">
+                          <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Jornada</span>
+                          <span className="bg-gray-600 text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{colJornada(selected)}</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
 
-                  {/* Formulario de asignación */}
                   <div className="p-5 space-y-4">
                     {/* PROGRAMA */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Programa
-                      </label>
+                      <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">Programa</label>
                       <select value={form.programa}
                         onChange={e => setForm(f => ({ ...f, programa: e.target.value, proyecto: '', proyNuevo: '' }))}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d4ed8] bg-white">
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d4ed8] bg-white font-semibold">
                         <option value="">— Selecciona programa —</option>
                         {Object.keys(programas).sort().map(p => (
                           <option key={p} value={p}>{p}</option>
                         ))}
-                        <option value="__NUEVO_PROG__">+ Nuevo programa...</option>
+                        <option value="__NUEVO_PROG__">+ Nuevo programa…</option>
                       </select>
                       {form.programa === '__NUEVO_PROG__' && (
                         <input type="text" placeholder="Nombre del nuevo programa"
@@ -338,18 +313,16 @@ export default function AsignacionPage() {
 
                     {/* PROYECTO */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Proyecto
-                      </label>
+                      <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">Proyecto</label>
                       <select value={form.proyecto}
                         onChange={e => setForm(f => ({ ...f, proyecto: e.target.value, proyNuevo: '' }))}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d4ed8] bg-white"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d4ed8] bg-white font-semibold"
                         disabled={!form.programa || form.programa === '__NUEVO_PROG__'}>
                         <option value="">— Selecciona proyecto —</option>
                         {(programas[form.programa] ?? []).map(p => (
                           <option key={p} value={p}>{p}</option>
                         ))}
-                        <option value="__NUEVO_PROY__">+ Nuevo proyecto...</option>
+                        <option value="__NUEVO_PROY__">+ Nuevo proyecto…</option>
                       </select>
                       {form.proyecto === '__NUEVO_PROY__' && (
                         <input type="text" placeholder="Nombre del nuevo proyecto"
@@ -357,34 +330,6 @@ export default function AsignacionPage() {
                           onChange={e => setForm(f => ({ ...f, proyNuevo: e.target.value }))}
                           className="mt-2 w-full border border-blue-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]" />
                       )}
-                    </div>
-
-                    {/* CÓDIGO */}
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Código del deportista
-                      </label>
-                      <input type="text" placeholder="Ej: FA-2025-089"
-                        value={form.codigo}
-                        onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d4ed8] font-mono" />
-                      <p className="text-[10px] text-gray-400 mt-1">
-                        Este código es el identificador definitivo del deportista en el sistema.
-                      </p>
-                    </div>
-
-                    {/* ESTADO */}
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase tracking-wide">
-                        Estado
-                      </label>
-                      <select value={form.estado}
-                        onChange={e => setForm(f => ({ ...f, estado: e.target.value }))}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d4ed8] bg-white">
-                        <option value="1. Nuevo">1. Nuevo</option>
-                        <option value="2. Antiguo">2. Antiguo</option>
-                        <option value="3. Sin Afiliación">3. Sin Afiliación</option>
-                      </select>
                     </div>
 
                     {error && (
@@ -404,7 +349,7 @@ export default function AsignacionPage() {
                         {guardando
                           ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           : <CheckCircle className="w-4 h-4" />}
-                        {guardando ? 'Guardando...' : 'Confirmar asignación'}
+                        {guardando ? 'Guardando…' : 'Asignar Proyecto'}
                       </button>
                     </div>
                   </div>
