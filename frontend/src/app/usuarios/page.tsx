@@ -74,7 +74,14 @@ export default function UsuariosPage() {
   const [nuevo,       setNuevo]       = useState({ usuario: '', clave: '' });
 
   useEffect(() => {
-    Promise.all([getProfes(), getDeportistas()]).then(([listaProfes, deps]) => {
+    Promise.all([
+      getProfes(),
+      getDeportistas(),
+      // Carga meta desde Supabase (fuente de verdad cross-device)
+      fetch('/api/jornada-proyecto', { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : [])
+        .catch(() => [] as any[]),
+    ]).then(([listaProfes, deps, metaRows]) => {
       const inicial = listaProfes.length
         ? listaProfes
         : PROFES_INICIALES.map(p => ({ ...p, id: uuid() }));
@@ -108,11 +115,39 @@ export default function UsuariosPage() {
         });
       setProyRows(rows);
 
-      // Cargar meta de localStorage
+      // Cargar meta: base = localStorage, encima = datos de Supabase (sobrescribe por proyecto)
+      let metaBase: Record<string, ProyMeta> = {};
       try {
         const raw = localStorage.getItem(PROYECTOS_META_KEY);
-        if (raw) setMeta(JSON.parse(raw));
+        if (raw) metaBase = JSON.parse(raw);
       } catch {}
+
+      if (Array.isArray(metaRows) && metaRows.length > 0) {
+        // Índice Supabase por nombre de proyecto
+        const sbByProy: Record<string, any> = {};
+        metaRows.forEach((r: any) => { sbByProy[r.proyecto] = r; });
+
+        // Para cada fila de proyecto conocida, combinar local + Supabase
+        // Supabase gana si tiene valores no vacíos; si está vacío, usa local
+        const metaFinal: Record<string, ProyMeta> = { ...metaBase };
+        rows.forEach(row => {
+          const k = `${row.programa}::${row.proyecto}`;
+          const sb = sbByProy[row.proyecto];
+          if (!sb) return; // sin dato en Supabase → conserva lo que haya en local
+          const local = metaBase[k] ?? { nombreFormador: '', sede: '', dias: [], edades: [] };
+          metaFinal[k] = {
+            nombreFormador: sb.nombre_formador || local.nombreFormador || '',
+            sede:           sb.sede            || local.sede            || '',
+            dias:           Array.isArray(sb.dias)   && sb.dias.length   > 0 ? sb.dias   : (local.dias   ?? []),
+            edades:         Array.isArray(sb.edades) && sb.edades.length > 0 ? sb.edades : (local.edades ?? []),
+          };
+        });
+        setMeta(metaFinal);
+        try { localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(metaFinal)); } catch {}
+      } else {
+        // Supabase vacío → usar localStorage tal cual
+        setMeta(metaBase);
+      }
     });
   }, []);
 
@@ -174,7 +209,7 @@ export default function UsuariosPage() {
   async function guardar() {
     setGuardando(true); setErrorGuard('');
 
-    // 1. Meta → localStorage
+    // 1. Meta → localStorage + Supabase (fuente de verdad cross-device)
     const newMeta: Record<string, ProyMeta> = { ...meta };
     Object.entries(metaEdits).forEach(([k, edits]) => {
       newMeta[k] = {
@@ -190,6 +225,28 @@ export default function UsuariosPage() {
     localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(newMeta));
     setMeta(newMeta);
     setMetaEdits({});
+
+    // 1b. Guardar meta en Supabase para persistencia cross-device
+    const proyectosConMeta = Object.entries(newMeta);
+    if (proyectosConMeta.length > 0) {
+      await Promise.allSettled(
+        proyectosConMeta.map(([k, m]) => {
+          const proy = k.split('::').slice(1).join('::');
+          if (!proy) return Promise.resolve();
+          return fetch('/api/jornada-proyecto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              proyecto:        proy,
+              dias:            m.dias,
+              sede:            m.sede,
+              nombre_formador: m.nombreFormador,
+              edades:          m.edades,
+            }),
+          }).catch(() => {});
+        })
+      );
+    }
 
     // 2. Profes → Supabase
     if (Object.keys(profeEdits).length > 0) {

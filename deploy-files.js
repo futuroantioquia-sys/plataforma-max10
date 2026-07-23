@@ -12,7 +12,7 @@ const crypto  = require('crypto');
 const TOKEN      = process.argv[2] || process.env.VERCEL_TOKEN;
 const PROJ_NAME  = 'plataforma-max10';
 const TEAM_ID    = 'team_0prQNtpTrByeCVB2Xi58AcKG';
-const PROJECT_ID = 'prj_igzwIM2OLpMSXADIIBgsMmQKOorl';
+const PROJECT_ID = 'prj_igzwlM2OLpM5XADIIBgsMmQKOorl';
 const FRONTEND   = path.join(__dirname, 'frontend');
 
 // Excluir estas rutas
@@ -23,8 +23,9 @@ const EXCLUDE = [
 ];
 
 const ENV_VARS = [
-  { key: 'NEXT_PUBLIC_SUPABASE_URL',      value: 'https://fykdyalpuydkwfjqguip.supabase.co' },
-  { key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', value: 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0' },
+  { key: 'NEXT_PUBLIC_SUPABASE_URL',      value: 'https://gsovtgtrsqzoruvgmhed.supabase.co' },
+  { key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', value: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4' },
+  { key: 'NEXT_PUBLIC_APP_URL',            value: 'https://plataforma-max10.vercel.app' },
 ];
 
 if (!TOKEN) { console.error('Falta el token.'); process.exit(1); }
@@ -95,6 +96,7 @@ async function createDeployment(files) {
   const fileList = files.map(f => ({ file: f.file, sha: f.sha, size: f.size }));
 
   const body = {
+    name:      PROJ_NAME,
     project:   PROJECT_ID,
     target:    'production',
     files:     fileList,
@@ -112,9 +114,33 @@ async function createDeployment(files) {
 
 // ── Main ────────────────────────────────────────────────────────
 
+// ── Actualizar variables de entorno ─────────────────────────────
+
+async function setEnvVars() {
+  console.log('\n🔧 Actualizando variables de entorno en Vercel...');
+  const existing = await apiRaw('GET', `/v10/projects/${PROJECT_ID}/env${QP}`);
+  const existingMap = {};
+  if (existing.status === 200 && existing.body.envs) {
+    for (const e of existing.body.envs) existingMap[e.key] = e.id;
+  }
+  for (const env of ENV_VARS) {
+    const envBody = { ...env, type: 'plain', target: ['production', 'preview'] };
+    if (existingMap[env.key]) {
+      const r = await apiRaw('PATCH', `/v10/projects/${PROJECT_ID}/env/${existingMap[env.key]}${QP}`, envBody);
+      console.log(`   ${r.status < 300 ? '✅' : '⚠️ '} ${env.key} ${r.status < 300 ? 'actualizada' : r.status}`);
+    } else {
+      const r = await apiRaw('POST', `/v10/projects/${PROJECT_ID}/env${QP}`, envBody);
+      console.log(`   ${r.status < 300 ? '✅' : '⚠️ '} ${env.key} ${r.status < 300 ? 'creada' : r.status}`);
+    }
+  }
+}
+
 async function main() {
+  await setEnvVars();
   console.log('\n📁 Recopilando archivos del frontend...');
-  const files = collectFiles(FRONTEND, FRONTEND);
+  // Usar directorio padre como base → rutas incluyen "frontend/" prefix
+  // Vercel project tiene rootDirectory="frontend", así que los archivos deben llegar con ese prefix
+  const files = collectFiles(FRONTEND, path.dirname(FRONTEND));
   console.log(`   ${files.length} archivos encontrados`);
 
   console.log('\n📤 Subiendo archivos a Vercel...');

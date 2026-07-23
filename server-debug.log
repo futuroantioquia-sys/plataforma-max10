@@ -1,0 +1,12 @@
+Iniciando servidor con captura de errores... 
+Fecha: mar. 21/07/2026 14:39:57,74 
+========================= 
+
+> futuro-antioquia-web@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.4
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...

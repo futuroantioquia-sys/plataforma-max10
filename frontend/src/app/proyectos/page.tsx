@@ -83,6 +83,7 @@ export default function GestionProyectosPage() {
   const [diasEdits,   setDiasEdits]   = useState<Record<string, number[]>>({});
   const [guardado,    setGuardado]    = useState(false);
   const [tab,         setTab]         = useState<'proyectos'|'sedes'>('proyectos');
+  const [errorDias,   setErrorDias]   = useState<string | null>(null);
 
   // Acordeón sedes: set de claves abiertas "programa::sede"
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
@@ -91,7 +92,25 @@ export default function GestionProyectosPage() {
     getDeportistas().then(lista => { if (lista.length) setDeportistas(lista); });
     try {
       const rawMeta = localStorage.getItem(PROYECTOS_META_KEY);
-      if (rawMeta) setMeta(JSON.parse(rawMeta));
+      if (rawMeta) {
+        const parsed = JSON.parse(rawMeta);
+        setMeta(parsed);
+        // Sincronizar días del localStorage → Supabase automáticamente al cargar.
+        // Así el profe en otro dispositivo ve los días aunque el admin no haya pulsado "Guardar".
+        Object.entries(parsed).forEach(([compKey, v]: [string, any]) => {
+          const dias = v?.dias;
+          if (Array.isArray(dias) && dias.length > 0) {
+            const proy = compKey.split('::').slice(1).join('::');
+            if (proy) {
+              fetch('/api/jornada-proyecto', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ proyecto: proy, dias }),
+              }).catch(() => {});
+            }
+          }
+        });
+      }
     } catch {}
   }, []);
 
@@ -183,16 +202,37 @@ export default function GestionProyectosPage() {
       : [...curr, jsDay].sort();
     setDiasEdits(prev => ({ ...prev, [key(row)]: newDias }));
 
-    // Auto-guardar días inmediatamente — no esperar al botón Guardar
+    // 1. Guardar en localStorage (acceso rápido mismo dispositivo)
     try {
       const raw = localStorage.getItem(PROYECTOS_META_KEY);
       const currentMeta = raw ? JSON.parse(raw) : {};
       const k = key(row);
       currentMeta[k] = { ...(currentMeta[k] ?? {}), dias: newDias };
       localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(currentMeta));
-      // Clave de acceso rápido para asistencia (sin prefijo de programa)
       localStorage.setItem(`futuro_dias_${row.proyecto}`, JSON.stringify(newDias));
     } catch {}
+
+    // 2. Guardar en Supabase inmediatamente — para que el profe en otro dispositivo lo vea
+    setErrorDias(null);
+    fetch('/api/jornada-proyecto', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ proyecto: row.proyecto, dias: newDias }),
+    })
+      .then(r => {
+        if (!r.ok) {
+          r.text().then(t => {
+            console.error('[toggleDiaRow] error:', r.status, t);
+            setErrorDias(`Error al guardar días en servidor (${r.status}). Use "Guardar cambios" para reintentar.`);
+            setTimeout(() => setErrorDias(null), 6000);
+          });
+        }
+      })
+      .catch(err => {
+        console.error('[toggleDiaRow] red:', err);
+        setErrorDias('Sin conexión. Los días se guardarán al hacer clic en "Guardar cambios".');
+        setTimeout(() => setErrorDias(null), 6000);
+      });
   }
 
   function toggleAbierto(k: string) {
@@ -272,6 +312,25 @@ export default function GestionProyectosPage() {
         localStorage.setItem(`futuro_dias_${proy}`, JSON.stringify((v as any).dias));
       }
     });
+
+    // Sincronizar TODOS los días al guardar → garantiza que el profe los vea en otro dispositivo
+    const proyConDias = new Map<string, number[]>();
+    Object.entries(newMeta).forEach(([compKey, v]) => {
+      const proy = compKey.split('::').slice(1).join('::');
+      if (proy && Array.isArray((v as any)?.dias) && (v as any).dias.length > 0) {
+        proyConDias.set(proy, (v as any).dias);
+      }
+    });
+    proyConDias.forEach((dias, proyecto) => {
+      fetch('/api/jornada-proyecto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proyecto, dias }),
+      })
+        .then(r => { if (!r.ok) console.error('[guardar] sync días', proyecto, r.status); })
+        .catch(e => console.error('[guardar] sync días', proyecto, e));
+    });
+
     setDeportistas(updated);
     setMeta(newMeta);
     setEdits({});
@@ -331,6 +390,14 @@ export default function GestionProyectosPage() {
           <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
         </div>
       </header>
+
+      {/* ── Banner error días ── */}
+      {errorDias && (
+        <div className="bg-red-100 border border-red-400 text-red-800 text-sm px-4 py-2 flex items-center justify-between">
+          <span>⚠️ {errorDias}</span>
+          <button onClick={() => setErrorDias(null)} className="ml-4 text-red-600 font-bold">✕</button>
+        </div>
+      )}
 
       {/* ── Tabs ── */}
       <div className="px-4 pt-4 flex gap-2 max-w-[1300px] mx-auto">

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Calendar, BarChart2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getAsistencia, getFoto } from '@/lib/db';
+import { getDeportistas, getAsistenciaDeportista, getFoto } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import LoadingBall from '@/components/LoadingBall';
 
@@ -77,14 +77,23 @@ export default function AsistenciaAtletaPage() {
   const [certHasta,  setCertHasta]  = useState(11);  // Diciembre
 
   useEffect(() => {
-    getDeportistas().then(lista => {
-      const found = lista.find(d => d.id === id);
-      if (found) setDep(found);
-    });
+    // Cargar foto en paralelo
     getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {
       try { const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); if (fotos[id]) setFoto(fotos[id]); } catch {}
     });
-    getAsistencia().then(data => { if (Object.keys(data).length) setAsistencia(data as any); });
+    // Cargar deportista primero → luego asistencia filtrada (pequeña, rápida en móvil)
+    getDeportistas().then(lista => {
+      const found = lista.find(d => d.id === id);
+      if (!found) return;
+      setDep(found);
+      const k = Object.keys(found._columnas).find(k => /^proy/i.test(k));
+      const proy = k ? found._columnas[k] : '';
+      if (proy) {
+        getAsistenciaDeportista(proy, id).then(data => {
+          if (Object.keys(data).length) setAsistencia(data as any);
+        });
+      }
+    });
   }, [id]);
 
   /* Datos derivados del deportista (seguros con dep ?? null) */

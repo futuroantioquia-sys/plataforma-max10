@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Camera } from 'lucide-react';
 import LoadingBall from '@/components/LoadingBall';
@@ -183,14 +185,16 @@ function construirFechaNac(cols: Record<string, string>): string | null {
   return partes.length ? `📅 ${partes.join(' de ')}` : null;
 }
 
-export default function EstadoCuentaPage() {
+function EstadoCuentaContent() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const puedeEditar = searchParams.get('edit') === '1';
 
-  const [dep,      setDep]     = useState<Deportista | null>(null);
-  const [foto,     setFoto]    = useState<string | null>(null);
+  const [dep,          setDep]          = useState<Deportista | null>(null);
+  const [foto,         setFoto]         = useState<string | null>(null);
+  const [guardandoFoto, setGuardandoFoto] = useState(false);
+  const [fotoGuardada,  setFotoGuardada]  = useState(false);
   const [pagos,    setPagos]   = useState<PagoRow[]>([]);
   const [editIdx,       setEditIdx]       = useState<number | null>(null);
   const [editForm,      setEditForm]      = useState<Partial<PagoRow>>({});
@@ -199,16 +203,40 @@ export default function EstadoCuentaPage() {
   const [confirmRevert, setConfirmRevert] = useState<number | null>(null);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
+  /** Redimensiona la imagen a máx 300px de ancho y la convierte a JPEG 65%.
+   *  Un selfie de celular pasa de ~2-4MB → ~25-50KB, que cabe sin problema en localStorage. */
+  function comprimirFoto(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX_W = 300;
+        const ratio = Math.min(1, MAX_W / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.65));
+      };
+      img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    });
+  }
+
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const base64 = ev.target?.result as string;
-      setFoto(base64);
-      saveFoto(id, base64).catch(console.error); // guarda en Supabase + localStorage
-    };
-    reader.readAsDataURL(file);
+    setGuardandoFoto(true);
+    comprimirFoto(file)
+      .then(base64 => {
+        setFoto(base64);
+        return saveFoto(id, base64);
+      })
+      .then(() => { setFotoGuardada(true); setTimeout(() => setFotoGuardada(false), 2500); })
+      .catch(console.error)
+      .finally(() => setGuardandoFoto(false));
   }
 
   /* ─── Cargar deportista y pagos guardados ─── */
@@ -494,123 +522,103 @@ export default function EstadoCuentaPage() {
         <div className="rounded-2xl bg-gradient-to-br from-[#0a2e12] via-[#052a10] to-black p-4 shadow-xl">
           <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={subirFoto}/>
 
-          {/* Fila superior: foto 3×4 + info + código */}
-          <div className="flex items-stretch gap-3">
+          {/* Fila 1: foto + nombre/datos + código */}
+          <div className="flex items-start gap-3 mb-3">
 
             {/* Foto 3×4 */}
-            <button onClick={() => fotoInputRef.current?.click()}
-              className="relative flex-shrink-0 group">
-              <div className="w-[72px] h-[96px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex flex-col items-center justify-center">
-                {foto
-                  ? <img src={foto} alt="" className="w-full h-full object-cover object-top"/>
-                  : <>
-                      <span className="text-white font-black text-3xl select-none">{initials}</span>
-                      <Camera className="w-4 h-4 text-white/40 mt-1"/>
-                    </>
-                }
-                <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                  <Camera className="w-6 h-6 text-white"/>
+            <div className="flex-shrink-0">
+              <button onClick={() => fotoInputRef.current?.click()} className="relative group block">
+                <div className="w-[64px] h-[85px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex flex-col items-center justify-center">
+                  {foto
+                    ? <img src={foto} alt="" className="w-full h-full object-cover object-top"/>
+                    : <>
+                        <span className="text-white font-black text-2xl select-none">{initials}</span>
+                        <Camera className="w-3.5 h-3.5 text-white/40 mt-1"/>
+                      </>
+                  }
+                  <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                    <Camera className="w-5 h-5 text-white"/>
+                  </div>
                 </div>
-              </div>
-            </button>
+              </button>
+              {/* Indicador guardado de foto */}
+              {guardandoFoto && <p className="text-yellow-300 text-[9px] font-bold text-center mt-1">Guardando…</p>}
+              {fotoGuardada  && <p className="text-green-300 text-[9px] font-bold text-center mt-1">✓ Guardada</p>}
+            </div>
 
-            {/* Nombre + filas de datos + botones */}
-            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide">
+            {/* Nombre + filas de datos */}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-white font-black text-sm leading-tight uppercase tracking-wide mb-2">
                 {nombre}
               </h1>
-
-              <div className="flex gap-2 items-start">
-                {/* Filas de datos */}
-                <div className="flex-1 min-w-0 space-y-[5px]">
-                  {[
-                    { label: 'PROGRAMA',    val: catVal },
-                    { label: 'PROYECTO',    val: proyecto },
-                    { label: 'FECHA AFIL.', val: fechaAfil ? formatFecha(fechaAfil) : '' },
-                    { label: 'MENSUALIDAD', val: tarifa },
-                  ].filter(r => r.val).map(({ label, val }) => (
-                    <div key={label} className="flex items-center gap-2">
-                      <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
-                        {label}
-                      </span>
-                      <span className="text-white text-[11px] font-semibold truncate">
-                        {String(val).toUpperCase()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Botones 2×2 */}
-                <div className="flex-shrink-0 grid grid-cols-2 gap-1.5">
-                  {[
-                    { label: 'PAGOS',      href: null },
-                    { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia` },
-                    { label: 'INFORMES',   href: '/evaluaciones' },
-                    { label: 'MENSAJES',   href: '/mensajes' },
-                  ].map(({ label, href }) => (
-                    <button key={label}
-                      onClick={() => href && router.push(href)}
-                      className={cn(
-                        'transition rounded-lg py-2 px-2 text-[9px] font-black tracking-wide text-center leading-tight',
-                        !href
-                          ? 'bg-[#16a34a] text-white'
-                          : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
-                      )}>
+              <div className="space-y-[4px]">
+                {[
+                  { label: 'PROGRAMA',    val: catVal },
+                  { label: 'PROYECTO',    val: proyecto },
+                  { label: 'FECHA AFIL.', val: fechaAfil ? formatFecha(fechaAfil) : '' },
+                  { label: 'MENSUALIDAD', val: tarifa },
+                ].filter(r => r.val).map(({ label, val }) => (
+                  <div key={label} className="flex items-center gap-1.5">
+                    <span className="bg-[#16a34a] text-white text-[9px] font-black px-1.5 py-[2px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
                       {label}
-                    </button>
-                  ))}
-                </div>
+                    </span>
+                    <span className="text-white text-[10px] font-semibold truncate">
+                      {String(val).toUpperCase()}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
             {/* CÓDIGO */}
             {codVal && (
-              <div className="flex-shrink-0 text-center self-start">
+              <div className="flex-shrink-0 text-center">
                 <p className="text-white/60 text-[9px] font-black tracking-widest uppercase mb-1">CÓDIGO</p>
-                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
+                <div className="bg-[#16a34a] text-white font-black text-base px-2 py-1.5 rounded-xl min-w-[52px] text-center shadow-md leading-none">
                   {codVal}
                 </div>
               </div>
             )}
           </div>
 
+          {/* Fila 2: botones de acción en fila completa */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              { label: 'PAGOS',      href: null },
+              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia` },
+              { label: 'INFORMES',   href: '/evaluaciones' },
+              { label: 'MENSAJES',   href: '/mensajes' },
+            ].map(({ label, href }) => (
+              <button key={label}
+                onClick={() => href && router.push(href)}
+                className={cn(
+                  'transition rounded-lg py-2 px-1 text-[9px] font-black tracking-wide text-center leading-tight',
+                  !href
+                    ? 'bg-[#16a34a] text-white'
+                    : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
+                )}>
+                {label}
+              </button>
+            ))}
+          </div>
+
         </div>
 
         {/* ── RESUMEN KPI ── */}
-        <div className="grid grid-cols-4 gap-2">
-          <div className="bg-gray-100 border border-gray-300 rounded-xl p-3 flex items-center gap-2">
-            <div className="w-9 h-9 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-base">{cargados}</span>
+        <div className="grid grid-cols-4 gap-1.5">
+          {[
+            { n: cargados,   label: 'Cargados',  numBg: 'bg-gray-500',  cardBg: 'bg-gray-100',  border: 'border-gray-300',  text: 'text-gray-600'  },
+            { n: pagados,    label: 'Pagados',   numBg: 'bg-green-500', cardBg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-700' },
+            { n: pendientes, label: 'Pendient.', numBg: 'bg-red-500',   cardBg: 'bg-red-50',    border: 'border-red-200',   text: 'text-red-700'   },
+            { n: proximos,   label: 'Próximos',  numBg: 'bg-blue-400',  cardBg: 'bg-blue-50',   border: 'border-blue-200',  text: 'text-blue-700'  },
+          ].map(({ n, label, numBg, cardBg, border, text }) => (
+            <div key={label} className={`${cardBg} ${border} border rounded-xl p-2 text-center`}>
+              <div className={`${numBg} rounded-lg w-7 h-7 flex items-center justify-center mx-auto mb-1`}>
+                <span className="text-white font-black text-sm">{n}</span>
+              </div>
+              <p className={`${text} font-black text-[9px] leading-tight`}>{label}</p>
             </div>
-            <div>
-              <p className="text-gray-600 font-black text-xs leading-tight">Cargados</p>
-            </div>
-          </div>
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
-            <div className="w-9 h-9 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-base">{pagados}</span>
-            </div>
-            <div>
-              <p className="text-green-700 font-black text-xs leading-tight">Pagados</p>
-            </div>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
-            <div className="w-9 h-9 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-base">{pendientes}</span>
-            </div>
-            <div>
-              <p className="text-red-700 font-black text-xs leading-tight">Pendientes</p>
-              {totalPendiente > 0 && <p className="text-red-500 text-[10px] font-bold">${totalPendiente.toLocaleString('es-CO').replace(/,/g,'.')}</p>}
-            </div>
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-2">
-            <div className="w-9 h-9 bg-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-base">{proximos}</span>
-            </div>
-            <div>
-              <p className="text-blue-700 font-black text-xs leading-tight">Próximos</p>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* ── SELECTOR AÑO ── */}
@@ -627,18 +635,19 @@ export default function EstadoCuentaPage() {
         </div>
 
         {/* ── TABLA ── */}
-        <div className="rounded-2xl overflow-hidden shadow-md border border-gray-200">
-          <table className="w-full border-collapse text-sm">
+        <div className="rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+          <table className="border-collapse text-sm" style={{ minWidth: 468, width: '100%' }}>
             <thead>
               <tr>
                 {[
-                  { label: 'FECHA',        w: '16%' },
-                  { label: 'DESCRIPCIÓN',  w: '22%' },
-                  { label: 'V. PAGADO',    w: '20%' },
-                  { label: 'DETALLE',      w: '20%' },
-                  { label: 'ESTADO PAGO',  w: '22%' },
+                  { label: 'FECHA',        w: 88  },
+                  { label: 'DESCRIPCIÓN',  w: 120 },
+                  { label: 'V. PAGADO',    w: 84  },
+                  { label: 'DETALLE',      w: 104 },
+                  { label: 'ESTADO PAGO',  w: 72  },
                 ].map(({ label, w }) => (
-                  <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '10px 8px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', width: w }}>
+                  <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '10px 6px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', minWidth: w, width: w }}>
                     {label}
                   </th>
                 ))}
@@ -657,9 +666,9 @@ export default function EstadoCuentaPage() {
                     <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
                       <input
                         value={formatFecha(row.fecha)}
-                        onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, fecha: e.target.value} : r); savePagos(u); }}
-                        className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
-                        placeholder="DD/MM/AAAA"
+                        onChange={e => { const ri = realIdxDe(idx); if (ri === -1) return; const u = pagos.map((r,i) => i===ri ? {...r, fecha: e.target.value} : r); savePagos(u); }}
+                        className="w-full text-center font-semibold text-[10px] text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                        placeholder="DD/MM/AA"
                       />
                     </td>
 
@@ -667,8 +676,8 @@ export default function EstadoCuentaPage() {
                     <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
                       <input
                         value={row.destino}
-                        onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, destino: e.target.value} : r); savePagos(u); }}
-                        className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                        onChange={e => { const ri = realIdxDe(idx); if (ri === -1) return; const u = pagos.map((r,i) => i===ri ? {...r, destino: e.target.value} : r); savePagos(u); }}
+                        className="w-full text-center font-semibold text-[10px] text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
                         placeholder="—"
                       />
                     </td>
@@ -679,7 +688,7 @@ export default function EstadoCuentaPage() {
                         value={ensurePeso(row.vPagado)}
                         readOnly={!isPaid}
                         onChange={e => { if (!isPaid) return; const u = pagos.map((r,i) => i===idx ? {...r, vPagado: e.target.value} : r); savePagos(u); }}
-                        className={cn('w-full text-center font-bold text-xs bg-transparent focus:outline-none px-1 py-1',
+                        className={cn('w-full text-center font-bold text-[10px] bg-transparent focus:outline-none px-1 py-1',
                           isPaid ? 'text-[#374151]' : 'text-[#9ca3af] cursor-default')}
                         placeholder="—"
                       />
@@ -716,6 +725,7 @@ export default function EstadoCuentaPage() {
             </tbody>
 
           </table>
+          </div>
         </div>
 
         {/* ── NOTA ── */}
@@ -848,5 +858,13 @@ export default function EstadoCuentaPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function EstadoCuentaPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen"><LoadingBall /></div>}>
+      <EstadoCuentaContent />
+    </Suspense>
   );
 }

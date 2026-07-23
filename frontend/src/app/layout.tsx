@@ -15,7 +15,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <body className={inter.className}>
-        {children}
+        {/* Wrapper con padding-bottom para que los botones flotantes nunca tapen el último contenido interactivo */}
+        <div style={{ paddingBottom: '8rem' }}>
+          {children}
+        </div>
         <BotonInicioFlotante />
       </body>
     </html>

@@ -149,9 +149,19 @@ export default function LoginPage() {
         // ── 2. Búsqueda rápida por código (1 query, no 1.139 filas) ──
         const candidatos = await buscarPorCodigo(u);
         const dep = candidatos.find(d => {
-          const cols   = d._columnas ?? {};
-          const docKey = Object.keys(cols).find(k => RX_DOC.test(k.trim().normalize('NFC')));
-          const doc    = docKey ? normDoc(String(cols[docKey]).trim()) : '';
+          const cols = d._columnas ?? {};
+          // Prioridad: clave con "num" + "doc" y sin "acudiente" (NUMERO DE DOCUMENTO)
+          const docKey =
+            Object.keys(cols).find(k => {
+              const kn = k.trim().normalize('NFC');
+              return /num.*doc|c[eé]dul|c\.c\b|identif|nit\b|cc\b/i.test(kn) && !/acudiente/i.test(kn);
+            }) ??
+            // Fallback: cualquier clave con "doc" pero que no sea tipo ni acudiente
+            Object.keys(cols).find(k => {
+              const kn = k.trim().normalize('NFC');
+              return /\bdoc\b/i.test(kn) && !/tipo|acudiente/i.test(kn);
+            });
+          const doc = docKey ? normDoc(String(cols[docKey]).trim()) : '';
           return doc === cNorm;
         });
 

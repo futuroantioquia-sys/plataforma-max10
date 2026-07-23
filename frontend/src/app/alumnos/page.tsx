@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -10,7 +10,11 @@ import {
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getDeportistasPorProyecto, saveDeportistas } from '@/lib/db';
+import {
+  getDeportistas, getDeportistasPorProyecto, saveDeportistas,
+  getCalComPorProyecto, saveCalCom,
+  getFotosProfes, saveFotoProfe,
+} from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 
 const FOTOS_PROFE_KEY = 'futuro_fotos_profes';
@@ -306,6 +310,8 @@ function DashboardProyecto({
   const inputRef      = useRef<HTMLInputElement>(null);
   const printRef      = useRef<HTMLDivElement>(null);
   const tableScrollRef= useRef<HTMLDivElement>(null);
+  const realTheadRef  = useRef<HTMLTableSectionElement>(null);
+  const stickyBarRef  = useRef<HTMLDivElement>(null);
   const profes   = [...new Set(lista.map(d => colProfe(d)).filter(Boolean))];
   const profe    = profes[0] ?? '';
   const fotoP    = profe ? fotosProfe[profe] : null;
@@ -313,6 +319,7 @@ function DashboardProyecto({
   const [busqueda,    setBusqueda]   = useState('');
   const [vistaTabla,  setVistaTabla] = useState(true);
   const [descargando, setDescargando]= useState(false);
+  const [showSticky,  setShowSticky] = useState(false);
 
   // ── Calificaciones (mismo localStorage que asistencia) ─────────
   const mesKey = (() => {
@@ -333,12 +340,103 @@ function DashboardProyecto({
       return raw ? JSON.parse(raw) : {};
     } catch { return {}; }
   });
+
+  // ── Carga CAL y COM desde Supabase al montar el componente ────
+  // Mergea con localStorage: Supabase sobreescribe, localStorage cubre gaps de red.
+  // El profe y el admin ven los mismos datos porque ambos leen de la misma tabla.
+  useEffect(() => {
+    if (!proy) return;
+    getCalComPorProyecto(proy, mesKey)
+      .then(({ cal, com }) => {
+        if (Object.keys(cal).length > 0) setCalMap(cal);
+        if (Object.keys(com).length > 0) setComMap(com);
+      })
+      .catch(() => {/* red no disponible — localStorage ya inicializó el estado */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proy]);
+
+  // ── Sticky thead clone — se activa cuando el thead real sube por encima del nav ──
+  useEffect(() => {
+    const container = tableScrollRef.current;
+    function sync() {
+      if (!realTheadRef.current) return;
+      const navEl     = document.querySelector('header');
+      const navBottom = navEl ? navEl.getBoundingClientRect().bottom : 64;
+      const theadTop  = realTheadRef.current.getBoundingClientRect().top;
+      setShowSticky(theadTop < navBottom);
+      if (stickyBarRef.current && container) {
+        const rect = container.getBoundingClientRect();
+        stickyBarRef.current.style.top   = `${navBottom}px`;
+        stickyBarRef.current.style.left  = `${rect.left}px`;
+        stickyBarRef.current.style.width = `${rect.width}px`;
+        stickyBarRef.current.style.right = 'auto';
+        stickyBarRef.current.scrollLeft  = container.scrollLeft;
+      }
+    }
+    window.addEventListener('scroll', sync, { passive: true });
+    container?.addEventListener('scroll', sync, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', sync);
+      container?.removeEventListener('scroll', sync);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Posicionar el clone exactamente al montarse (antes del primer paint)
+  useLayoutEffect(() => {
+    if (!showSticky || !stickyBarRef.current || !tableScrollRef.current) return;
+    const navEl     = document.querySelector('header');
+    const navBottom = navEl ? navEl.getBoundingClientRect().bottom : 64;
+    const rect      = tableScrollRef.current.getBoundingClientRect();
+    stickyBarRef.current.style.top   = `${navBottom}px`;
+    stickyBarRef.current.style.left  = `${rect.left}px`;
+    stickyBarRef.current.style.width = `${rect.width}px`;
+    stickyBarRef.current.style.right = 'auto';
+    stickyBarRef.current.scrollLeft  = tableScrollRef.current.scrollLeft;
+    // Copiar anchos exactos del thead real al clone para alineación perfecta.
+    // visibility:hidden mantiene dimensiones válidas, getBoundingClientRect() funciona.
+    if (realTheadRef.current) {
+      const realThs  = Array.from(realTheadRef.current.querySelectorAll('th')) as HTMLElement[];
+      const cloneThs = Array.from(stickyBarRef.current.querySelectorAll('th')) as HTMLElement[];
+      let stickyLeft = 0;
+      let totalWidth = 0;
+      realThs.forEach((th, i) => {
+        const w = Math.ceil(th.getBoundingClientRect().width);
+        totalWidth += w;
+        if (cloneThs[i]) {
+          cloneThs[i].style.width    = `${w}px`;
+          cloneThs[i].style.minWidth = `${w}px`;
+          // Recalcular left de celdas sticky según ancho real medido
+          if (cloneThs[i].style.position === 'sticky') {
+            cloneThs[i].style.left = `${stickyLeft}px`;
+            stickyLeft += w;
+          }
+        }
+      });
+      // table-layout:fixed es crítico: sin él el browser redistribuye los anchos
+      // ignorando los que asignamos (porque el clone no tiene <tbody>)
+      const cloneTable = stickyBarRef.current.querySelector('table') as HTMLElement | null;
+      if (cloneTable) {
+        cloneTable.style.tableLayout = 'fixed';
+        cloneTable.style.width       = `${totalWidth}px`;
+        cloneTable.style.minWidth    = `${totalWidth}px`;
+      }
+    }
+  }, [showSticky]);
+
   function setCal(depId: string, value: string) {
     setCalMap(prev => {
       const updated = { ...prev, [depId]: value };
       try { localStorage.setItem(calStorageKey, JSON.stringify(updated)); } catch {}
       return updated;
     });
+    // Lee COM desde localStorage (siempre actualizado por saveCalCom de forma sincrónica)
+    // en lugar del estado React, para evitar stale closure cuando COM cambió en el mismo batch.
+    const latestCom = (() => {
+      try { return (JSON.parse(localStorage.getItem(comStorageKey) || '{}') as Record<string, string>)[depId] ?? ''; }
+      catch { return ''; }
+    })();
+    saveCalCom(proy, mesKey, depId, value, latestCom).catch(() => {});
   }
   function setCom(depId: string, value: string) {
     setComMap(prev => {
@@ -346,6 +444,13 @@ function DashboardProyecto({
       try { localStorage.setItem(comStorageKey, JSON.stringify(updated)); } catch {}
       return updated;
     });
+    // Lee CAL desde localStorage (siempre actualizado por saveCalCom de forma sincrónica)
+    // en lugar del estado React, para evitar stale closure cuando CAL cambió en el mismo batch.
+    const latestCal = (() => {
+      try { return (JSON.parse(localStorage.getItem(calStorageKey) || '{}') as Record<string, string>)[depId] ?? ''; }
+      catch { return ''; }
+    })();
+    saveCalCom(proy, mesKey, depId, latestCal, value).catch(() => {});
   }
 
   // ── Descarga PDF tamaño carta ─────────────────────────────────
@@ -545,6 +650,40 @@ function DashboardProyecto({
   return (
     <div className="space-y-3" ref={printRef}>
 
+      {/* ── Sticky thead clone (fijo bajo el nav cuando el original sale de vista) ── */}
+      {showSticky && (
+        <>
+          <style dangerouslySetInnerHTML={{ __html: '[data-sticky-clone]::-webkit-scrollbar{display:none}[data-hidden-thead] th{position:relative!important;z-index:15!important;background:#ffffff!important;color:transparent!important;border-color:transparent!important}[data-hidden-thead] tr{background:#ffffff!important}' }} />
+          <div
+            ref={stickyBarRef}
+            data-sticky-clone=""
+            style={{ position: 'fixed', top: 64, left: 0, right: 0, zIndex: 30, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', pointerEvents: 'none' }}
+          >
+            <table className="text-xs border-collapse" style={{ minWidth: '100%' }}>
+              <thead>
+                <tr style={{ background: '#16a34a' }}>
+                  <th className="border border-[#16375a] px-2 py-2 text-[10px] text-white/40 select-none text-center"
+                    style={{ background: '#16a34a', width: 36, minWidth: 36, position: 'sticky', left: 0, zIndex: 4 }}>#</th>
+                  {cols.map(c => (
+                    <th key={c.key}
+                      className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap"
+                      style={{ minWidth: c.minW, textAlign: c.center ? 'center' : 'left', background: '#16a34a',
+                        ...(c.key === 'nombre' ? { position: 'sticky', left: 36, zIndex: 3, boxShadow: '2px 0 4px rgba(0,0,0,0.15)' } : {}) }}>
+                      {c.label}
+                    </th>
+                  ))}
+                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left" style={{ minWidth: 130, background: '#16a34a' }}>
+                    POSICIÓN <span className="text-white/40 font-normal normal-case">(máx. 3)</span>
+                  </th>
+                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center" style={{ minWidth: 90, background: '#7c3aed' }}>CAL</th>
+                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center" style={{ minWidth: 80, background: '#1d4ed8' }}>COM</th>
+                </tr>
+              </thead>
+            </table>
+          </div>
+        </>
+      )}
+
       {/* ── Hero profe + stats ── */}
       <div className={cn('rounded-2xl shadow-sm bg-gradient-to-br', pal.grad)}>
         <div className="p-4 text-white">
@@ -642,15 +781,15 @@ function DashboardProyecto({
           </table>
 
           {/* Tabla */}
-          <div ref={tableScrollRef} className="overflow-x-auto" style={{ maxHeight: '65vh', overflowY: 'auto', overflowX: 'visible' }}>
+          <div ref={tableScrollRef} className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="text-xs border-collapse" style={{ minWidth: '100%' }}>
-              <thead className="sticky top-0 z-10">
+              <thead ref={realTheadRef} className="z-10" {...(showSticky ? { 'data-hidden-thead': '' } : {})}>
                 <tr style={{ background: '#16a34a' }}>
-                  <th className="border border-[#16375a] px-2 py-2 text-[10px] text-white/40 w-9 select-none text-center">#</th>
+                  <th className="border border-[#16375a] px-2 py-2 text-[10px] text-white/40 w-9 select-none text-center sticky left-0 z-20" style={{ background: '#16a34a' }}>#</th>
                   {cols.map(c => (
                     <th key={c.key}
-                      className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap"
-                      style={{ minWidth: c.minW, textAlign: c.center ? 'center' : 'left' }}>
+                      className={`border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap${c.key === 'nombre' ? ' sticky left-9 z-20' : ''}`}
+                      style={{ minWidth: c.minW, textAlign: c.center ? 'center' : 'left', background: '#16a34a', ...(c.key === 'nombre' ? { boxShadow: '2px 0 4px rgba(0,0,0,0.15)' } : {}) }}>
                       {c.label}
                     </th>
                   ))}
@@ -678,8 +817,8 @@ function DashboardProyecto({
 
                   return (
                     <tr key={dep.id} style={{ background: bg }} className="hover:brightness-95 transition-all">
-                      <td className="border border-white px-2 py-1.5 text-center text-[10px] font-bold select-none"
-                        style={{ color: '#111827', background: bg }}>{i + 1}</td>
+                      <td className="border border-white px-2 py-1.5 text-center text-[10px] font-bold select-none sticky left-0"
+                        style={{ color: '#111827', background: bg, zIndex: 4, minWidth: 36 }}>{i + 1}</td>
 
                       {cols.map(c => {
                         const v = val(dep, c.key);
@@ -693,8 +832,8 @@ function DashboardProyecto({
                         );
                         return (
                           <td key={c.key}
-                            className={cn('border border-white px-2 py-1.5', c.key !== 'afiliacion' && 'whitespace-nowrap')}
-                            style={{ textAlign: c.center ? 'center' : 'left', verticalAlign: 'middle' }}>
+                            className={cn('border border-white px-2 py-1.5', c.key !== 'afiliacion' && 'whitespace-nowrap', c.key === 'nombre' && 'sticky left-9 z-10')}
+                            style={{ textAlign: c.center ? 'center' : 'left', verticalAlign: 'middle', ...(c.key === 'nombre' ? { background: bg, boxShadow: `-6px 0 0 6px ${bg}, 2px 0 4px rgba(0,0,0,0.07)`, zIndex: 3 } : {}) }}>
 
                             {c.key === 'nombre' ? (
                               <span className="font-bold text-[#111827] underline decoration-dotted underline-offset-2 cursor-pointer"
@@ -789,6 +928,18 @@ function AlumnosPageContent() {
   const [proyEdits,   setProyEdits]   = useState<Record<string, string>>({});
   const [cargando,    setCargando]    = useState(true);
   const [errorCarga,  setErrorCarga]  = useState<string | null>(null);
+
+  // Calidoso/padre: redirigir a su propio perfil en vez de ver la lista completa
+  useEffect(() => {
+    try {
+      const cookies = document.cookie.split(';').map(c => c.trim());
+      if (cookies.some(c => c === 'futuro-session=deportista')) {
+        const calidosoId = localStorage.getItem('futuro-calidoso-id');
+        router.replace(calidosoId ? `/alumnos/${calidosoId}` : '/dashboard');
+      }
+    } catch {}
+  }, [router]);
+
   // Detección de profesor — se hace en useEffect (cliente) para evitar mismatch de SSR
   const [esProfe, setEsProfe] = useState(false);
   useEffect(() => {
@@ -829,6 +980,11 @@ function AlumnosPageContent() {
       const fp = localStorage.getItem(FOTOS_PROFE_KEY);
       if (fp) setFotosProfe(JSON.parse(fp));
     } catch {}
+    // Carga fotos de profes desde Supabase (columna profes.foto)
+    // Mergea con localStorage para que funcione sin red también
+    getFotosProfes()
+      .then(fotos => { if (Object.keys(fotos).length > 0) setFotosProfe(fotos); })
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -870,6 +1026,8 @@ function AlumnosPageContent() {
     const nuevo = { ...fotosProfe, [profe]: b64 };
     setFotosProfe(nuevo);
     try { localStorage.setItem(FOTOS_PROFE_KEY, JSON.stringify(nuevo)); } catch {}
+    // Persiste en profes.foto de Supabase (columna ya existe, UPDATE por usuario)
+    saveFotoProfe(profe, b64).catch(() => {});
   }
 
   // Grupos especiales — excluidos de todos los programas
@@ -975,7 +1133,7 @@ function AlumnosPageContent() {
 
   if (!programa) return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/dashboard')}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition">
@@ -1127,7 +1285,7 @@ function AlumnosPageContent() {
   // ══ NIVEL SIN PROYECTO (tabla directa) ══════════════════════
   if (programa === SIN_PROY_KEY) return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
+      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-20">
         <button onClick={() => setPrograma(null)}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
           <ArrowLeft className="w-4 h-4" />
@@ -1153,9 +1311,9 @@ function AlumnosPageContent() {
         </div>
 
         <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <div className="overflow-x-auto" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          <div className="overflow-x-auto">
             <table className="text-xs border-collapse w-full">
-              <thead className="sticky top-0 z-10">
+              <thead className="sticky top-16 z-10">
                 <tr style={{ background: '#16a34a' }}>
                   <th className="border border-white px-2 py-2 text-[10px] text-white/60 w-9 text-center select-none">#</th>
                   {['CÓDIGO','DEPORTISTA','PROGRAMA','AÑO','MES','DÍA','ESTADO'].map(h => (
@@ -1231,7 +1389,7 @@ function AlumnosPageContent() {
   // ══ NIVEL RETIRADOS (tabla directa, sin proyectos) ═══════════
   if (programa === RETIRADOS_KEY) return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
+      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-20">
         <button onClick={() => setPrograma(null)}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
           <ArrowLeft className="w-4 h-4" />
@@ -1259,9 +1417,9 @@ function AlumnosPageContent() {
 
         {/* Tabla retirados */}
         <div className="rounded-xl border border-gray-300 overflow-hidden shadow-sm">
-          <div className="overflow-x-auto" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          <div className="overflow-x-auto">
             <table className="text-xs border-collapse w-full">
-              <thead className="sticky top-0 z-10">
+              <thead className="sticky top-16 z-10">
                 <tr style={{ background: '#4B5563' }}>
                   <th className="border border-gray-500 px-2 py-2 text-[10px] text-white/40 w-9 text-center select-none">#</th>
                   {(['CÓDIGO','DEPORTISTA','PROYECTO','AÑO','MES','DÍA','ESTADO'] as const).map(h => (
@@ -1314,7 +1472,7 @@ function AlumnosPageContent() {
   const palProg = palIdx(programa, programasSorted);
   if (!proy) return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-2 min-w-0">
           <button onClick={() => (esProfe || !!searchParams.get('proyecto')) ? router.push('/mis-proyectos') : setPrograma(null)}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
@@ -1401,12 +1559,12 @@ function AlumnosPageContent() {
   );
 
   // ══ NIVEL 3: DASHBOARD DEL PROYECTO (tabla) ═════════════════
-  const palProy   = PALETA[proysSorted.findIndex(([n]) => n === proy) % PALETA.length];
+  const palProy   = PALETA[Math.max(0, proysSorted.findIndex(([n]) => n === proy)) % PALETA.length] ?? PALETA[0];
   const listaProy = porProy[proy] ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
+      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-20">
         <button onClick={() => (esProfe || !!searchParams.get('proyecto')) ? router.push('/mis-proyectos') : setProy(null)}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0"
           title="Atrás">

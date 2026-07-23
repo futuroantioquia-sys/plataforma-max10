@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
+import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
 import { getDeportistas, saveDeportistas, getFoto, saveFoto } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
@@ -120,52 +121,62 @@ export default function PerfilDeportista() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const usuario = useAuthStore(s => s.usuario);
-  const esPadre = usuario?.rol === 'padre';
+  const esPadre    = usuario?.rol === 'padre';
+  const esProfesor = usuario?.rol === 'profesor';
 
   const [dep,           setDep]          = useState<Deportista | null>(null);
+  const [cargando,      setCargando]      = useState(true);
   const [foto,          setFoto]          = useState<string | null>(null);
   const [editando,      setEditando]      = useState(false);
   const [edits,         setEdits]         = useState<Record<string, string>>({});
   const [tab,           setTab]           = useState(0);
   const [procesandoFoto, setProcesandoFoto] = useState(false);
+  const [modalMant,      setModalMant]      = useState(false);
   const inputFotoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getDeportistas().then(lista => {
       const d = lista.find(x => x.id === id);
       if (d) { setDep(d); setEdits({ ...d._columnas }); }
+      setCargando(false);
     });
     getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {
       try { const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); if (fotos[id]) setFoto(fotos[id]); } catch {}
     });
   }, [id]);
 
+  /** Redimensiona la imagen a máx 300px de ancho y la convierte a JPEG 65%.
+   *  Un selfie de celular pasa de ~2-4MB → ~25-50KB, que cabe en localStorage. */
+  function comprimirFoto(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX_W = 300;
+        const ratio = Math.min(1, MAX_W / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.65));
+      };
+      img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    });
+  }
+
   async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setProcesandoFoto(true);
     try {
-      // TODO: activar con `npm install @imgly/background-removal`
-      // const { removeBackground } = await import('@imgly/background-removal');
-      // const blob = await removeBackground(file, { output: { format: 'image/png', quality: 1 } });
-      // const img = new Image();
-      // img.src = URL.createObjectURL(blob);
-      // await new Promise<void>(res => { img.onload = () => res(); });
-      // const canvas = document.createElement('canvas');
-      // canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-      // const ctx = canvas.getContext('2d')!;
-      // ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      // ctx.drawImage(img, 0, 0); URL.revokeObjectURL(img.src);
-      // const b64 = canvas.toDataURL('image/jpeg', 0.92);
-
-      // Por ahora: guardar foto original
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const b64 = ev.target?.result as string;
-        setFoto(b64);
-        saveFoto(id, b64).catch(console.error);
-      };
-      reader.readAsDataURL(file);
+      const b64 = await comprimirFoto(file);
+      setFoto(b64);
+      await saveFoto(id, b64);
+    } catch (err) {
+      console.error('Error guardando foto:', err);
     } finally {
       setProcesandoFoto(false);
     }
@@ -186,6 +197,10 @@ export default function PerfilDeportista() {
     const lista = await getDeportistas();
     await saveDeportistas(lista.filter(d => d.id !== id));
     router.push('/alumnos');
+  }
+
+  if (cargando) {
+    return <LoadingBall />;
   }
 
   if (!dep) {
@@ -256,6 +271,53 @@ export default function PerfilDeportista() {
         boxSizing: 'border-box',
       }}>
 
+        {/* Modal En Mantenimiento */}
+        {modalMant && (
+          <div
+            onClick={() => setModalMant(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 999,
+              background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: '#1a1a1a', borderRadius: 24,
+                border: '1.5px solid rgba(255,255,255,0.12)',
+                padding: '32px 28px', maxWidth: 320, width: '90%',
+                textAlign: 'center', boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
+              }}
+            >
+              <div style={{
+                width: 72, height: 72, borderRadius: '50%',
+                background: 'rgba(251,191,36,0.15)', margin: '0 auto 18px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 36,
+              }}>🔧</div>
+              <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 18, margin: '0 0 10px' }}>
+                EN MANTENIMIENTO
+              </h2>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, margin: '0 0 24px', lineHeight: 1.6 }}>
+                Esta función estará disponible muy pronto.<br/>
+                ¡Gracias por tu paciencia!
+              </p>
+              <button
+                onClick={() => setModalMant(false)}
+                style={{
+                  width: '100%', padding: '13px 0', borderRadius: 14,
+                  background: '#16a34a', border: 'none', cursor: 'pointer',
+                  color: '#fff', fontWeight: 900, fontSize: 14,
+                  letterSpacing: '0.04em',
+                }}
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── TARJETA SUPERIOR ── */}
         <div style={{
           width: '100%', maxWidth: 500,
@@ -325,22 +387,60 @@ export default function PerfilDeportista() {
 
           {/* Botones */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginTop: 16 }}>
-            {[
-              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`    },
-              { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta` },
-              { label: 'INFORMES',   href: '/evaluaciones'                },
-              { label: 'MENSAJES',   href: '/mensajes'                    },
-            ].map(({ label, href }) => (
-              <button key={label} onClick={() => router.push(href)} style={{
-                background: 'rgba(255,255,255,0.11)',
-                border: '1.5px solid rgba(255,255,255,0.22)',
-                borderRadius: 13, padding: '11px 2px',
-                color: '#fff', fontWeight: 900, fontSize: 9.5,
-                letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer',
-              }}>
-                {label}
-              </button>
-            ))}
+            {/* ASISTENCIA — funciona */}
+            <button onClick={() => router.push(`/alumnos/${id}/asistencia`)} style={{
+              background: 'rgba(255,255,255,0.11)',
+              border: '1.5px solid rgba(255,255,255,0.22)',
+              borderRadius: 13, padding: '11px 2px',
+              color: '#fff', fontWeight: 900, fontSize: 9.5,
+              letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer',
+            }}>
+              ASISTENCIA
+            </button>
+            {/* PAGOS — funciona */}
+            <button onClick={() => router.push(`/alumnos/${id}/estado-cuenta`)} style={{
+              background: 'rgba(255,255,255,0.11)',
+              border: '1.5px solid rgba(255,255,255,0.22)',
+              borderRadius: 13, padding: '11px 2px',
+              color: '#fff', fontWeight: 900, fontSize: 9.5,
+              letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer',
+            }}>
+              PAGOS
+            </button>
+            {/* INFORMES — EN MANTENIMIENTO */}
+            <button onClick={() => setModalMant(true)} style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1.5px solid rgba(255,255,255,0.12)',
+              borderRadius: 13, padding: '11px 2px',
+              color: 'rgba(255,255,255,0.4)', fontWeight: 900, fontSize: 9.5,
+              letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer',
+              position: 'relative',
+            }}>
+              INFORMES
+              <span style={{
+                position: 'absolute', top: -7, right: -4,
+                background: '#f59e0b', color: '#000',
+                fontSize: 7, fontWeight: 900, borderRadius: 6,
+                padding: '2px 5px', letterSpacing: 0,
+              }}>🔧</span>
+            </button>
+            {/* MENSAJES — EN MANTENIMIENTO */}
+            <button onClick={() => setModalMant(true)} style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1.5px solid rgba(255,255,255,0.12)',
+              borderRadius: 13, padding: '11px 2px',
+              color: 'rgba(255,255,255,0.4)', fontWeight: 900, fontSize: 9.5,
+              letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer',
+              position: 'relative',
+            }}>
+              MENSAJES
+              <span style={{
+                position: 'absolute', top: -7, right: -4,
+                background: '#f59e0b', color: '#000',
+                fontSize: 7, fontWeight: 900, borderRadius: 6,
+                padding: '2px 5px', letterSpacing: 0,
+              }}>🔧</span>
+            </button>
           </div>
         </div>
 
@@ -449,27 +549,29 @@ export default function PerfilDeportista() {
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-lg">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/alumnos')} className="text-white/80 hover:text-white text-sm font-bold">
+          <button onClick={() => esProfesor ? router.back() : router.push('/alumnos')} className="text-white/80 hover:text-white text-sm font-bold">
             ← Deportistas
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {editando && (
+          {!esProfesor && editando && (
             <button onClick={() => { setEditando(false); setEdits({ ...dep._columnas }); }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
               <X className="w-4 h-4" /> Cancelar
             </button>
           )}
-          {!editando && (
+          {!esProfesor && !editando && (
             <button onClick={eliminar}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
               <Trash2 className="w-4 h-4" /> Eliminar
             </button>
           )}
-          <button onClick={() => editando ? guardar() : setEditando(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
-            {editando ? <><Save className="w-4 h-4" /> Guardar</> : <><Edit3 className="w-4 h-4" /> Editar</>}
-          </button>
+          {!esProfesor && (
+            <button onClick={() => editando ? guardar() : setEditando(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
+              {editando ? <><Save className="w-4 h-4" /> Guardar</> : <><Edit3 className="w-4 h-4" /> Editar</>}
+            </button>
+          )}
           <div className="text-right leading-tight border-l border-white/30 pl-3">
             <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
             <p className="text-white/50 text-[11px]">Conecta, Gestiona, Gana</p>

@@ -573,18 +573,18 @@ export async function saveAllPagos(all: AllPagos): Promise<void> {
 export async function getFoto(depId: string): Promise<string | null> {
   try {
     const { data, error } = await supabase()
-      .from('deportistas_fotos')
-      .select('foto_base64')
+      .from('fotos_deportistas')
+      .select('base64')
       .eq('deportista_id', depId)
       .maybeSingle();
 
     if (error) throw error;
-    if (data?.foto_base64) {
+    if (data?.base64) {
       // Guardar en localStorage también
       const fotos = lsGet<Record<string, string>>(LS_FOTOS, {});
-      fotos[depId] = data.foto_base64;
+      fotos[depId] = data.base64;
       lsSet(LS_FOTOS, fotos);
-      return data.foto_base64;
+      return data.base64;
     }
   } catch {}
 
@@ -601,8 +601,8 @@ export async function saveFoto(depId: string, base64: string): Promise<void> {
 
   try {
     const { error } = await supabase()
-      .from('deportistas_fotos')
-      .upsert({ deportista_id: depId, foto_base64: base64 }, { onConflict: 'deportista_id' });
+      .from('fotos_deportistas')
+      .upsert({ deportista_id: depId, base64: base64 }, { onConflict: 'deportista_id' });
 
     if (error) console.error('[db] saveFoto:', error.message);
   } catch (e) {
@@ -617,11 +617,34 @@ export type AsistenciaData = Record<string, Record<string, Record<string, Record
 
 const LS_ASIST = 'futuro_asistencia';
 
-/** Lee asistencia completa: fetch() directo → SDK → localStorage. */
+/** Fusiona dos AsistenciaData: mantiene TODOS los registros de ambas fuentes.
+ *  Si existe el mismo (proyecto/mes/dep/fecha) en ambas, Supabase tiene prioridad. */
+function mergeAsistencia(local: AsistenciaData, remote: AsistenciaData): AsistenciaData {
+  // Empezar con copia profunda del local
+  const merged: AsistenciaData = JSON.parse(JSON.stringify(local));
+  for (const [proy, meses] of Object.entries(remote)) {
+    if (!merged[proy]) merged[proy] = {};
+    for (const [mes, deps] of Object.entries(meses)) {
+      if (!merged[proy][mes]) merged[proy][mes] = {};
+      for (const [dep, fechas] of Object.entries(deps)) {
+        if (!merged[proy][mes][dep]) merged[proy][mes][dep] = {};
+        for (const [fecha, estado] of Object.entries(fechas)) {
+          if (estado) merged[proy][mes][dep][fecha] = estado; // Supabase gana solo si tiene estado real (no vacío)
+        }
+      }
+    }
+  }
+  return merged;
+}
+
+/** Lee asistencia completa: fetch() directo → SDK → localStorage.
+ *  Siempre FUSIONA con localStorage (nunca sobreescribe), y usa limit alto para evitar
+ *  truncamiento de la paginación de Supabase (default 1000 filas). */
 export async function getAsistencia(): Promise<AsistenciaData> {
   const parseAsistRows = (data: any[]): AsistenciaData => {
     const result: AsistenciaData = {};
     for (const r of data) {
+      if (!r.estado) continue; // ignorar filas vacías — no deben sobreescribir datos válidos
       if (!result[r.proyecto]) result[r.proyecto] = {};
       if (!result[r.proyecto][r.anio_mes]) result[r.proyecto][r.anio_mes] = {};
       if (!result[r.proyecto][r.anio_mes][r.deportista_id]) result[r.proyecto][r.anio_mes][r.deportista_id] = {};
@@ -630,10 +653,12 @@ export async function getAsistencia(): Promise<AsistenciaData> {
     return result;
   };
 
-  // ── Intento 1: fetch() nativo ──
+  const local = lsGet<AsistenciaData>(LS_ASIST, {});
+
+  // ── Intento 1: fetch() nativo con limit alto ──
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado`,
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&limit=50000`,
       {
         headers: {
           'apikey':        SUPABASE_ANON_KEY,
@@ -645,32 +670,206 @@ export async function getAsistencia(): Promise<AsistenciaData> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        const result = parseAsistRows(data);
-        lsSet(LS_ASIST, result);
-        return result;
+        const remote = parseAsistRows(data);
+        const merged = mergeAsistencia(local, remote);
+        lsSet(LS_ASIST, merged);
+        return merged;
       }
     }
   } catch { /* intentar SDK */ }
 
-  // ── Intento 2: SDK ──
+  // ── Intento 2: SDK con limit alto ──
   try {
     const { data, error } = await supabase()
       .from('asistencia')
-      .select('proyecto, anio_mes, deportista_id, fecha, estado');
+      .select('proyecto, anio_mes, deportista_id, fecha, estado')
+      .limit(50000);
 
     if (error) throw error;
-    if (!data || !data.length) return lsGet<AsistenciaData>(LS_ASIST, {});
+    if (!data || !data.length) return local;
 
-    const result = parseAsistRows(data);
-    lsSet(LS_ASIST, result);
-    return result;
+    const remote = parseAsistRows(data);
+    const merged = mergeAsistencia(local, remote);
+    lsSet(LS_ASIST, merged);
+    return merged;
   } catch {
-    return lsGet<AsistenciaData>(LS_ASIST, {});
+    return local;
   }
 }
 
-/** Guarda asistencia completa (upsert batch). */
-export async function saveAsistencia(data: AsistenciaData): Promise<void> {
+/** Guarda asistencia SOLO en localStorage (rápido, sin riesgo de carrera). */
+export function saveAsistenciaLocal(data: AsistenciaData): void {
+  lsSet(LS_ASIST, data);
+}
+
+/** Carga asistencia filtrada por un proyecto — ~50-200 filas en vez de 50 000.
+ *  Para profes: carga solo su proyecto; actualiza LS sin tocar otros proyectos. */
+export async function getAsistenciaPorProyecto(proyectoId: string): Promise<AsistenciaData> {
+  if (!proyectoId) return {};
+
+  const parseRows = (rows: any[]): AsistenciaData => {
+    const r: AsistenciaData = {};
+    for (const row of rows) {
+      if (!row.estado) continue;
+      if (!r[row.proyecto]) r[row.proyecto] = {};
+      if (!r[row.proyecto][row.anio_mes]) r[row.proyecto][row.anio_mes] = {};
+      if (!r[row.proyecto][row.anio_mes][row.deportista_id]) r[row.proyecto][row.anio_mes][row.deportista_id] = {};
+      r[row.proyecto][row.anio_mes][row.deportista_id][row.fecha] = row.estado;
+    }
+    return r;
+  };
+
+  // Local: extraer solo este proyecto del LS completo
+  const localFull = lsGet<AsistenciaData>(LS_ASIST, {});
+  const local: AsistenciaData = localFull[proyectoId]
+    ? { [proyectoId]: localFull[proyectoId] }
+    : {};
+
+  // Intento 1: fetch() directo filtrado por proyecto
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado` +
+      `&proyecto=eq.${encodeURIComponent(proyectoId)}&limit=5000`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const remote = parseRows(data);
+        const merged = mergeAsistencia(local, remote);
+        const full   = lsGet<AsistenciaData>(LS_ASIST, {});
+        if (merged[proyectoId]) full[proyectoId] = merged[proyectoId];
+        lsSet(LS_ASIST, full);
+        return merged;
+      }
+    }
+  } catch { /* fallback SDK */ }
+
+  // Intento 2: SDK filtrado por proyecto
+  try {
+    const { data, error } = await supabase()
+      .from('asistencia')
+      .select('proyecto, anio_mes, deportista_id, fecha, estado')
+      .eq('proyecto', proyectoId)
+      .limit(5000);
+    if (!error && Array.isArray(data)) {
+      const remote = parseRows(data);
+      const merged = mergeAsistencia(local, remote);
+      const full   = lsGet<AsistenciaData>(LS_ASIST, {});
+      if (merged[proyectoId]) full[proyectoId] = merged[proyectoId];
+      lsSet(LS_ASIST, full);
+      return merged;
+    }
+  } catch { /* ignore */ }
+
+  return local;
+}
+
+/** Guarda asistencia de UN SOLO PROYECTO en Supabase y LS.
+ *  Evita sobreescribir datos de otros proyectos/profes. Retorna true si todo OK. */
+export async function saveAsistenciaProyecto(proyectoId: string, data: AsistenciaData): Promise<boolean> {
+  // 1. Actualizar LS: solo este proyecto, sin tocar los demás
+  const fullLocal = lsGet<AsistenciaData>(LS_ASIST, {});
+  if (data[proyectoId]) fullLocal[proyectoId] = data[proyectoId];
+  lsSet(LS_ASIST, fullLocal);
+
+  // 2. Upsert solo filas del proyecto actual
+  try {
+    const rows: object[] = [];
+    const proyData = data[proyectoId] ?? {};
+    for (const [anio_mes, deps] of Object.entries(proyData)) {
+      for (const [deportista_id, fechas] of Object.entries(deps)) {
+        for (const [fecha, estado] of Object.entries(fechas)) {
+          if (estado) rows.push({ proyecto: proyectoId, anio_mes, deportista_id, fecha, estado });
+        }
+      }
+    }
+    if (!rows.length) return true;
+    let allOk = true;
+    const CHUNK = 500;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const { error } = await supabase()
+        .from('asistencia')
+        .upsert(rows.slice(i, i + CHUNK), { onConflict: 'proyecto,anio_mes,deportista_id,fecha' });
+      if (error) { console.error('[db] saveAsistenciaProyecto chunk:', error.message); allOk = false; }
+    }
+    return allOk;
+  } catch (e) {
+    console.error('[db] saveAsistenciaProyecto:', e);
+    return false;
+  }
+}
+
+/** Elimina UNA marca de asistencia de Supabase (cuando el usuario la desmarca).
+ *  También limpia LS para consistencia. */
+export async function deleteAsistenciaFecha(
+  proyectoId: string, anio_mes: string, deportistaId: string, fecha: string
+): Promise<void> {
+  // 1. Borrar de LS
+  const full = lsGet<AsistenciaData>(LS_ASIST, {});
+  if (full[proyectoId]?.[anio_mes]?.[deportistaId]) {
+    const { [fecha]: _r, ...rest } = full[proyectoId][anio_mes][deportistaId];
+    full[proyectoId][anio_mes][deportistaId] = rest;
+    lsSet(LS_ASIST, full);
+  }
+  // 2. DELETE en Supabase
+  try {
+    await supabase()
+      .from('asistencia')
+      .delete()
+      .eq('proyecto', proyectoId)
+      .eq('anio_mes', anio_mes)
+      .eq('deportista_id', deportistaId)
+      .eq('fecha', fecha);
+  } catch (e) { console.error('[db] deleteAsistenciaFecha:', e); }
+}
+
+/** Obtiene asistencia solo de UN deportista — consulta pequeña, ideal para móvil/calidoso. */
+export async function getAsistenciaDeportista(proyectoId: string, deportistaId: string): Promise<AsistenciaData> {
+  if (!proyectoId || !deportistaId) return {};
+
+  const parse = (rows: any[]): AsistenciaData => {
+    const r: AsistenciaData = {};
+    for (const row of rows) {
+      if (!row.estado) continue; // ignorar filas vacías
+      if (!r[row.proyecto]) r[row.proyecto] = {};
+      if (!r[row.proyecto][row.anio_mes]) r[row.proyecto][row.anio_mes] = {};
+      if (!r[row.proyecto][row.anio_mes][row.deportista_id]) r[row.proyecto][row.anio_mes][row.deportista_id] = {};
+      r[row.proyecto][row.anio_mes][row.deportista_id][row.fecha] = row.estado;
+    }
+    return r;
+  };
+
+  // Intento 1: fetch directo filtrado
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado` +
+      `&proyecto=eq.${encodeURIComponent(proyectoId)}&deportista_id=eq.${encodeURIComponent(deportistaId)}&limit=5000`;
+    const res = await fetch(url, {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return parse(data);
+    }
+  } catch { /* fallback SDK */ }
+
+  // Intento 2: SDK filtrado
+  try {
+    const { data } = await supabase()
+      .from('asistencia')
+      .select('proyecto, anio_mes, deportista_id, fecha, estado')
+      .eq('proyecto', proyectoId)
+      .eq('deportista_id', deportistaId)
+      .limit(5000);
+    if (data && data.length > 0) return parse(data);
+  } catch { /* ignore */ }
+
+  return {};
+}
+
+/** Guarda asistencia completa (upsert batch).
+ *  Retorna true si todos los chunks se guardaron en Supabase, false si hubo algún error. */
+export async function saveAsistencia(data: AsistenciaData): Promise<boolean> {
   lsSet(LS_ASIST, data);
 
   try {
@@ -679,21 +878,24 @@ export async function saveAsistencia(data: AsistenciaData): Promise<void> {
       for (const [anio_mes, deps] of Object.entries(meses)) {
         for (const [deportista_id, fechas] of Object.entries(deps)) {
           for (const [fecha, estado] of Object.entries(fechas)) {
-            rows.push({ proyecto, anio_mes, deportista_id, fecha, estado });
+            if (estado) rows.push({ proyecto, anio_mes, deportista_id, fecha, estado }); // no subir estados vacíos
           }
         }
       }
     }
-    if (!rows.length) return;
+    if (!rows.length) return true;
+    let allOk = true;
     const CHUNK = 500;
     for (let i = 0; i < rows.length; i += CHUNK) {
       const { error } = await supabase()
         .from('asistencia')
         .upsert(rows.slice(i, i + CHUNK), { onConflict: 'proyecto,anio_mes,deportista_id,fecha' });
-      if (error) console.error('[db] saveAsistencia chunk:', error.message);
+      if (error) { console.error('[db] saveAsistencia chunk:', error.message); allOk = false; }
     }
+    return allOk;
   } catch (e) {
     console.error('[db] saveAsistencia:', e);
+    return false;
   }
 }
 
@@ -1160,5 +1362,267 @@ export async function savePostpartido(data: Omit<Postpartido, 'id'>): Promise<vo
     if (error) console.error('[db] savePostpartido:', error.message);
   } catch (e) {
     console.error('[db] savePostpartido:', e);
+  }
+}
+
+// ── CAL / COM (calificación mensual + competencia en torneo) ──
+//
+// Tabla Supabase: cal_com
+// UNIQUE(proyecto, anio_mes, deportista_id)  ← upsert seguro por celda
+// localStorage: claves futuro_cal_${proy}_${mesKey} / futuro_com_${proy}_${mesKey}
+//               (mismo formato que usaba el código anterior — compatibilidad total)
+
+/**
+ * Sube a Supabase los deportistas que tienen CAL/COM en localStorage pero
+ * que no existen en la BD remota (datos guardados antes del fix o con red caída).
+ * Fire-and-forget: no bloquea la carga de la página.
+ */
+function syncOrphans(
+  proyectoId: string,
+  anio_mes: string,
+  localCal: Record<string, string>,
+  localCom: Record<string, string>,
+  remoteCal: Record<string, string>,
+  remoteCom: Record<string, string>
+): void {
+  // Reunir todos los deportista_id que tienen datos en localStorage
+  const allLocalIds = new Set([
+    ...Object.keys(localCal).filter(id => localCal[id]),
+    ...Object.keys(localCom).filter(id => localCom[id]),
+  ]);
+  // IDs que Supabase ya conoce
+  const allRemoteIds = new Set([...Object.keys(remoteCal), ...Object.keys(remoteCom)]);
+  // Huérfanos: tienen datos en localStorage pero NO en Supabase
+  const orphanIds = [...allLocalIds].filter(id => !allRemoteIds.has(id));
+  if (orphanIds.length === 0) return;
+  console.log(`[db] syncOrphans: ${orphanIds.length} entradas localStorage-only → subiendo a Supabase`);
+  Promise.all(
+    orphanIds.map(depId =>
+      saveCalCom(proyectoId, anio_mes, depId, localCal[depId] ?? '', localCom[depId] ?? '')
+    )
+  ).catch(e => console.warn('[db] syncOrphans error:', e));
+}
+
+/**
+ * Carga CAL y COM de Supabase para un proyecto + mes específicos.
+ * Mergea con localStorage: Supabase sobreescribe por deportista_id cuando
+ * tiene valor, localStorage cubre los deportistas que Supabase aún no tiene.
+ * Retorna { cal: Record<depId, valor>, com: Record<depId, valor> }
+ */
+export async function getCalComPorProyecto(
+  proyectoId: string,
+  anio_mes: string
+): Promise<{ cal: Record<string, string>; com: Record<string, string> }> {
+  const lsCalKey = `futuro_cal_${proyectoId}_${anio_mes}`;
+  const lsComKey = `futuro_com_${proyectoId}_${anio_mes}`;
+  const localCal = lsGet<Record<string, string>>(lsCalKey, {});
+  const localCom = lsGet<Record<string, string>>(lsComKey, {});
+
+  function parseRows(data: any[]): { cal: Record<string, string>; com: Record<string, string> } {
+    const cal: Record<string, string> = {};
+    const com: Record<string, string> = {};
+    for (const r of data) {
+      if (r.cal && r.deportista_id) cal[r.deportista_id] = r.cal;
+      if (r.com && r.deportista_id) com[r.deportista_id] = r.com;
+    }
+    return { cal, com };
+  }
+
+  function persist(cal: Record<string, string>, com: Record<string, string>) {
+    lsSet(lsCalKey, cal);
+    lsSet(lsComKey, com);
+  }
+
+  // Intento 1: fetch() directo a Supabase (evita CORS preflight en móvil)
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/cal_com?select=deportista_id,cal,com` +
+      `&proyecto=eq.${encodeURIComponent(proyectoId)}` +
+      `&anio_mes=eq.${encodeURIComponent(anio_mes)}` +
+      `&limit=10000`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const { cal: remoteCal, com: remoteCom } = parseRows(data);
+        // Supabase gana sobre localStorage por deportista (tiene la última escritura real)
+        const mergedCal = { ...localCal, ...remoteCal };
+        const mergedCom = { ...localCom, ...remoteCom };
+        persist(mergedCal, mergedCom);
+        // Subir entradas que solo existen en localStorage (sin conexión anterior o pre-fix)
+        syncOrphans(proyectoId, anio_mes, localCal, localCom, remoteCal, remoteCom);
+        return { cal: mergedCal, com: mergedCom };
+      }
+    }
+  } catch { /* fallback SDK */ }
+
+  // Intento 2: SDK Supabase
+  try {
+    const { data, error } = await supabase()
+      .from('cal_com')
+      .select('deportista_id, cal, com')
+      .eq('proyecto', proyectoId)
+      .eq('anio_mes', anio_mes);
+    if (!error && Array.isArray(data)) {
+      const { cal: remoteCal, com: remoteCom } = parseRows(data);
+      const mergedCal = { ...localCal, ...remoteCal };
+      const mergedCom = { ...localCom, ...remoteCom };
+      persist(mergedCal, mergedCom);
+      // Subir entradas que solo existen en localStorage (sin conexión anterior o pre-fix)
+      syncOrphans(proyectoId, anio_mes, localCal, localCom, remoteCal, remoteCom);
+      return { cal: mergedCal, com: mergedCom };
+    }
+  } catch { /* ignorar */ }
+
+  // Fallback: solo localStorage (sin red)
+  return { cal: localCal, com: localCom };
+}
+
+/**
+ * Upsert inmediato de CAL y COM para UN deportista específico.
+ * Llamado en cada cambio de celda — el UNIQUE constraint garantiza idempotencia.
+ * Escribe localStorage primero (UI optimista), luego Supabase (fuente de verdad).
+ *
+ * NOTA: pasar el valor actual del OTRO campo para no pisarlo en el upsert.
+ * Ejemplo: cuando el profe cambia CAL, pasar com=comMap[depId]?? ''
+ */
+export async function saveCalCom(
+  proyectoId: string,
+  anio_mes: string,
+  deportistaId: string,
+  cal: string,
+  com: string
+): Promise<void> {
+  // 1. Caché localStorage (respuesta inmediata sin esperar red)
+  const lsCalKey = `futuro_cal_${proyectoId}_${anio_mes}`;
+  const lsComKey = `futuro_com_${proyectoId}_${anio_mes}`;
+  const calMap = lsGet<Record<string, string>>(lsCalKey, {});
+  const comMap = lsGet<Record<string, string>>(lsComKey, {});
+  calMap[deportistaId] = cal;
+  comMap[deportistaId] = com;
+  lsSet(lsCalKey, calMap);
+  lsSet(lsComKey, comMap);
+
+  // 2. Supabase upsert (fuente de verdad — idempotente por UNIQUE constraint)
+  //    Intento 1: fetch() directo (evita CORS preflight en móvil — mismo patrón
+  //    que usan todas las demás funciones de escritura en este archivo).
+  const row = {
+    proyecto:      proyectoId,
+    anio_mes,
+    deportista_id: deportistaId,
+    cal:           cal || null,   // NULL en BD cuando no hay valor (más limpio que '')
+    com:           com || null,
+  };
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/cal_com?on_conflict=proyecto%2Canio_mes%2Cdeportista_id`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'resolution=merge-duplicates',
+        },
+        body: JSON.stringify(row),
+      }
+    );
+    if (res.ok || res.status === 201) {
+      return; // éxito — no necesitamos el SDK
+    }
+    // Respuesta no-ok: loggear y caer al SDK
+    const errText = await res.text().catch(() => res.status.toString());
+    console.warn('[db] saveCalCom fetch() no-ok, usando SDK. Status:', res.status, errText);
+  } catch (e) {
+    console.warn('[db] saveCalCom fetch() falló, usando SDK:', e);
+  }
+
+  //    Intento 2: SDK Supabase (fallback cuando fetch() falla por red o CORS)
+  try {
+    const { error } = await supabase()
+      .from('cal_com')
+      .upsert(row, { onConflict: 'proyecto,anio_mes,deportista_id' });
+    if (error) console.error('[db] saveCalCom SDK:', error.message);
+  } catch (e) {
+    console.error('[db] saveCalCom SDK:', e);
+  }
+}
+
+// ── FOTOS PROFES ──────────────────────────────────────────────
+// La tabla `profes` ya tiene columna `foto text` (nullable).
+// Se identifica al profe por su campo `usuario` (apellido en mayúsculas).
+
+/**
+ * Carga las fotos de todos los profes desde Supabase.
+ * Retorna { [usuario]: base64 } — compatible con la clave FOTOS_PROFE_KEY
+ * que usa AlumnosPageContent.
+ */
+export async function getFotosProfes(): Promise<Record<string, string>> {
+  const lsKey = 'futuro_fotos_profes';
+  const local  = lsGet<Record<string, string>>(lsKey, {});
+
+  // Intento 1: fetch() directo filtrado (solo filas con foto)
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profes?select=usuario,foto&foto=not.is.null`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const remote: Record<string, string> = {};
+        for (const r of data) {
+          // Excluir strings vacíos que son el DEFAULT de la columna
+          if (r.usuario && r.foto && r.foto.length > 10) remote[r.usuario] = r.foto;
+        }
+        const merged = { ...local, ...remote };
+        lsSet(lsKey, merged);
+        return merged;
+      }
+    }
+  } catch { /* fallback SDK */ }
+
+  // Intento 2: SDK Supabase
+  try {
+    const { data } = await supabase()
+      .from('profes')
+      .select('usuario, foto')
+      .not('foto', 'is', null);
+    if (data && data.length > 0) {
+      const remote: Record<string, string> = {};
+      for (const r of data) {
+        if (r.usuario && r.foto && r.foto.length > 10) remote[r.usuario] = r.foto;
+      }
+      const merged = { ...local, ...remote };
+      lsSet(lsKey, merged);
+      return merged;
+    }
+  } catch { /* ignorar */ }
+
+  return local;
+}
+
+/**
+ * Guarda la foto de un profe en Supabase (columna `foto` de la tabla `profes`)
+ * y en localStorage.  Se identifica por `usuario` (apellido en mayúsculas).
+ */
+export async function saveFotoProfe(usuario: string, base64: string): Promise<void> {
+  // 1. localStorage inmediato
+  const lsKey = 'futuro_fotos_profes';
+  const fotos  = lsGet<Record<string, string>>(lsKey, {});
+  fotos[usuario] = base64;
+  lsSet(lsKey, fotos);
+
+  // 2. Supabase: UPDATE por usuario (la fila ya existe — no usar insert)
+  try {
+    const { error } = await supabase()
+      .from('profes')
+      .update({ foto: base64 })
+      .eq('usuario', usuario);
+    if (error) console.error('[db] saveFotoProfe:', error.message);
+  } catch (e) {
+    console.error('[db] saveFotoProfe:', e);
   }
 }

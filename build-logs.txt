@@ -1,0 +1,111 @@
+[
+{"type":"stdout","created":1784664823506,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Running build in Washington, D.C., USA (East) – iad1","id":"1784664823506503903148100000","date":1784664823506,"serial":"1784664823506503903148100000"}}
+,
+{"type":"stdout","created":1784664823507,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Build machine configuration: 2 cores, 8 GB","id":"1784664823507503903148100000","date":1784664823507,"serial":"1784664823507503903148100000"}}
+,
+{"type":"stdout","created":1784664823511,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Retrieving list of deployment files...","id":"1784664823511503903148100000","date":1784664823511,"serial":"1784664823511503903148100000"}}
+,
+{"type":"stdout","created":1784664823819,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Downloading 59 deployment files...","id":"1784664823819503903148100001","date":1784664823819,"serial":"1784664823819503903148100001"}}
+,
+{"type":"stdout","created":1784664824676,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Restored build cache from previous deployment (4qtqE59YVsdYo3XTMJdgbfTcYEB5)","id":"1784664824676503903148100000","date":1784664824676,"serial":"1784664824676503903148100000"}}
+,
+{"type":"stdout","created":1784664824944,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Running \"vercel build\"","id":"1784664824944118620744400000","date":1784664824944,"serial":"1784664824944118620744400000"}}
+,
+{"type":"stderr","created":1784664824962,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Vercel CLI 56.4.0","id":"1784664824962118620744400000","date":1784664824962,"serial":"1784664824962118620744400000"}}
+,
+{"type":"stdout","created":1784664825519,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Installing dependencies...","id":"1784664825519118620744400000","date":1784664825519,"serial":"1784664825519118620744400000"}}
+,
+{"type":"stderr","created":1784664842958,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"npm warn deprecated next@14.2.4: This version has a security vulnerability. Please upgrade to a patched version. See https://nextjs.org/blog/security-update-2025-12-11 for more details.","id":"1784664842958118620744400000","date":1784664842958,"serial":"1784664842958118620744400000"}}
+,
+{"type":"stdout","created":1784664843152,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"","id":"1784664843152118620744400000","date":1784664843152,"serial":"1784664843152118620744400000"}}
+,
+{"type":"stdout","created":1784664843153,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"added 452 packages in 17s","id":"1784664843153118620744400000","date":1784664843153,"serial":"1784664843153118620744400000"}}
+,
+{"type":"stdout","created":1784664843154,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"","id":"1784664843154118620744400000","date":1784664843154,"serial":"1784664843154118620744400000"}}
+,
+{"type":"stdout","created":1784664843154,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"156 packages are looking for funding","id":"1784664843154118620744400001","date":1784664843154,"serial":"1784664843154118620744400001"}}
+,
+{"type":"stdout","created":1784664843154,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"  run `npm fund` for details","id":"1784664843154118620744400002","date":1784664843154,"serial":"1784664843154118620744400002"}}
+,
+{"type":"stdout","created":1784664843211,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Detected Next.js version: 14.2.4","id":"1784664843211118620744400000","date":1784664843211,"serial":"1784664843211118620744400000"}}
+,
+{"type":"stdout","created":1784664843219,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Running \"npm run build\"","id":"1784664843219118620744400000","date":1784664843219,"serial":"1784664843219118620744400000"}}
+,
+{"type":"stdout","created":1784664843331,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"","id":"1784664843331118620744400000","date":1784664843331,"serial":"1784664843331118620744400000"}}
+,
+{"type":"stdout","created":1784664843331,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"> futuro-antioquia-web@1.0.0 build","id":"1784664843331118620744400001","date":1784664843331,"serial":"1784664843331118620744400001"}}
+,
+{"type":"stdout","created":1784664843331,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"> next build","id":"1784664843331118620744400002","date":1784664843331,"serial":"1784664843331118620744400002"}}
+,
+{"type":"stdout","created":1784664843332,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"","id":"1784664843332118620744400000","date":1784664843332,"serial":"1784664843332118620744400000"}}
+,
+{"type":"stdout","created":1784664843883,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Attention: Next.js now collects completely anonymous telemetry regarding usage.","id":"1784664843883118620744400000","date":1784664843883,"serial":"1784664843883118620744400000"}}
+,
+{"type":"stdout","created":1784664843884,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"This information is used to shape Next.js' roadmap and prioritize features.","id":"1784664843884118620744400000","date":1784664843884,"serial":"1784664843884118620744400000"}}
+,
+{"type":"stdout","created":1784664843884,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:","id":"1784664843884118620744400001","date":1784664843884,"serial":"1784664843884118620744400001"}}
+,
+{"type":"stdout","created":1784664843884,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"https://nextjs.org/telemetry","id":"1784664843884118620744400002","date":1784664843884,"serial":"1784664843884118620744400002"}}
+,
+{"type":"stdout","created":1784664843884,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"","id":"1784664843884118620744400003","date":1784664843884,"serial":"1784664843884118620744400003"}}
+,
+{"type":"stdout","created":1784664843937,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"  ▲ Next.js 14.2.4","id":"1784664843937118620744400000","date":1784664843937,"serial":"1784664843937118620744400000"}}
+,
+{"type":"stdout","created":1784664843938,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"","id":"1784664843938118620744400000","date":1784664843938,"serial":"1784664843938118620744400000"}}
+,
+{"type":"stdout","created":1784664843958,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"   Creating an optimized production build ...","id":"1784664843958118620744400000","date":1784664843958,"serial":"1784664843958118620744400000"}}
+,
+{"type":"stdout","created":1784664869636,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":" ✓ Compiled successfully","id":"1784664869636118620744400000","date":1784664869636,"serial":"1784664869636118620744400000"}}
+,
+{"type":"stdout","created":1784664869637,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"   Skipping validation of types","id":"1784664869637118620744400000","date":1784664869637,"serial":"1784664869637118620744400000"}}
+,
+{"type":"stdout","created":1784664869637,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"   Skipping linting","id":"1784664869637118620744400001","date":1784664869637,"serial":"1784664869637118620744400001"}}
+,
+{"type":"stdout","created":1784664869931,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"   Collecting page data ...","id":"1784664869931118620744400000","date":1784664869931,"serial":"1784664869931118620744400000"}}
+,
+{"type":"stdout","created":1784664871702,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"   Generating static pages (0/32) ...","id":"1784664871702118620744400000","date":1784664871702,"serial":"1784664871702118620744400000"}}
+,
+{"type":"stdout","created":1784664872423,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"   Generating static pages (8/32) \r","id":"1784664872423118620744400000","date":1784664872423,"serial":"1784664872423118620744400000"}}
+,
+{"type":"stdout","created":1784664873117,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"   Generating static pages (16/32) \r","id":"1784664873117118620744400000","date":1784664873117,"serial":"1784664873117118620744400000"}}
+,
+{"type":"stdout","created":1784664874343,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"   Generating static pages (24/32) \r","id":"1784664874343118620744400000","date":1784664874343,"serial":"1784664874343118620744400000"}}
+,
+{"type":"stderr","created":1784664875159,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":" ⨯ useSearchParams() should be wrapped in a suspense boundary at page \"/pagos\". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout","id":"1784664875159118620744400000","date":1784664875159,"serial":"1784664875159118620744400000"}}
+,
+{"type":"stderr","created":1784664875160,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at o (/vercel/path1/.next/server/chunks/401.js:26:11069)","id":"1784664875160118620744400000","date":1784664875160,"serial":"1784664875160118620744400000"}}
+,
+{"type":"stderr","created":1784664875160,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at s (/vercel/path1/.next/server/chunks/401.js:26:22019)","id":"1784664875160118620744400001","date":1784664875160,"serial":"1784664875160118620744400001"}}
+,
+{"type":"stderr","created":1784664875164,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at j (/vercel/path1/.next/server/app/pagos/page.js:21:1747)","id":"1784664875164118620744400000","date":1784664875164,"serial":"1784664875164118620744400000"}}
+,
+{"type":"stderr","created":1784664875165,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at nj (/vercel/path1/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:46251)","id":"1784664875165118620744400000","date":1784664875165,"serial":"1784664875165118620744400000"}}
+,
+{"type":"stderr","created":1784664875165,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at nM (/vercel/path1/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:47571)","id":"1784664875165118620744400001","date":1784664875165,"serial":"1784664875165118620744400001"}}
+,
+{"type":"stderr","created":1784664875165,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at nN (/vercel/path1/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:64546)","id":"1784664875165118620744400002","date":1784664875165,"serial":"1784664875165118620744400002"}}
+,
+{"type":"stderr","created":1784664875165,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at nI (/vercel/path1/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:47010)","id":"1784664875165118620744400003","date":1784664875165,"serial":"1784664875165118620744400003"}}
+,
+{"type":"stderr","created":1784664875165,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at nM (/vercel/path1/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:47717)","id":"1784664875165118620744400004","date":1784664875165,"serial":"1784664875165118620744400004"}}
+,
+{"type":"stderr","created":1784664875165,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at nM (/vercel/path1/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:61546)","id":"1784664875165118620744400005","date":1784664875165,"serial":"1784664875165118620744400005"}}
+,
+{"type":"stderr","created":1784664875165,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"    at nN (/vercel/path1/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:12:64546)","id":"1784664875165118620744400006","date":1784664875165,"serial":"1784664875165118620744400006"}}
+,
+{"type":"stderr","created":1784664875166,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"","id":"1784664875166118620744400000","date":1784664875166,"serial":"1784664875166118620744400000"}}
+,
+{"type":"stderr","created":1784664875166,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Error occurred prerendering page \"/pagos\". Read more: https://nextjs.org/docs/messages/prerender-error","id":"1784664875166118620744400001","date":1784664875166,"serial":"1784664875166118620744400001"}}
+,
+{"type":"stderr","created":1784664875166,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"","id":"1784664875166118620744400002","date":1784664875166,"serial":"1784664875166118620744400002"}}
+,
+{"type":"stdout","created":1784664875166,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":" ✓ Generating static pages (32/32)","id":"1784664875166118620744400003","date":1784664875166,"serial":"1784664875166118620744400003"}}
+,
+{"type":"stderr","created":1784664875167,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"","id":"1784664875167118620744400000","date":1784664875167,"serial":"1784664875167118620744400000"}}
+,
+{"type":"stderr","created":1784664875167,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"> Export encountered errors on following paths:","id":"1784664875167118620744400001","date":1784664875167,"serial":"1784664875167118620744400001"}}
+,
+{"type":"stderr","created":1784664875168,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"\t/pagos/page: /pagos","id":"1784664875168118620744400000","date":1784664875168,"serial":"1784664875168118620744400000"}}
+,
+{"type":"stderr","created":1784664875218,"payload":{"deploymentId":"dpl_83vqBmNT4U9jiuk5Ybm8hqahrhTn","info":{"type":"build","name":"bld_jhg6k3bfr","entrypoint":"."},"text":"Error: Command \"npm run build\" exited with 1","id":"1784664875218118620744400000","date":1784664875218,"serial":"1784664875218118620744400000"}}
+]

@@ -329,35 +329,92 @@ function DashboardProfesor() {
   );
 }
 
+// ── MODAL EN CONSTRUCCIÓN (calidoso) ────────────────────────────
+function ModalConstruccion({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative bg-white rounded-3xl shadow-2xl p-8 mx-4 max-w-sm w-full text-center"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Icono construcción */}
+        <div className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+          <span className="text-4xl">🏗️</span>
+        </div>
+        <h2 className="text-xl font-black text-gray-900 mb-2">EN CONSTRUCCIÓN</h2>
+        <p className="text-sm text-gray-500 mb-6">
+          Esta funcionalidad estará disponible muy pronto.<br/>
+          ¡Gracias por tu paciencia!
+        </p>
+        <button
+          onClick={onClose}
+          className="w-full py-3 rounded-xl bg-[#16a34a] text-white font-bold text-sm hover:bg-[#064e1e] transition"
+        >
+          Entendido
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── DASHBOARD PADRE / DEPORTISTA ─────────────────────────────────
 function DashboardPadre() {
+  const [informeModal, setInformeModal] = useState(false);
+
   const accesos = [
-    { titulo: 'Formulario Afiliación', icono: ClipboardList,  href: '/afiliacion',   descripcion: 'Actualiza tu ficha',           color: 'verde'  },
-    { titulo: 'Ver Evaluaciones',      icono: Star,           href: '/evaluaciones', descripcion: 'Progreso técnico y formativo',  color: 'dorado' },
-    { titulo: 'Mis Pagos',            icono: DollarSign,     href: '/pagos',        descripcion: 'Estado de mensualidades',      color: 'azul'   },
-    { titulo: 'Calendario',           icono: Calendar,        href: '/calendario',   descripcion: 'Próximos entrenamientos',      color: 'teal'   },
-    { titulo: 'Chat Profesor',        icono: MessageCircle,   href: '/mensajes',     descripcion: 'Comunícate directamente',      color: 'purple' },
+    { titulo: 'Formulario Afiliación', icono: ClipboardList, href: '/afiliacion',   descripcion: 'Actualiza tu ficha',          color: 'verde'  },
+    { titulo: 'Ver Evaluaciones',      icono: Star,          href: '/evaluaciones', descripcion: 'Progreso técnico y formativo', color: 'dorado' },
+    { titulo: 'Calendario',            icono: Calendar,       href: '/calendario',   descripcion: 'Próximos entrenamientos',     color: 'teal'   },
+    { titulo: 'Chat Profesor',         icono: MessageCircle,  href: '/mensajes',     descripcion: 'Comunícate directamente',     color: 'purple' },
+    { titulo: 'Mis Pagos',             icono: DollarSign,     href: '/pagos',        descripcion: 'Estado de mensualidades',     color: 'azul'   },
   ];
+
   return (
     <div className="space-y-6">
+      {informeModal && <ModalConstruccion onClose={() => setInformeModal(false)} />}
+
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#064e1e] to-[#16a34a] p-5 text-white shadow-lg animate-fade-up">
         <div className="absolute inset-0 pointer-events-none opacity-[0.06]">
           <svg className="w-full h-full"><defs><pattern id="sp-p" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse"><circle cx="30" cy="30" r="14" fill="none" stroke="white" strokeWidth="1"/></pattern></defs><rect width="100%" height="100%" fill="url(#sp-p)"/></svg>
         </div>
-        <p className="relative text-white/70 text-xs font-semibold uppercase tracking-wider mb-1">Mi deportista</p>
-        <p className="relative text-xl font-bold">Pendiente de registro</p>
-        <p className="relative text-white/70 text-sm mt-1">Los datos aparecerán una vez se importe la lista</p>
+        <p className="relative text-white/70 text-xs font-semibold uppercase tracking-wider mb-1">Futuro Antioquia</p>
+        <p className="relative text-xl font-bold">Max 10 Sport</p>
+        <p className="relative text-white/70 text-sm mt-1">Bienvenido a tu portal deportivo</p>
         <div className="relative grid grid-cols-3 gap-3 mt-4">
-          {[{ v: '—', l: 'Asistencia' }, { v: '—', l: 'Nota técnica' }, { v: '—', l: 'Evaluaciones' }].map((s) => (
+          {[{ v: '⚽', l: 'Entrenamiento' }, { v: '📋', l: 'Evaluaciones' }, { v: '📅', l: 'Calendario' }].map((s) => (
             <div key={s.l} className="bg-white/15 rounded-xl p-3 text-center">
-              <p className="text-xl font-bold">{s.v}</p>
+              <p className="text-xl">{s.v}</p>
               <p className="text-white/70 text-[10px] mt-0.5">{s.l}</p>
             </div>
           ))}
         </div>
       </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 animate-fade-up delay-100">
         {accesos.map((a) => <AccesoCard key={a.titulo} {...a} />)}
+
+        {/* Informe — EN CONSTRUCCIÓN */}
+        <button
+          onClick={() => setInformeModal(true)}
+          className={cn(
+            'group relative bg-white rounded-xl sm:rounded-2xl border border-gray-100 p-3 sm:p-4 text-left',
+            'transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-purple-300',
+          )}
+        >
+          <span className="absolute -top-2 -right-2 bg-amber-400 text-white text-[9px] font-black rounded-full px-2 py-0.5 shadow-md z-10 leading-tight">
+            🏗️
+          </span>
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-3 bg-purple-100 text-purple-700 group-hover:bg-purple-600 group-hover:text-white transition-all duration-200">
+            <Clipboard className="w-4 h-4 sm:w-5 sm:h-5" />
+          </div>
+          <p className="font-bold text-gray-800 text-xs sm:text-sm leading-tight group-hover:text-purple-600 transition-colors">
+            Informe
+          </p>
+          <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 sm:mt-1 leading-tight">Informe del deportista</p>
+        </button>
       </div>
     </div>
   );
