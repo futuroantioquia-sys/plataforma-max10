@@ -550,7 +550,7 @@ export default function PerfilDeportista() {
       <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-lg">
         <div className="flex items-center gap-3">
           <button onClick={() => esProfesor ? router.back() : router.push('/alumnos')} className="text-white/80 hover:text-white text-sm font-bold">
-            ← Deportistas
+            ← {esProfesor && proyectoVal ? proyectoVal : 'Deportistas'}
           </button>
         </div>
         <div className="flex items-center gap-2">
