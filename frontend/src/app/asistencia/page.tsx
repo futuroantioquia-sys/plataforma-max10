@@ -3,7 +3,7 @@
 import { Suspense } from 'react';
 import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp, Home, LogOut } from 'lucide-react';
 import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
@@ -921,6 +921,35 @@ function AsistenciaInner() {
             </div>
           </div>
         )}
+
+        {/* ── BOTONES INICIO Y SALIR (scrollables, encima del GUARDAR fijo) ── */}
+        {esProfe && proyecto && atletas.length > 0 && (
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => router.push('/mis-proyectos')}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-[#064e1e] text-white font-black text-sm active:scale-[.97] transition-transform shadow-sm"
+            >
+              <Home className="w-4 h-4" />
+              Inicio
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.removeItem('futuro-profe-nombre');
+                  localStorage.removeItem('futuro-profe-foto');
+                  localStorage.removeItem('futuro-profe-proyectos');
+                  localStorage.removeItem('futuro-rol');
+                } catch {}
+                router.push('/login');
+              }}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-red-200 text-red-500 font-black text-sm active:scale-[.97] transition-transform shadow-sm"
+            >
+              <LogOut className="w-4 h-4" />
+              Salir
+            </button>
+          </div>
+        )}
+
       </main>
 
       {/* ── BOTÓN GUARDAR FLOTANTE ─────────────────────────── */}
