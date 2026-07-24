@@ -223,7 +223,7 @@ function DashboardAdmin() {
       <CategoriaSection emoji="📊" titulo="Seguimiento" color="purple" delay={300}>
         <AccesoCard titulo="Control de Asistencia"  icono={Clipboard}  href="/asistencia"   descripcion="Registro por proyecto"       color="purple" />
         <AccesoCard titulo="Consolidado Asistencia" icono={Activity}   href="/consolidado"  descripcion="Feb–Dic por deportista"      color="purple" />
-        <AccesoCard titulo="Valoración Deportiva"   icono={Star}       href="/evaluaciones" descripcion="Registrar evaluaciones"      color="purple" />
+        <AccesoCard titulo="Valoración Dinámica para Padres" icono={Star} href="/evaluaciones" descripcion="Informe dinámico por deportista" color="purple" />
         <AccesoCard titulo="Sesiones de Entrenamiento" icono={Dumbbell} href="/sesiones"    descripcion="Objetivo y ejercicios por sesión" color="purple" />
         <AccesoCard titulo="Postpartido"            icono={Trophy}     href="/postpartido"  descripcion="Resultado y desempeño individual" color="purple" />
         <AccesoCard titulo="Torneos y Estadísticas" icono={Trophy}     href="/torneos"      descripcion="Deportistas por competencia" color="purple" />
@@ -262,7 +262,7 @@ function DashboardProfesor() {
 
   const accesos = [
     { titulo: 'Mis Proyectos',   icono: Clipboard,     href: '/mis-proyectos', descripcion: 'Asistencia y calificación',  color: 'verde'  },
-    { titulo: 'Evaluar Alumnos',  icono: Star,          href: '/evaluaciones', descripcion: 'Técnico y formativo',        color: 'dorado' },
+    { titulo: 'Valoración Dinámica', icono: Star,        href: '/evaluaciones', descripcion: 'Informe para padres',        color: 'dorado' },
     { titulo: 'Mis Alumnos',     icono: Users,          href: '/alumnos',      descripcion: 'Fichas y seguimiento',       color: 'azul'   },
     { titulo: 'Sesiones',        icono: Dumbbell,       href: '/sesiones',     descripcion: 'Planes de entrenamiento',    color: 'purple' },
     { titulo: 'Postpartido',     icono: Trophy,         href: '/postpartido',  descripcion: 'Resultado y desempeño',      color: 'teal'   },
@@ -366,7 +366,7 @@ function DashboardPadre() {
 
   const accesos = [
     { titulo: 'Formulario Afiliación', icono: ClipboardList, href: '/afiliacion',   descripcion: 'Actualiza tu ficha',          color: 'verde'  },
-    { titulo: 'Ver Evaluaciones',      icono: Star,          href: '/evaluaciones', descripcion: 'Progreso técnico y formativo', color: 'dorado' },
+    { titulo: 'Valoración Dinámica',   icono: Star,          href: '/evaluaciones', descripcion: 'Tu informe deportivo',         color: 'dorado' },
     { titulo: 'Calendario',            icono: Calendar,       href: '/calendario',   descripcion: 'Próximos entrenamientos',     color: 'teal'   },
     { titulo: 'Chat Profesor',         icono: MessageCircle,  href: '/mensajes',     descripcion: 'Comunícate directamente',     color: 'purple' },
     { titulo: 'Mis Pagos',             icono: DollarSign,     href: '/pagos',        descripcion: 'Estado de mensualidades',     color: 'azul'   },
