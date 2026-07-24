@@ -150,19 +150,36 @@ export default function LoginPage() {
         const candidatos = await buscarPorCodigo(u);
         const dep = candidatos.find(d => {
           const cols = d._columnas ?? {};
-          // Prioridad: clave con "num" + "doc" y sin "acudiente" (NUMERO DE DOCUMENTO)
+          const keys = Object.keys(cols);
+
+          // Intento 1: campo NUMERO DE DOCUMENTO u otros campos de doc (sin acudiente)
           const docKey =
-            Object.keys(cols).find(k => {
+            keys.find(k => {
               const kn = k.trim().normalize('NFC');
-              return /num.*doc|c[eé]dul|c\.c\b|identif|nit\b|cc\b/i.test(kn) && !/acudiente/i.test(kn);
+              return /num.*doc|c[eé]dul|c\.c\b|identif|nit\b/i.test(kn) && !/acudiente/i.test(kn);
             }) ??
-            // Fallback: cualquier clave con "doc" pero que no sea tipo ni acudiente
-            Object.keys(cols).find(k => {
+            keys.find(k => {
               const kn = k.trim().normalize('NFC');
-              return /\bdoc\b/i.test(kn) && !/tipo|acudiente/i.test(kn);
+              return /documento/i.test(kn) && !/tipo|acudiente/i.test(kn);
             });
-          const doc = docKey ? normDoc(String(cols[docKey]).trim()) : '';
-          return doc === cNorm;
+
+          if (docKey) {
+            const doc = normDoc(String(cols[docKey] ?? '').trim());
+            if (doc && doc === cNorm) return true;
+          }
+
+          // Intento 2: buscar cNorm en CUALQUIER valor del objeto columnas
+          // (por si el campo tiene nombre inesperado)
+          if (cNorm.length >= 6) {
+            const matchAny = keys.some(k => {
+              if (/acudiente/i.test(k)) return false;
+              const val = normDoc(String(cols[k] ?? '').trim());
+              return val === cNorm;
+            });
+            if (matchAny) return true;
+          }
+
+          return false;
         });
 
         if (dep) {

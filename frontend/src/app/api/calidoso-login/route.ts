@@ -25,25 +25,65 @@ export async function GET(request: NextRequest) {
   const codigo = (searchParams.get('codigo') ?? '').trim().toUpperCase();
   if (!codigo) return NextResponse.json([]);
 
+  // ── Intento 1: RPC buscar_calidoso (1 query, rápida) ──
   try {
-    // Llamada al RPC — el parámetro va en el body como JSON, sin encoding de URL
     const res = await fetch(`${SB_URL}/rest/v1/rpc/buscar_calidoso`, {
       method:  'POST',
       headers: HDRS,
       body:    JSON.stringify({ p_codigo: codigo }),
       cache:   'no-store',
     });
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.error('[calidoso-login] RPC error:', res.status, err);
-      return NextResponse.json([]);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return NextResponse.json(data);
+      }
+    } else {
+      console.error('[calidoso-login] RPC error:', res.status);
     }
-
-    const data = await res.json();
-    return NextResponse.json(Array.isArray(data) ? data : []);
   } catch (e: any) {
-    console.error('[calidoso-login] fetch error:', e?.message);
-    return NextResponse.json([]);
+    console.error('[calidoso-login] RPC fetch error:', e?.message);
   }
+
+  // ── Intento 2: Query REST directa filtrando por columnas JSONB ──
+  // Prueba los dos formatos más comunes del campo código
+  const intentos = [
+    `columnas->>CÓDIGO=eq.${encodeURIComponent(codigo)}`,
+    `columnas->>CODIGO=eq.${encodeURIComponent(codigo)}`,
+    `columnas->>C%C3%93DIGO=eq.${encodeURIComponent(codigo)}`,
+  ];
+  for (const filtro of intentos) {
+    try {
+      const url = `${SB_URL}/rest/v1/deportistas?select=id,nombre,columnas&${filtro}&limit=5`;
+      const res = await fetch(url, { headers: HDRS, cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return NextResponse.json(data);
+        }
+      }
+    } catch { /* continuar */ }
+  }
+
+  // ── Intento 3: Búsqueda por texto en columnas serializado ──
+  try {
+    // ilike sobre el JSON serializado: busca el código entre comillas
+    const url = `${SB_URL}/rest/v1/deportistas?select=id,nombre,columnas&columnas=phfts.${encodeURIComponent(codigo)}&limit=10`;
+    const res = await fetch(url, { headers: HDRS, cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        // Filtrar del lado servidor: verificar que el código realmente coincide
+        const RX_COD = /^c[oó]d/i;
+        const filtrados = data.filter((r: any) => {
+          const cols = r.columnas ?? {};
+          const codKey = Object.keys(cols).find((k: string) => RX_COD.test(k.trim()));
+          return codKey && String(cols[codKey]).trim().toUpperCase() === codigo;
+        });
+        if (filtrados.length > 0) return NextResponse.json(filtrados);
+      }
+    }
+  } catch { /* ignorar */ }
+
+  return NextResponse.json([]);
 }
