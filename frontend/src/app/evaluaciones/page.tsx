@@ -406,9 +406,26 @@ function VistaPadres({ data, nombreEntrenador, onClose }: {
               <div style={{ fontSize: 8, color: '#475569', fontWeight: 700, letterSpacing: 2, marginBottom: 3 }}>
                 {data.fecha} · INFORME #{data.numeroInforme || '—'}
               </div>
-              <div style={{ fontSize: 17, color: '#f1f5f9', fontWeight: 900, letterSpacing: 0.5, lineHeight: 1.2, marginBottom: 8, textTransform: 'uppercase' }}>
+              <div style={{ fontSize: 17, color: '#f1f5f9', fontWeight: 900, letterSpacing: 0.5, lineHeight: 1.2, marginBottom: 6, textTransform: 'uppercase' }}>
                 {data.nombre || 'DEPORTISTA'}
               </div>
+              {/* ── INDICADOR DE NIVEL GLOBAL ── */}
+              {(() => {
+                const lvl = Math.round(overall);
+                const DOT_COLOR = ['', '#ef4444', '#f97316', '#d97706', '#eab308', '#22c55e'];
+                const LVL_NOMBRE = ['', 'INICIAL', 'BÁSICO', 'INTERMEDIO', 'AVANZADO', 'SUPERIOR'];
+                const dc = DOT_COLOR[lvl] || '#475569';
+                const dn = LVL_NOMBRE[lvl] || '—';
+                return lvl > 0 ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                    <span style={{ width: 11, height: 11, borderRadius: '50%', background: dc, boxShadow: `0 0 10px ${dc}cc`, flexShrink: 0, display: 'inline-block' }} />
+                    <span style={{ color: dc, fontSize: 12, fontWeight: 900, letterSpacing: 1.5 }}>{dn}</span>
+                    <span style={{ color: '#334155', fontSize: 9, fontWeight: 700 }}>· Nivel {lvl} de 5</span>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: 8, height: 14 }} />
+                );
+              })()}
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' as const, marginBottom: 10 }}>
                 {data.proyecto && <span style={{ background: '#16a34a22', border: '1px solid #16a34a44', color: '#4ade80', fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4 }}>{data.proyecto}</span>}
                 {data.programa && <span style={{ background: '#0ea5e922', border: '1px solid #0ea5e944', color: '#38bdf8', fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 4 }}>{data.programa}</span>}
@@ -447,6 +464,27 @@ function VistaPadres({ data, nombreEntrenador, onClose }: {
               scores={[fisico, tecnico, tactico, comportamiento, mental]}
               labels={['FÍSICO', 'TÉCNICA', 'TÁCTICA', 'COMPORT.', 'MENTAL']}
             />
+          </div>
+        </div>
+
+        {/* ── ESCALA DE NIVELES ── */}
+        <div style={{ background: '#0d1f2e', borderRadius: 14, border: '1px solid #1e3a4a', padding: '12px 14px', marginBottom: 14 }}>
+          <div style={{ color: '#475569', fontSize: 9, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase' as const, marginBottom: 8 }}>Escala de Niveles</div>
+          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 5 }}>
+            {[
+              { n: 1, color: '#ef4444', label: 'INICIAL',     desc: 'Comienza el proceso' },
+              { n: 2, color: '#f97316', label: 'BÁSICO',      desc: 'En construcción' },
+              { n: 3, color: '#d97706', label: 'INTERMEDIO',  desc: 'Buen camino' },
+              { n: 4, color: '#eab308', label: 'AVANZADO',    desc: 'Sobre la media' },
+              { n: 5, color: '#22c55e', label: 'SUPERIOR',    desc: 'Nivel élite' },
+            ].map(({ n, color, label, desc }) => (
+              <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#060d18', borderRadius: 8, padding: '6px 10px', border: `1px solid ${color}22` }}>
+                <span style={{ color: '#475569', fontSize: 9, fontWeight: 900, width: 8 }}>{n}</span>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: color, boxShadow: `0 0 7px ${color}`, flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ color, fontSize: 10, fontWeight: 900, letterSpacing: 1, flex: 1 }}>{label}</span>
+                <span style={{ color: '#334155', fontSize: 8, fontStyle: 'italic' }}>{desc}</span>
+              </div>
+            ))}
           </div>
         </div>
 
