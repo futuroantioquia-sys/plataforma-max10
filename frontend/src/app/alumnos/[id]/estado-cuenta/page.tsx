@@ -206,6 +206,7 @@ function EstadoCuentaContent() {
   const [soportes,      setSoportes]      = useState<Soporte[]>([]);
   const [showSoportes,  setShowSoportes]  = useState(false);
   const [subiendoSop,   setSubiendoSop]   = useState(false);
+  const [modalImg,      setModalImg]      = useState<string | null>(null);
   const fotoInputRef    = useRef<HTMLInputElement>(null);
   const soporteInputRef = useRef<HTMLInputElement>(null);
 
@@ -886,10 +887,10 @@ function EstadoCuentaContent() {
                         placeholder="Ej: PAGO JULIO, PAGO AGO Y SEP"
                       />
                       <p className="text-[10px] text-gray-400 font-semibold">{s.fecha}</p>
-                      <a href={s.base64} target="_blank" rel="noopener noreferrer"
+                      <button onClick={() => setModalImg(s.base64)}
                         className="inline-block mt-1 text-[10px] font-black text-blue-600 underline">
                         🔍 Ver completo
-                      </a>
+                      </button>
                     </div>
                     {/* Eliminar */}
                     <button onClick={() => eliminarSoporte(s.id)}
@@ -1019,6 +1020,26 @@ function EstadoCuentaContent() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── MODAL VER SOPORTE ── */}
+      {modalImg && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center p-4"
+          onClick={() => setModalImg(null)}
+        >
+          <button
+            onClick={() => setModalImg(null)}
+            className="absolute top-4 right-4 text-white text-3xl font-black bg-black/50 rounded-full w-10 h-10 flex items-center justify-center"
+          >×</button>
+          <p className="text-white/60 text-xs mb-3">Toca fuera de la imagen para cerrar</p>
+          <img
+            src={modalImg}
+            alt="Soporte de pago"
+            className="max-w-full max-h-[85vh] rounded-xl object-contain shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
