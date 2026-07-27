@@ -301,8 +301,8 @@ export default function AsistenciaAtletaPage() {
           <p className="text-white/60 text-xs">{catVal}{proyecto !== '__SIN_PROYECTO__' ? ` · ${proyecto}` : ''}</p>
         </div>
         <div className="relative flex flex-col items-end flex-shrink-0">
-          <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-6 w-auto object-contain" />
-          <p className="text-white/60 text-[9px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
+          <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+          <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 

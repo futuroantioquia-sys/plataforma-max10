@@ -578,8 +578,8 @@ function EstadoCuentaContent() {
           <p className="text-white/60 text-xs">Control de pagos individual</p>
         </div>
         <div className="relative flex flex-col items-end">
-          <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-6 w-auto object-contain" />
-          <p className="text-white/60 text-[9px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
+          <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+          <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 

@@ -572,9 +572,9 @@ export default function PerfilDeportista() {
               {editando ? <><Save className="w-4 h-4" /> Guardar</> : <><Edit3 className="w-4 h-4" /> Editar</>}
             </button>
           )}
-          <div className="text-right leading-tight border-l border-white/30 pl-3">
-            <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-            <p className="text-white/50 text-[11px]">Conecta, Gestiona, Gana</p>
+          <div className="flex flex-col items-end flex-shrink-0 border-l border-white/30 pl-3">
+            <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+            <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
           </div>
         </div>
       </header>
