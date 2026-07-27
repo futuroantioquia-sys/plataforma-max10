@@ -15,6 +15,17 @@ import type { Soporte } from '@/lib/db';
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
 const PAGOS_KEY    = 'futuro_pagos_estado';
 
+/* ── Datos de pago de la institución ──────────────────────────────
+   Actualiza estos valores con la cuenta real de la academia.       */
+const DATOS_PAGO = {
+  banco:   'BANCOLOMBIA',
+  tipo:    'Cuenta de Ahorros',
+  numero:  '400-000000-00',        // ← Número de cuenta real aquí
+  titular: 'MAX 10 SPORT',         // ← Titular de la cuenta
+  nit:     '000.000.000-0',        // ← NIT de la institución
+  ref:     'Nombre del deportista + mes a pagar',
+};
+
 const DETALLE_ROWS = [
   'MATRÍCULA 2026',
   'FEBRERO 2026','MARZO 2026','ABRIL 2026','MAYO 2026','JUNIO 2026',
@@ -207,6 +218,7 @@ function EstadoCuentaContent() {
   const [showSoportes,  setShowSoportes]  = useState(false);
   const [subiendoSop,   setSubiendoSop]   = useState(false);
   const [modalImg,      setModalImg]      = useState<string | null>(null);
+  const [showInfoPago,  setShowInfoPago]  = useState(false);
   const fotoInputRef    = useRef<HTMLInputElement>(null);
   const soporteInputRef = useRef<HTMLInputElement>(null);
 
@@ -776,9 +788,15 @@ function EstadoCuentaContent() {
                         : isProx
                           ? <span style={{ display:'block', background:'#e5e7eb', color:'#9ca3af', borderRadius:4, padding:'2px 4px', fontWeight:900, fontSize: esCali ? 8 : 11, textAlign:'center' }}>PRÓX</span>
                           : esCali
-                            ? <span style={{ display:'block', background: isPaid ? '#16a34a' : '#dc2626', color:'white', borderRadius:4, padding:'2px 4px', fontWeight:900, fontSize:8, textAlign:'center' }}>
-                                {isPaid ? 'PAGÓ ✓' : 'PEND'}
-                              </span>
+                            ? (isPaid
+                                ? <span style={{ display:'block', background:'#16a34a', color:'white', borderRadius:4, padding:'2px 4px', fontWeight:900, fontSize:8, textAlign:'center' }}>PAGÓ ✓</span>
+                                : <button
+                                    onClick={() => setShowInfoPago(true)}
+                                    className="titila"
+                                    style={{ display:'block', background:'#16a34a', color:'white', borderRadius:4, padding:'3px 2px', fontWeight:900, fontSize:7.5, textAlign:'center', width:'100%', border:'none', cursor:'pointer', lineHeight:1.2 }}>
+                                    💚 PAGA<br/>AHORA
+                                  </button>
+                              )
                             : puedeEditar
                               ? <button onClick={() => toggleEstado(idx)}
                                   className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
@@ -1017,6 +1035,60 @@ function EstadoCuentaContent() {
                 onClick={() => editIdx !== null && eliminarMes(editIdx)}
                 className="text-red-400 hover:text-red-600 text-xs font-bold transition underline underline-offset-2">
                 No cobrar este mes (eliminar del estado de cuenta)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL INFO DE PAGO ── */}
+      {showInfoPago && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center" onClick={() => setShowInfoPago(false)}>
+          <div className="bg-white rounded-t-3xl shadow-2xl w-full max-w-sm pb-8" onClick={e => e.stopPropagation()}>
+
+            {/* Handle */}
+            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-4 mb-4"/>
+
+            {/* Encabezado */}
+            <div className="text-center px-6 mb-5">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-4xl">🏦</span>
+              </div>
+              <h3 className="font-black text-gray-900 text-lg">Realiza tu Pago</h3>
+              <p className="text-gray-400 text-[11px] mt-1 font-semibold">Transfiere al siguiente número de cuenta</p>
+            </div>
+
+            {/* Datos bancarios */}
+            <div className="mx-5 bg-green-50 border border-green-200 rounded-2xl p-4 space-y-2.5 mb-4">
+              {[
+                { label: 'BANCO',    value: DATOS_PAGO.banco   },
+                { label: 'TIPO',     value: DATOS_PAGO.tipo    },
+                { label: 'NÚMERO',   value: DATOS_PAGO.numero  },
+                { label: 'TITULAR',  value: DATOS_PAGO.titular },
+                { label: 'NIT',      value: DATOS_PAGO.nit     },
+                { label: 'REFERENCIA', value: DATOS_PAGO.ref   },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-start gap-2">
+                  <span className="bg-green-700 text-white text-[9px] font-black px-2 py-[3px] rounded-lg w-[82px] text-center flex-shrink-0 tracking-wide">
+                    {label}
+                  </span>
+                  <span className="text-gray-800 font-black text-[11px] leading-tight pt-[2px]">{value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* PSE próximamente */}
+            <div className="mx-5 bg-blue-50 border border-blue-200 rounded-xl p-3 mb-5 text-center">
+              <p className="text-blue-600 font-black text-[11px]">⚡ PRÓXIMAMENTE — PAGO EN LÍNEA (PSE)</p>
+              <p className="text-blue-400 text-[10px] font-semibold mt-0.5">Pronto podrás pagar directamente desde aquí</p>
+            </div>
+
+            {/* Botón cerrar */}
+            <div className="px-5">
+              <button
+                onClick={() => setShowInfoPago(false)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3.5 font-black text-sm transition">
+                ✓ Entendido
               </button>
             </div>
           </div>
