@@ -219,6 +219,7 @@ function EstadoCuentaContent() {
   const [subiendoSop,   setSubiendoSop]   = useState(false);
   const [modalImg,      setModalImg]      = useState<string | null>(null);
   const [showInfoPago,  setShowInfoPago]  = useState(false);
+  const [showMant,      setShowMant]      = useState(false);
   const fotoInputRef    = useRef<HTMLInputElement>(null);
   const soporteInputRef = useRef<HTMLInputElement>(null);
 
@@ -576,9 +577,9 @@ function EstadoCuentaContent() {
           <h1 className="text-white font-black text-lg">Estado de Cuenta</h1>
           <p className="text-white/60 text-xs">Control de pagos individual</p>
         </div>
-        <div className="relative text-right leading-tight">
-          <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-          <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
+        <div className="relative flex flex-col items-center">
+          <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-8 w-auto object-contain" />
+          <p className="text-white/60 text-[9px] mt-1 text-center leading-tight">Conecta, Gestiona,<br/>Gana</p>
         </div>
       </header>
 
@@ -650,19 +651,27 @@ function EstadoCuentaContent() {
           {/* Fila 2: botones de acción en fila completa */}
           <div className="grid grid-cols-4 gap-1.5">
             {[
-              { label: 'PAGOS',      href: null },
-              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia` },
-              { label: 'INFORMES',   href: '/evaluaciones' },
-              { label: 'MENSAJES',   href: '/mensajes' },
-            ].map(({ label, href }) => (
+              { label: 'PAGOS',      href: null,                        bloqueado: false },
+              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`, bloqueado: false },
+              { label: 'INFORMES',   href: '/evaluaciones',             bloqueado: esCali },
+              { label: 'MENSAJES',   href: '/mensajes',                 bloqueado: esCali },
+            ].map(({ label, href, bloqueado }) => (
               <button key={label}
-                onClick={() => href && router.push(href)}
+                onClick={() => {
+                  if (bloqueado) { setShowMant(true); return; }
+                  if (href) router.push(href);
+                }}
                 className={cn(
-                  'transition rounded-lg py-2 px-1 text-[9px] font-black tracking-wide text-center leading-tight',
-                  !href
+                  'relative transition rounded-lg py-2 px-1 text-[9px] font-black tracking-wide text-center leading-tight',
+                  !href && !bloqueado
                     ? 'bg-[#16a34a] text-white'
-                    : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
+                    : bloqueado
+                      ? 'bg-white/10 border border-white/20 text-white/50'
+                      : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
                 )}>
+                {bloqueado && (
+                  <span className="absolute -top-1.5 -right-1 text-[11px] leading-none">🔧</span>
+                )}
                 {label}
               </button>
             ))}
@@ -1037,6 +1046,26 @@ function EstadoCuentaContent() {
                 No cobrar este mes (eliminar del estado de cuenta)
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL MANTENIMIENTO ── */}
+      {showMant && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setShowMant(false)}>
+          <div className="bg-[#1c1c1e] rounded-3xl shadow-2xl w-full max-w-sm px-6 py-8 text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-20 h-20 bg-[#2c2c2e] rounded-full flex items-center justify-center mx-auto mb-5">
+              <span className="text-4xl">🔧</span>
+            </div>
+            <h3 className="text-white font-black text-xl tracking-wide mb-3">EN MANTENIMIENTO</h3>
+            <p className="text-gray-400 text-sm font-semibold leading-relaxed mb-8">
+              Esta función estará disponible muy pronto.<br/>¡Gracias por tu paciencia!
+            </p>
+            <button
+              onClick={() => setShowMant(false)}
+              className="w-full bg-[#16a34a] hover:bg-green-600 text-white rounded-2xl py-4 font-black text-base transition">
+              Entendido
+            </button>
           </div>
         </div>
       )}
