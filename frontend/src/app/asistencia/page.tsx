@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useState, useMemo, useEffect, useCallback, memo } from 'react';
+import { useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp, Home, LogOut } from 'lucide-react';
 import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha } from '@/lib/db';
