@@ -110,6 +110,10 @@ function AsistenciaInner() {
   const [controlesAbiertos, setControlesAbiertos] = useState(true);
   const [calMap,           setCalMap]           = useState<Record<string, string>>({});
 
+  // Botones laterales flotantes — se ocultan cuando llegan los inline del fondo
+  const botonesInlineRef  = useRef<HTMLDivElement>(null);
+  const [mostrarLaterales, setMostrarLaterales] = useState(true);
+
   const mesKey = `${anio}_${String(mes + 1).padStart(2, '0')}`;
 
   const esProfe = useMemo(() => {
@@ -299,6 +303,19 @@ function AsistenciaInner() {
     } catch { setCalMap({}); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyecto, mesKey]);
+
+  // Fade de botones laterales: se ocultan cuando los inline del fondo son visibles
+  useEffect(() => {
+    const el = botonesInlineRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setMostrarLaterales(!entry.isIntersecting),
+      { threshold: 0.15 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto, atletas.length]);
 
   // Programas y proyectos para el admin (no se usa para profe)
   const programas = useMemo(() => {
@@ -925,7 +942,7 @@ function AsistenciaInner() {
 
         {/* ── BOTONES INICIO Y SALIR (scrollables, encima del GUARDAR fijo) ── */}
         {esProfe && proyecto && atletas.length > 0 && (
-          <div className="flex gap-3 pt-2">
+          <div ref={botonesInlineRef} className="flex gap-3 pt-2">
             <button
               onClick={() => router.push('/mis-proyectos')}
               className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-[#064e1e] text-white font-black text-sm active:scale-[.97] transition-transform shadow-sm"
@@ -952,6 +969,46 @@ function AsistenciaInner() {
         )}
 
       </main>
+
+      {/* ── BOTONES LATERALES FLOTANTES (lado derecho, se desvanecen al llegar al fondo) ── */}
+      {esProfe && proyecto && atletas.length > 0 && (
+        <div
+          className="fixed z-40 flex flex-col gap-2"
+          style={{
+            right: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            opacity: mostrarLaterales ? 1 : 0,
+            pointerEvents: mostrarLaterales ? 'auto' : 'none',
+            transition: 'opacity 0.45s ease',
+          }}
+        >
+          <button
+            onClick={() => router.push('/mis-proyectos')}
+            title="Inicio"
+            aria-label="Inicio"
+            className="w-11 h-11 rounded-full bg-[#064e1e] text-white flex items-center justify-center shadow-xl active:scale-90 transition-transform"
+          >
+            <Home className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => {
+              try {
+                localStorage.removeItem('futuro-profe-nombre');
+                localStorage.removeItem('futuro-profe-foto');
+                localStorage.removeItem('futuro-profe-proyectos');
+                localStorage.removeItem('futuro-rol');
+              } catch {}
+              router.push('/login');
+            }}
+            title="Cerrar sesión"
+            aria-label="Salir"
+            className="w-11 h-11 rounded-full bg-white border border-red-200 text-red-400 flex items-center justify-center shadow-xl active:scale-90 transition-transform"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
+      )}
 
       {/* ── BOTÓN GUARDAR FLOTANTE ─────────────────────────── */}
       {esProfe && proyecto && atletas.length > 0 && (
