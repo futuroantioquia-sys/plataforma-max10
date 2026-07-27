@@ -109,6 +109,7 @@ export default function LoginPage() {
           try {
             if (dep?.id)     localStorage.setItem('futuro-calidoso-id',     dep.id);
             if (dep?._nombre) localStorage.setItem('futuro-calidoso-nombre', dep._nombre);
+            localStorage.setItem('futuro-calidoso-codigo', u.trim().toUpperCase());
             // Guardar credenciales → próximos ingresos son instantáneos sin red
             const credsRaw = localStorage.getItem('futuro_calidoso_credenciales');
             const creds: Record<string, string> = credsRaw ? JSON.parse(credsRaw) : {};

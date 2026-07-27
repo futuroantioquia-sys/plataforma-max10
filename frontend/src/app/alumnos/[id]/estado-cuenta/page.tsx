@@ -9,7 +9,8 @@ import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
-import { getFoto, saveFoto, savePagosDeportista, getPagos } from '@/lib/db';
+import { getFoto, saveFoto, savePagosDeportista, getPagos, getSoportes, saveSoporte, updateSoporteNombre, deleteSoporte } from '@/lib/db';
+import type { Soporte } from '@/lib/db';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
 const PAGOS_KEY    = 'futuro_pagos_estado';
@@ -191,17 +192,22 @@ function EstadoCuentaContent() {
   const searchParams = useSearchParams();
   const puedeEditar = searchParams.get('edit') === '1';
 
-  const [dep,          setDep]          = useState<Deportista | null>(null);
-  const [foto,         setFoto]         = useState<string | null>(null);
+  const [esCali,        setEsCali]        = useState(false);
+  const [dep,           setDep]           = useState<Deportista | null>(null);
+  const [foto,          setFoto]          = useState<string | null>(null);
   const [guardandoFoto, setGuardandoFoto] = useState(false);
   const [fotoGuardada,  setFotoGuardada]  = useState(false);
-  const [pagos,    setPagos]   = useState<PagoRow[]>([]);
+  const [pagos,         setPagos]         = useState<PagoRow[]>([]);
   const [editIdx,       setEditIdx]       = useState<number | null>(null);
   const [editForm,      setEditForm]      = useState<Partial<PagoRow>>({});
   const [elimConfirm,   setElimConfirm]   = useState<number | null>(null);
-  const [anio,     setAnio]    = useState(new Date().getFullYear());
+  const [anio,          setAnio]          = useState(new Date().getFullYear());
   const [confirmRevert, setConfirmRevert] = useState<number | null>(null);
-  const fotoInputRef = useRef<HTMLInputElement>(null);
+  const [soportes,      setSoportes]      = useState<Soporte[]>([]);
+  const [showSoportes,  setShowSoportes]  = useState(false);
+  const [subiendoSop,   setSubiendoSop]   = useState(false);
+  const fotoInputRef    = useRef<HTMLInputElement>(null);
+  const soporteInputRef = useRef<HTMLInputElement>(null);
 
   /** Redimensiona la imagen a máx 300px de ancho y la convierte a JPEG 65%.
    *  Un selfie de celular pasa de ~2-4MB → ~25-50KB, que cabe sin problema en localStorage. */
@@ -238,6 +244,43 @@ function EstadoCuentaContent() {
       .catch(console.error)
       .finally(() => setGuardandoFoto(false));
   }
+
+  function subirSoporte(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSubiendoSop(true);
+    const fechaLabel = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
+    comprimirFoto(file)
+      .then(base64 => saveSoporte({
+        deportistaId: id,
+        nombre: `SOPORTE ${fechaLabel}`,
+        base64,
+        fecha: new Date().toISOString().split('T')[0],
+      }))
+      .then(() => getSoportes(id))
+      .then(lista => { setSoportes(lista); setShowSoportes(true); })
+      .catch(console.error)
+      .finally(() => {
+        setSubiendoSop(false);
+        if (soporteInputRef.current) soporteInputRef.current.value = '';
+      });
+  }
+
+  function actualizarNombreSoporte(soporteId: string, nombre: string) {
+    setSoportes(prev => prev.map(s => s.id === soporteId ? { ...s, nombre } : s));
+    updateSoporteNombre(id, soporteId, nombre).catch(console.error);
+  }
+
+  function eliminarSoporte(soporteId: string) {
+    setSoportes(prev => prev.filter(s => s.id !== soporteId));
+    deleteSoporte(id, soporteId).catch(console.error);
+  }
+
+  /* ─── Detectar rol calidoso y cargar soportes ─── */
+  useEffect(() => {
+    setEsCali(document.cookie.includes('futuro-session=deportista'));
+    getSoportes(id).then(setSoportes).catch(console.error);
+  }, [id]);
 
   /* ─── Cargar deportista y pagos guardados ─── */
   useEffect(() => {
@@ -489,6 +532,16 @@ function EstadoCuentaContent() {
 
   return (
     <div className="min-h-screen bg-[#f1f5f9]">
+      <style>{`
+        @keyframes titila {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.15; transform: scale(0.97); }
+        }
+        .titila { animation: titila 0.9s ease-in-out infinite; }
+      `}</style>
+
+      {/* ── INPUTS ocultos ── */}
+      <input ref={soporteInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={subirSoporte}/>
 
       {/* ── HEADER ── */}
       <header className="relative bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
@@ -637,17 +690,23 @@ function EstadoCuentaContent() {
         {/* ── TABLA ── */}
         <div className="rounded-2xl shadow-md border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="border-collapse text-sm" style={{ minWidth: 468, width: '100%' }}>
+          <table className="border-collapse" style={{ minWidth: esCali ? 330 : 468, width: '100%' }}>
             <thead>
               <tr>
-                {[
+                {(esCali ? [
+                  { label: 'FECHA',    w: 58  },
+                  { label: 'DESCR.',   w: 68  },
+                  { label: 'V.PAG.',   w: 62  },
+                  { label: 'DETALLE',  w: 86  },
+                  { label: 'ESTADO',   w: 56  },
+                ] : [
                   { label: 'FECHA',        w: 88  },
                   { label: 'DESCRIPCIÓN',  w: 120 },
                   { label: 'V. PAGADO',    w: 84  },
                   { label: 'DETALLE',      w: 104 },
                   { label: 'ESTADO PAGO',  w: 72  },
-                ].map(({ label, w }) => (
-                  <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '10px 6px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', minWidth: w, width: w }}>
+                ]).map(({ label, w }) => (
+                  <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: esCali ? '8px 3px' : '10px 6px', textAlign: 'center', fontSize: esCali ? 9 : 10, fontWeight: 900, letterSpacing: '0.04em', minWidth: w, width: w }}>
                     {label}
                   </th>
                 ))}
@@ -656,6 +715,7 @@ function EstadoCuentaContent() {
             <tbody>
               {pagosVista.map((row, idx) => {
                 const isPaid  = becado || row.estado === 'PAGÓ';
+                const isPend  = !becado && row.estado === 'PEND';
                 const isProx  = !becado && row.estado === 'PROX';
                 const rowBg   = isProx ? '#f9fafb' : ROW;
                 const detBg   = becado ? '#374151' : isProx ? '#9ca3af' : isPaid ? '#374151' : '#dc2626';
@@ -663,60 +723,71 @@ function EstadoCuentaContent() {
                   <tr key={idx} style={{ opacity: isProx ? 0.6 : 1 }}>
 
                     {/* FECHA */}
-                    <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      <input
-                        value={formatFecha(row.fecha)}
-                        onChange={e => { const ri = realIdxDe(idx); if (ri === -1) return; const u = pagos.map((r,i) => i===ri ? {...r, fecha: e.target.value} : r); savePagos(u); }}
-                        className="w-full text-center font-semibold text-[10px] text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
-                        placeholder="DD/MM/AA"
-                      />
+                    <td style={{ background: rowBg, border: BW, padding: esCali ? '3px 3px' : '4px 6px', textAlign: 'center' }}>
+                      {esCali
+                        ? <span style={{ display: 'block', textAlign: 'center', fontWeight: 600, fontSize: 9, color: '#111827' }}>{formatFecha(row.fecha) || '—'}</span>
+                        : <input
+                            value={formatFecha(row.fecha)}
+                            onChange={e => { const ri = realIdxDe(idx); if (ri === -1) return; const u = pagos.map((r,i) => i===ri ? {...r, fecha: e.target.value} : r); savePagos(u); }}
+                            className="w-full text-center font-semibold text-[10px] text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                            placeholder="DD/MM/AA"
+                          />
+                      }
                     </td>
 
-                    {/* DESCRIPCIÓN (campo destino) */}
-                    <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      <input
-                        value={row.destino}
-                        onChange={e => { const ri = realIdxDe(idx); if (ri === -1) return; const u = pagos.map((r,i) => i===ri ? {...r, destino: e.target.value} : r); savePagos(u); }}
-                        className="w-full text-center font-semibold text-[10px] text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
-                        placeholder="—"
-                      />
+                    {/* DESCRIPCIÓN — visible para todos; calidoso solo lectura */}
+                    <td style={{ background: rowBg, border: BW, padding: esCali ? '3px 3px' : '4px 6px', textAlign: 'center' }}>
+                      {esCali
+                        ? <span style={{ display: 'block', textAlign: 'center', fontWeight: 600, fontSize: 9, color: '#111827' }}>{row.destino || '—'}</span>
+                        : <input
+                            value={row.destino}
+                            onChange={e => { const ri = realIdxDe(idx); if (ri === -1) return; const u = pagos.map((r,i) => i===ri ? {...r, destino: e.target.value} : r); savePagos(u); }}
+                            className="w-full text-center font-semibold text-[10px] text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                            placeholder="—"
+                          />
+                      }
                     </td>
 
-                    {/* V. PAGADO — gris claro, número con $ y puntos */}
-                    <td style={{ background: '#e5e7eb', border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      <input
-                        value={ensurePeso(row.vPagado)}
-                        readOnly={!isPaid}
-                        onChange={e => { if (!isPaid) return; const u = pagos.map((r,i) => i===idx ? {...r, vPagado: e.target.value} : r); savePagos(u); }}
-                        className={cn('w-full text-center font-bold text-[10px] bg-transparent focus:outline-none px-1 py-1',
-                          isPaid ? 'text-[#374151]' : 'text-[#9ca3af] cursor-default')}
-                        placeholder="—"
-                      />
+                    {/* V. PAGADO */}
+                    <td style={{ background: '#e5e7eb', border: BW, padding: esCali ? '3px 3px' : '4px 6px', textAlign: 'center' }}>
+                      {esCali
+                        ? <span style={{ display: 'block', textAlign: 'center', fontWeight: 700, fontSize: 9, color: isPaid ? '#374151' : '#9ca3af' }}>{ensurePeso(row.vPagado) || '—'}</span>
+                        : <input
+                            value={ensurePeso(row.vPagado)}
+                            readOnly={!isPaid}
+                            onChange={e => { if (!isPaid) return; const u = pagos.map((r,i) => i===idx ? {...r, vPagado: e.target.value} : r); savePagos(u); }}
+                            className={cn('w-full text-center font-bold text-[10px] bg-transparent focus:outline-none px-1 py-1',
+                              isPaid ? 'text-[#374151]' : 'text-[#9ca3af] cursor-default')}
+                            placeholder="—"
+                          />
+                      }
                     </td>
 
-                    {/* DETALLE — gris oscuro en vez de verde cuando pagó */}
-                    <td style={{ background: detBg, color: 'white', border: BW, padding: '8px 10px', textAlign: 'center', fontWeight: 900, fontSize: 11, whiteSpace: 'nowrap' }}>
-                      {row.detalle}
+                    {/* DETALLE */}
+                    <td style={{ background: detBg, color: 'white', border: BW, padding: esCali ? '6px 3px' : '8px 10px', textAlign: 'center', fontWeight: 900, fontSize: esCali ? 9 : 11, whiteSpace: 'nowrap' }}>
+                      {esCali ? row.detalle.replace(' 2026','').replace(' 2027','') : row.detalle}
                     </td>
 
                     {/* ESTADO PAGO */}
-                    <td style={{ background: rowBg, border: BW, padding: '6px 4px', textAlign: 'center' }}>
+                    <td style={{ background: rowBg, border: BW, padding: esCali ? '4px 2px' : '6px 4px', textAlign: 'center' }}>
                       {becado
-                        ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white"
-                            style={{ background: '#16a34a' }}>BECADO</span>
+                        ? <span style={{ display:'block', background:'#16a34a', color:'white', borderRadius:4, padding:'2px 4px', fontWeight:900, fontSize: esCali ? 8 : 11, textAlign:'center' }}>BECADO</span>
                         : isProx
-                          ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
-                              style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
-                          : puedeEditar
-                            ? <button onClick={() => toggleEstado(idx)}
-                                className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
-                                  isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
-                                  {isPaid ? 'PAGÓ' : 'PEND'}
-                              </button>
-                            : <span className={cn('px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default',
-                                isPaid ? 'bg-green-500' : 'bg-red-500')}>
-                                {isPaid ? 'PAGÓ' : 'PEND'}
+                          ? <span style={{ display:'block', background:'#e5e7eb', color:'#9ca3af', borderRadius:4, padding:'2px 4px', fontWeight:900, fontSize: esCali ? 8 : 11, textAlign:'center' }}>PRÓX</span>
+                          : esCali
+                            ? <span style={{ display:'block', background: isPaid ? '#16a34a' : '#dc2626', color:'white', borderRadius:4, padding:'2px 4px', fontWeight:900, fontSize:8, textAlign:'center' }}>
+                                {isPaid ? 'PAGÓ ✓' : 'PEND'}
                               </span>
+                            : puedeEditar
+                              ? <button onClick={() => toggleEstado(idx)}
+                                  className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
+                                    isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
+                                    {isPaid ? 'PAGÓ' : 'PEND'}
+                                </button>
+                              : <span className={cn('px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default',
+                                  isPaid ? 'bg-green-500' : 'bg-red-500')}>
+                                  {isPaid ? 'PAGÓ' : 'PEND'}
+                                </span>
                       }
                     </td>
                   </tr>
@@ -729,14 +800,107 @@ function EstadoCuentaContent() {
         </div>
 
         {/* ── NOTA ── */}
-        {puedeEditar
-          ? <p className="text-center text-[11px] text-gray-400 pb-4">
+        {!esCali && (puedeEditar
+          ? <p className="text-center text-[11px] text-gray-400 pb-2">
               Toca <strong>PEND</strong> para registrar pago · Toca <strong>PAGÓ</strong> para revertir
             </p>
-          : <p className="text-center text-[11px] text-amber-500 font-semibold pb-4">
+          : <p className="text-center text-[11px] text-amber-500 font-semibold pb-2">
               Solo lectura · Edición disponible desde Control de Pagos
             </p>
-        }
+        )}
+
+        {/* ── SECCIÓN SOPORTES ── */}
+        <div className="pb-6">
+
+          {/* ── Vista CALIDOSO: subir + ver + aviso ── */}
+          {esCali && (
+            <>
+              {/* Aviso importante */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-3 flex items-start gap-2">
+                <span className="text-amber-500 text-lg flex-shrink-0">⚠️</span>
+                <p className="text-amber-700 font-semibold text-[11px] leading-snug">
+                  <strong>Recuerda:</strong> solo sube soportes de pagos que estén <strong>PENDIENTES</strong>. No subas comprobantes de meses que ya aparecen como <strong className="text-green-700">PAGÓ ✓</strong>.
+                </p>
+              </div>
+
+              {/* Botones calidoso */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => soporteInputRef.current?.click()}
+                  disabled={subiendoSop}
+                  className="flex-1 py-3 rounded-xl font-black text-white text-sm transition"
+                  style={{ background: subiendoSop ? '#6b7280' : '#1d4ed8' }}
+                >
+                  {subiendoSop ? '⏳ Subiendo...' : '📤 SUBIR SOPORTES'}
+                </button>
+                <button
+                  onClick={() => setShowSoportes(s => !s)}
+                  className="flex-1 py-3 rounded-xl font-black text-white text-sm transition"
+                  style={{ background: showSoportes ? '#374151' : '#0f766e' }}
+                >
+                  {showSoportes ? '🙈 OCULTAR' : `👁 VER SOPORTES${soportes.length ? ` (${soportes.length})` : ''}`}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Vista ADMIN: solo botón ver ── */}
+          {!esCali && (
+            <button
+              onClick={() => setShowSoportes(s => !s)}
+              className="w-full py-3 rounded-xl font-black text-white text-sm transition mb-3"
+              style={{ background: showSoportes ? '#374151' : '#1d4ed8' }}
+            >
+              {showSoportes ? '🙈 Ocultar soportes' : `📋 VER SOPORTES DEL DEPORTISTA${soportes.length ? ` (${soportes.length})` : ''}`}
+            </button>
+          )}
+
+          {/* Panel de soportes — igual para admin y calidoso */}
+          {showSoportes && (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+              <h4 className="font-black text-[#1d4ed8] text-sm tracking-wide mb-2">
+                📋 SOPORTES DE PAGO
+              </h4>
+              {soportes.length === 0 ? (
+                <p className="text-center text-gray-400 text-xs py-4 font-semibold">
+                  {esCali
+                    ? 'Aún no has subido soportes. Usa el botón azul para subir tu comprobante.'
+                    : 'El deportista aún no ha subido soportes de pago.'}
+                </p>
+              ) : (
+                soportes.map(s => (
+                  <div key={s.id} className="bg-white rounded-xl border border-blue-100 p-3 flex gap-3 items-start shadow-sm">
+                    {/* Miniatura */}
+                    <div className="w-16 h-20 flex-shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center">
+                      {s.base64.startsWith('data:image')
+                        ? <img src={s.base64} alt="" className="w-full h-full object-cover"/>
+                        : <span className="text-2xl">📄</span>
+                      }
+                    </div>
+                    {/* Nombre editable + fecha + enlace */}
+                    <div className="flex-1 min-w-0">
+                      <input
+                        value={s.nombre}
+                        onChange={e => actualizarNombreSoporte(s.id, e.target.value)}
+                        className="w-full font-black text-[11px] text-[#111827] border border-blue-200 rounded-lg px-2 py-1.5 mb-1 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50"
+                        placeholder="Ej: PAGO JULIO, PAGO AGO Y SEP"
+                      />
+                      <p className="text-[10px] text-gray-400 font-semibold">{s.fecha}</p>
+                      <a href={s.base64} target="_blank" rel="noopener noreferrer"
+                        className="inline-block mt-1 text-[10px] font-black text-blue-600 underline">
+                        🔍 Ver completo
+                      </a>
+                    </div>
+                    {/* Eliminar */}
+                    <button onClick={() => eliminarSoporte(s.id)}
+                      className="text-red-400 hover:text-red-600 text-xl font-black flex-shrink-0 leading-none"
+                      title="Eliminar">×</button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
       </main>
 

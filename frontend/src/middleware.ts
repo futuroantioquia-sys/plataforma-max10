@@ -9,7 +9,7 @@ const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/sesion
 // Rutas permitidas para calidoso/deportista — SOLO su propio portal
 // ⚠️ SEGURIDAD: jamás agregar /pagos, /general, /asignacion, /proyectos, /usuarios, etc.
 // /alumnos está permitido SOLO para que vean su propio perfil (esPadre=true en la página limita la vista)
-const RUTAS_DEPORTISTA = ['/dashboard', '/afiliacion', '/evaluaciones', '/calendario', '/mensajes', '/alumnos'];
+const RUTAS_DEPORTISTA = ['/dashboard', '/afiliacion', '/evaluaciones', '/valoracion-padres', '/calendario', '/mensajes', '/alumnos'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -1626,3 +1626,94 @@ export async function saveFotoProfe(usuario: string, base64: string): Promise<vo
     console.error('[db] saveFotoProfe:', e);
   }
 }
+
+// ── SOPORTES DE PAGO ────────────────────────────────────────────
+
+export interface Soporte {
+  id:           string;
+  deportistaId: string;
+  nombre:       string;  // editable: "PAGO JULIO", "PAGO AGOSTO Y SEPTIEMBRE", etc.
+  base64:       string;  // imagen comprimida
+  fecha:        string;  // YYYY-MM-DD
+}
+
+const LS_SOPORTES = 'futuro_soportes_pagos';
+
+/** Lee soportes de pago de un deportista: Supabase → localStorage. */
+export async function getSoportes(depId: string): Promise<Soporte[]> {
+  try {
+    const { data, error } = await supabase()
+      .from('soportes_pagos')
+      .select('id, deportista_id, nombre, base64, created_at')
+      .eq('deportista_id', depId)
+      .order('created_at', { ascending: false });
+
+    if (!error && data && data.length > 0) {
+      const lista = data.map((r: any): Soporte => ({
+        id:           r.id,
+        deportistaId: r.deportista_id,
+        nombre:       r.nombre ?? '',
+        base64:       r.base64 ?? '',
+        fecha:        (r.created_at ?? '').split('T')[0],
+      }));
+      // Caché local
+      const all = lsGet<Record<string, Soporte[]>>(LS_SOPORTES, {});
+      all[depId] = lista;
+      lsSet(LS_SOPORTES, all);
+      return lista;
+    }
+  } catch { /* tabla puede no existir aún */ }
+
+  const all = lsGet<Record<string, Soporte[]>>(LS_SOPORTES, {});
+  return all[depId] ?? [];
+}
+
+/** Guarda un nuevo soporte de pago. */
+export async function saveSoporte(data: Omit<Soporte, 'id'>): Promise<void> {
+  const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
+  const nuevo: Soporte = { ...data, id };
+
+  // localStorage primero
+  const all = lsGet<Record<string, Soporte[]>>(LS_SOPORTES, {});
+  if (!all[data.deportistaId]) all[data.deportistaId] = [];
+  all[data.deportistaId].unshift(nuevo);
+  lsSet(LS_SOPORTES, all);
+
+  // Supabase (tabla puede no existir — ignorar error)
+  try {
+    const { error } = await supabase().from('soportes_pagos').insert({
+      id,
+      deportista_id: data.deportistaId,
+      nombre:        data.nombre,
+      base64:        data.base64,
+    });
+    if (error) console.warn('[db] saveSoporte:', error.message);
+  } catch { /* ignorar */ }
+}
+
+/** Actualiza el nombre editable de un soporte. */
+export async function updateSoporteNombre(depId: string, soporteId: string, nombre: string): Promise<void> {
+  const all = lsGet<Record<string, Soporte[]>>(LS_SOPORTES, {});
+  if (all[depId]) {
+    all[depId] = all[depId].map(s => s.id === soporteId ? { ...s, nombre } : s);
+    lsSet(LS_SOPORTES, all);
+  }
+  try {
+    await supabase().from('soportes_pagos').update({ nombre }).eq('id', soporteId);
+  } catch { /* ignorar */ }
+}
+
+/** Elimina un soporte de pago. */
+export async function deleteSoporte(depId: string, soporteId: string): Promise<void> {
+  const all = lsGet<Record<string, Soporte[]>>(LS_SOPORTES, {});
+  if (all[depId]) {
+    all[depId] = all[depId].filter(s => s.id !== soporteId);
+    lsSet(LS_SOPORTES, all);
+  }
+  try {
+    await supabase().from('soportes_pagos').delete().eq('id', soporteId);
+  } catch { /* ignorar */ }
+}
