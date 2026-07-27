@@ -577,9 +577,9 @@ function EstadoCuentaContent() {
           <h1 className="text-white font-black text-lg">Estado de Cuenta</h1>
           <p className="text-white/60 text-xs">Control de pagos individual</p>
         </div>
-        <div className="relative flex flex-col items-center">
-          <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-8 w-auto object-contain" />
-          <p className="text-white/60 text-[9px] mt-1 text-center leading-tight">Conecta, Gestiona,<br/>Gana</p>
+        <div className="relative flex flex-col items-end">
+          <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-6 w-auto object-contain" />
+          <p className="text-white/60 text-[9px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 
@@ -670,7 +670,7 @@ function EstadoCuentaContent() {
                       : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
                 )}>
                 {bloqueado && (
-                  <span className="absolute -top-1.5 -right-1 text-[11px] leading-none">🔧</span>
+                  <span className="absolute -top-1.5 -right-1 bg-orange-500 rounded-full w-4 h-4 flex items-center justify-center text-[8px] leading-none">🔧</span>
                 )}
                 {label}
               </button>
