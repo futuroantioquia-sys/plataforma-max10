@@ -1,10 +1,10 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useState, useMemo, useEffect, useCallback, memo } from 'react';
+import { useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
-import { getDeportistas, getDeportistasPorProyecto, getAsistencia, saveAsistencia } from '@/lib/db';
+import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp, Home, LogOut } from 'lucide-react';
+import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -74,14 +74,14 @@ const CeldaEstado = memo(function CeldaEstado({
       {readOnly ? (
         <div
           title={ESTADO_LABEL[estado] || 'Sin registro'}
-          className={`w-[52px] sm:w-[68px] h-9 sm:h-10 rounded font-black text-[8px] sm:text-[9px] leading-tight px-0.5 flex items-center justify-center whitespace-nowrap ${ESTADO_STYLE[estado]}`}>
+          className={`w-[44px] sm:w-[56px] h-8 rounded font-black text-[8px] leading-tight px-0.5 flex items-center justify-center whitespace-nowrap ${ESTADO_STYLE[estado]}`}>
           {ESTADO_LABEL[estado]}
         </div>
       ) : (
         <button
           onClick={onClick}
           title={ESTADO_LABEL[estado] || 'Sin registro'}
-          className={`w-[52px] sm:w-[68px] h-9 sm:h-10 rounded font-black text-[8px] sm:text-[9px] leading-tight px-0.5 transition active:scale-90 whitespace-nowrap ${ESTADO_STYLE[estado]}`}>
+          className={`w-[44px] sm:w-[56px] h-8 rounded font-black text-[8px] leading-tight px-0.5 transition active:scale-90 whitespace-nowrap ${ESTADO_STYLE[estado]}`}>
           {ESTADO_LABEL[estado]}
         </button>
       )}
@@ -105,8 +105,14 @@ function AsistenciaInner() {
   const [cargandoProy, setCargandoProy] = useState(false); // carga del proyecto específico
   const [guardando,    setGuardando]    = useState(false);
   const [guardado,     setGuardado]     = useState(false);
+  const [hayCambios,   setHayCambios]   = useState(false);
+  const [errorGuardar, setErrorGuardar] = useState(false);
   const [controlesAbiertos, setControlesAbiertos] = useState(true);
   const [calMap,           setCalMap]           = useState<Record<string, string>>({});
+
+  // Botones laterales flotantes — se ocultan cuando llegan los inline del fondo
+  const botonesInlineRef  = useRef<HTMLDivElement>(null);
+  const [mostrarLaterales, setMostrarLaterales] = useState(true);
 
   const mesKey = `${anio}_${String(mes + 1).padStart(2, '0')}`;
 
@@ -160,31 +166,33 @@ function AsistenciaInner() {
 
   // ── Carga de datos: estrategia diferente según rol ───────────
   useEffect(() => {
-    // Siempre cargamos asistencia (es localStorage, rápido)
-    getAsistencia().then(data => {
-      if (Object.keys(data).length) setAsistencia(data as any);
-    });
-
     if (esProfe) {
-      // Profe: NO cargamos todos. Si hay proyecto en URL, cargamos solo ese.
+      // Profe: carga SOLO el proyecto asignado (no los 50 000 filas globales)
       const proyUrl = searchParams.get('proyecto');
       if (proyUrl) {
         setCargandoProy(true);
-        getDeportistasPorProyecto(proyUrl).then(({ data }) => {
+        Promise.all([
+          getDeportistasPorProyecto(proyUrl),
+          getAsistenciaPorProyecto(proyUrl),   // solo este proyecto
+        ]).then(([{ data: deps }, asistData]) => {
           setCargandoProy(false);
-          if (data.length) setDeportistas(data);
+          if (deps.length) setDeportistas(deps);
+          if (Object.keys(asistData).length) setAsistencia(asistData as any);
         });
-      }
-      // Sin proyecto en URL → redirigir a mis-proyectos
-      else {
+      } else {
+        // Sin proyecto en URL → redirigir a mis-proyectos
         router.replace('/mis-proyectos');
       }
     } else {
-      // Admin: carga todos (con caché en memoria)
+      // Admin: carga todos los proyectos para poder navegar entre ellos
       setCargando(true);
-      getDeportistas().then(lista => {
+      Promise.all([
+        getDeportistas(),
+        getAsistencia(),
+      ]).then(([lista, asistData]) => {
         setCargando(false);
         if (lista.length) setDeportistas(lista);
+        if (Object.keys(asistData).length) setAsistencia(asistData as any);
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,47 +201,73 @@ function AsistenciaInner() {
   // Cuando profe cambia de proyecto manualmente → carga los atletas del nuevo proyecto
   const proyectoAnterior = useMemo(() => proyecto, []);
   useEffect(() => {
-    if (!esProfe || !proyecto || proyecto === searchParams.get('proyecto')) return;
-    setCargandoProy(true);
-    setDeportistas([]);
-    getDeportistasPorProyecto(proyecto).then(({ data }) => {
-      setCargandoProy(false);
-      if (data.length) setDeportistas(data);
-    });
+    if (!proyecto || proyecto === searchParams.get('proyecto')) return;
+    if (esProfe) {
+      // Profe cambia de proyecto → recargar deportistas + asistencia del nuevo proyecto
+      setCargandoProy(true);
+      setDeportistas([]);
+      Promise.all([
+        getDeportistasPorProyecto(proyecto),
+        getAsistenciaPorProyecto(proyecto),
+      ]).then(([{ data: deps }, asistData]) => {
+        setCargandoProy(false);
+        if (deps.length) setDeportistas(deps);
+        if (Object.keys(asistData).length) setAsistencia(asistData as any);
+      });
+    } else {
+      // Admin cambia de proyecto → refrescar asistencia del proyecto desde Supabase
+      getAsistenciaPorProyecto(proyecto).then(asistData => {
+        if (Object.keys(asistData).length) {
+          setAsistencia(prev => ({ ...prev, ...(asistData as any) }));
+        }
+      });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyecto, esProfe]);
 
   // Cargar días del proyecto seleccionado (y resetear a [] al cambiar de proyecto)
   useEffect(() => {
-    // Siempre resetear primero → casillas en blanco al cambiar de proyecto
     setDiasSel([]);
     if (!proyecto) return;
+
+    // 1.ª opción: clave rápida localStorage (mismo navegador, inmediata)
     try {
-      // 1.ª opción: clave rápida (mismo navegador, inmediata)
       const rawDias = localStorage.getItem(`futuro_dias_${proyecto}`);
       if (rawDias) {
         const dias = JSON.parse(rawDias) as number[];
-        if (Array.isArray(dias) && dias.length > 0) { setDiasSel(dias); return; }
-      }
-      // 2.ª opción: meta compuesta (búsqueda insensible a mayúsculas)
-      const rawMeta = localStorage.getItem(PROYECTOS_META_KEY);
-      if (rawMeta) {
-        const meta = JSON.parse(rawMeta) as Record<string, { dias?: number[] }>;
-        const proyLower = proyecto.trim().toLowerCase();
-        const k = Object.keys(meta).find(mk =>
-          mk.trim().toLowerCase().endsWith(`::${proyLower}`) ||
-          mk.trim().toLowerCase() === proyLower
-        );
-        if (k && Array.isArray(meta[k]?.dias) && (meta[k]!.dias!).length > 0) {
-          setDiasSel(meta[k]!.dias!);
+        if (Array.isArray(dias) && dias.length > 0) { setDiasSel(dias); }
+      } else {
+        // 2.ª opción: meta compuesta localStorage
+        const rawMeta = localStorage.getItem(PROYECTOS_META_KEY);
+        if (rawMeta) {
+          const meta = JSON.parse(rawMeta) as Record<string, { dias?: number[] }>;
+          const proyLower = proyecto.trim().toLowerCase();
+          const k = Object.keys(meta).find(mk =>
+            mk.trim().toLowerCase().endsWith(`::${proyLower}`) ||
+            mk.trim().toLowerCase() === proyLower
+          );
+          if (k && Array.isArray(meta[k]?.dias) && (meta[k]!.dias!).length > 0) {
+            setDiasSel(meta[k]!.dias!);
+          }
         }
       }
     } catch {}
+
+    // 3.ª opción: API Supabase (funciona en cualquier dispositivo — principal para profes)
+    fetch(`/api/jornada-proyecto?proyecto=${encodeURIComponent(proyecto)}`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : { dias: [] })
+      .then(({ dias }: { dias: number[] }) => {
+        if (Array.isArray(dias) && dias.length > 0) {
+          setDiasSel(dias);
+          try { localStorage.setItem(`futuro_dias_${proyecto}`, JSON.stringify(dias)); } catch {}
+        }
+      })
+      .catch(() => {/* silencioso */});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyecto]);
 
-  // 3.ª opción (definitiva): leer días desde Supabase vía columna jornada
-  // Esto funciona aunque admin y profe estén en navegadores distintos
+  // 4.ª opción: leer días desde columna jornada en los deportistas ya cargados
+  // (respaldo secundario si el API falló pero los deportistas vienen con jornada)
   useEffect(() => {
     if (!proyecto || deportistas.length === 0) return;
     const proyLower = proyecto.trim().toLowerCase();
@@ -251,7 +285,6 @@ function AsistenciaInner() {
         parsed.every(n => typeof n === 'number' && n >= 0 && n <= 6)
       ) {
         setDiasSel(parsed);
-        // También actualizar localStorage para próximas cargas rápidas
         try { localStorage.setItem(`futuro_dias_${proyecto}`, JSON.stringify(parsed)); } catch {}
       }
     } catch {
@@ -270,6 +303,19 @@ function AsistenciaInner() {
     } catch { setCalMap({}); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyecto, mesKey]);
+
+  // Fade de botones laterales: se ocultan cuando los inline del fondo son visibles
+  useEffect(() => {
+    const el = botonesInlineRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setMostrarLaterales(!entry.isIntersecting),
+      { threshold: 0.15 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyecto, deportistas.length]);
 
   // Programas y proyectos para el admin (no se usa para profe)
   const programas = useMemo(() => {
@@ -371,11 +417,29 @@ function AsistenciaInner() {
     const curr = estadoMap[depId]?.[fk] ?? '';
     if (curr === 'CAN') return;
     const next = ESTADO_NEXT[curr];
+
+    // Si volvemos a vacío Y había un valor real → eliminar la fila de Supabase
+    if (!next && curr) {
+      deleteAsistenciaFecha(proyecto, mesKey, depId, fk)
+        .catch(e => console.error('[asistencia] delete:', e));
+    }
+
     setAsistencia(prev => {
       const prevMes = prev[proyecto]?.[mesKey] ?? {};
-      const newMes  = { ...prevMes, [depId]: { ...(prevMes[depId] ?? {}), [fk]: next } };
+      const prevDep = prevMes[depId] ?? {};
+      let newDep: Record<string, string>;
+      if (!next) {
+        // Volver a vacío = eliminar la clave (no guardar '' en Supabase)
+        const { [fk]: _removed, ...rest } = prevDep;
+        newDep = rest;
+      } else {
+        newDep = { ...prevDep, [fk]: next };
+      }
+      const newMes  = { ...prevMes, [depId]: newDep };
       const updated: AsistenciaData = { ...prev, [proyecto]: { ...(prev[proyecto] ?? {}), [mesKey]: newMes } };
-      saveAsistencia(updated);
+      // Solo localStorage en cada click — evita carreras con Supabase
+      saveAsistenciaLocal(updated);
+      setHayCambios(true);
       return updated;
     });
   }, [estadoMap, proyecto, mesKey]);
@@ -386,12 +450,21 @@ function AsistenciaInner() {
     const yaCancelado = atletas.length > 0 && getEstado(atletas[0].id, fk) === 'CAN';
     if (yaCancelado) {
       if (!window.confirm(`¿Deshacer el cancelado del ${diaStr}?`)) return;
+      // Deshacer cancelado: eliminar la fila CAN de Supabase por cada atleta
+      atletas.forEach(d => {
+        deleteAsistenciaFecha(proyecto, mesKey, d.id, fk)
+          .catch(e => console.error('[asistencia] delete undo-cancel:', e));
+      });
       setAsistencia(prev => {
         const prevMes = prev[proyecto]?.[mesKey] ?? {};
         const newMes  = { ...prevMes };
-        atletas.forEach(d => { newMes[d.id] = { ...(newMes[d.id] ?? {}), [fk]: '' }; });
+        atletas.forEach(d => {
+          const { [fk]: _removed, ...rest } = newMes[d.id] ?? {};
+          newMes[d.id] = rest;
+        });
         const updated: AsistenciaData = { ...prev, [proyecto]: { ...(prev[proyecto] ?? {}), [mesKey]: newMes } };
-        saveAsistencia(updated);
+        saveAsistenciaLocal(updated);
+        setHayCambios(true);
         return updated;
       });
     } else {
@@ -401,7 +474,8 @@ function AsistenciaInner() {
         const newMes  = { ...prevMes };
         atletas.forEach(d => { newMes[d.id] = { ...(newMes[d.id] ?? {}), [fk]: 'CAN' }; });
         const updated: AsistenciaData = { ...prev, [proyecto]: { ...(prev[proyecto] ?? {}), [mesKey]: newMes } };
-        saveAsistencia(updated);
+        saveAsistenciaLocal(updated);
+        setHayCambios(true);
         return updated;
       });
     }
@@ -446,13 +520,21 @@ function AsistenciaInner() {
   }
 
   async function guardarAsistencia() {
-    if (guardando) return;
+    if (guardando || !proyecto) return;
     setGuardando(true);
     setGuardado(false);
+    setErrorGuardar(false);
     try {
-      await saveAsistencia(asistencia);
-      setGuardado(true);
-      setTimeout(() => setGuardado(false), 3000);
+      // Solo guarda el proyecto activo — nunca sobreescribe datos de otros profes
+      const ok = await saveAsistenciaProyecto(proyecto, asistencia);
+      if (ok) {
+        setGuardado(true);
+        setHayCambios(false);
+        setTimeout(() => setGuardado(false), 4000);
+      } else {
+        setErrorGuardar(true);
+        setTimeout(() => setErrorGuardar(false), 6000);
+      }
     } finally {
       setGuardando(false);
     }
@@ -517,7 +599,7 @@ function AsistenciaInner() {
 
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 z-20">
-        <button onClick={() => router.push('/dashboard')} className="text-white/70 hover:text-white transition flex-shrink-0">
+        <button onClick={() => router.push(esProfe ? '/mis-proyectos' : '/dashboard')} className="text-white/70 hover:text-white transition flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
@@ -527,25 +609,20 @@ function AsistenciaInner() {
         <div className="flex items-center gap-2 flex-shrink-0">
           {proyecto && atletas.length > 0 && esProfe && (
             <>
-              <button onClick={guardarAsistencia} disabled={guardando}
-                className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition border ${guardado ? 'bg-white text-[#16a34a] border-white' : 'bg-[#16a34a] hover:bg-[#15803d] text-white border-white/30'}`}>
-                {guardado ? <><CheckCircle2 className="w-3.5 h-3.5" />¡Listo!</>
-                  : guardando ? <><Save className="w-3.5 h-3.5 animate-pulse" />…</>
-                  : <><Save className="w-3.5 h-3.5" />Guardar</>}
-              </button>
               <button onClick={descargarExcel}
                 className="hidden sm:flex items-center gap-1 bg-white/20 hover:bg-white/35 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition border border-white/30">
                 <FileDown className="w-3.5 h-3.5" />CSV
               </button>
             </>
           )}
-          <div className="hidden sm:block text-right leading-tight">
-            <p className="text-white font-black text-xs tracking-widest">MAX 10 SPORT</p>
+          <div className="flex flex-col items-end flex-shrink-0">
+            <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+            <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
           </div>
         </div>
       </header>
 
-      <main className="px-2 sm:px-3 py-2 sm:py-3 space-y-2 sm:space-y-3">
+      <main className="px-2 sm:px-3 py-2 sm:py-3 pb-32 space-y-2 sm:space-y-3">
 
         {/* ── Bienvenida profe ───────────────────────────────── */}
         {esProfe && !proyecto && !estaCargando && (
@@ -751,12 +828,12 @@ function AsistenciaInner() {
                   </tr>
                   {/* Fila 2: Columnas */}
                   <tr>
-                    <th style={{ background: G, border: BW, width: 70, minWidth: 70 }}
-                      className="px-2 py-2 text-center text-white font-black text-[10px] uppercase whitespace-nowrap sticky left-0 z-10">
+                    <th style={{ background: G, border: BW, width: 58, minWidth: 58 }}
+                      className="px-1 py-2 text-center text-white font-black text-[10px] uppercase whitespace-nowrap">
                       CÓD
                     </th>
-                    <th style={{ background: G, border: BW, minWidth: 160 }}
-                      className="px-3 sm:px-5 py-2 text-left text-white font-black text-[10px] uppercase whitespace-nowrap sticky left-[74px] z-10">
+                    <th style={{ background: G, border: BW, minWidth: 90 }}
+                      className="px-1 py-2 text-left text-white font-black text-[10px] uppercase whitespace-nowrap sticky left-0 z-10">
                       NOMBRE
                     </th>
                     {!esProfe && (
@@ -792,12 +869,12 @@ function AsistenciaInner() {
                     const tot = totalesMap[dep.id];
                     return (
                       <tr key={dep.id}>
-                        <td style={{ background: G, border: BW, width: 70, minWidth: 70 }}
-                          className="px-2 py-1.5 text-center text-white font-black text-xs whitespace-nowrap sticky left-0 z-10">
+                        <td style={{ background: G, border: BW, width: 58, minWidth: 58 }}
+                          className="px-1 py-1.5 text-center text-white font-black text-xs whitespace-nowrap">
                           {cod || '—'}
                         </td>
-                        <td style={{ background: ROW1, border: BW, minWidth: 160 }}
-                          className="px-3 sm:px-5 py-1.5 text-left text-[#111827] font-semibold text-xs sm:text-sm whitespace-nowrap sticky left-[74px] z-10">
+                        <td style={{ background: ROW1, border: BW, minWidth: 90 }}
+                          className="px-1 py-1.5 text-left text-[#111827] font-semibold text-xs whitespace-nowrap sticky left-0 z-10">
                           {dep._nombre}
                         </td>
                         {!esProfe && (
@@ -862,7 +939,135 @@ function AsistenciaInner() {
             </div>
           </div>
         )}
+
+        {/* ── BOTONES INICIO Y SALIR (scrollables, encima del GUARDAR fijo) ── */}
+        {esProfe && proyecto && atletas.length > 0 && (
+          <div ref={botonesInlineRef} className="flex gap-3 pt-2">
+            <button
+              onClick={() => router.push('/mis-proyectos')}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-[#064e1e] text-white font-black text-sm active:scale-[.97] transition-transform shadow-sm"
+            >
+              <Home className="w-4 h-4" />
+              Inicio
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.removeItem('futuro-profe-nombre');
+                  localStorage.removeItem('futuro-profe-foto');
+                  localStorage.removeItem('futuro-profe-proyectos');
+                  localStorage.removeItem('futuro-rol');
+                } catch {}
+                router.push('/login');
+              }}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-red-200 text-red-500 font-black text-sm active:scale-[.97] transition-transform shadow-sm"
+            >
+              <LogOut className="w-4 h-4" />
+              Salir
+            </button>
+          </div>
+        )}
+
       </main>
+
+      {/* ── BOTONES LATERALES FLOTANTES (lado derecho, se desvanecen al llegar al fondo) ── */}
+      {esProfe && proyecto && atletas.length > 0 && (
+        <div
+          className="fixed z-40 flex flex-col gap-2"
+          style={{
+            right: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            opacity: mostrarLaterales ? 1 : 0,
+            pointerEvents: mostrarLaterales ? 'auto' : 'none',
+            transition: 'opacity 0.45s ease',
+          }}
+        >
+          <button
+            onClick={() => router.push('/mis-proyectos')}
+            title="Inicio"
+            aria-label="Inicio"
+            className="w-11 h-11 rounded-full bg-[#064e1e] text-white flex items-center justify-center shadow-xl active:scale-90 transition-transform"
+          >
+            <Home className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => {
+              try {
+                localStorage.removeItem('futuro-profe-nombre');
+                localStorage.removeItem('futuro-profe-foto');
+                localStorage.removeItem('futuro-profe-proyectos');
+                localStorage.removeItem('futuro-rol');
+              } catch {}
+              router.push('/login');
+            }}
+            title="Cerrar sesión"
+            aria-label="Salir"
+            className="w-11 h-11 rounded-full bg-white border border-red-200 text-red-400 flex items-center justify-center shadow-xl active:scale-90 transition-transform"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      {/* ── BOTÓN GUARDAR FLOTANTE ─────────────────────────── */}
+      {esProfe && proyecto && atletas.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pt-2"
+          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)' }}>
+          <button
+            onClick={guardarAsistencia}
+            disabled={guardando}
+            style={{
+              width: '100%',
+              maxWidth: 480,
+              margin: '0 auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              padding: '16px 0',
+              borderRadius: 18,
+              border: 'none',
+              cursor: guardando ? 'wait' : 'pointer',
+              fontWeight: 900,
+              fontSize: 17,
+              letterSpacing: '0.03em',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+              background: errorGuardar
+                ? '#b45309'
+                : guardado
+                  ? '#15803d'
+                  : hayCambios
+                    ? '#dc2626'
+                    : '#16a34a',
+              color: '#fff',
+              transition: 'background 0.2s',
+            }}
+          >
+            {errorGuardar ? (
+              <><Save style={{ width: 22, height: 22 }} /> ⚠️ ERROR — REINTENTAR</>
+            ) : guardado ? (
+              <><CheckCircle2 style={{ width: 22, height: 22 }} /> ¡ASISTENCIA GUARDADA!</>
+            ) : guardando ? (
+              <><Save style={{ width: 22, height: 22, animation: 'pulse 1s infinite' }} /> GUARDANDO...</>
+            ) : hayCambios ? (
+              <><Save style={{ width: 22, height: 22 }} /> GUARDAR CAMBIOS ⚠️</>
+            ) : (
+              <><Save style={{ width: 22, height: 22 }} /> GUARDAR ASISTENCIA</>
+            )}
+          </button>
+          {errorGuardar && (
+            <p style={{ textAlign: 'center', color: '#fcd34d', fontSize: 12, marginTop: 6, fontWeight: 700 }}>
+              ❌ No se pudo guardar en el servidor. Revisa tu conexión y vuelve a intentarlo.
+            </p>
+          )}
+          {hayCambios && !guardando && !guardado && !errorGuardar && (
+            <p style={{ textAlign: 'center', color: '#fca5a5', fontSize: 12, marginTop: 6, fontWeight: 700 }}>
+              ⚠️ Tienes cambios sin guardar — presiona el botón para no perderlos
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
