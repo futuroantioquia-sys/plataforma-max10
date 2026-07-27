@@ -220,6 +220,7 @@ function EstadoCuentaContent() {
   const [modalImg,      setModalImg]      = useState<string | null>(null);
   const [showInfoPago,  setShowInfoPago]  = useState(false);
   const [showMant,      setShowMant]      = useState(false);
+  const [soporteExito,  setSoporteExito]  = useState(false);
   const fotoInputRef    = useRef<HTMLInputElement>(null);
   const soporteInputRef = useRef<HTMLInputElement>(null);
 
@@ -272,7 +273,12 @@ function EstadoCuentaContent() {
         fecha: new Date().toISOString().split('T')[0],
       }))
       .then(() => getSoportes(id))
-      .then(lista => { setSoportes(lista); setShowSoportes(true); })
+      .then(lista => {
+        setSoportes(lista);
+        setShowSoportes(true);
+        setSoporteExito(true);
+        setTimeout(() => setSoporteExito(false), 5500);
+      })
       .catch(console.error)
       .finally(() => {
         setSubiendoSop(false);
@@ -552,6 +558,11 @@ function EstadoCuentaContent() {
           50% { opacity: 0.15; transform: scale(0.97); }
         }
         .titila { animation: titila 0.9s ease-in-out infinite; }
+        @keyframes fadeOutMsg {
+          0%, 75% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-4px); }
+        }
+        .soporte-ok { animation: fadeOutMsg 5.5s ease-in-out forwards; }
       `}</style>
 
       {/* ── INPUTS ocultos ── */}
@@ -850,6 +861,17 @@ function EstadoCuentaContent() {
                   <strong>Recuerda:</strong> solo sube soportes de pagos que estén <strong>PENDIENTES</strong>. No subas comprobantes de meses que ya aparecen como <strong className="text-green-700">PAGÓ ✓</strong>.
                 </p>
               </div>
+
+              {/* Mensaje éxito soporte */}
+              {soporteExito && (
+                <div className="soporte-ok bg-green-50 border border-green-300 rounded-xl px-4 py-2.5 mb-3 flex items-center gap-2.5">
+                  <span className="text-green-500 text-lg flex-shrink-0">✅</span>
+                  <div>
+                    <p className="text-green-700 font-black text-[12px] leading-tight">¡Pago adjunto correctamente!</p>
+                    <p className="text-green-600 text-[10px] font-semibold mt-0.5">El administrador podrá verlo en tu estado de cuenta.</p>
+                  </div>
+                </div>
+              )}
 
               {/* Botones calidoso */}
               <div className="flex gap-2 mb-3">
