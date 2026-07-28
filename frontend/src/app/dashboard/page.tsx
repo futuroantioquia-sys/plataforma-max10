@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Users, DollarSign, Calendar,
@@ -114,7 +114,7 @@ function LinkInscripcionCard() {
     navigator.clipboard.writeText(url).then(() => {
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
-    });
+    }).catch(() => {});
   }
 
   const qrSrc = url
@@ -368,7 +368,9 @@ function DashboardHeader({ usuario }: { usuario: any }) {
   const router = useRouter();
 
   function cerrarSesion() {
-    useAuthStore.getState().logout().then(() => router.push('/login'));
+    useAuthStore.getState().logout()
+      .then(() => router.push('/login'))
+      .catch(() => { router.push('/login'); });
   }
 
   return (
@@ -467,11 +469,48 @@ function WelcomeBar({ usuario }: { usuario: any }) {
   );
 }
 
+// ── ERROR BOUNDARY ────────────────────────────────────────────────
+class DashboardErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[DashboardErrorBoundary] crash:', error.message, info.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-lg p-6 max-w-lg w-full">
+            <h2 className="text-xl font-black text-red-600 mb-3">⚠️ Error en el Dashboard</h2>
+            <pre className="bg-gray-100 rounded-lg p-3 text-xs overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ maxHeight: 240 }}>
+              {this.state.error.message}{'\n\n'}{this.state.error.stack}
+            </pre>
+            <p className="text-xs text-gray-500 mb-4">Toma captura y envíala al desarrollador.</p>
+            <button
+              onClick={() => { this.setState({ error: null }); window.location.reload(); }}
+              className="w-full bg-green-600 text-white font-black py-3 rounded-xl text-base">
+              🔄 Recargar
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ── PÁGINA PRINCIPAL ─────────────────────────────────────────────
-export default function DashboardPage() {
+function DashboardInner() {
   const router = useRouter();
   const { usuario, cargando } = useAuthStore();
-  const [montado, setMontado] = useState(false);
+  const [montado,  setMontado]  = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => { setMontado(true); }, []);
 
@@ -479,6 +518,21 @@ export default function DashboardPage() {
     if (!montado) return;
     if (!usuario && !cargando) router.replace('/login');
   }, [usuario, cargando, router, montado]);
+
+  // Captura promesas rechazadas no manejadas — evita la pantalla de error de Next.js
+  useEffect(() => {
+    function onUnhandledRejection(ev: PromiseRejectionEvent) {
+      const r = ev.reason;
+      const msg = r?.message
+        ? `${r.message}\n\n${r.stack ?? ''}`
+        : String(r ?? 'Error desconocido');
+      console.error('[dashboard] unhandledrejection:', r);
+      setErrorMsg(msg);
+      ev.preventDefault();
+    }
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    return () => window.removeEventListener('unhandledrejection', onUnhandledRejection);
+  }, []);
 
   if (!montado || cargando || !usuario) return <LoadingBall />;
 
@@ -493,6 +547,23 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#f0f7ff]">
+      {/* Panel de error (Promise rejection) */}
+      {errorMsg && (
+        <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full">
+            <h2 className="text-xl font-black text-red-600 mb-3">⚠️ Error en el Dashboard</h2>
+            <pre className="bg-gray-100 rounded-lg p-3 text-xs overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ maxHeight: 220 }}>
+              {errorMsg}
+            </pre>
+            <p className="text-xs text-gray-500 mb-4">Toma captura y envíala al desarrollador.</p>
+            <button
+              onClick={() => { setErrorMsg(null); window.location.reload(); }}
+              className="w-full bg-green-600 text-white font-black py-3 rounded-xl text-base">
+              🔄 Recargar
+            </button>
+          </div>
+        </div>
+      )}
       <DashboardHeader usuario={usuario} />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-7">
@@ -500,5 +571,13 @@ export default function DashboardPage() {
         {vistaPorRol[usuario.rol] ?? <DashboardAdmin />}
       </main>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <DashboardErrorBoundary>
+      <DashboardInner />
+    </DashboardErrorBoundary>
   );
 }

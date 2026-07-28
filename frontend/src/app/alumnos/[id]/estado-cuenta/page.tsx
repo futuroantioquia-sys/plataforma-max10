@@ -198,6 +198,7 @@ export default function EstadoCuentaPage() {
   const [anio,     setAnio]    = useState(new Date().getFullYear());
   const [confirmRevert, setConfirmRevert] = useState<number | null>(null);
   const [showPagoModal, setShowPagoModal] = useState(false);
+  const [pagoModalIdx,  setPagoModalIdx]  = useState<number | null>(null);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -656,34 +657,48 @@ export default function EstadoCuentaPage() {
 
                     {/* FECHA */}
                     <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      <input
-                        value={formatFecha(row.fecha)}
-                        onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, fecha: e.target.value} : r); savePagos(u); }}
-                        className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
-                        placeholder="DD/MM/AAAA"
-                      />
+                      {puedeEditar ? (
+                        <input
+                          value={formatFecha(row.fecha)}
+                          onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, fecha: e.target.value} : r); savePagos(u); }}
+                          className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                          placeholder="DD/MM/AAAA"
+                        />
+                      ) : (
+                        <span className="text-xs font-semibold text-[#111827]">{formatFecha(row.fecha) || '—'}</span>
+                      )}
                     </td>
 
                     {/* DESCRIPCIÓN (campo destino) */}
                     <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      <input
-                        value={row.destino}
-                        onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, destino: e.target.value} : r); savePagos(u); }}
-                        className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
-                        placeholder="—"
-                      />
+                      {puedeEditar ? (
+                        <input
+                          value={row.destino}
+                          onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, destino: e.target.value} : r); savePagos(u); }}
+                          className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                          placeholder="—"
+                        />
+                      ) : (
+                        <span className="text-xs font-semibold text-[#111827]">{row.destino || '—'}</span>
+                      )}
                     </td>
 
                     {/* V. PAGADO — gris claro, número con $ y puntos */}
                     <td style={{ background: '#e5e7eb', border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      <input
-                        value={ensurePeso(row.vPagado)}
-                        readOnly={!isPaid}
-                        onChange={e => { if (!isPaid) return; const u = pagos.map((r,i) => i===idx ? {...r, vPagado: e.target.value} : r); savePagos(u); }}
-                        className={cn('w-full text-center font-bold text-xs bg-transparent focus:outline-none px-1 py-1',
-                          isPaid ? 'text-[#374151]' : 'text-[#9ca3af] cursor-default')}
-                        placeholder="—"
-                      />
+                      {puedeEditar ? (
+                        <input
+                          value={ensurePeso(row.vPagado)}
+                          readOnly={!isPaid}
+                          onChange={e => { if (!isPaid) return; const u = pagos.map((r,i) => i===idx ? {...r, vPagado: e.target.value} : r); savePagos(u); }}
+                          className={cn('w-full text-center font-bold text-xs bg-transparent focus:outline-none px-1 py-1',
+                            isPaid ? 'text-[#374151]' : 'text-[#9ca3af] cursor-default')}
+                          placeholder="—"
+                        />
+                      ) : (
+                        <span className={cn('text-xs font-bold', isPaid ? 'text-[#374151]' : 'text-[#9ca3af]')}>
+                          {ensurePeso(row.vPagado) || '—'}
+                        </span>
+                      )}
                     </td>
 
                     {/* DETALLE — gris oscuro en vez de verde cuando pagó */}
@@ -710,7 +725,7 @@ export default function EstadoCuentaPage() {
                                     PAGÓ
                                   </span>
                                 : <button
-                                    onClick={() => setShowPagoModal(true)}
+                                    onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
                                     className="px-2 py-2 rounded-lg font-black text-[14px] w-full block text-center text-white tracking-wide shadow-sm active:scale-95 transition-transform"
                                     style={{ background: '#dc2626' }}>
                                     PAGAR
@@ -776,15 +791,17 @@ export default function EstadoCuentaPage() {
       })()}
 
       {/* ── MODAL PAGAR (vista calidoso) ── */}
-      {showPagoModal && (
+      {showPagoModal && (() => {
+        const filaModal = pagoModalIdx !== null ? pagosVista[pagoModalIdx] : null;
+        return (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
-             onClick={() => setShowPagoModal(false)}>
+             onClick={() => { setShowPagoModal(false); setPagoModalIdx(null); }}>
           <div className="relative rounded-3xl overflow-hidden w-full max-w-xs shadow-2xl"
                style={{ background: '#1a2d40' }}
                onClick={e => e.stopPropagation()}>
 
             {/* Cerrar */}
-            <button onClick={() => setShowPagoModal(false)}
+            <button onClick={() => { setShowPagoModal(false); setPagoModalIdx(null); }}
                     className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition z-10">
               ✕
             </button>
@@ -793,6 +810,17 @@ export default function EstadoCuentaPage() {
 
               {/* Escudo FA */}
               <img src="/ESCUDO%20F.A%202020.png" alt="Futuro Antioquia" className="w-[90px] h-auto drop-shadow-lg"/>
+
+              {/* Mes y monto */}
+              {filaModal && (
+                <div className="w-full rounded-xl py-2.5 px-4 text-center" style={{ background: '#0f3460' }}>
+                  <p className="text-white/70 text-[10px] font-semibold uppercase tracking-wider">Pago correspondiente a</p>
+                  <p className="text-white font-black text-[15px] mt-0.5">{filaModal.detalle}</p>
+                  {filaModal.vCargado && (
+                    <p className="text-green-400 font-black text-[18px] mt-0.5">{filaModal.vCargado}</p>
+                  )}
+                </div>
+              )}
 
               {/* Título */}
               <h2 className="text-white font-black text-[17px] tracking-[0.15em] text-center">REALIZA TU PAGO</h2>
@@ -853,7 +881,8 @@ export default function EstadoCuentaPage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── MODAL REGISTRAR PAGO ── */}
       {editIdx !== null && (

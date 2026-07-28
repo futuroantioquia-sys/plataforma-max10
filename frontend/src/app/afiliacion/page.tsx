@@ -366,6 +366,20 @@ export default function AfiliacionPage() {
   const [_deps, _setDeps] = useState<Deportista[]>([]);
   useEffect(() => { getDeportistas().then(_setDeps); }, []);
 
+  // Auto-iniciar en modo "nuevo" si viene desde el botón NUEVO del login
+  useEffect(() => {
+    try {
+      const modoFlag = sessionStorage.getItem('afiliacion_modo');
+      if (modoFlag === 'nuevo') {
+        sessionStorage.removeItem('afiliacion_modo');
+        setCampos(CAMPOS_NUEVO);
+        setModo('nuevo');
+        setPaso('formulario');
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [depId,      setDepId]      = useState<string | null>(null);
   const [campos,     setCampos]     = useState<{ key: string; label: string; tipo: string; seccion?: string }[]>([]);
   const [valores,    setValores]    = useState<Record<string, string>>({});

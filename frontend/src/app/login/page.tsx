@@ -2,12 +2,12 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Shield, AlertCircle, Loader2, Users, Star } from 'lucide-react';
+import { Eye, EyeOff, Shield, AlertCircle, Loader2, Users, Star, UserPlus } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
 import { getProfes, getVistaContable, buscarPorCodigo } from '@/lib/db';
 
-type Tab = 'admin' | 'profe' | 'calidoso';
+type Tab = 'admin' | 'profe' | 'calidoso' | 'nuevo';
 
 export default function LoginPage() {
   const router  = useRouter();
@@ -184,6 +184,17 @@ export default function LoginPage() {
         setErrLocal('Código o documento incorrecto');
         return;
       }
+
+      /* ── NUEVO DEPORTISTA ─── */
+      if (tab === 'nuevo') {
+        if (c === '34') {
+          try { sessionStorage.setItem('afiliacion_modo', 'nuevo'); } catch {}
+          router.push('/afiliacion');
+        } else {
+          setErrLocal('Código incorrecto. Solicita el código al administrador.');
+        }
+        return;
+      }
     } finally {
       setEnviando(false);
     }
@@ -220,6 +231,16 @@ export default function LoginPage() {
       ring:         'focus:border-orange-400',
       tabActive:    'text-[#9a3412]',
     },
+    nuevo: {
+      titulo:       'Nuevo Deportista',
+      labelUser:    '',
+      placeholderU: '',
+      labelClave:   'Código de Acceso',
+      placeholderC: 'Ingresa el código',
+      grad:         'from-[#7c3aed] to-[#a855f7]',
+      ring:         'focus:border-purple-400',
+      tabActive:    'text-[#7c3aed]',
+    },
   };
 
   const cfg     = config[tab];
@@ -230,6 +251,7 @@ export default function LoginPage() {
     admin:    'from-[#064e1e] via-[#0a6628] to-[#22c55e]',
     profe:    'from-[#0f172a] via-[#1e3a8a] to-[#3b82f6]',
     calidoso: 'from-[#431407] via-[#92400e] to-[#f97316]',
+    nuevo:    'from-[#2e1065] via-[#7c3aed] to-[#a855f7]',
   };
 
   return (
@@ -285,9 +307,10 @@ export default function LoginPage() {
         <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-1.5 flex gap-1 mb-5 border border-white/20">
           {(
             [
-              { key: 'admin',    label: 'Admin',    icon: Shield },
-              { key: 'profe',    label: 'Profe',    icon: Users  },
-              { key: 'calidoso', label: 'Calidoso', icon: Star   },
+              { key: 'admin',    label: 'Admin',    icon: Shield    },
+              { key: 'profe',    label: 'Profe',    icon: Users     },
+              { key: 'calidoso', label: 'Calidoso', icon: Star      },
+              { key: 'nuevo',    label: 'Nuevo',    icon: UserPlus  },
             ] as { key: Tab; label: string; icon: any }[]
           ).map(({ key, label, icon: Icono }) => (
             <button
@@ -318,7 +341,8 @@ export default function LoginPage() {
             <p className="text-sm text-gray-400 mb-6">Ingresa tus datos para continuar</p>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Campo usuario */}
+              {/* Campo usuario (oculto para nuevos) */}
+              {tab !== 'nuevo' && (
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
                   {cfg.labelUser}
@@ -337,6 +361,7 @@ export default function LoginPage() {
                   )}
                 />
               </div>
+              )}
 
               {/* Campo clave */}
               <div>
