@@ -204,7 +204,7 @@ export default function PerfilDeportista() {
   const edad      = calcularEdad(dep._columnas);
 
   // Columnas a mostrar: sin vacías ni __EMPTY, y ocultar AÑO/MES/DÍA sueltos (ya se muestran combinados)
-  const columnas  = Object.entries(dep._columnas).filter(([k]) => {
+  const columnas  = Object.entries(dep._columnas ?? {}).filter(([k]) => {
     if (!k.trim()) return false;
     if (/^__EMPTY/i.test(k)) return false;
     if (/^column\s*\d+$/i.test(k)) return false;
@@ -218,7 +218,7 @@ export default function PerfilDeportista() {
   const initials  = dep._nombre.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
   /* Campos para el encabezado */
-  const getC = (rx: RegExp) => { const k = Object.keys(dep._columnas).find(k => rx.test(k)); return k ? dep._columnas[k] : ''; };
+  const getC = (rx: RegExp) => { const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k)); return k ? (dep._columnas[k] ?? '') : ''; };
   const programaVal    = getC(/^program/i);
   const proyectoVal    = getC(/^proy/i);
   const codigoVal      = getC(/^c[oó]d/i);

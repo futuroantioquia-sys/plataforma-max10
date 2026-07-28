@@ -94,8 +94,6 @@ const CeldaEstado = memo(function CeldaEstado({
 function AsistenciaInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const fromAtleta   = searchParams.get('proyecto') !== null;
-
   const [deportistas,  setDeportistas]  = useState<Deportista[]>([]);
   const [asistencia,   setAsistencia]   = useState<AsistenciaData>({});
   const [programa,     setPrograma]     = useState('');
@@ -169,7 +167,10 @@ function AsistenciaInner() {
     setEsProfe(isProfe);
     try {
       const rg = localStorage.getItem('futuro-profe-proyectos');
-      if (rg) setProyectosProfe(JSON.parse(rg));
+      if (rg) {
+        const parsed = JSON.parse(rg);
+        if (Array.isArray(parsed)) setProyectosProfe(parsed);
+      }
       const rn = localStorage.getItem('futuro-profe-nombre');
       if (rn) {
         const parsed = JSON.parse(rn);
@@ -217,7 +218,6 @@ function AsistenciaInner() {
   }, []);
 
   // Cuando profe cambia de proyecto manualmente → carga los atletas del nuevo proyecto
-  const proyectoAnterior = useMemo(() => proyecto, []);
   useEffect(() => {
     if (!proyecto || proyecto === searchParams.get('proyecto')) return;
     if (esProfe) {
@@ -667,9 +667,9 @@ function AsistenciaInner() {
               </div>
             </div>
             <p className="text-gray-500 text-sm mb-5 text-center font-medium">
-              {proyectosProfe.length > 0 ? 'Selecciona el proyecto:' : 'Sin proyectos asignados. Contacta al admin.'}
+              {Array.isArray(proyectosProfe) && proyectosProfe.length > 0 ? 'Selecciona el proyecto:' : 'Sin proyectos asignados. Contacta al admin.'}
             </p>
-            {proyectosProfe.length > 0 && (
+            {Array.isArray(proyectosProfe) && proyectosProfe.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-sm">
                 {proyectosProfe.map(proy => (
                   <button key={proy} onClick={() => setProyecto(proy)}

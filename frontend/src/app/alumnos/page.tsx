@@ -146,7 +146,7 @@ function colorCompite(valor: string): string {
 }
 
 function getCol(dep: Deportista, regex: RegExp) {
-  const key = Object.keys(dep._columnas).find(k => regex.test(k));
+  const key = Object.keys(dep._columnas ?? {}).find(k => regex.test(k));
   return key ? dep._columnas[key] : '';
 }
 
@@ -166,6 +166,7 @@ const colProfe    = (d: Deportista) => getCol(d, /^profe/i)   || '';
 const colCompite  = (d: Deportista) => getCol(d, /^compite/i) || '';
 const colEstado   = (d: Deportista) => getCol(d, /^estado/i)  || '';
 const colSede     = (d: Deportista) => getCol(d, /^sede/i)    || 'Sin sede';
+const colAfil     = (d: Deportista) => getCol(d, /tipo.*afil|afil.*tipo/i) || getCol(d, /afiliaci[oó]n/i) || '';
 
 // Deportistas retirados: ESTADO contiene "retirado"
 const esRetirado   = (d: Deportista) => /retirad/i.test(colEstado(d));
@@ -177,6 +178,7 @@ const SIN_PROY_KEY   = '__SIN_PROYECTO__';
 const colCal      = (d: Deportista) => getCol(d, /^cal$/i)    || '';
 
 function iniciales(nombre: string) {
+  if (!nombre || typeof nombre !== 'string') return '?';
   return nombre.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 }
 
@@ -430,9 +432,6 @@ function DashboardProyecto({
     reader.readAsDataURL(file);
   }
 
-  // Tipo de afiliación
-  const colAfil = (d: Deportista) => getCol(d, /tipo.*afil|afil.*tipo/i) || getCol(d, /afiliaci[oó]n/i) || '';
-
   // Stats por tipo de afiliación
   const nuevos    = lista.filter(d => colAfil(d).toLowerCase().includes('nuevo')).length;
   const antiguos  = lista.filter(d => colAfil(d).toLowerCase().includes('antigu')).length;
@@ -452,7 +451,7 @@ function DashboardProyecto({
   }
 
   // Helpers celda — declarados antes del sort para que el hoisting los tenga disponibles
-  function getRK(dep: Deportista, rx: RegExp) { return Object.keys(dep._columnas).find(k => rx.test(k)) ?? ''; }
+  function getRK(dep: Deportista, rx: RegExp) { return Object.keys(dep._columnas ?? {}).find(k => rx.test(k)) ?? ''; }
   function val(dep: Deportista, key: string): string {
     const map: Record<string, RegExp> = {
       estado:/^estado/i, codigo:/^c[oó]d/i, anio:/^a[ñn]o$/i,
@@ -489,7 +488,7 @@ function DashboardProyecto({
 
   // ── Detectar columnas clave por nombre Y por valor ──────────
   const AFIL_KWDS = ['antigu','nuevo','reingreso','mb instit','b instit','sin afil','paso'];
-  const _allKeys  = lista.length > 0 ? Object.keys(lista[0]._columnas) : [];
+  const _allKeys  = lista.length > 0 ? Object.keys(lista[0]._columnas ?? {}) : [];
   const AFIL_KEY  = _allKeys.find(k => /tipo.*afil|afil.*tipo/i.test(k.trim()))
                  || _allKeys.find(k => /afiliaci[oó]n/i.test(k.trim()))
                  || _allKeys.find(k => lista.some(d => {
@@ -818,10 +817,10 @@ function AlumnosPageContent() {
         } else if (error) {
           setErrorCarga(error);
         }
-      });
+      }).catch(err => { console.error('Error cargando proyecto:', err); setCargando(false); setErrorCarga(String(err)); });
     } else {
       // Admin mode: carga todos los deportistas
-      getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
+      getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); }).catch(err => { console.error('Error cargando deportistas:', err); setCargando(false); });
     }
     try {
       const f = localStorage.getItem('futuro_fotos_deportistas');
@@ -858,7 +857,7 @@ function AlumnosPageContent() {
     if (!valor.trim()) return;
     const lista = deportistas.map(d => {
       if (d.id !== depId) return d;
-      const kProy = Object.keys(d._columnas).find(k => /^proy/i.test(k)) || 'PROY';
+      const kProy = Object.keys(d._columnas ?? {}).find(k => /^proy/i.test(k)) || 'PROY';
       return { ...d, _columnas: { ...d._columnas, [kProy]: valor.trim() } };
     });
     setDeportistas(lista);
