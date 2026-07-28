@@ -631,15 +631,16 @@ export async function getAsistencia(): Promise<AsistenciaData> {
     return result;
   };
 
-  // ── Intento 1: fetch() nativo ──
+  // ── Intento 1: fetch() nativo (con límite para evitar payloads masivos) ──
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado`,
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&limit=5000&order=anio_mes.desc`,
       {
         headers: {
           'apikey':        SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'Content-Type':  'application/json',
+          'Prefer':        'count=none',
         },
       }
     );
@@ -657,7 +658,9 @@ export async function getAsistencia(): Promise<AsistenciaData> {
   try {
     const { data, error } = await supabase()
       .from('asistencia')
-      .select('proyecto, anio_mes, deportista_id, fecha, estado');
+      .select('proyecto, anio_mes, deportista_id, fecha, estado')
+      .order('anio_mes', { ascending: false })
+      .limit(5000);
 
     if (error) throw error;
     if (!data || !data.length) return lsGet<AsistenciaData>(LS_ASIST, {});

@@ -1,8 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { Suspense } from 'react';
-import { useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
+import React, { Suspense, useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp, Home, LogOut } from 'lucide-react';
 import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha } from '@/lib/db';
@@ -91,6 +90,41 @@ const CeldaEstado = memo(function CeldaEstado({
   );
 });
 
+// ── Error Boundary — atrapa crashes de render y los muestra en la UI ──
+class AsistenciaErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[AsistenciaErrorBoundary] render crash:', error.message, '\n', error.stack, '\n', info.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-lg p-6 max-w-lg w-full">
+            <h2 className="text-xl font-black text-red-600 mb-3">⚠️ Error en Asistencia</h2>
+            <pre className="bg-gray-100 rounded-lg p-3 text-xs overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ maxHeight: 240 }}>
+              {this.state.error.message}{'\n\n'}{this.state.error.stack}
+            </pre>
+            <p className="text-xs text-gray-500 mb-4">Toma captura de pantalla y envíala al desarrollador.</p>
+            <button onClick={() => { this.setState({ error: null }); window.location.reload(); }}
+              className="w-full bg-green-600 text-white font-black py-3 rounded-xl text-base">
+              🔄 Recargar página
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AsistenciaInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -109,6 +143,7 @@ function AsistenciaInner() {
   const [errorGuardar, setErrorGuardar] = useState(false);
   const [controlesAbiertos, setControlesAbiertos] = useState(true);
   const [calMap,           setCalMap]           = useState<Record<string, string>>({});
+  const [errorMsg,         setErrorMsg]         = useState<string | null>(null);
 
   // Botones laterales flotantes — se ocultan cuando llegan los inline del fondo
   const botonesInlineRef  = useRef<HTMLDivElement>(null);
@@ -139,6 +174,22 @@ function AsistenciaInner() {
       if (f3) setFotoProfe(f3);
     } catch { /* localStorage no disponible o nombreProfe inválido */ }
   }, [nombreProfe]);
+
+  // ── Atrapa cualquier Promise no capturada y la muestra en la UI ──
+  // Esto evita que Next.js muestre "Application error" y en cambio muestra el error real
+  useEffect(() => {
+    function onUnhandledRejection(ev: PromiseRejectionEvent) {
+      const reason = ev.reason;
+      const msg = reason?.message
+        ? `${reason.message}\n\n${reason.stack ?? ''}`
+        : String(reason ?? 'Error desconocido en promesa');
+      console.error('[asistencia] unhandledrejection:', reason);
+      setErrorMsg(msg);
+      ev.preventDefault(); // previene la pantalla de error de Next.js
+    }
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    return () => window.removeEventListener('unhandledrejection', onUnhandledRejection);
+  }, []);
 
   // ── Detecta rol + carga datos en un único effect (evita stale closure de esProfe) ──
   useEffect(() => {
@@ -241,6 +292,8 @@ function AsistenciaInner() {
         if (Object.keys(asistData).length) {
           setAsistencia(prev => ({ ...prev, ...(asistData as any) }));
         }
+      }).catch(err => {
+        console.error('[asistencia] refresh admin proyecto:', err);
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -617,6 +670,29 @@ function AsistenciaInner() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+
+      {/* ── Panel de error diagnóstico (visible en lugar de "Application error") ── */}
+      {errorMsg && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full">
+            <h2 className="text-xl font-black text-red-600 mb-2">⚠️ Error detectado</h2>
+            <p className="text-xs text-gray-500 mb-3">Toma captura de pantalla y envíala al desarrollador:</p>
+            <pre className="bg-gray-100 rounded-lg p-3 text-[11px] font-mono overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ maxHeight: 280 }}>
+              {errorMsg}
+            </pre>
+            <div className="flex gap-3">
+              <button onClick={() => { setErrorMsg(null); window.location.reload(); }}
+                className="flex-1 bg-green-600 text-white font-black py-3 rounded-xl text-sm">
+                🔄 Recargar
+              </button>
+              <button onClick={() => setErrorMsg(null)}
+                className="flex-1 bg-gray-100 text-gray-700 font-black py-3 rounded-xl text-sm">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 z-20">
@@ -1096,7 +1172,9 @@ function AsistenciaInner() {
 export default function AsistenciaPage() {
   return (
     <Suspense>
-      <AsistenciaInner />
+      <AsistenciaErrorBoundary>
+        <AsistenciaInner />
+      </AsistenciaErrorBoundary>
     </Suspense>
   );
 }
