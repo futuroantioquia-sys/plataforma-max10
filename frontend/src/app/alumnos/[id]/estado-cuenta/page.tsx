@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Camera } from 'lucide-react';
 import LoadingBall from '@/components/LoadingBall';
@@ -184,7 +184,7 @@ function construirFechaNac(cols: Record<string, string>): string | null {
   return partes.length ? `📅 ${partes.join(' de ')}` : null;
 }
 
-export default function EstadoCuentaPage() {
+function EstadoCuentaInner() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -965,5 +965,13 @@ export default function EstadoCuentaPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function EstadoCuentaPage() {
+  return (
+    <Suspense>
+      <EstadoCuentaInner />
+    </Suspense>
   );
 }

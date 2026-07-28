@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DollarSign, Search,
@@ -81,7 +81,7 @@ function getMesAfil(cols: Record<string, string>): number {
 }
 
 
-export default function PagosPage() {
+function PagosInner() {
   const router      = useRouter();
   const searchParams = useSearchParams();
 
@@ -499,5 +499,13 @@ export default function PagosPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function PagosPage() {
+  return (
+    <Suspense>
+      <PagosInner />
+    </Suspense>
   );
 }
