@@ -15,7 +15,7 @@ import type { Deportista } from '@/lib/db';
 import { cn } from '@/lib/utils';
 
 function getCol(dep: Deportista, rx: RegExp): string {
-  const k = Object.keys(dep._columnas).find(c => rx.test(c));
+  const k = Object.keys(dep._columnas ?? {}).find(c => rx.test(c));
   return k ? dep._columnas[k] ?? '' : '';
 }
 function colPrograma(d: Deportista) { return getCol(d, /^program/i); }

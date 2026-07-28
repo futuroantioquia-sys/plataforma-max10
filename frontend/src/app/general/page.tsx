@@ -79,7 +79,7 @@ function ordenAfil(dep: Deportista): number {
 }
 
 function getColVal(dep: Deportista, rx: RegExp): string {
-  const k = Object.keys(dep._columnas).find(k => rx.test(k.trim()));
+  const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k.trim()));
   return k ? (dep._columnas[k] ?? '') : '';
 }
 
@@ -263,8 +263,8 @@ export default function GeneralPage() {
       if (!lista.length) return;
       let cambiado = false;
       const actualizados = lista.map(dep => {
-        const keySede     = Object.keys(dep._columnas).find(k => /sede/i.test(k.trim()));
-        const keyPrograma = Object.keys(dep._columnas).find(k => /^program/i.test(k.trim()));
+        const keySede     = Object.keys(dep._columnas ?? {}).find(k => /sede/i.test(k.trim()));
+        const keyPrograma = Object.keys(dep._columnas ?? {}).find(k => /^program/i.test(k.trim()));
         if (!keySede || !keyPrograma) return dep;
         const prog = (dep._columnas[keyPrograma] ?? '').trim();
         const sede = (dep._columnas[keySede] ?? '').trim();
@@ -284,9 +284,9 @@ export default function GeneralPage() {
     if (!deportistas.length) return [];
     let ref = deportistas[0];
     deportistas.forEach(d => {
-      if (Object.keys(d._columnas).length > Object.keys(ref._columnas).length) ref = d;
+      if (Object.keys(d._columnas ?? {}).length > Object.keys(ref._columnas ?? {}).length) ref = d;
     });
-    const todas = Object.keys(ref._columnas);
+    const todas = Object.keys(ref._columnas ?? {});
     const fecha      = todas.filter(c => esFechaAfil(c));
     const tipoAfil   = todas.filter(c => esTipoAfil(c));
     const estado     = todas.filter(c => /^estado$/i.test(c.trim()));  // ESTADO después de TIPO AFIL
@@ -482,10 +482,10 @@ export default function GeneralPage() {
 
       // Columnas de referencia (el deportista con más columnas)
       const refDep = deportistas.reduce(
-        (best, d) => Object.keys(d._columnas).length > Object.keys(best._columnas).length ? d : best,
+        (best, d) => Object.keys(d._columnas ?? {}).length > Object.keys(best._columnas ?? {}).length ? d : best,
         deportistas[0] ?? { _columnas: {} } as Deportista
       );
-      const existingKeys = Object.keys(refDep._columnas);
+      const existingKeys = Object.keys(refDep._columnas ?? {});
       // mapa: clave_normalizada → clave_original del consolidado
       const normMap = new Map<string, string>();
       existingKeys.forEach(k => normMap.set(sinTildes(k), k));
@@ -658,11 +658,11 @@ export default function GeneralPage() {
       if (!dep) return;
 
       // Resolver claves reales o virtuales
-      const kC  = Object.keys(dep._columnas).find(k => /^competencia$/i.test(k)) || VTC;
-      const kT1 = Object.keys(dep._columnas).find(k => /^compite$/i.test(k))     || VT1;
-      const kT2 = Object.keys(dep._columnas).find(k => /torneo.?2/i.test(k))     || VT2;
-      const kT3 = Object.keys(dep._columnas).find(k => /torneo.?3/i.test(k))     || VT3;
-      const kT4 = Object.keys(dep._columnas).find(k => /torneo.?4/i.test(k))     || VT4;
+      const kC  = Object.keys(dep._columnas ?? {}).find(k => /^competencia$/i.test(k)) || VTC;
+      const kT1 = Object.keys(dep._columnas ?? {}).find(k => /^compite$/i.test(k))     || VT1;
+      const kT2 = Object.keys(dep._columnas ?? {}).find(k => /torneo.?2/i.test(k))     || VT2;
+      const kT3 = Object.keys(dep._columnas ?? {}).find(k => /torneo.?3/i.test(k))     || VT3;
+      const kT4 = Object.keys(dep._columnas ?? {}).find(k => /torneo.?4/i.test(k))     || VT4;
 
       updates[fila.depId] = {};
       if (fila.competencia) updates[fila.depId][kC]  = fila.competencia;
@@ -1407,7 +1407,7 @@ export default function GeneralPage() {
                     <thead>
                       <tr style={{ background: '#16a34a' }}>
                         <th style={{ border: '1px solid white', padding: '6px 10px', color: 'white', fontWeight: 900 }}>ESTADO</th>
-                        {nuevosFilas[0] && Object.keys(nuevosFilas[0]._columnas).slice(0, 7).map(k => (
+                        {nuevosFilas[0] && Object.keys(nuevosFilas[0]._columnas ?? {}).slice(0, 7).map(k => (
                           <th key={k} style={{ border: '1px solid white', padding: '6px 10px', color: 'white', fontWeight: 900, whiteSpace: 'nowrap' }}>
                             {k.toUpperCase()}
                           </th>
@@ -1422,7 +1422,7 @@ export default function GeneralPage() {
                               ? <span style={{ color: '#d97706' }}>DUPLICADO</span>
                               : <span style={{ color: '#16a34a' }}>NUEVO</span>}
                           </td>
-                          {Object.keys(nuevosFilas[0]._columnas).slice(0, 7).map(k => (
+                          {Object.keys(nuevosFilas[0]._columnas ?? {}).slice(0, 7).map(k => (
                             <td key={k} style={{ border: '1px solid white', padding: '5px 8px', whiteSpace: 'nowrap', color: '#111827' }}>
                               {r._columnas[k] || '—'}
                             </td>

@@ -375,7 +375,7 @@ export default function AfiliacionPage() {
   // Helper: obtener columnas del Excel excluyendo las 4 restringidas
   // Deduplica por label: si dos columnas generan el mismo label, queda la que tiene valor
   function camposDesdeExcel(dep: Deportista) {
-    const todos = Object.keys(dep._columnas)
+    const todos = Object.keys(dep._columnas ?? {})
       .filter(k => !esExcluida(k))
       .map(k => ({ key: k, label: labelDe(k), tipo: tipoDe(k) }));
 
@@ -414,7 +414,7 @@ export default function AfiliacionPage() {
 
       // Buscar por código primero
       const dep = lista.find(d => {
-        const kCod = Object.keys(d._columnas).find(c => /^c[oó]d/i.test(c));
+        const kCod = Object.keys(d._columnas ?? {}).find(c => /^c[oó]d/i.test(c));
         return kCod && norm(d._columnas[kCod] ?? '') === norm(codigo);
       });
 
@@ -424,7 +424,7 @@ export default function AfiliacionPage() {
       }
 
       // Verificar documento: buscar columna de documento/cédula en sus datos
-      const kDoc = Object.keys(dep._columnas).find(c =>
+      const kDoc = Object.keys(dep._columnas ?? {}).find(c =>
         /^doc|^c[eé]d|^identidad|^id\b|^n[uú]m.*doc/i.test(c)
       );
       if (kDoc && dep._columnas[kDoc]) {
@@ -464,8 +464,8 @@ export default function AfiliacionPage() {
     const lista: Deportista[] = _deps;
     const norm = (s: string) => s.toLowerCase().replace(/[\s.-]/g, '');
     const existe = lista.some(d => {
-      const kCod = Object.keys(d._columnas).find(c => /^c[oó]d/i.test(c));
-      return kCod && norm(d._columnas[kCod] ?? '') === norm(val);
+      const kCod = Object.keys(d._columnas ?? {}).find(c => /^c[oó]d/i.test(c));
+      return kCod && norm((d._columnas ?? {})[kCod] ?? '') === norm(val);
     });
     setCodigoError(existe
       ? `⚠ El código "${val.trim()}" ya existe y pertenece a otro deportista afiliado. Por favor usa un código diferente.`
@@ -482,8 +482,8 @@ export default function AfiliacionPage() {
       const lista: Deportista[] = _deps;
       const norm = (s: string) => s.toLowerCase().replace(/[\s.-]/g, '');
       const existe = lista.some(d => {
-        const kCod = Object.keys(d._columnas).find(c => /^c[oó]d/i.test(c));
-        return kCod && norm(d._columnas[kCod] ?? '') === norm(codVal);
+        const kCod = Object.keys(d._columnas ?? {}).find(c => /^c[oó]d/i.test(c));
+        return kCod && norm((d._columnas ?? {})[kCod] ?? '') === norm(codVal);
       });
       if (existe) {
         setCodigoError(`⚠ El código "${codVal.trim()}" ya existe y pertenece a otro deportista afiliado. Por favor usa un código diferente.`);

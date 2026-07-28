@@ -9,7 +9,7 @@ import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
 
 function getCol(dep: Deportista, rx: RegExp) {
-  const k = Object.keys(dep._columnas).find(k => rx.test(k));
+  const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k));
   return k ? dep._columnas[k] : '';
 }
 function proyectoDe(dep: Deportista) {

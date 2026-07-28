@@ -23,7 +23,7 @@ const MAX_POS = 3;
 
 // ── Helpers ────────────────────────────────────────────────────
 function getCol(dep: Deportista, rx: RegExp): string {
-  const k = Object.keys(dep._columnas).find(k => rx.test(k.trim()));
+  const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k.trim()));
   return k ? (dep._columnas[k] ?? '') : '';
 }
 function colorCodigo(afil: string): string {
@@ -36,7 +36,7 @@ function colorCodigo(afil: string): string {
   return '#16a34a';
 }
 function getRK(dep: Deportista, rx: RegExp) {
-  return Object.keys(dep._columnas).find(k => rx.test(k.trim())) ?? '';
+  return Object.keys(dep._columnas ?? {}).find(k => rx.test(k.trim())) ?? '';
 }
 
 function getTorneos(dep: Deportista): string[] {
@@ -251,7 +251,7 @@ function DashboardEquipo({
   const antiguos = lista.filter(d => colEstado(d).toLowerCase().includes('antigu')).length;
 
   const AFIL_KWDS_T   = ['antigu','nuevo','reingreso','mb instit','b instit','sin afil','paso'];
-  const _allKeysT     = lista.length > 0 ? Object.keys(lista[0]._columnas) : [];
+  const _allKeysT     = lista.length > 0 ? Object.keys(lista[0]._columnas ?? {}) : [];
   const AFIL_KEY_T    = _allKeysT.find(k => /tipo.*afil|afil.*tipo/i.test(k.trim()))
                      || _allKeysT.find(k => /afiliaci[oó]n/i.test(k.trim()))
                      || _allKeysT.find(k => lista.some(d => {

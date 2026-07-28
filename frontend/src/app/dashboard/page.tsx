@@ -192,7 +192,7 @@ function DashboardAdmin() {
   useEffect(() => {
     getDeportistas().then(lista => {
       const count = lista.filter(d => {
-        const proy = (Object.entries(d._columnas).find(([k]) => /^proy/i.test(k.trim()))?.[1] ?? '').trim().toUpperCase();
+        const proy = (Object.entries(d._columnas ?? {}).find(([k]) => /^proy/i.test(k.trim()))?.[1] ?? '').trim().toUpperCase();
         return !proy || proy === 'UBICAR';
       }).length;
       setPendientesAsign(count);

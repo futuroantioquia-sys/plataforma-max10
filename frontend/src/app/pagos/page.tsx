@@ -20,11 +20,11 @@ type DepEstado = 'ACTIVO' | 'PAUSO' | 'RETIRADO';
 const DEP_ESTADOS_KEY = 'futuro_dep_estados';
 
 function codigoDe(dep: Deportista): string {
-  const k = Object.keys(dep._columnas).find(k => /^c[oó]d/i.test(k));
+  const k = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k));
   return k ? dep._columnas[k] : '';
 }
 function getCol(dep: Deportista, rx: RegExp): string {
-  const k = Object.keys(dep._columnas).find(k => rx.test(k));
+  const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k));
   return k ? dep._columnas[k] : '';
 }
 function colorCodigo(afil: string): string {
@@ -151,7 +151,7 @@ export default function PagosPage() {
 
   /* Resumen de pagos por deportista — busca por dep.id Y por todos los códigos numéricos */
   function esBecadoDep(dep: Deportista): boolean {
-    const kCod = Object.keys(dep._columnas).find(k => /^c[oó]d/i.test(k));
+    const kCod = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k));
     const raw  = kCod ? String(dep._columnas[kCod] ?? '').trim() : '';
     return /^b\d/i.test(raw) && !/^mb/i.test(raw);
   }
@@ -167,7 +167,7 @@ export default function PagosPage() {
     const seen = new Set(posKeys);
 
     // Columna CÓDIGO explícita — nunca excluir como año (ej: código "2018" es válido)
-    const kCod = Object.keys(dep._columnas).find(k => /^c[oó]d/i.test(k));
+    const kCod = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k));
     if (kCod) {
       const digits = String(dep._columnas[kCod] ?? '').replace(/\D/g, '');
       if (digits.length >= 4 && digits.length <= 5) {
@@ -177,7 +177,7 @@ export default function PagosPage() {
       }
     }
     // Otras columnas — sí excluir años (2000-2099)
-    for (const [k, v] of Object.entries(dep._columnas)) {
+    for (const [k, v] of Object.entries(dep._columnas ?? {})) {
       if (k === kCod) continue;
       const digits = String(v ?? '').replace(/\D/g, '');
       if (digits.length >= 4 && digits.length <= 5) {

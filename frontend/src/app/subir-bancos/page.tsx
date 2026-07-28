@@ -213,7 +213,7 @@ export default function SubirBancosPage() {
     // Mapa código → deportista
     const mapCod = new Map<string, Deportista>();
     deportistas.forEach(d => {
-      const k = Object.keys(d._columnas).find(k => /^c[oó]d/i.test(k.trim()));
+      const k = Object.keys(d._columnas ?? {}).find(k => /^c[oó]d/i.test(k.trim()));
       const cod = norm(k ? d._columnas[k] : '');
       if (cod) mapCod.set(cod, d);
     });

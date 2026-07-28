@@ -47,7 +47,7 @@ function ocultarFila(programa: string, proyecto: string): boolean {
 }
 
 function getCol(dep: Deportista, rx: RegExp): string {
-  const k = Object.keys(dep._columnas).find(k => rx.test(k.trim()));
+  const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k.trim()));
   return k ? (dep._columnas[k] ?? '') : '';
 }
 

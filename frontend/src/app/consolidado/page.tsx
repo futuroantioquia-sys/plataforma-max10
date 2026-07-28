@@ -26,14 +26,14 @@ type Estado = 'A' | 'F' | 'S' | 'ES' | 'FA' | 'NQ' | 'C' | 'CAN' | 'SE' | '';
 type AsistenciaData = Record<string, Record<string, Record<string, Record<string, Estado>>>>;
 
 function getCol(dep: Deportista, rx: RegExp) {
-  const k = Object.keys(dep._columnas).find(k => rx.test(k));
+  const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k));
   return k ? dep._columnas[k] : '';
 }
 function proyectoDe(dep: Deportista) {
   return getCol(dep, /^proy/i) || '__SIN_PROYECTO__';
 }
 function codigoDe(dep: Deportista) {
-  const k = Object.keys(dep._columnas).find(k => /^c[oó]d/i.test(k));
+  const k = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k));
   return k ? dep._columnas[k] : '';
 }
 
