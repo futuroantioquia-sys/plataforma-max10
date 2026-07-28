@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Limpiar sesión — Futuro Antioquia</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #064e1e; color: white;
+         display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; margin: 0; }
+  .card { background: white; color: #111; border-radius: 16px; padding: 32px;
+          max-width: 380px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+  h2 { color: #064e1e; margin-top: 0; }
+  .btn { display: block; background: #16a34a; color: white; border: none;
+         padding: 14px 28px; border-radius: 10px; font-size: 16px; font-weight: bold;
+         cursor: pointer; margin-top: 16px; width: 100%; box-sizing: border-box; }
+  .btn:hover { background: #15803d; }
+  .ok { background: #dcfce7; color: #166534; border-radius: 8px;
+        padding: 12px; margin-top: 16px; display: none; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>🧹 Futuro Antioquia</h2>
+  <p>Borra todas las cookies y datos de sesión para iniciar sesión desde cero.</p>
+  <button class="btn" onclick="limpiar()">🗑️ Borrar cookies y sesión</button>
+  <div class="ok" id="ok">✅ ¡Listo! Abre el link de abajo para ingresar.</div>
+  <a href="https://plataforma-max10.vercel.app/login" id="link" target="_blank"
+     style="display:none; margin-top:12px; background:#064e1e; color:white;
+            padding:12px; border-radius:10px; text-decoration:none; font-weight:bold; display:none">
+    ▶ Ir al Login
+  </a>
+</div>
+
+<script>
+function limpiar() {
+  // 1. Borrar cookies del dominio local (si se abre como archivo local)
+  try {
+    const cookies = document.cookie.split(';');
+    for (let c of cookies) {
+      const name = c.trim().split('=')[0];
+      document.cookie = name + '=; path=/; max-age=0; SameSite=Lax';
+    }
+  } catch(e) {}
+
+  // 2. Borrar localStorage y sessionStorage
+  try { localStorage.clear(); } catch(e) {}
+  try { sessionStorage.clear(); } catch(e) {}
+
+  // 3. Mostrar OK y link
+  document.getElementById('ok').style.display = 'block';
+  document.getElementById('link').style.display = 'block';
+
+  // 4. Abrir el login automáticamente
+  setTimeout(() => {
+    window.open('https://plataforma-max10.vercel.app/login', '_blank');
+  }, 800);
+}
+</script>
+</body>
+</html>

@@ -50,7 +50,7 @@ function estadoTexto(e: Estado): string {
 }
 
 function getCol(dep: Deportista, rx: RegExp): string {
-  const k = Object.keys(dep._columnas).find(k => rx.test(k));
+  const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k));
   return k ? dep._columnas[k] : '';
 }
 

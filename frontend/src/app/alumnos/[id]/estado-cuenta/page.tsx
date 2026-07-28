@@ -727,9 +727,9 @@ export default function EstadoCuentaPage() {
                                   </span>
                                 : <button
                                     onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
-                                    className="px-2 py-2 rounded-lg font-black text-[14px] w-full block text-center text-white tracking-wide shadow-sm active:scale-95 transition-transform"
+                                    className="px-2 py-2 rounded-lg font-black text-[14px] w-full block text-center text-white tracking-wide shadow-sm active:scale-95 transition-transform animate-pulse"
                                     style={{ background: '#dc2626' }}>
-                                    PAGAR
+                                    💳 PAGAR AHORA
                                   </button>
                       }
                     </td>
