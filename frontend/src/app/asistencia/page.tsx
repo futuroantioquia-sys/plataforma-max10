@@ -116,36 +116,10 @@ function AsistenciaInner() {
 
   const mesKey = `${anio}_${String(mes + 1).padStart(2, '0')}`;
 
-  const esProfe = useMemo(() => {
-    if (typeof document === 'undefined') return false;
-    const cookies = document.cookie.split(';').map(c => c.trim());
-    // Si la cookie dice "1" → es admin: nunca tratar como profe aunque localStorage tenga datos viejos
-    if (cookies.some(c => c === 'futuro-session=1')) return false;
-    if (cookies.some(c => c === 'futuro-session=profesor')) return true;
-    // Fallback localStorage solo si no hay cookie de admin
-    try {
-      const grupos = localStorage.getItem('futuro-profe-proyectos');
-      const nombre = localStorage.getItem('futuro-profe-nombre');
-      if (grupos && nombre) return true;
-    } catch {}
-    return false;
-  }, []);
-
-  const proyectosProfe = useMemo<string[]>(() => {
-    try {
-      const raw = localStorage.getItem('futuro-profe-proyectos');
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return [];
-  }, []);
-
-  const nombreProfe = useMemo(() => {
-    try {
-      const raw = localStorage.getItem('futuro-profe-nombre');
-      if (raw) return JSON.parse(raw) as string;
-    } catch {}
-    return 'Profe';
-  }, []);
+  // ── Valores iniciales iguales al SSR — se actualizan en el useEffect de rol+carga ──
+  const [esProfe,        setEsProfe]        = useState(false);
+  const [proyectosProfe, setProyectosProfe] = useState<string[]>([]);
+  const [nombreProfe,    setNombreProfe]    = useState('Profe');
 
   const [fotoProfe, setFotoProfe] = useState('');
   useEffect(() => {
@@ -164,16 +138,38 @@ function AsistenciaInner() {
     if (f3) setFotoProfe(f3);
   }, [nombreProfe]);
 
-  // ── Carga de datos: estrategia diferente según rol ───────────
+  // ── Detecta rol + carga datos en un único effect (evita stale closure de esProfe) ──
   useEffect(() => {
-    if (esProfe) {
+    // 1. Detectar rol desde cookies/localStorage
+    const cookies = document.cookie.split(';').map(c => c.trim());
+    const isAdmin = cookies.some(c => c === 'futuro-session=1');
+    let isProfe = !isAdmin && cookies.some(c => c === 'futuro-session=profesor');
+    if (!isProfe && !isAdmin) {
+      try {
+        const g = localStorage.getItem('futuro-profe-proyectos');
+        const n = localStorage.getItem('futuro-profe-nombre');
+        if (g && n) isProfe = true;
+      } catch {}
+    }
+
+    // 2. Sincronizar estado de UI con el rol real
+    setEsProfe(isProfe);
+    try {
+      const rg = localStorage.getItem('futuro-profe-proyectos');
+      if (rg) setProyectosProfe(JSON.parse(rg));
+      const rn = localStorage.getItem('futuro-profe-nombre');
+      if (rn) setNombreProfe(JSON.parse(rn));
+    } catch {}
+
+    // 3. Carga de datos usando isProfe local (sin stale closure)
+    if (isProfe) {
       // Profe: carga SOLO el proyecto asignado (no los 50 000 filas globales)
       const proyUrl = searchParams.get('proyecto');
       if (proyUrl) {
         setCargandoProy(true);
         Promise.all([
           getDeportistasPorProyecto(proyUrl),
-          getAsistenciaPorProyecto(proyUrl),   // solo este proyecto
+          getAsistenciaPorProyecto(proyUrl),
         ]).then(([{ data: deps }, asistData]) => {
           setCargandoProy(false);
           if (deps.length) setDeportistas(deps);
