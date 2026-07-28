@@ -197,6 +197,7 @@ export default function EstadoCuentaPage() {
   const [elimConfirm,   setElimConfirm]   = useState<number | null>(null);
   const [anio,     setAnio]    = useState(new Date().getFullYear());
   const [confirmRevert, setConfirmRevert] = useState<number | null>(null);
+  const [showPagoModal, setShowPagoModal] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -704,10 +705,16 @@ export default function EstadoCuentaPage() {
                                   isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
                                   {isPaid ? 'PAGÓ' : 'PEND'}
                               </button>
-                            : <span className={cn('px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default',
-                                isPaid ? 'bg-green-500' : 'bg-red-500')}>
-                                {isPaid ? 'PAGÓ' : 'PEND'}
-                              </span>
+                            : isPaid
+                                ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default bg-green-500">
+                                    PAGÓ
+                                  </span>
+                                : <button
+                                    onClick={() => setShowPagoModal(true)}
+                                    className="px-2 py-2 rounded-lg font-black text-[14px] w-full block text-center text-white tracking-wide shadow-sm active:scale-95 transition-transform"
+                                    style={{ background: '#dc2626' }}>
+                                    PAGAR
+                                  </button>
                       }
                     </td>
                   </tr>
@@ -767,6 +774,85 @@ export default function EstadoCuentaPage() {
           </div>
         );
       })()}
+
+      {/* ── MODAL PAGAR (vista calidoso) ── */}
+      {showPagoModal && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
+             onClick={() => setShowPagoModal(false)}>
+          <div className="relative rounded-3xl overflow-hidden w-full max-w-xs shadow-2xl"
+               style={{ background: '#1a2d40' }}
+               onClick={e => e.stopPropagation()}>
+
+            {/* Cerrar */}
+            <button onClick={() => setShowPagoModal(false)}
+                    className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition z-10">
+              ✕
+            </button>
+
+            <div className="px-6 pt-7 pb-6 flex flex-col items-center gap-4">
+
+              {/* Escudo FA */}
+              <img src="/ESCUDO F.A 2020.png" alt="Futuro Antioquia" className="w-[90px] h-auto drop-shadow-lg"/>
+
+              {/* Título */}
+              <h2 className="text-white font-black text-[17px] tracking-[0.15em] text-center">REALIZA TU PAGO</h2>
+
+              {/* Datos bancarios */}
+              <div className="w-full space-y-2.5">
+                {([
+                  { label: 'BANCO',   val: 'BANCOLOMBIA' },
+                  { label: 'TIPO',    val: 'CUENTA DE AHORROS' },
+                  { label: 'NÚMERO',  val: '10182764613', copy: true },
+                  { label: 'TITULAR', val: 'FUTURO ANTIOQUIA' },
+                  { label: 'NIT',     val: '811036997' },
+                ] as Array<{ label: string; val: string; copy?: boolean }>).map(({ label, val, copy }) => (
+                  <div key={label} className="flex items-center gap-3">
+                    <span className="text-white text-[10px] font-black px-2.5 py-[5px] rounded-lg text-center flex-shrink-0 tracking-wide"
+                          style={{ background: '#22c55e', minWidth: 68 }}>
+                      {label}
+                    </span>
+                    <span className="text-white font-semibold text-[13px] tracking-wide flex-1">{val}</span>
+                    {copy && (
+                      <button
+                        onClick={() => { try { navigator.clipboard.writeText('10182764613'); } catch {} }}
+                        className="text-white/60 hover:text-white transition flex-shrink-0 p-1"
+                        title="Copiar número">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Banner azul */}
+              <div className="w-full rounded-xl py-2.5 px-4 text-center"
+                   style={{ background: '#2563eb' }}>
+                <p className="text-white font-black text-[10px] tracking-wider uppercase leading-snug">
+                  Recuerda guardar soporte y subir tu pago
+                </p>
+              </div>
+
+              {/* PSE próximamente */}
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-white/80 italic text-[15px] tracking-wide">Próximamente</span>
+                {/* PSE logo inline */}
+                <div className="w-12 h-12 rounded-full flex flex-col items-center justify-center flex-shrink-0"
+                     style={{ background: 'linear-gradient(145deg,#1a56db,#2563eb)' }}>
+                  <span style={{ color:'#7dd3fc', fontSize:'7px', fontWeight:700, lineHeight:1.1, letterSpacing:'0.08em' }}>ach</span>
+                  <span style={{ color:'white', fontSize:'14px', fontStyle:'italic', fontWeight:900, lineHeight:1 }}>pse</span>
+                </div>
+              </div>
+
+              {/* MaxIO logo */}
+              <img src="/MAX 10.png" alt="Max 10 Sport" className="h-9 w-auto opacity-90 mt-1"/>
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── MODAL REGISTRAR PAGO ── */}
       {editIdx !== null && (

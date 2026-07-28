@@ -697,6 +697,103 @@ export async function saveAsistencia(data: AsistenciaData): Promise<void> {
   }
 }
 
+/** Carga asistencia filtrada por proyecto (para profes — evita cargar todo). */
+export async function getAsistenciaPorProyecto(proyecto: string): Promise<AsistenciaData> {
+  const parseRows = (data: any[]): AsistenciaData => {
+    const result: AsistenciaData = {};
+    for (const r of data) {
+      if (!result[r.proyecto]) result[r.proyecto] = {};
+      if (!result[r.proyecto][r.anio_mes]) result[r.proyecto][r.anio_mes] = {};
+      if (!result[r.proyecto][r.anio_mes][r.deportista_id]) result[r.proyecto][r.anio_mes][r.deportista_id] = {};
+      result[r.proyecto][r.anio_mes][r.deportista_id][r.fecha] = r.estado;
+    }
+    return result;
+  };
+
+  // Intento 1: fetch() nativo con filtro de proyecto
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&proyecto=eq.${encodeURIComponent(proyecto)}`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return parseRows(data);
+    }
+  } catch { /* intentar SDK */ }
+
+  // Intento 2: SDK con filtro
+  try {
+    const { data, error } = await supabase()
+      .from('asistencia')
+      .select('proyecto, anio_mes, deportista_id, fecha, estado')
+      .eq('proyecto', proyecto);
+    if (!error && data) return parseRows(data);
+  } catch {}
+
+  // Fallback: localStorage (filtrado)
+  const all = lsGet<AsistenciaData>(LS_ASIST, {});
+  return all[proyecto] ? { [proyecto]: all[proyecto] } : {};
+}
+
+/** Guarda asistencia en localStorage inmediatamente (sin esperar Supabase). */
+export function saveAsistenciaLocal(data: AsistenciaData): void {
+  lsSet(LS_ASIST, data);
+}
+
+/**
+ * Guarda asistencia de UN proyecto en Supabase (upsert).
+ * Devuelve true si guardó OK, false si hubo error.
+ */
+export async function saveAsistenciaProyecto(proyecto: string, asistencia: AsistenciaData): Promise<boolean> {
+  lsSet(LS_ASIST, asistencia);
+  try {
+    const proyData = asistencia[proyecto];
+    if (!proyData) return true;
+    const rows: object[] = [];
+    for (const [anio_mes, deps] of Object.entries(proyData)) {
+      for (const [deportista_id, fechas] of Object.entries(deps)) {
+        for (const [fecha, estado] of Object.entries(fechas)) {
+          if (estado) rows.push({ proyecto, anio_mes, deportista_id, fecha, estado });
+        }
+      }
+    }
+    if (!rows.length) return true;
+    const CHUNK = 500;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const { error } = await supabase()
+        .from('asistencia')
+        .upsert(rows.slice(i, i + CHUNK), { onConflict: 'proyecto,anio_mes,deportista_id,fecha' });
+      if (error) { console.error('[db] saveAsistenciaProyecto:', error.message); return false; }
+    }
+    return true;
+  } catch (e) {
+    console.error('[db] saveAsistenciaProyecto:', e);
+    return false;
+  }
+}
+
+/** Elimina un registro de asistencia individual de Supabase (al desmarcar estado). */
+export async function deleteAsistenciaFecha(
+  proyecto: string, anio_mes: string, deportista_id: string, fecha: string
+): Promise<void> {
+  try {
+    const { error } = await supabase()
+      .from('asistencia')
+      .delete()
+      .match({ proyecto, anio_mes, deportista_id, fecha });
+    if (error) console.error('[db] deleteAsistenciaFecha:', error.message);
+  } catch (e) {
+    console.error('[db] deleteAsistenciaFecha:', e);
+  }
+}
+
 // ── VISTA CONTABLE ────────────────────────────────────────────
 
 export type FilaVC = Record<string, string>; // { CÓDIGO, NOMBRE, MATRÍCULA, FEBRERO... }
