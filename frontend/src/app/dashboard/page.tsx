@@ -440,9 +440,14 @@ function DashboardHeader({ usuario }: { usuario: any }) {
 function WelcomeBar({ usuario }: { usuario: any }) {
   const hora = new Date().getHours();
   const saludo = hora < 12 ? 'Buenos días' : hora < 18 ? 'Buenas tardes' : 'Buenas noches';
-  const fecha = new Date().toLocaleDateString('es-CO', {
-    weekday: 'long', month: 'long', day: 'numeric',
-  });
+  let fecha = '';
+  try {
+    fecha = new Date().toLocaleDateString('es-CO', {
+      weekday: 'long', month: 'long', day: 'numeric',
+    });
+  } catch {
+    fecha = new Date().toLocaleDateString();
+  }
 
   return (
     <div className="mb-5 animate-fade-up">
