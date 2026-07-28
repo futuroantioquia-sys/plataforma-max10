@@ -432,7 +432,7 @@ function VistaPadres({ data, nombreEntrenador, onClose }: {
 
             {/* Escudo */}
             <div style={{ flexShrink: 0, alignSelf: 'flex-start' }}>
-              <img src="/ESCUDO F.A 2020.png" alt="FA" style={{ width: 46, height: 46, objectFit: 'contain', opacity: 0.85 }} />
+              <img src="/ESCUDO%20F.A%202020.png" alt="FA" style={{ width: 46, height: 46, objectFit: 'contain', opacity: 0.85 }} />
             </div>
           </div>
         </div>
@@ -548,7 +548,7 @@ function VistaPadres({ data, nombreEntrenador, onClose }: {
 
         {/* ── PIE ── */}
         <div style={{ background: '#0d1f2e', borderRadius: 12, border: '1px solid #1e3a4a', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-          <img src="/ESCUDO F.A 2020.png" alt="FA" style={{ width: 34, height: 34, objectFit: 'contain', opacity: 0.8 }} />
+          <img src="/ESCUDO%20F.A%202020.png" alt="FA" style={{ width: 34, height: 34, objectFit: 'contain', opacity: 0.8 }} />
           <div style={{ flex: 1 }}>
             <div style={{ color: '#4ade80', fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>FUTURO ANTIOQUIA · MAX 10 SPORT</div>
             <div style={{ color: '#475569', fontSize: 9, marginTop: 2 }}>
@@ -929,7 +929,7 @@ export default function ValoracionPage() {
                 <div style={{ background: VERDE_GRAD, display: 'flex', alignItems: 'center', padding: '7px 14px', gap: 10, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
                   {/* Logo Max10 izquierda */}
                   <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                    <img src="/MAX 10.png" alt="Max10 Sport" style={{ height: 36, width: 'auto', objectFit: 'contain' }} />
+                    <img src="/MAX%2010.png" alt="Max10 Sport" style={{ height: 36, width: 'auto', objectFit: 'contain' }} />
                     <span style={{ color: '#fff', fontSize: 8, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Conecta, Gestiona, Gana</span>
                   </div>
                   {/* Título derecha */}
@@ -1008,7 +1008,7 @@ export default function ValoracionPage() {
                   </div>
                   {/* LOGO + CÓDIGO - derecha */}
                   <div style={{ flexShrink: 0, textAlign: 'center', alignSelf: 'flex-start', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <img src="/ESCUDO F.A 2020.png" alt="Futuro Antioquia" style={{ width: 72, height: 72, objectFit: 'contain' }} />
+                    <img src="/ESCUDO%20F.A%202020.png" alt="Futuro Antioquia" style={{ width: 72, height: 72, objectFit: 'contain' }} />
                     <div style={{ color: '#374151', fontSize: 9, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 }}>CÓDIGO</div>
                     <div style={{ background: VERDE_GRAD, borderRadius: 10, minWidth: 65, textAlign: 'center', padding: '8px 10px', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact', outline: err('codigo') ? '2px solid #ef4444' : 'none' } as React.CSSProperties}>
                       <input value={data.codigo} onChange={e => set('codigo', e.target.value)} placeholder="—"

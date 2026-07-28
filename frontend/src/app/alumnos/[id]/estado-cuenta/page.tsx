@@ -792,7 +792,7 @@ export default function EstadoCuentaPage() {
             <div className="px-6 pt-7 pb-6 flex flex-col items-center gap-4">
 
               {/* Escudo FA */}
-              <img src="/ESCUDO F.A 2020.png" alt="Futuro Antioquia" className="w-[90px] h-auto drop-shadow-lg"/>
+              <img src="/ESCUDO%20F.A%202020.png" alt="Futuro Antioquia" className="w-[90px] h-auto drop-shadow-lg"/>
 
               {/* Título */}
               <h2 className="text-white font-black text-[17px] tracking-[0.15em] text-center">REALIZA TU PAGO</h2>
@@ -848,7 +848,7 @@ export default function EstadoCuentaPage() {
               </div>
 
               {/* MaxIO logo */}
-              <img src="/MAX 10.png" alt="Max 10 Sport" className="h-9 w-auto opacity-90 mt-1"/>
+              <img src="/MAX%2010.png" alt="Max 10 Sport" className="h-9 w-auto opacity-90 mt-1"/>
 
             </div>
           </div>

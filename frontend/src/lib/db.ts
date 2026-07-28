@@ -199,6 +199,7 @@ export async function getDeportistas(): Promise<Deportista[]> {
   const cached = lsGet<Deportista[]>(LS_DEPS, []);
   const result = cached.map(d => ({
     ...d,
+    _columnas: d._columnas ?? {},
     _nombre: derivarNombre(d._nombre, d._columnas ?? {}),
   }));
   if (result.length) _cacheDeportistas = result;

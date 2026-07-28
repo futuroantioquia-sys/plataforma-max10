@@ -51,8 +51,9 @@ const ROW1 = '#f1f5f9';
 const BW   = '2px solid white';
 
 function getCol(dep: Deportista, rx: RegExp) {
-  const k = Object.keys(dep._columnas).find(k => rx.test(k));
-  return k ? dep._columnas[k] : '';
+  const cols = dep._columnas ?? {};
+  const k = Object.keys(cols).find(k => rx.test(k));
+  return k ? cols[k] : '';
 }
 function proyectoDe(dep: Deportista) {
   return getCol(dep, /^proy/i) || '__SIN_PROYECTO__';
@@ -170,7 +171,10 @@ function AsistenciaInner() {
       const rg = localStorage.getItem('futuro-profe-proyectos');
       if (rg) setProyectosProfe(JSON.parse(rg));
       const rn = localStorage.getItem('futuro-profe-nombre');
-      if (rn) setNombreProfe(JSON.parse(rn));
+      if (rn) {
+        const parsed = JSON.parse(rn);
+        setNombreProfe(typeof parsed === 'string' ? parsed : String(parsed));
+      }
     } catch {}
 
     // 3. Carga de datos usando isProfe local (sin stale closure)
@@ -186,6 +190,9 @@ function AsistenciaInner() {
           setCargandoProy(false);
           if (deps.length) setDeportistas(deps);
           if (Object.keys(asistData).length) setAsistencia(asistData as any);
+        }).catch(err => {
+          console.error('[asistencia] carga profe:', err);
+          setCargandoProy(false);
         });
       } else {
         // Sin proyecto en URL → redirigir a mis-proyectos
@@ -201,6 +208,9 @@ function AsistenciaInner() {
         setCargando(false);
         if (lista.length) setDeportistas(lista);
         if (Object.keys(asistData).length) setAsistencia(asistData as any);
+      }).catch(err => {
+        console.error('[asistencia] carga admin:', err);
+        setCargando(false);
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,6 +231,9 @@ function AsistenciaInner() {
         setCargandoProy(false);
         if (deps.length) setDeportistas(deps);
         if (Object.keys(asistData).length) setAsistencia(asistData as any);
+      }).catch(err => {
+        console.error('[asistencia] cambio proyecto profe:', err);
+        setCargandoProy(false);
       });
     } else {
       // Admin cambia de proyecto → refrescar asistencia del proyecto desde Supabase
@@ -624,7 +637,7 @@ function AsistenciaInner() {
             </>
           )}
           <div className="flex flex-col items-end flex-shrink-0">
-            <img src="/MAX 10.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+            <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
             <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
           </div>
         </div>
@@ -643,7 +656,7 @@ function AsistenciaInner() {
                     className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg mb-3" />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-white/20 border-4 border-white/60 flex items-center justify-center shadow-lg mb-3">
-                    <span className="text-3xl font-black text-white">{nombreProfe.charAt(0)}</span>
+                    <span className="text-3xl font-black text-white">{typeof nombreProfe === 'string' ? nombreProfe.charAt(0) : '?'}</span>
                   </div>
                 )}
                 <p className="text-white/70 text-xs font-semibold tracking-widest uppercase">¡Hola,</p>
