@@ -629,17 +629,18 @@ function AsistenciaInner() {
     const colsBase = esProfe ? 2 : 3;
     const fila1 = [e(`ASISTENCIA ${MESES[mes].toUpperCase()} ${anio} / ${proyecto}`), ...Array(colsBase - 1 + diasDelMes.length + 1).fill(e(''))].join(sep);
     const semCeldas = grupos.flatMap(g => [e(`SEMANA ${g.semLabel}`), ...Array(g.isos.length - 1).fill(e(''))]);
-    const fila2 = [...Array(colsBase).fill(e('')), ...semCeldas, e('TOTAL'), e('%')].join(sep);
+    const fila2 = [...Array(colsBase).fill(e('')), ...semCeldas, e('TOTAL'), e('%'), ...(esProfe ? [e('CALIFICACIÓN')] : [])].join(sep);
     const colDias = diasDelMes.map(d => { const iso = JS_DIA_A_ISO(d.getDay()); return e(`${DIAS_INICIAL[iso - 1]} ${d.getDate()}`); });
     const fila3 = esProfe
-      ? [e('CÓDIGO'), e('NOMBRE DEL DEPORTISTA'), ...colDias, e('TOTAL'), e('%')].join(sep)
+      ? [e('CÓDIGO'), e('NOMBRE DEL DEPORTISTA'), ...colDias, e('TOTAL'), e('%'), e('CAL')].join(sep)
       : [e('CÓDIGO'), e('NOMBRE DEL DEPORTISTA'), e('AÑO'), ...colDias, e('TOTAL'), e('%')].join(sep);
     const filasData = atletas.map(dep => {
       const cod = getCol(dep, /^c[oó]d/i); const año = getCol(dep, /^a[ñn]o$/i);
       const tot = totalesMap[dep.id];
       const celdas = diasDelMes.map(d => { const fk = d.toISOString().split('T')[0]; return e(ESTADO_LABEL[estadoMap[dep.id]?.[fk] ?? ''] || ''); });
       const base = esProfe ? [e(cod || ''), e(dep._nombre)] : [e(cod || ''), e(dep._nombre), e(año || '')];
-      return [...base, ...celdas, e(tot > 0 ? tot : ''), e(tot > 0 ? porcentaje(dep.id) : '')].join(sep);
+      const calVal = esProfe ? [e(calMap[dep.id] ?? '')] : [];
+      return [...base, ...celdas, e(tot > 0 ? tot : ''), e(tot > 0 ? porcentaje(dep.id) : ''), ...calVal].join(sep);
     });
     const filaFinal = [...Array(colsBase).fill(e('')),
       ...diasDelMes.map(d => { const fk = d.toISOString().split('T')[0]; const r = atletas.some(dep => { const est = estadoMap[dep.id]?.[fk] ?? ''; return est !== '' && est !== 'CAN' && est !== 'SE'; }); return e(r ? '✓' : ''); }),
@@ -904,7 +905,7 @@ function AsistenciaInner() {
                 <thead className="sticky top-0 z-20">
                   {/* Fila 1: Título + Semanas */}
                   <tr>
-                    <th colSpan={esProfe ? 2 : 3} style={{ background: AZUL, border: BW }}
+                    <th colSpan={esProfe ? 2 : 3} style={{ background: AZUL, border: BW, position: 'sticky', left: 0, zIndex: 25 }}
                       className="px-3 sm:px-5 py-2.5 text-left text-white font-black text-xs sm:text-sm uppercase tracking-wide whitespace-nowrap">
                       ASISTENCIA {MESES[mes].toUpperCase()} {anio} / {proyecto}
                     </th>
@@ -922,15 +923,21 @@ function AsistenciaInner() {
                       className="px-2 sm:px-3 text-center text-white font-black text-xs sm:text-sm uppercase whitespace-nowrap align-middle">
                       %
                     </th>
+                    {esProfe && (
+                      <th rowSpan={2} style={{ background: '#1e3a8a', border: BW }}
+                        className="px-2 sm:px-3 text-center text-white font-black text-xs sm:text-sm uppercase whitespace-nowrap align-middle">
+                        CAL
+                      </th>
+                    )}
                   </tr>
                   {/* Fila 2: Columnas */}
                   <tr>
-                    <th style={{ background: G, border: BW, width: 58, minWidth: 58 }}
+                    <th style={{ background: G, border: BW, width: 58, minWidth: 58, position: 'sticky', left: 0, zIndex: 15 }}
                       className="px-1 py-2 text-center text-white font-black text-[10px] uppercase whitespace-nowrap">
                       CÓD
                     </th>
-                    <th style={{ background: G, border: BW, minWidth: 90 }}
-                      className="px-1 py-2 text-left text-white font-black text-[10px] uppercase whitespace-nowrap sticky left-0 z-10">
+                    <th style={{ background: G, border: BW, minWidth: 100, position: 'sticky', left: 58, zIndex: 15 }}
+                      className="px-1 py-2 text-left text-white font-black text-[10px] uppercase whitespace-nowrap">
                       NOMBRE
                     </th>
                     {!esProfe && (
@@ -966,12 +973,12 @@ function AsistenciaInner() {
                     const tot = totalesMap[dep.id];
                     return (
                       <tr key={dep.id}>
-                        <td style={{ background: G, border: BW, width: 58, minWidth: 58 }}
+                        <td style={{ background: G, border: BW, width: 58, minWidth: 58, position: 'sticky', left: 0, zIndex: 10 }}
                           className="px-1 py-1.5 text-center text-white font-black text-xs whitespace-nowrap">
                           {cod || '—'}
                         </td>
-                        <td style={{ background: ROW1, border: BW, minWidth: 90 }}
-                          className="px-1 py-1.5 text-left text-[#111827] font-semibold text-xs whitespace-nowrap sticky left-0 z-10">
+                        <td style={{ background: ROW1, border: BW, minWidth: 100, position: 'sticky', left: 58, zIndex: 10 }}
+                          className="px-1 py-1.5 text-left text-[#111827] font-semibold text-xs whitespace-nowrap">
                           {dep._nombre}
                         </td>
                         {!esProfe && (
@@ -999,6 +1006,17 @@ function AsistenciaInner() {
                           className="px-2 sm:px-3 py-1.5 text-center text-white font-black text-sm whitespace-nowrap">
                           {tot > 0 ? porcentaje(dep.id) : ''}
                         </td>
+                        {esProfe && (
+                          <td style={{ background: '#f8fafc', border: BW, minWidth: 68 }}
+                            className="px-1 py-1 text-center">
+                            <select
+                              value={calMap[dep.id] ?? ''}
+                              onChange={e => setCal(dep.id, e.target.value)}
+                              className="w-full text-xs font-bold text-center bg-transparent border border-blue-200 rounded focus:outline-none cursor-pointer py-0.5 text-[#1e3a8a]">
+                              {CAL_OPTIONS.map(o => <option key={o} value={o}>{o || '—'}</option>)}
+                            </select>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -1030,6 +1048,10 @@ function AsistenciaInner() {
                       className="px-2 sm:px-3 py-2.5 text-center text-white font-bold text-[10px] whitespace-nowrap">
                       de {diasDelMes.length}
                     </td>
+                    {esProfe && (
+                      <td style={{ background: '#1e3a8a', border: BW }}
+                        className="px-2 py-2.5" />
+                    )}
                   </tr>
                 </tbody>
               </table>

@@ -320,6 +320,26 @@ export async function getDeportistasPorProyecto(
     errores.push(`SDK error: ${e?.message}`);
   }
 
+  // Fallback 4: filtrar desde caché en memoria o localStorage
+  try {
+    const cached = _cacheDeportistas ?? lsGet<Deportista[]>(LS_DEPS, []);
+    if (cached.length > 0) {
+      const proyLower = proyecto.trim().toLowerCase();
+      const filtered = cached.filter(dep => {
+        const cols = dep._columnas ?? {};
+        const k = Object.keys(cols).find(k => /^proy/i.test(k));
+        const val = k ? String(cols[k]).trim().toLowerCase() : '';
+        return val === proyLower;
+      });
+      if (filtered.length > 0) {
+        console.log(`[getDeportistasPorProyecto] cache fallback: ${filtered.length} deportistas para "${proyecto}"`);
+        return { data: filtered, error: null };
+      }
+    }
+  } catch (e: any) {
+    errores.push(`Cache fallback error: ${e?.message}`);
+  }
+
   const resumen = errores.join(' | ');
   console.error('[getDeportistasPorProyecto]', resumen);
   return { data: [], error: resumen };
