@@ -296,8 +296,9 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="text-center mb-7">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/15 backdrop-blur rounded-2xl shadow-2xl border border-white/30 mb-4">
-            <span className="text-white font-black text-xl">FA</span>
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-white/15 backdrop-blur rounded-2xl shadow-2xl border border-white/30 mb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/ESCUDO%20F.A%202020.png" alt="Futuro Antioquia" className="w-14 h-14 object-contain drop-shadow-lg" />
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight">Futuro Antioquia</h1>
           <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mt-1">Plataforma Deportiva · 2026</p>

@@ -6,7 +6,7 @@ import {
   Users, DollarSign, Calendar,
   Star, MessageCircle, Clipboard, Activity, ClipboardList, UserPlus, LayoutList,
   Link2, Copy, Check, QrCode, BarChart3, Trophy, Upload, FolderKanban,
-  LogOut, Zap, Shield, Dumbbell,
+  LogOut, Zap, Shield, Dumbbell, HardHat,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
@@ -15,9 +15,9 @@ import { getDeportistas } from '@/lib/db';
 
 // ── CARD DE ACCESO RÁPIDO ────────────────────────────────────────
 function AccesoCard({
-  titulo, icono: Icono, href, descripcion, color = 'verde', badge,
+  titulo, icono: Icono, href, descripcion, color = 'verde', badge, disabled,
 }: {
-  titulo: string; icono: React.ElementType; href: string; descripcion: string; color?: string; badge?: number;
+  titulo: string; icono: React.ElementType; href: string; descripcion: string; color?: string; badge?: number; disabled?: boolean;
 }) {
   const router = useRouter();
 
@@ -30,6 +30,18 @@ function AccesoCard({
   };
 
   const c = colorMap[color] ?? colorMap.verde;
+
+  if (disabled) {
+    return (
+      <div className="group relative bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-200 p-3 sm:p-4 text-left opacity-60 cursor-not-allowed">
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-3 bg-gray-100 text-gray-400">
+          <Icono className="w-4 h-4 sm:w-5 sm:h-5" />
+        </div>
+        <p className="font-bold text-gray-500 text-xs sm:text-sm leading-tight">{titulo}</p>
+        <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 sm:mt-1 leading-tight font-semibold uppercase tracking-wide">{descripcion}</p>
+      </div>
+    );
+  }
 
   return (
     <button
@@ -332,11 +344,11 @@ function DashboardProfesor() {
 // ── DASHBOARD PADRE / DEPORTISTA ─────────────────────────────────
 function DashboardPadre() {
   const accesos = [
-    { titulo: 'Formulario Afiliación', icono: ClipboardList,  href: '/afiliacion',   descripcion: 'Actualiza tu ficha',           color: 'verde'  },
-    { titulo: 'Ver Evaluaciones',      icono: Star,           href: '/evaluaciones', descripcion: 'Progreso técnico y formativo',  color: 'dorado' },
-    { titulo: 'Mis Pagos',            icono: DollarSign,     href: '/pagos',        descripcion: 'Estado de mensualidades',      color: 'azul'   },
-    { titulo: 'Calendario',           icono: Calendar,        href: '/calendario',   descripcion: 'Próximos entrenamientos',      color: 'teal'   },
-    { titulo: 'Chat Profesor',        icono: MessageCircle,   href: '/mensajes',     descripcion: 'Comunícate directamente',      color: 'purple' },
+    { titulo: 'Formulario Afiliación', icono: ClipboardList, href: '/afiliacion',   descripcion: 'Actualiza tu ficha',          color: 'verde',  disabled: false },
+    { titulo: 'Ver Evaluaciones',      icono: Star,          href: '/evaluaciones', descripcion: 'Progreso técnico y formativo', color: 'dorado', disabled: false },
+    { titulo: 'Mis Pagos',            icono: DollarSign,    href: '/pagos',        descripcion: 'Estado de mensualidades',     color: 'azul',   disabled: false },
+    { titulo: 'Calendario',           icono: Calendar,       href: '/calendario',   descripcion: 'Próximos entrenamientos',     color: 'teal',   disabled: false },
+    { titulo: 'Informes',             icono: HardHat,        href: '#',             descripcion: 'EN CONSTRUCCIÓN',             color: 'purple', disabled: true  },
   ];
   return (
     <div className="space-y-6">
@@ -392,7 +404,8 @@ function DashboardHeader({ usuario }: { usuario: any }) {
         {/* Logo + Marca */}
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center border border-white/30 flex-shrink-0">
-            <span className="text-white font-black text-xs sm:text-sm">FA</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/ESCUDO%20F.A%202020.png" alt="FA" className="w-6 h-6 sm:w-7 sm:h-7 object-contain" />
           </div>
           <div>
             <p className="text-white font-black text-xs sm:text-sm tracking-wide leading-none">FUTURO ANTIOQUIA</p>

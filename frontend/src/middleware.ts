@@ -6,6 +6,9 @@ const RUTAS_PUBLICAS = ['/login', '/afiliacion', '/api'];
 // Rutas permitidas para el rol profesor — asistencia + portal propio + vista alumnos
 const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/sesiones', '/postpartido', '/mis-proyectos', '/alumnos'];
 
+// Rutas permitidas para deportista (calidoso) — solo su perfil, pagos y dashboard
+const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/pagos', '/evaluaciones', '/afiliacion', '/calendario'];
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -25,6 +28,14 @@ export function middleware(request: NextRequest) {
     const permitida = RUTAS_PROFESOR.some(r => pathname === r || pathname.startsWith(r + '/'));
     if (!permitida) {
       return NextResponse.redirect(new URL('/asistencia', request.url));
+    }
+  }
+
+  // Restricción de rutas para deportista (calidoso) — solo su perfil, pagos y dashboard
+  if (sesion.value === 'deportista') {
+    const permitida = RUTAS_DEPORTISTA.some(r => pathname === r || pathname.startsWith(r + '/'));
+    if (!permitida) {
+      return NextResponse.redirect(new URL('/alumnos', request.url));
     }
   }
 
