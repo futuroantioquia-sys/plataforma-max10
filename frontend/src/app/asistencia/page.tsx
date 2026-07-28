@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { Suspense } from 'react';
 import { useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
@@ -96,10 +97,10 @@ function AsistenciaInner() {
 
   const [deportistas,  setDeportistas]  = useState<Deportista[]>([]);
   const [asistencia,   setAsistencia]   = useState<AsistenciaData>({});
-  const [programa,     setPrograma]     = useState(searchParams.get('programa') ?? '');
-  const [proyecto,     setProyecto]     = useState(searchParams.get('proyecto') ?? '');
-  const [mes,          setMes]          = useState(new Date().getMonth());
-  const [anio,         setAnio]         = useState(new Date().getFullYear());
+  const [programa,     setPrograma]     = useState('');
+  const [proyecto,     setProyecto]     = useState('');
+  const [mes,          setMes]          = useState(0);
+  const [anio,         setAnio]         = useState(2026);
   const [diasSel,      setDiasSel]      = useState<number[]>([]);
   const [cargando,     setCargando]     = useState(false); // cambia a false por defecto — profe no carga todo
   const [cargandoProy, setCargandoProy] = useState(false); // carga del proyecto específico
@@ -123,23 +124,34 @@ function AsistenciaInner() {
 
   const [fotoProfe, setFotoProfe] = useState('');
   useEffect(() => {
-    if (nombreProfe && nombreProfe !== 'Profe') {
-      const f1 = localStorage.getItem(`futuro-foto-profe-${nombreProfe.toUpperCase()}`);
-      if (f1) { setFotoProfe(f1); return; }
-    }
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith('futuro-foto-profe-')) {
-        const f2 = localStorage.getItem(k);
-        if (f2) { setFotoProfe(f2); return; }
+    try {
+      if (nombreProfe && typeof nombreProfe === 'string' && nombreProfe !== 'Profe') {
+        const f1 = localStorage.getItem(`futuro-foto-profe-${nombreProfe.toUpperCase()}`);
+        if (f1) { setFotoProfe(f1); return; }
       }
-    }
-    const f3 = localStorage.getItem('futuro-profe-foto');
-    if (f3) setFotoProfe(f3);
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('futuro-foto-profe-')) {
+          const f2 = localStorage.getItem(k);
+          if (f2) { setFotoProfe(f2); return; }
+        }
+      }
+      const f3 = localStorage.getItem('futuro-profe-foto');
+      if (f3) setFotoProfe(f3);
+    } catch { /* localStorage no disponible o nombreProfe inválido */ }
   }, [nombreProfe]);
 
   // ── Detecta rol + carga datos en un único effect (evita stale closure de esProfe) ──
   useEffect(() => {
+    // 0. Inicializar fecha y searchParams del lado del cliente (evita hydration mismatch)
+    const now = new Date();
+    setMes(now.getMonth());
+    setAnio(now.getFullYear());
+    const prgParam = searchParams.get('programa') ?? '';
+    const proyParam = searchParams.get('proyecto') ?? '';
+    if (prgParam) setPrograma(prgParam);
+    if (proyParam) setProyecto(proyParam);
+
     // 1. Detectar rol desde cookies/localStorage
     const cookies = document.cookie.split(';').map(c => c.trim());
     const isAdmin = cookies.some(c => c === 'futuro-session=1');
