@@ -200,7 +200,10 @@ function EstadoCuentaInner() {
   const [confirmRevert, setConfirmRevert] = useState<number | null>(null);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [pagoModalIdx,  setPagoModalIdx]  = useState<number | null>(null);
-  const fotoInputRef = useRef<HTMLInputElement>(null);
+  const fotoInputRef    = useRef<HTMLInputElement>(null);
+  const soporteInputRef = useRef<HTMLInputElement>(null);
+  const [soportes,    setSoportes]    = useState<{ name: string; data: string; date: string }[]>([]);
+  const [verSoportes, setVerSoportes] = useState(false);
 
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -212,6 +215,45 @@ function EstadoCuentaInner() {
       saveFoto(id, base64).catch(console.error); // guarda en Supabase + localStorage
     };
     reader.readAsDataURL(file);
+  }
+
+  /* ─── Cargar soportes de pago desde localStorage ─── */
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`futuro_soportes_${id}`);
+      if (raw) setSoportes(JSON.parse(raw));
+    } catch {}
+  }, [id]);
+
+  function subirSoporte(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    Promise.all(
+      files.map(file => new Promise<{ name: string; data: string; date: string }>(resolve => {
+        const reader = new FileReader();
+        reader.onload = ev => resolve({
+          name: file.name,
+          data: ev.target?.result as string,
+          date: new Date().toLocaleDateString('es-CO'),
+        });
+        reader.readAsDataURL(file);
+      }))
+    ).then(nuevos => {
+      setSoportes(prev => {
+        const updated = [...prev, ...nuevos];
+        try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+      if (soporteInputRef.current) soporteInputRef.current.value = '';
+    });
+  }
+
+  function eliminarSoporte(idx: number) {
+    setSoportes(prev => {
+      const updated = prev.filter((_, i) => i !== idx);
+      try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
   }
 
   /* ─── Cargar deportista y pagos guardados ─── */
@@ -746,10 +788,36 @@ function EstadoCuentaInner() {
           ? <p className="text-center text-[11px] text-gray-400 pb-4">
               Toca <strong>PEND</strong> para registrar pago · Toca <strong>PAGÓ</strong> para revertir
             </p>
-          : <p className="text-center text-[11px] text-amber-500 font-semibold pb-4">
+          : <p className="text-center text-[11px] text-amber-500 font-semibold pb-2">
               Solo lectura · Edición disponible desde Control de Pagos
             </p>
         }
+
+        {/* ── SUBIR / VER SOPORTES (solo vista calidoso) ── */}
+        {!puedeEditar && (
+          <div className="flex gap-3 pb-4">
+            <input
+              ref={soporteInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              multiple
+              className="hidden"
+              onChange={subirSoporte}
+            />
+            <button
+              onClick={() => soporteInputRef.current?.click()}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm text-white transition active:scale-95"
+              style={{ background: '#16a34a' }}>
+              📎 Subir soporte
+            </button>
+            <button
+              onClick={() => setVerSoportes(true)}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm text-white transition active:scale-95"
+              style={{ background: '#1e3a8a' }}>
+              🖼️ Ver soportes{soportes.length > 0 ? ` (${soportes.length})` : ''}
+            </button>
+          </div>
+        )}
 
       </main>
 
@@ -884,6 +952,51 @@ function EstadoCuentaInner() {
         </div>
         );
       })()}
+
+      {/* ── MODAL VER SOPORTES ── */}
+      {verSoportes && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
+             onClick={() => setVerSoportes(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[80vh] overflow-hidden flex flex-col"
+               onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-black text-[#111827] text-base">Soportes de pago</h3>
+              <button onClick={() => setVerSoportes(false)}
+                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold text-gray-500 text-sm transition">
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 space-y-3">
+              {soportes.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm font-semibold py-8">
+                  No hay soportes subidos aún
+                </p>
+              ) : (
+                soportes.map((s, i) => (
+                  <div key={i} className="rounded-xl border border-gray-200 overflow-hidden">
+                    {s.data.startsWith('data:image') ? (
+                      <img src={s.data} alt={s.name} className="w-full object-contain max-h-48"/>
+                    ) : (
+                      <div className="bg-gray-50 p-4 text-center">
+                        <p className="text-2xl mb-1">📄</p>
+                        <p className="text-sm font-semibold text-gray-600 truncate">{s.name}</p>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50">
+                      <p className="text-[10px] text-gray-400 font-semibold">{s.date}</p>
+                      <button
+                        onClick={() => eliminarSoporte(i)}
+                        className="text-red-400 hover:text-red-600 text-[10px] font-bold transition">
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── MODAL REGISTRAR PAGO ── */}
       {editIdx !== null && (
