@@ -122,6 +122,7 @@ export default function PerfilDeportista() {
   const { id } = useParams<{ id: string }>();
   const usuario = useAuthStore(s => s.usuario);
   const esPadre = usuario?.rol === 'padre';
+  const esAdmin = usuario?.rol === 'administracion';
 
   const [dep,           setDep]          = useState<Deportista | null>(null);
   const [loading,       setLoading]      = useState(true);
@@ -654,25 +655,31 @@ export default function PerfilDeportista() {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {editando && (
+          {esAdmin && editando && (
             <button onClick={() => { setEditando(false); setEdits({ ...dep._columnas }); }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
               <X className="w-4 h-4" /> Cancelar
             </button>
           )}
-          {!editando && (
+          {esAdmin && !editando && (
             <button onClick={eliminar}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
               <Trash2 className="w-4 h-4" /> Eliminar
             </button>
           )}
-          <button onClick={() => editando ? guardar() : setEditando(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
-            {editando ? <><Save className="w-4 h-4" /> Guardar</> : <><Edit3 className="w-4 h-4" /> Editar</>}
-          </button>
-          <div className="text-right leading-tight border-l border-white/30 pl-3">
-            <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-            <p className="text-white/50 text-[11px]">Conecta, Gestiona, Gana</p>
+          {esAdmin && (
+            <button onClick={() => editando ? guardar() : setEditando(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
+              {editando ? <><Save className="w-4 h-4" /> Guardar</> : <><Edit3 className="w-4 h-4" /> Editar</>}
+            </button>
+          )}
+          <div className="flex items-center gap-2 border-l border-white/30 pl-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/ESCUDO%20F.A%202020.png" alt="FA" className="w-7 h-7 object-contain" />
+            <div className="text-right leading-tight">
+              <p className="text-white font-black text-xs tracking-widest leading-none">MAX 10 SPORT</p>
+              <p className="text-white/50 text-[10px] leading-none mt-0.5">Conecta, Gestiona, Gana</p>
+            </div>
           </div>
         </div>
       </header>
