@@ -192,7 +192,8 @@ function EstadoCuentaInner() {
   const puedeEditar = searchParams.get('edit') === '1';
   const esReadonly  = searchParams.get('readonly') === '1';
   const { usuario } = useAuthStore();
-  const esProfesor  = usuario?.rol === 'profesor';
+  const esProfesor   = usuario?.rol === 'profesor';
+  const esDeportista = usuario?.rol === 'deportista';
 
   const [dep,      setDep]     = useState<Deportista | null>(null);
   const [foto,     setFoto]    = useState<string | null>(null);
@@ -628,23 +629,19 @@ function EstadoCuentaInner() {
                 <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
                   {codVal}
                 </div>
-                {/* Botones 2×2 debajo del código */}
-                <div className="grid grid-cols-2 gap-1 w-full">
+                {/* Botones PAGOS y ASIST apilados */}
+                <div className="flex flex-col gap-1.5 w-full">
                   {[
-                    { label: 'PAGOS',      href: null,                        mant: false },
-                    { label: 'ASIST.',     href: `/alumnos/${id}/asistencia`, mant: false },
-                    { label: '🔧 INFO.',   href: '/mantenimiento',            mant: true  },
-                    { label: '🔧 MENS.',   href: '/mantenimiento',            mant: true  },
-                  ].filter(b => (!esProfesor && !esReadonly) || (!b.mant)).map(({ label, href, mant }) => (
+                    { label: 'PAGOS',  href: null,                        active: true  },
+                    { label: 'ASIST.', href: `/alumnos/${id}/asistencia`, active: false },
+                  ].map(({ label, href, active }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(
-                        'transition rounded-lg py-[5px] px-1 text-[7px] font-black tracking-wide text-center leading-tight',
-                        !href
+                        'transition rounded-lg py-2 px-3 text-[11px] font-black tracking-wide text-center w-full',
+                        active
                           ? 'bg-[#16a34a] text-white'
-                          : mant
-                            ? 'bg-orange-500 hover:bg-orange-600 text-white border border-orange-400'
-                            : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
+                          : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
                       )}>
                       {label}
                     </button>
@@ -823,7 +820,7 @@ function EstadoCuentaInner() {
                 Solo lectura · Edición disponible desde Control de Pagos
               </p>
         }
-        {!esProfesor && !esReadonly && <p className="text-center text-[11px] text-gray-400 pb-4">
+        {esDeportista && !esReadonly && <p className="text-center text-[11px] text-gray-400 pb-4">
           ¿Tienes dudas? Comunícate con la línea de pagos{' '}
           <a href="https://wa.me/573045401497" target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-0.5 font-black text-[#16a34a] underline underline-offset-2">
@@ -832,8 +829,8 @@ function EstadoCuentaInner() {
           </a>
         </p>}
 
-        {/* ── SUBIR / VER SOPORTES (solo vista calidoso, no profe, no readonly) ── */}
-        {!puedeEditar && !esProfesor && !esReadonly && (
+        {/* ── SUBIR / VER SOPORTES (solo calidoso) ── */}
+        {esDeportista && !esReadonly && (
           <div className="flex gap-3 pb-4">
             <input
               ref={soporteInputRef}
