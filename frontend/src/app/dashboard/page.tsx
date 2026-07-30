@@ -6,12 +6,12 @@ import {
   Users, DollarSign, Calendar,
   Star, MessageCircle, Clipboard, Activity, ClipboardList, UserPlus, LayoutList,
   Link2, Copy, Check, QrCode, BarChart3, Trophy, Upload, FolderKanban,
-  LogOut, Zap, Shield, Dumbbell, HardHat,
+  LogOut, Zap, Shield, Dumbbell, HardHat, Clock,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
-import { getDeportistas } from '@/lib/db';
+import { getDeportistas, countSoportesPendientes } from '@/lib/db';
 
 // ── CARD DE ACCESO RÁPIDO ────────────────────────────────────────
 function AccesoCard({
@@ -199,7 +199,8 @@ function LinkInscripcionCard() {
 
 // ── DASHBOARD ADMINISTRADOR ──────────────────────────────────────
 function DashboardAdmin() {
-  const [pendientesAsign, setPendientesAsign] = useState(0);
+  const [pendientesAsign,    setPendientesAsign]    = useState(0);
+  const [pendientesSoportes, setPendientesSoportes] = useState(0);
 
   useEffect(() => {
     getDeportistas().then(lista => {
@@ -209,6 +210,8 @@ function DashboardAdmin() {
       }).length;
       setPendientesAsign(count);
     }).catch(() => {});
+
+    countSoportesPendientes().then(n => setPendientesSoportes(n)).catch(() => {});
   }, []);
 
   return (
@@ -227,6 +230,7 @@ function DashboardAdmin() {
       <CategoriaSection emoji="💰" titulo="Finanzas" color="azul" delay={200}>
         <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="azul" />
         <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" />
+        <AccesoCard titulo="Pagos Pendientes"      icono={Clock}        href="/pagos-pendientes"         descripcion="Soportes enviados por padres"  color="azul" badge={pendientesSoportes} />
       </CategoriaSection>
 
       <div className="divider-fade" />

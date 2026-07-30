@@ -1204,6 +1204,123 @@ export async function saveCalificacion(deportistaId: string, anioMes: string, va
   }
 }
 
+// ── SOPORTES DE PAGO ─────────────────────────────────────────
+// Tabla: soportes_pago (id, deportista_id, nombre, datos, fecha, meses[], confirmado, fecha_confirmacion)
+
+export interface SoportePago {
+  id: string;
+  deportista_id: string;
+  nombre: string;
+  datos: string;
+  fecha: string;
+  meses: string[];
+  confirmado: boolean;
+  fecha_confirmacion: string | null;
+  created_at: string;
+}
+
+/** Guarda un soporte de pago en Supabase (dual-save con localStorage). */
+export async function saveSoportePago(
+  deportistaId: string,
+  soporte: { name: string; data: string; date: string; meses: string[] }
+): Promise<void> {
+  try {
+    const { error } = await supabase()
+      .from('soportes_pago')
+      .insert({
+        deportista_id: deportistaId,
+        nombre: soporte.name,
+        datos: soporte.data,
+        fecha: soporte.date,
+        meses: soporte.meses ?? [],
+        confirmado: false,
+      });
+    if (error) console.error('[db] saveSoportePago:', error.message);
+  } catch (e) { console.error('[db] saveSoportePago:', e); }
+}
+
+/** Carga todos los soportes pendientes (no confirmados) para el admin. */
+export async function getSoportesPendientes(): Promise<SoportePago[]> {
+  // Intento 1: fetch() directo (más portable en mobile)
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/soportes_pago?select=id,deportista_id,nombre,datos,fecha,meses,confirmado,fecha_confirmacion,created_at&confirmado=eq.false&order=created_at.desc`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer':        'count=none',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return data as SoportePago[];
+    }
+  } catch { /* fallback */ }
+
+  // Intento 2: SDK Supabase
+  try {
+    const { data, error } = await supabase()
+      .from('soportes_pago')
+      .select('id,deportista_id,nombre,datos,fecha,meses,confirmado,fecha_confirmacion,created_at')
+      .eq('confirmado', false)
+      .order('created_at', { ascending: false });
+    if (!error && data) return data as SoportePago[];
+  } catch {}
+
+  return [];
+}
+
+/** Cuenta soportes pendientes (para badge del dashboard). */
+export async function countSoportesPendientes(): Promise<number> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/soportes_pago?select=id&confirmado=eq.false`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer':        'count=exact',
+          'Range':         '0-0',
+        },
+      }
+    );
+    if (res.ok) {
+      const cr = res.headers.get('content-range');
+      if (cr) { const m = cr.match(/\/(\d+)/); if (m) return parseInt(m[1]); }
+      const data = await res.json();
+      if (Array.isArray(data)) return data.length;
+    }
+  } catch {}
+  return 0;
+}
+
+/** Marca un soporte como confirmado. */
+export async function confirmarSoportePago(soporteId: string): Promise<void> {
+  try {
+    const { error } = await supabase()
+      .from('soportes_pago')
+      .update({
+        confirmado: true,
+        fecha_confirmacion: new Date().toLocaleDateString('es-CO'),
+      })
+      .eq('id', soporteId);
+    if (error) console.error('[db] confirmarSoportePago:', error.message);
+  } catch (e) { console.error('[db] confirmarSoportePago:', e); }
+}
+
+/** Elimina un soporte (cuando el admin rechaza). */
+export async function eliminarSoportePago(soporteId: string): Promise<void> {
+  try {
+    const { error } = await supabase()
+      .from('soportes_pago')
+      .delete()
+      .eq('id', soporteId);
+    if (error) console.error('[db] eliminarSoportePago:', error.message);
+  } catch (e) { console.error('[db] eliminarSoportePago:', e); }
+}
+
 // ── VISTA CONTABLE ────────────────────────────────────────────
 
 export type FilaVC = Record<string, string>; // { CÓDIGO, NOMBRE, MATRÍCULA, FEBRERO... }

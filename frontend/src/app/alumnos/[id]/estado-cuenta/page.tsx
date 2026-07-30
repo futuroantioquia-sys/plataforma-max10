@@ -8,7 +8,7 @@ import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
-import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos } from '@/lib/db';
+import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago } from '@/lib/db';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
 const PAGOS_KEY    = 'futuro_pagos_estado';
@@ -264,6 +264,8 @@ function EstadoCuentaInner() {
       try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(updated)); } catch {}
       return updated;
     });
+    // Guardar también en Supabase para que el admin pueda ver los soportes pendientes
+    nuevos.forEach(s => saveSoportePago(id as string, s).catch(() => {}));
     setPendingFiles([]);
     setNombreSoporte('');
     setMesesSelSoporte([]);
