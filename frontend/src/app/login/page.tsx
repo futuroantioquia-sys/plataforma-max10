@@ -100,14 +100,19 @@ export default function LoginPage() {
 
       /* ── CALIDOSO ─── */
       if (tab === 'calidoso') {
-        const normDoc = (v: string) => v.replace(/[\s.,\-]/g, '');
-        const cNorm   = normDoc(c);
-        const RX_DOC  = /num.*doc|^doc|doc|c[eé]dul|c\.c|identif|nit|no.*doc|cc\b/i;
+        // FIX Bug E: normDoc ahora también:
+        //   • elimina NBSP ( ) que Excel introduce en algunos campos
+        //   • convierte a MAYÚSCULAS → comparación case-insensitive
+        const normDoc = (v: string) =>
+          v.replace(/[\s .,\-]/g, '').toUpperCase();
+
+        const cNorm  = normDoc(c);
+        const RX_DOC = /num.*doc|^doc|doc|c[eé]dul|c\.c|identif|nit|no.*doc|cc\b/i;
 
         function sesionDeportista(dep: { id: string; _nombre?: string } | undefined) {
           document.cookie = 'futuro-session=deportista; path=/; max-age=86400; SameSite=Lax';
           try {
-            if (dep?.id)     localStorage.setItem('futuro-calidoso-id',     dep.id);
+            if (dep?.id)      localStorage.setItem('futuro-calidoso-id',     dep.id);
             if (dep?._nombre) localStorage.setItem('futuro-calidoso-nombre', dep._nombre);
             // Guardar credenciales → próximos ingresos son instantáneos sin red
             const credsRaw = localStorage.getItem('futuro_calidoso_credenciales');
@@ -148,12 +153,41 @@ export default function LoginPage() {
 
         // ── 2. Búsqueda rápida por código (1 query, no 1.139 filas) ──
         const candidatos = await buscarPorCodigo(u);
+
+        // Logging de diagnóstico — visible en DevTools → Console del navegador
+        console.log('[login:calidoso] código:', u, '| candidatos encontrados:', candidatos.length);
+        if (candidatos.length > 0) {
+          const colKeys = Object.keys(candidatos[0]._columnas ?? {});
+          console.log('[login:calidoso] columnas keys:', colKeys.join(' | '));
+        } else {
+          console.warn('[login:calidoso] buscarPorCodigo devolvió 0 resultados — RPC o SDK fallaron');
+        }
+
+        // Helper: encontrar la clave de número de documento del deportista.
+        // Excluye: "TIPO DE DOCUMENTO" (es RC/CC/TI, no el número)
+        //          claves con "ACUD" (son del acudiente/padre, no del deportista)
+        function findDocKey(cols: Record<string, string>): string | undefined {
+          return Object.keys(cols).find(k => {
+            const kn = k.trim().normalize('NFC');
+            if (/tipo/i.test(kn) || /acud/i.test(kn)) return false;
+            return RX_DOC.test(kn) &&
+              cols[k] != null &&
+              String(cols[k]).trim() !== '';
+          });
+        }
+
         const dep = candidatos.find(d => {
           const cols   = d._columnas ?? {};
-          const docKey = Object.keys(cols).find(k => RX_DOC.test(k.trim().normalize('NFC')));
-          const doc    = docKey ? normDoc(String(cols[docKey]).trim()) : '';
-          return doc === cNorm;
+          const docKey = findDocKey(cols);
+          // FIX Bug E: normDoc aplica a AMBOS lados → case-insensitive + sin separadores
+          const docAlmacenado = docKey ? normDoc(String(cols[docKey])) : '';
+          return docAlmacenado === cNorm;
         });
+
+        // Log post-find sin PII — solo indica si hubo coincidencia y cuál clave usó
+        const logDocKey = candidatos[0] ? (findDocKey(candidatos[0]._columnas ?? {}) ?? 'ninguna') : 'N/A';
+        console.log('[login:calidoso] resultado:', dep ? 'OK ✓' : 'sin coincidencia',
+          '| docKey usado:', logDocKey);
 
         if (dep) {
           sesionDeportista(dep);
@@ -181,13 +215,19 @@ export default function LoginPage() {
           return;
         }
 
+        // Log final para diagnóstico (visible en DevTools)
+        console.error('[login:calidoso] Login fallido. Código:', u,
+          '| candidatos:', candidatos.length,
+          '| vcData filas:', vcData.length,
+          '| cNorm:', cNorm);
+
         setErrLocal('Código o documento incorrecto');
         return;
       }
 
       /* ── NUEVO DEPORTISTA ─── */
       if (tab === 'nuevo') {
-        if (c === '34') {
+        if (c === '26') {
           try { sessionStorage.setItem('afiliacion_modo', 'nuevo'); } catch {}
           router.push('/afiliacion');
         } else {
@@ -304,31 +344,23 @@ export default function LoginPage() {
           <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mt-1">Plataforma Deportiva · 2026</p>
         </div>
 
-        {/* Tabs */}
-        <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-1.5 flex gap-1 mb-5 border border-white/20">
-          {(
-            [
-              { key: 'admin',    label: 'Admin',    icon: Shield    },
-              { key: 'profe',    label: 'Profe',    icon: Users     },
-              { key: 'calidoso', label: 'Calidoso', icon: Star      },
-              { key: 'nuevo',    label: 'Nuevo',    icon: UserPlus  },
-            ] as { key: Tab; label: string; icon: any }[]
-          ).map(({ key, label, icon: Icono }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => cambiarTab(key)}
-              className={cn(
-                'flex-1 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5',
-                tab === key
-                  ? `bg-white shadow-md ${cfg.tabActive}`
-                  : 'text-white/70 hover:text-white hover:bg-white/10',
-              )}
-            >
-              <Icono className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
+        {/* Selector de rol (dropdown) */}
+        <div className="relative mb-5">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none select-none z-10">
+            {tab === 'admin' ? '🛡️' : tab === 'profe' ? '👥' : tab === 'calidoso' ? '⭐' : '➕'}
+          </span>
+          <select
+            value={tab}
+            onChange={e => cambiarTab(e.target.value as Tab)}
+            className="w-full appearance-none bg-white/15 backdrop-blur-sm border border-white/30 rounded-xl pl-8 pr-7 py-2 text-white font-black text-xs focus:outline-none focus:border-white/60 focus:bg-white/22 transition-all cursor-pointer"
+            style={{ WebkitAppearance: 'none' }}
+          >
+            <option value="admin"    className="bg-gray-900 text-white font-bold">Admin</option>
+            <option value="profe"    className="bg-gray-900 text-white font-bold">Profe</option>
+            <option value="calidoso" className="bg-gray-900 text-white font-bold">Calidoso</option>
+            <option value="nuevo"    className="bg-gray-900 text-white font-bold">Nuevo deportista</option>
+          </select>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 pointer-events-none text-[10px]">▼</span>
         </div>
 
         {/* Tarjeta */}

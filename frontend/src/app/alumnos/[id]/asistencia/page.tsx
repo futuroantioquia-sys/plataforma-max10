@@ -367,59 +367,55 @@ export default function AsistenciaAtletaPage() {
               </div>
             </div>
 
-            {/* Nombre + datos + botones */}
+            {/* Nombre + datos */}
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
               <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide">{nombre}</h1>
-              <div className="flex gap-2 items-start">
-                {/* Filas de datos */}
-                <div className="flex-1 min-w-0 space-y-[5px]">
-                  {[
-                    { label: 'PROGRAMA',    val: catVal },
-                    { label: 'PROYECTO',    val: proyecto !== '__SIN_PROYECTO__' ? proyecto : '' },
-                    { label: 'FECHA AFIL.', val: fechaAfil },
-                    { label: 'MENSUALIDAD', val: tarifa },
-                  ].filter(r => r.val).map(({ label, val }) => (
-                    <div key={label} className="flex items-center gap-2">
-                      <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
-                        {label}
-                      </span>
-                      <span className="text-white text-[11px] font-semibold truncate">
-                        {String(val).toUpperCase()}
-                      </span>
-                    </div>
-                  ))}
+              <div className="space-y-[5px]">
+                {[
+                  { label: 'PROGRAMA',    val: catVal },
+                  { label: 'PROYECTO',    val: proyecto !== '__SIN_PROYECTO__' ? proyecto : '' },
+                  { label: 'FECHA AFIL.', val: fechaAfil },
+                  { label: 'MENSUALIDAD', val: tarifa },
+                ].filter(r => r.val).map(({ label, val }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
+                      {label}
+                    </span>
+                    <span className="text-white text-[11px] font-semibold truncate">
+                      {String(val).toUpperCase()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CÓDIGO + botones 2×2 debajo */}
+            {codVal && (
+              <div className="flex-shrink-0 flex flex-col items-center gap-1.5 self-start">
+                <p className="text-white/60 text-[9px] font-black tracking-widest uppercase">CÓDIGO</p>
+                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
+                  {codVal}
                 </div>
-                {/* Botones 2×2 */}
-                <div className="flex-shrink-0 grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 gap-1 w-full">
                   {[
                     { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta`, mant: false, active: false },
-                    { label: 'ASISTENCIA', href: null,                            mant: false, active: true  },
-                    { label: 'INFORMES',   href: '/mantenimiento',                mant: true,  active: false },
-                    { label: 'MENSAJES',   href: '/mantenimiento',                mant: true,  active: false },
+                    { label: 'ASIST.',     href: null,                            mant: false, active: true  },
+                    { label: '🔧 INFO.',   href: '/mantenimiento',                mant: true,  active: false },
+                    { label: '🔧 MENS.',   href: '/mantenimiento',                mant: true,  active: false },
                   ].map(({ label, href, mant, active }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(
-                        'transition rounded-lg py-2 px-2 text-[9px] font-black tracking-wide text-center leading-tight',
+                        'transition rounded-lg py-[5px] px-1 text-[7px] font-black tracking-wide text-center leading-tight',
                         active
                           ? 'bg-[#16a34a] text-white'
                           : mant
                             ? 'bg-orange-500 hover:bg-orange-600 text-white border border-orange-400'
                             : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
                       )}>
-                      {mant ? `🔧 ${label}` : label}
+                      {label}
                     </button>
                   ))}
-                </div>
-              </div>
-            </div>
-
-            {/* CÓDIGO */}
-            {codVal && (
-              <div className="flex-shrink-0 text-center self-start">
-                <p className="text-white/60 text-[9px] font-black tracking-widest uppercase mb-1">CÓDIGO</p>
-                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
-                  {codVal}
                 </div>
               </div>
             )}

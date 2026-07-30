@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, saveDeportistas, getFoto, saveFoto } from '@/lib/db';
+import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -128,7 +128,16 @@ export default function PerfilDeportista() {
   const [edits,         setEdits]         = useState<Record<string, string>>({});
   const [tab,           setTab]           = useState(0);
   const [procesandoFoto, setProcesandoFoto] = useState(false);
-  const inputFotoRef = useRef<HTMLInputElement>(null);
+  const inputFotoRef  = useRef<HTMLInputElement>(null);
+
+  type DocFile = { name: string; data: string; date: string } | null;
+  const [docTI,  setDocTI]  = useState<DocFile>(null);
+  const [docRC,  setDocRC]  = useState<DocFile>(null);
+  const [docEPS, setDocEPS] = useState<DocFile>(null);
+  const [docPreview, setDocPreview] = useState<{ name: string; data: string } | null>(null);
+  const inputTIRef  = useRef<HTMLInputElement>(null);
+  const inputRCRef  = useRef<HTMLInputElement>(null);
+  const inputEPSRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getDeportistas().then(lista => {
@@ -154,7 +163,54 @@ export default function PerfilDeportista() {
     getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {
       try { const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); if (fotos[id]) setFoto(fotos[id]); } catch {}
     });
+    // Cargar documentos — localStorage primero, luego Supabase
+    try {
+      const raw = localStorage.getItem(`futuro_docs_${id}`);
+      if (raw) {
+        const docs = JSON.parse(raw);
+        if (docs.ti)  setDocTI(docs.ti);
+        if (docs.rc)  setDocRC(docs.rc);
+        if (docs.eps) setDocEPS(docs.eps);
+      }
+    } catch {}
+    getDocumentos(id).then(docs => {
+      const conv = (d: { nombre: string; datos: string; fecha: string }) => ({ name: d.nombre, data: d.datos, date: d.fecha });
+      if (docs.ti)  setDocTI(conv(docs.ti));
+      if (docs.rc)  setDocRC(conv(docs.rc));
+      if (docs.eps) setDocEPS(conv(docs.eps));
+    }).catch(() => {});
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function subirDoc(e: React.ChangeEvent<HTMLInputElement>, tipo: 'ti' | 'rc' | 'eps') {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const doc = { name: file.name.replace(/\.[^.]+$/, ''), data: ev.target?.result as string, date: new Date().toLocaleDateString('es-CO') };
+      const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : setDocEPS;
+      setter(doc);
+      try {
+        const prev = JSON.parse(localStorage.getItem(`futuro_docs_${id}`) ?? '{}');
+        localStorage.setItem(`futuro_docs_${id}`, JSON.stringify({ ...prev, [tipo]: doc }));
+      } catch {}
+      // Guardar en Supabase para acceso cross-device
+      saveDocumento(id, tipo, { nombre: doc.name, datos: doc.data, fecha: doc.date })
+        .catch(err => console.error('[perfil] saveDocumento:', err));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
+  function eliminarDoc(tipo: 'ti' | 'rc' | 'eps') {
+    const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : setDocEPS;
+    setter(null);
+    try {
+      const prev = JSON.parse(localStorage.getItem(`futuro_docs_${id}`) ?? '{}');
+      delete prev[tipo];
+      localStorage.setItem(`futuro_docs_${id}`, JSON.stringify(prev));
+    } catch {}
+    deleteDocumento(id, tipo).catch(err => console.error('[perfil] deleteDocumento:', err));
+  }
 
   async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -363,6 +419,11 @@ export default function PerfilDeportista() {
           </div>
         </div>
 
+        {/* ── INPUTS OCULTOS DOCUMENTOS ── */}
+        <input ref={inputTIRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'ti')}/>
+        <input ref={inputRCRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'rc')}/>
+        <input ref={inputEPSRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'eps')}/>
+
         {/* ── TARJETA FOTO ── */}
         <input ref={inputFotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={subirFoto}/>
         <div style={{
@@ -416,20 +477,38 @@ export default function PerfilDeportista() {
                   maxHeight: '62vh',
                 }}
               />
-              {/* Pie de foto — cambiar foto */}
-              <button
-                onClick={() => inputFotoRef.current?.click()}
-                style={{
-                  marginTop: 10,
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: 700,
-                  letterSpacing: '0.06em', textTransform: 'uppercase', padding: '4px 0',
-                }}
-              >
-                <Camera size={13} color="rgba(255,255,255,0.45)"/>
-                Toca aquí para cambiar la foto
-              </button>
+              {/* Pie de foto — cambiar + eliminar */}
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                <button
+                  onClick={() => inputFotoRef.current?.click()}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: 700,
+                    letterSpacing: '0.06em', textTransform: 'uppercase', padding: '4px 0',
+                  }}
+                >
+                  <Camera size={13} color="rgba(255,255,255,0.45)"/>
+                  Cambiar foto
+                </button>
+                <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14 }}>|</span>
+                <button
+                  onClick={() => {
+                    if (!confirm('¿Eliminar la foto?')) return;
+                    setFoto(null);
+                    saveFoto(id, '').catch(console.error);
+                    try { const f = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); delete f[id]; localStorage.setItem(FOTOS_KEY, JSON.stringify(f)); } catch {}
+                  }}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    color: 'rgba(220,38,38,0.6)', fontSize: 11, fontWeight: 700,
+                    letterSpacing: '0.06em', textTransform: 'uppercase', padding: '4px 0',
+                  }}
+                >
+                  🗑 Eliminar foto
+                </button>
+              </div>
             </>
           ) : (
             <button onClick={() => inputFotoRef.current?.click()} style={{
@@ -455,6 +534,97 @@ export default function PerfilDeportista() {
               </p>
             </button>
           ))}
+        </div>
+
+        {/* ── TARJETA DOCUMENTOS ── */}
+        <div style={{
+          width: '100%', maxWidth: 500,
+          background: 'linear-gradient(150deg, #0c3d1c 0%, #052a10 55%, #071510 100%)',
+          borderRadius: 22,
+          border: '1.5px solid rgba(22,163,74,0.25)',
+          padding: '18px 16px 16px',
+          boxSizing: 'border-box',
+          boxShadow: '0 4px 28px rgba(0,0,0,0.55)',
+        }}>
+          <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 9, fontWeight: 900, letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 0 14px' }}>
+            📋 Documentación requerida
+          </p>
+
+          {/* Grupo: Documento de identidad */}
+          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 8.5, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 8px' }}>
+            Documento de identidad
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+            {([
+              { tipo: 'ti'  as const, label: '🪪 Tarjeta de identidad',      ref: inputTIRef,  doc: docTI  },
+              { tipo: 'rc'  as const, label: '📄 Folio de Registro Civil',    ref: inputRCRef,  doc: docRC  },
+            ]).map(({ tipo, label, ref, doc }) => (
+              <div key={tipo} style={{
+                background: doc ? 'rgba(22,163,74,0.12)' : 'rgba(255,255,255,0.05)',
+                border: doc ? '1.5px solid rgba(22,163,74,0.4)' : '1.5px dashed rgba(255,255,255,0.15)',
+                borderRadius: 14, padding: '10px 12px',
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                {doc ? (
+                  <>
+                    <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✅</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ color: '#fff', fontWeight: 900, fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</p>
+                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '2px 0 0', fontWeight: 600 }}>{doc.date}</p>
+                    </div>
+                    <button onClick={() => eliminarDoc(tipo)} style={{ background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 8, padding: '4px 8px', color: '#f87171', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
+                      Eliminar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0, opacity: 0.4 }}>📎</span>
+                    <p style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700, fontSize: 11, margin: 0, flex: 1 }}>{label}</p>
+                    <button onClick={() => ref.current?.click()} style={{ background: '#16a34a', border: 'none', borderRadius: 10, padding: '7px 12px', color: '#fff', fontSize: 10, fontWeight: 900, cursor: 'pointer', flexShrink: 0, letterSpacing: '0.03em' }}>
+                      Subir
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Certificado EPS */}
+          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 8.5, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 8px' }}>
+            Certificado de EPS
+          </p>
+          {(() => {
+            const doc = docEPS;
+            return (
+              <div style={{
+                background: doc ? 'rgba(22,163,74,0.12)' : 'rgba(255,255,255,0.05)',
+                border: doc ? '1.5px solid rgba(22,163,74,0.4)' : '1.5px dashed rgba(255,255,255,0.15)',
+                borderRadius: 14, padding: '10px 12px',
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                {doc ? (
+                  <>
+                    <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✅</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ color: '#fff', fontWeight: 900, fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</p>
+                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '2px 0 0', fontWeight: 600 }}>{doc.date}</p>
+                    </div>
+                    <button onClick={() => eliminarDoc('eps')} style={{ background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 8, padding: '4px 8px', color: '#f87171', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
+                      Eliminar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0, opacity: 0.4 }}>🏥</span>
+                    <p style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700, fontSize: 11, margin: 0, flex: 1 }}>🏥 Certificado de EPS</p>
+                    <button onClick={() => inputEPSRef.current?.click()} style={{ background: '#16a34a', border: 'none', borderRadius: 10, padding: '7px 12px', color: '#fff', fontSize: 10, fontWeight: 900, cursor: 'pointer', flexShrink: 0, letterSpacing: '0.03em' }}>
+                      Subir
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
       </div>
@@ -652,7 +822,115 @@ export default function PerfilDeportista() {
           })()}
         </div>
 
+        {/* ── SECCIÓN FOTO + DOCUMENTOS (admin/profe) ── */}
+        {(foto || docTI || docRC || docEPS) && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100">
+              <p className="text-xs font-black text-gray-500 uppercase tracking-widest">📋 Foto y Documentos</p>
+            </div>
+            <div className="p-4 space-y-3">
+
+              {/* Foto */}
+              {foto && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <img src={foto} alt={dep._nombre} className="w-14 h-[72px] object-cover object-top rounded-lg border border-gray-200 flex-shrink-0"/>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black text-gray-800 uppercase tracking-wide">Foto del deportista</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Subida por el acudiente</p>
+                  </div>
+                  <a
+                    href={foto}
+                    download={`foto_${dep._nombre.replace(/\s+/g,'_')}.jpg`}
+                    className="flex items-center gap-1.5 bg-[#16a34a] text-white text-[10px] font-black px-3 py-1.5 rounded-lg hover:bg-green-700 transition flex-shrink-0"
+                  >
+                    ⬇ Descargar
+                  </a>
+                </div>
+              )}
+
+              {/* Documentos */}
+              {([
+                { tipo: 'ti'  as const, doc: docTI,  label: '🪪 Tarjeta de identidad' },
+                { tipo: 'rc'  as const, doc: docRC,  label: '📄 Folio de Registro Civil' },
+                { tipo: 'eps' as const, doc: docEPS, label: '🏥 Certificado de EPS' },
+              ]).filter(({ doc }) => !!doc).map(({ doc, label }) => {
+                const isImage = doc!.data.startsWith('data:image');
+                return (
+                  <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                    {isImage
+                      ? <img src={doc!.data} alt={label} className="w-14 h-[72px] object-cover rounded-lg border border-gray-200 flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: label, data: doc!.data })}/>
+                      : <div className="w-14 h-[72px] rounded-lg bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: label, data: doc!.data })}>
+                          <span className="text-2xl">📄</span>
+                        </div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-black text-gray-800 uppercase tracking-wide">{label}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">{doc!.name}</p>
+                      <p className="text-[10px] text-gray-400">{doc!.date}</p>
+                    </div>
+                    <div className="flex flex-col gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => setDocPreview({ name: label, data: doc!.data })}
+                        className="text-[10px] font-black px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 transition"
+                      >
+                        👁 Ver
+                      </button>
+                      <a
+                        href={doc!.data}
+                        download={`${label.replace(/[^a-zA-Z0-9]/g,'_')}_${dep._nombre.replace(/\s+/g,'_')}`}
+                        className="text-[10px] font-black px-3 py-1.5 rounded-lg bg-[#16a34a] text-white hover:bg-green-700 transition text-center"
+                      >
+                        ⬇ Bajar
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {(!foto && !docTI && !docRC && !docEPS) && (
+                <p className="text-xs text-gray-400 text-center py-4">El acudiente aún no ha subido documentos.</p>
+              )}
+            </div>
+          </div>
+        )}
+
       </main>
+
+      {/* ── MODAL PREVIEW DOCUMENTO ── */}
+      {docPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.85)' }}
+          onClick={() => setDocPreview(null)}
+        >
+          <div
+            className="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <p className="text-sm font-black text-gray-800">{docPreview.name}</p>
+              <button onClick={() => setDocPreview(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">✕</button>
+            </div>
+            <div className="p-4">
+              {docPreview.data.startsWith('data:image') ? (
+                <img src={docPreview.data} alt={docPreview.name} className="w-full rounded-xl object-contain max-h-[70vh]"/>
+              ) : (
+                <iframe src={docPreview.data} title={docPreview.name} className="w-full h-[70vh] rounded-xl border border-gray-100"/>
+              )}
+            </div>
+            <div className="px-4 pb-4">
+              <a
+                href={docPreview.data}
+                download={docPreview.name.replace(/[^a-zA-Z0-9]/g,'_')}
+                className="block text-center bg-[#16a34a] text-white font-black text-sm py-2.5 rounded-xl hover:bg-green-700 transition"
+              >
+                ⬇ Descargar documento
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

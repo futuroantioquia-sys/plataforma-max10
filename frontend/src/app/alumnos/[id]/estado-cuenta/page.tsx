@@ -8,7 +8,7 @@ import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
-import { getFoto, saveFoto, savePagosDeportista, getPagos } from '@/lib/db';
+import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos } from '@/lib/db';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
 const PAGOS_KEY    = 'futuro_pagos_estado';
@@ -207,6 +207,7 @@ function EstadoCuentaInner() {
   const [pendingFiles,     setPendingFiles]     = useState<{ name: string; data: string; date: string }[]>([]);
   const [nombreSoporte,    setNombreSoporte]    = useState('');
   const [showNombreModal,  setShowNombreModal]  = useState(false);
+  const [mesesSelSoporte,  setMesesSelSoporte]  = useState<string[]>([]);
   const [toastSoporte,     setToastSoporte]     = useState(false);
 
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -246,6 +247,7 @@ function EstadoCuentaInner() {
     ).then(leidos => {
       setPendingFiles(leidos);
       setNombreSoporte(leidos[0]?.name ?? '');
+      setMesesSelSoporte([]);
       setShowNombreModal(true);
     });
   }
@@ -255,6 +257,7 @@ function EstadoCuentaInner() {
     const nuevos = pendingFiles.map((f, i) => ({
       ...f,
       name: pendingFiles.length > 1 ? `${base} (${i + 1})` : base,
+      meses: mesesSelSoporte,
     }));
     setSoportes(prev => {
       const updated = [...prev, ...nuevos];
@@ -263,6 +266,7 @@ function EstadoCuentaInner() {
     });
     setPendingFiles([]);
     setNombreSoporte('');
+    setMesesSelSoporte([]);
     setShowNombreModal(false);
     setToastSoporte(true);
     setTimeout(() => setToastSoporte(false), 5000);
@@ -278,7 +282,8 @@ function EstadoCuentaInner() {
 
   /* ─── Cargar deportista y pagos guardados ─── */
   useEffect(() => {
-    Promise.all([getDeportistas(), getPagos(), getFoto(id)]).then(([lista, allPagos, foto]) => {
+    // 1. Primero cargamos el deportista y la foto
+    Promise.all([getDeportistas(), getFoto(id)]).then(([lista, foto]) => {
       const found = lista.find(d => d.id === id);
       if (found) setDep(found);
       if (foto) setFoto(foto);
@@ -286,24 +291,26 @@ function EstadoCuentaInner() {
       /* ── Buscar pagos por dep.id Y por código(s) de 4-5 dígitos ──────────
          El Libro Contable guarda bajo el código numérico (ej: "8095").
          Las ediciones manuales se guardan bajo dep.id (ej: "dep-xxx-42").
-         Probamos TODOS los posibles códigos del deportista para no perder
-         pagos importados aunque haya diferencias de formato (ceros iniciales). */
+         getPagosPorCodigos() filtra en Supabase → escala sin importar el total. */
       const codigosDep = found ? todosLosCodigos(found) : [];
+      const todosIds   = [...new Set([id, ...codigosDep])]; // dep.id + códigos numéricos
 
-      /* Merge: dep.id gana (manual > import) */
-      const mergeMap = new Map<string, PagoRow>();
+      // 2. Luego cargamos SOLO los pagos de este deportista
+      getPagosPorCodigos(todosIds).then(allPagos => {
+        /* Merge: dep.id gana (manual > import) */
+        const mergeMap = new Map<string, PagoRow>();
 
-      /* Base: pagos importados (todos los códigos posibles) */
-      for (const cod of codigosDep) {
-        for (const r of ((allPagos as AllPagos)[cod] ?? [])) {
+        /* Base: pagos importados (todos los códigos posibles) */
+        for (const cod of codigosDep) {
+          for (const r of ((allPagos as AllPagos)[cod] ?? [])) {
+            mergeMap.set(r.detalle, r);
+          }
+        }
+
+        /* Override: ediciones manuales bajo dep.id */
+        for (const r of ((allPagos as AllPagos)[id] ?? [])) {
           mergeMap.set(r.detalle, r);
         }
-      }
-
-      /* Override: ediciones manuales bajo dep.id */
-      for (const r of ((allPagos as AllPagos)[id] ?? [])) {
-        mergeMap.set(r.detalle, r);
-      }
 
       let filas: PagoRow[] = Array.from(mergeMap.values());
 
@@ -346,7 +353,8 @@ function EstadoCuentaInner() {
         };
       });
       setPagos(fullRows);
-    }).catch(console.error);
+      }).catch(console.error);  // cierra getPagosPorCodigos.then()
+    }).catch(console.error);    // cierra Promise.all.then()
   }, [id]);
 
   /* ─── Rellenar vCargado desde Vista Contable (siempre que dep esté listo) ─── */
@@ -579,63 +587,60 @@ function EstadoCuentaInner() {
               </div>
             </button>
 
-            {/* Nombre + filas de datos + botones */}
+            {/* Nombre + filas de datos */}
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
               <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide">
                 {nombre}
               </h1>
 
-              <div className="flex gap-2 items-start">
-                {/* Filas de datos */}
-                <div className="flex-1 min-w-0 space-y-[5px]">
-                  {[
-                    { label: 'PROGRAMA',    val: catVal },
-                    { label: 'PROYECTO',    val: proyecto },
-                    { label: 'FECHA AFIL.', val: fechaAfil ? formatFecha(fechaAfil) : '' },
-                    { label: 'MENSUALIDAD', val: tarifa },
-                  ].filter(r => r.val).map(({ label, val }) => (
-                    <div key={label} className="flex items-center gap-2">
-                      <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
-                        {label}
-                      </span>
-                      <span className="text-white text-[11px] font-semibold truncate">
-                        {String(val).toUpperCase()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              {/* Filas de datos */}
+              <div className="space-y-[5px]">
+                {[
+                  { label: 'PROGRAMA',    val: catVal },
+                  { label: 'PROYECTO',    val: proyecto },
+                  { label: 'FECHA AFIL.', val: fechaAfil ? formatFecha(fechaAfil) : '' },
+                  { label: 'MENSUALIDAD', val: tarifa },
+                ].filter(r => r.val).map(({ label, val }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
+                      {label}
+                    </span>
+                    <span className="text-white text-[11px] font-semibold truncate">
+                      {String(val).toUpperCase()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-                {/* Botones 2×2 */}
-                <div className="flex-shrink-0 grid grid-cols-2 gap-1.5">
+            {/* CÓDIGO + botones 2×2 debajo */}
+            {codVal && (
+              <div className="flex-shrink-0 flex flex-col items-center gap-1.5 self-start">
+                <p className="text-white/60 text-[9px] font-black tracking-widest uppercase">CÓDIGO</p>
+                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
+                  {codVal}
+                </div>
+                {/* Botones 2×2 debajo del código */}
+                <div className="grid grid-cols-2 gap-1 w-full">
                   {[
-                    { label: 'PAGOS',      href: null,                          mant: false },
-                    { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`,   mant: false },
-                    { label: 'INFORMES',   href: '/mantenimiento',              mant: true  },
-                    { label: 'MENSAJES',   href: '/mantenimiento',              mant: true  },
+                    { label: 'PAGOS',      href: null,                        mant: false },
+                    { label: 'ASIST.',     href: `/alumnos/${id}/asistencia`, mant: false },
+                    { label: '🔧 INFO.',   href: '/mantenimiento',            mant: true  },
+                    { label: '🔧 MENS.',   href: '/mantenimiento',            mant: true  },
                   ].map(({ label, href, mant }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(
-                        'transition rounded-lg py-2 px-2 text-[9px] font-black tracking-wide text-center leading-tight',
+                        'transition rounded-lg py-[5px] px-1 text-[7px] font-black tracking-wide text-center leading-tight',
                         !href
                           ? 'bg-[#16a34a] text-white'
                           : mant
                             ? 'bg-orange-500 hover:bg-orange-600 text-white border border-orange-400'
                             : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
                       )}>
-                      {mant ? `🔧 ${label}` : label}
+                      {label}
                     </button>
                   ))}
-                </div>
-              </div>
-            </div>
-
-            {/* CÓDIGO */}
-            {codVal && (
-              <div className="flex-shrink-0 text-center self-start">
-                <p className="text-white/60 text-[9px] font-black tracking-widest uppercase mb-1">CÓDIGO</p>
-                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
-                  {codVal}
                 </div>
               </div>
             )}
@@ -644,39 +649,31 @@ function EstadoCuentaInner() {
         </div>
 
         {/* ── RESUMEN KPI ── */}
-        <div className="grid grid-cols-4 gap-2">
-          <div className="bg-gray-100 border border-gray-300 rounded-xl p-3 flex items-center gap-2">
-            <div className="w-9 h-9 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-base">{cargados}</span>
+        <div className="grid grid-cols-4 gap-1.5">
+          <div className="bg-gray-100 border border-gray-300 rounded-xl p-2 flex flex-col items-center gap-1">
+            <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-black text-sm">{cargados}</span>
             </div>
-            <div>
-              <p className="text-gray-600 font-black text-xs leading-tight">Cargados</p>
-            </div>
+            <p className="text-gray-600 font-black text-[9px] leading-tight text-center">Cargados</p>
           </div>
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
-            <div className="w-9 h-9 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-base">{pagados}</span>
+          <div className="bg-green-50 border border-green-200 rounded-xl p-2 flex flex-col items-center gap-1">
+            <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-black text-sm">{pagados}</span>
             </div>
-            <div>
-              <p className="text-green-700 font-black text-xs leading-tight">Pagados</p>
-            </div>
+            <p className="text-green-700 font-black text-[9px] leading-tight text-center">Pagados</p>
           </div>
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
-            <div className="w-9 h-9 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-base">{pendientes}</span>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-2 flex flex-col items-center gap-1">
+            <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-black text-sm">{pendientes}</span>
             </div>
-            <div>
-              <p className="text-red-700 font-black text-xs leading-tight">Pendientes</p>
-              {totalPendiente > 0 && <p className="text-red-500 text-[10px] font-bold">${totalPendiente.toLocaleString('es-CO').replace(/,/g,'.')}</p>}
-            </div>
+            <p className="text-red-700 font-black text-[9px] leading-tight text-center">Pendientes</p>
+            {totalPendiente > 0 && <p className="text-red-500 text-[8px] font-bold text-center">${totalPendiente.toLocaleString('es-CO').replace(/,/g,'.')}</p>}
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-2">
-            <div className="w-9 h-9 bg-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-base">{proximos}</span>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-2 flex flex-col items-center gap-1">
+            <div className="w-8 h-8 bg-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-black text-sm">{proximos}</span>
             </div>
-            <div>
-              <p className="text-blue-700 font-black text-xs leading-tight">Próximos</p>
-            </div>
+            <p className="text-blue-700 font-black text-[9px] leading-tight text-center">Próximos</p>
           </div>
         </div>
 
@@ -696,15 +693,14 @@ function EstadoCuentaInner() {
         {/* ── TABLA ── */}
         <div className="rounded-2xl shadow-md border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto w-full -webkit-overflow-scrolling-touch">
-          <table className="border-collapse" style={{ width: '100%', minWidth: 380 }}>
+          <table className="border-collapse" style={{ width: '100%', minWidth: 300 }}>
             <thead>
               <tr>
                 {[
-                  { label: 'FECHA',       pct: '17%' },
-                  { label: 'DESCRIPCIÓN', pct: '26%' },
-                  { label: 'V. PAGADO',   pct: '18%' },
-                  { label: 'DETALLE',     pct: '19%' },
-                  { label: 'ESTADO',      pct: '20%' },
+                  { label: 'FECHA',     pct: '20%' },
+                  { label: 'V. PAGADO', pct: '22%' },
+                  { label: 'DETALLE',   pct: '32%' },
+                  { label: 'ESTADO',    pct: '26%' },
                 ].map(({ label, pct }) => (
                   <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '9px 5px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', width: pct }}>
                     {label}
@@ -714,10 +710,15 @@ function EstadoCuentaInner() {
             </thead>
             <tbody>
               {pagosVista.map((row, idx) => {
-                const isPaid  = becado || row.estado === 'PAGÓ';
-                const isProx  = !becado && row.estado === 'PROX';
-                const rowBg   = isProx ? '#f9fafb' : ROW;
-                const detBg   = becado ? '#374151' : isProx ? '#9ca3af' : isPaid ? '#374151' : '#dc2626';
+                const isPaid       = becado || row.estado === 'PAGÓ';
+                const isProx       = !becado && row.estado === 'PROX';
+                // hasSoporte: true si hay algún soporte que cubra este mes (PEND o PROX)
+                // El padre puede pagar un mes próximo por adelantado — soporte tiene prioridad sobre PROX
+                const hasSoporte   = !isPaid && soportes.some(s =>
+                  !s.meses || s.meses.length === 0 || s.meses.includes(row.detalle)
+                );
+                const rowBg        = (isProx && !hasSoporte) ? '#f9fafb' : ROW;
+                const detBg        = becado ? '#374151' : isPaid ? '#374151' : hasSoporte ? '#d97706' : isProx ? '#9ca3af' : '#dc2626';
                 return (
                   <tr key={idx} style={{ opacity: isProx ? 0.6 : 1 }}>
 
@@ -727,25 +728,11 @@ function EstadoCuentaInner() {
                         <input
                           value={formatFecha(row.fecha)}
                           onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, fecha: e.target.value} : r); savePagos(u); }}
-                          className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                          className="w-full text-center font-semibold text-[9px] text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
                           placeholder="DD/MM/AAAA"
                         />
                       ) : (
-                        <span className="text-xs font-semibold text-[#111827]">{formatFecha(row.fecha) || '—'}</span>
-                      )}
-                    </td>
-
-                    {/* DESCRIPCIÓN (campo destino) */}
-                    <td style={{ background: rowBg, border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      {puedeEditar ? (
-                        <input
-                          value={row.destino}
-                          onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, destino: e.target.value} : r); savePagos(u); }}
-                          className="w-full text-center font-semibold text-xs text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
-                          placeholder="—"
-                        />
-                      ) : (
-                        <span className="text-xs font-semibold text-[#111827]">{row.destino || '—'}</span>
+                        <span className="text-[9px] font-semibold text-[#111827]">{formatFecha(row.fecha) || '—'}</span>
                       )}
                     </td>
 
@@ -756,12 +743,12 @@ function EstadoCuentaInner() {
                           value={ensurePeso(row.vPagado)}
                           readOnly={!isPaid}
                           onChange={e => { if (!isPaid) return; const u = pagos.map((r,i) => i===idx ? {...r, vPagado: e.target.value} : r); savePagos(u); }}
-                          className={cn('w-full text-center font-bold text-xs bg-transparent focus:outline-none px-1 py-1',
+                          className={cn('w-full text-center font-bold text-[9px] bg-transparent focus:outline-none px-1 py-1',
                             isPaid ? 'text-[#374151]' : 'text-[#9ca3af] cursor-default')}
                           placeholder="—"
                         />
                       ) : (
-                        <span className={cn('text-xs font-bold', isPaid ? 'text-[#374151]' : 'text-[#9ca3af]')}>
+                        <span className={cn('text-[9px] font-bold', isPaid ? 'text-[#374151]' : 'text-[#9ca3af]')}>
                           {ensurePeso(row.vPagado) || '—'}
                         </span>
                       )}
@@ -777,25 +764,30 @@ function EstadoCuentaInner() {
                       {becado
                         ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white"
                             style={{ background: '#16a34a' }}>BECADO</span>
-                        : isProx
-                          ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
-                              style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
-                          : puedeEditar
-                            ? <button onClick={() => toggleEstado(idx)}
-                                className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
-                                  isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
-                                  {isPaid ? 'PAGÓ' : 'PEND'}
-                              </button>
-                            : isPaid
-                                ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default bg-green-500">
-                                    PAGÓ
+                        : puedeEditar
+                          ? <button onClick={() => toggleEstado(idx)}
+                              className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
+                                isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
+                                {isPaid ? 'PAGÓ' : 'PEND'}
+                            </button>
+                          : isPaid
+                              ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default bg-green-500">
+                                  PAGÓ
+                                </span>
+                              : hasSoporte
+                                ? <span className="px-1 py-[5px] rounded-lg font-black text-[9px] w-full block text-center leading-tight whitespace-nowrap"
+                                    style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24' }}>
+                                    ⏳ POR CONFIRMAR
                                   </span>
-                                : <button
-                                    onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
-                                    className="px-1 py-2 rounded-lg font-black text-[11px] w-full block text-center text-white shadow-sm active:scale-95 transition-transform animate-pulse whitespace-nowrap"
-                                    style={{ background: '#dc2626' }}>
-                                    💳 PAGAR
-                                  </button>
+                                : isProx
+                                  ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
+                                      style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
+                                  : <button
+                                      onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
+                                      className="px-1 py-2 rounded-lg font-black text-[11px] w-full block text-center text-white shadow-sm active:scale-95 transition-transform animate-pulse whitespace-nowrap"
+                                      style={{ background: '#dc2626' }}>
+                                      💳 PAGAR
+                                    </button>
                       }
                     </td>
                   </tr>
@@ -812,10 +804,22 @@ function EstadoCuentaInner() {
           ? <p className="text-center text-[11px] text-gray-400 pb-4">
               Toca <strong>PEND</strong> para registrar pago · Toca <strong>PAGÓ</strong> para revertir
             </p>
-          : <p className="text-center text-[11px] text-amber-500 font-semibold pb-2">
-              Solo lectura · Edición disponible desde Control de Pagos
-            </p>
+          : soportes.length > 0
+            ? <p className="text-center text-[11px] text-amber-600 font-semibold pb-2">
+                ⏳ Soporte(s) subidos · En revisión por el área contable
+              </p>
+            : <p className="text-center text-[11px] text-amber-500 font-semibold pb-2">
+                Solo lectura · Edición disponible desde Control de Pagos
+              </p>
         }
+        <p className="text-center text-[11px] text-gray-400 pb-4">
+          ¿Tienes dudas? Comunícate con la línea de pagos{' '}
+          <a href="https://wa.me/573045401497" target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-0.5 font-black text-[#16a34a] underline underline-offset-2">
+            <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.117.554 4.103 1.523 5.824L.057 23.5a.5.5 0 0 0 .609.61l5.79-1.477A11.952 11.952 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.9a9.9 9.9 0 0 1-5.031-1.371l-.361-.214-3.733.952.984-3.617-.235-.374A9.859 9.859 0 0 1 2.1 12C2.1 6.525 6.525 2.1 12 2.1S21.9 6.525 21.9 12 17.475 21.9 12 21.9z"/></svg>
+            304 540 1497
+          </a>
+        </p>
 
         {/* ── SUBIR / VER SOPORTES (solo vista calidoso) ── */}
         {!puedeEditar && (
@@ -1022,7 +1026,20 @@ function EstadoCuentaInner() {
                         <p className="text-sm font-semibold text-gray-600 truncate">{s.name}</p>
                       </div>
                     )}
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50">
+                    <div className="px-3 pt-2 pb-1 bg-gray-50">
+                      <p className="text-[10px] font-black text-gray-700 truncate">{s.name}</p>
+                      {s.meses && s.meses.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {s.meses.map(m => (
+                            <span key={m} className="text-[9px] font-black px-2 py-0.5 rounded-full"
+                              style={{ background: '#d1fae5', color: '#065f46' }}>
+                              {m.replace(' 2026','').replace(' 2027','')}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-gray-100">
                       <p className="text-[10px] text-gray-400 font-semibold">{s.date}</p>
                       <button
                         onClick={() => eliminarSoporte(i)}
@@ -1130,44 +1147,144 @@ function EstadoCuentaInner() {
         </div>
       )}
 
-      {/* ── MODAL NOMBRE SOPORTE ── */}
-      {showNombreModal && (
-        <div
-          className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center p-4 pb-10"
-          onClick={() => { setPendingFiles([]); setShowNombreModal(false); }}>
+      {/* ── MODAL SOPORTE: selección de mes(es) + nombre ── */}
+      {showNombreModal && (() => {
+        const mesesDisp = pagosVista.filter(r => r.estado === 'PEND' || r.estado === 'PROX');
+        const toggleMes = (det: string) =>
+          setMesesSelSoporte(prev =>
+            prev.includes(det) ? prev.filter(m => m !== det) : [...prev, det]
+          );
+
+        // Validación de orden: si hay un mes PEND anterior al más temprano seleccionado,
+        // no se puede guardar y se muestra el primer mes que debería pagarse
+        const mesesPend = mesesDisp.filter(r => r.estado === 'PEND');
+        const numsSel   = mesesSelSoporte.map(det => MES_NUM[det] ?? 999);
+        const minSel    = numsSel.length ? Math.min(...numsSel) : 999;
+        const mesConflicto = mesesSelSoporte.length === 0 ? null : mesesPend
+          .filter(r => !mesesSelSoporte.includes(r.detalle) && (MES_NUM[r.detalle] ?? 999) < minSel)
+          .sort((a, b) => (MES_NUM[a.detalle] ?? 999) - (MES_NUM[b.detalle] ?? 999))[0] ?? null;
+
+        const puedeGuardar = mesesSelSoporte.length > 0 && !mesConflicto;
+
+        return (
           <div
-            className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm"
-            onClick={e => e.stopPropagation()}>
-            <h3 className="font-black text-gray-900 text-base mb-1">📎 Nombre del soporte</h3>
-            <p className="text-xs text-gray-500 mb-4">
-              Dale un nombre claro para identificarlo fácilmente
-              {pendingFiles.length > 1 && ` (${pendingFiles.length} archivos)`}
-            </p>
-            <input
-              autoFocus
-              type="text"
-              value={nombreSoporte}
-              onChange={e => setNombreSoporte(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') confirmarNombreSoporte(); if (e.key === 'Escape') { setPendingFiles([]); setShowNombreModal(false); } }}
-              placeholder="Ej: Pago agosto 2026"
-              className="w-full border-2 border-blue-300 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:border-blue-600 mb-4"
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setPendingFiles([]); setShowNombreModal(false); }}
-                className="flex-1 py-3 rounded-xl font-bold text-sm text-gray-600 bg-gray-100 active:scale-95 transition">
-                Cancelar
-              </button>
-              <button
-                onClick={confirmarNombreSoporte}
-                className="flex-1 py-3 rounded-xl font-black text-sm text-white active:scale-95 transition"
-                style={{ background: '#16a34a' }}>
-                ✅ Guardar
-              </button>
+            className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center p-4 pb-6"
+            onClick={() => { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); }}>
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+              onClick={e => e.stopPropagation()}>
+
+              {/* Encabezado */}
+              <div className="px-5 pt-5 pb-3 border-b border-gray-100">
+                <h3 className="font-black text-gray-900 text-base leading-tight">📎 Soporte de pago</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {pendingFiles.length > 1 ? `${pendingFiles.length} archivos` : pendingFiles[0]?.name}
+                </p>
+              </div>
+
+              <div className="px-5 pt-4 pb-5 space-y-4">
+
+                {/* Selección de mes(es) */}
+                {mesesDisp.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                      ¿Qué mes(es) estás pagando?
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {mesesDisp.map(r => {
+                        const sel = mesesSelSoporte.includes(r.detalle);
+                        // Resaltar en rojo el mes en conflicto (el que debería haberse pagado antes)
+                        const esConflicto = mesConflicto?.detalle === r.detalle;
+                        return (
+                          <button
+                            key={r.detalle}
+                            onClick={() => toggleMes(r.detalle)}
+                            className="px-3 py-1.5 rounded-xl font-black text-[11px] transition border-2 active:scale-95"
+                            style={
+                              esConflicto
+                                ? { background: '#fef2f2', color: '#991b1b', borderColor: '#ef4444' }
+                                : sel
+                                  ? { background: '#16a34a', color: 'white', borderColor: '#16a34a' }
+                                  : { background: '#f1f5f9', color: '#374151', borderColor: '#d1d5db' }
+                            }>
+                            {r.detalle.replace(' 2026','').replace(' 2027','')}
+                            {r.estado === 'PROX' && !esConflicto && <span className="ml-1 opacity-60">(Próx.)</span>}
+                            {esConflicto && <span className="ml-1">⚠️</span>}
+                            {sel && !esConflicto && <span className="ml-1">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Aviso de conflicto */}
+                    {mesConflicto && (
+                      <div className="mt-3 rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 flex items-start gap-2">
+                        <span className="text-red-500 text-lg leading-none mt-0.5">⛔</span>
+                        <div>
+                          <p className="text-red-700 font-black text-[11px] leading-snug">
+                            Primero debes pagar <span className="underline underline-offset-2">
+                              {mesConflicto.detalle.replace(' 2026','').replace(' 2027,','')}
+                            </span>
+                          </p>
+                          <p className="text-red-500 text-[10px] mt-0.5">
+                            No puedes seleccionar meses posteriores mientras haya meses anteriores pendientes. ¿Tienes dudas? Comunícate con la línea de pagos{' '}
+                            <a href="https://wa.me/573045401497" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 font-black underline underline-offset-2">
+                              <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.117.554 4.103 1.523 5.824L.057 23.5a.5.5 0 0 0 .609.61l5.79-1.477A11.952 11.952 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.9a9.9 9.9 0 0 1-5.031-1.371l-.361-.214-3.733.952.984-3.617-.235-.374A9.859 9.859 0 0 1 2.1 12C2.1 6.525 6.525 2.1 12 2.1S21.9 6.525 21.9 12 17.475 21.9 12 21.9z"/></svg>
+                              304 540 1497
+                            </a>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Aviso selección vacía */}
+                    {mesesSelSoporte.length === 0 && !mesConflicto && (
+                      <p className="text-[10px] text-amber-500 font-semibold mt-2">
+                        Selecciona al menos un mes para continuar
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Nombre del soporte */}
+                <div>
+                  <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                    Nombre del soporte
+                  </p>
+                  <input
+                    type="text"
+                    value={nombreSoporte}
+                    onChange={e => setNombreSoporte(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && puedeGuardar) confirmarNombreSoporte();
+                      if (e.key === 'Escape') { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); }
+                    }}
+                    placeholder="Ej: Pago julio 2026"
+                    className="w-full border-2 border-green-300 rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none focus:border-green-600"
+                  />
+                </div>
+
+                {/* Botones */}
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={() => { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); }}
+                    className="flex-1 py-3 rounded-xl font-bold text-sm text-gray-600 bg-gray-100 active:scale-95 transition">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmarNombreSoporte}
+                    disabled={!puedeGuardar}
+                    className="flex-1 py-3 rounded-xl font-black text-sm text-white active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: '#16a34a' }}>
+                    ✅ Guardar
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

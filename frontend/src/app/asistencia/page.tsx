@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import React, { Suspense, useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp, Home, LogOut } from 'lucide-react';
-import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, getAsistenciaDeportistas, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha } from '@/lib/db';
+import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, getAsistenciaDeportistas, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha, getCalificaciones, saveCalificacion } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -295,8 +295,13 @@ function AsistenciaInner() {
         setCargandoProy(false);
       });
     } else {
-      // Admin cambia de proyecto → refrescar asistencia del proyecto desde Supabase
-      getAsistenciaPorProyecto(proyecto).then(asistData => {
+      // Admin cambia de proyecto → cargar asistencia por deportista_id
+      // Así los deportistas trasladados de proyecto no pierden su historial
+      const idsEnProy = deportistas.filter(d => proyectoDe(d) === proyecto).map(d => d.id);
+      const loader = idsEnProy.length
+        ? getAsistenciaDeportistas(idsEnProy)
+        : getAsistenciaPorProyecto(proyecto); // fallback si aún no hay deportistas cargados
+      loader.then(asistData => {
         if (Object.keys(asistData).length) {
           setAsistencia(prev => ({ ...prev, ...(asistData as any) }));
         }
@@ -375,16 +380,24 @@ function AsistenciaInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deportistas, proyecto]);
 
-  // Cargar calificaciones del mes desde localStorage
+  // Cargar calificaciones del mes desde Supabase (por deportista_id, no por proyecto)
+  // Así los deportistas trasladados conservan su CAL
   useEffect(() => {
     if (!proyecto) return;
-    const calKey = `futuro_cal_${proyecto}_${mesKey}`;
+    // Mostrar localStorage instantáneamente (UX rápida)
     try {
+      const calKey = `futuro_cal_${proyecto}_${mesKey}`;
       const raw = localStorage.getItem(calKey);
-      setCalMap(raw ? JSON.parse(raw) : {});
-    } catch { setCalMap({}); }
+      if (raw) setCalMap(JSON.parse(raw));
+    } catch {}
+    // Sobreescribir con Supabase (fuente de verdad por deportista_id)
+    const ids = deportistas.filter(d => proyectoDe(d) === proyecto).map(d => d.id);
+    if (!ids.length) return;
+    getCalificaciones(ids, mesKey)
+      .then(data => { if (Object.keys(data).length) setCalMap(data); })
+      .catch(err => console.error('[asistencia] load CAL Supabase:', err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proyecto, mesKey]);
+  }, [proyecto, mesKey, deportistas.length]);
 
   // Fade de botones laterales: se ocultan cuando los inline del fondo son visibles
   useEffect(() => {
@@ -607,8 +620,16 @@ function AsistenciaInner() {
   function setCal(depId: string, value: string) {
     setCalMap(prev => {
       const updated = { ...prev, [depId]: value };
-      const calKey  = `futuro_cal_${proyecto}_${mesKey}`;
-      localStorage.setItem(calKey, JSON.stringify(updated));
+      // localStorage como caché instantáneo (UX sin latencia)
+      try {
+        const calKey = `futuro_cal_${proyecto}_${mesKey}`;
+        localStorage.setItem(calKey, JSON.stringify(updated));
+      } catch {}
+      // Supabase como fuente de verdad — keyed por deportista_id para sobrevivir traslados
+      if (depId && mesKey) {
+        saveCalificacion(depId, mesKey, value)
+          .catch(e => console.error('[asistencia] save CAL Supabase:', e));
+      }
       return updated;
     });
   }

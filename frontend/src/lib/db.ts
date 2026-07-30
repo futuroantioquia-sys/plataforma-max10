@@ -94,12 +94,33 @@ function lsSet(key: string, val: unknown) {
 
 // ── DEPORTISTAS ───────────────────────────────────────────────
 
-/** Convierte fila cruda de Supabase al tipo Deportista */
+/** Convierte fila cruda de Supabase al tipo Deportista.
+ *
+ * FIX Bug C: columnas puede llegar como objeto JS (JSONB parseado) o como
+ * string (TEXT/JSON sin parsear), dependiendo de cómo declara el retorno
+ * la función PostgreSQL `buscar_calidoso`. Se parsea en ambos casos.
+ */
 function rowToDeportista(r: any): Deportista {
+  let cols: Record<string, unknown> = {};
+
+  if (r.columnas !== null && r.columnas !== undefined) {
+    if (typeof r.columnas === 'string') {
+      // La función RPC devolvió columnas como TEXT → parsear manualmente
+      try {
+        cols = JSON.parse(r.columnas);
+      } catch {
+        console.warn('[rowToDeportista] columnas no es JSON válido:', String(r.columnas).slice(0, 100));
+        cols = {};
+      }
+    } else if (typeof r.columnas === 'object') {
+      cols = r.columnas as Record<string, unknown>;
+    }
+  }
+
   return {
     id:        r.id,
-    _nombre:   derivarNombre(r.nombre ?? '', r.columnas ?? {}),
-    _columnas: r.columnas ?? {},
+    _nombre:   derivarNombre(r.nombre ?? '', cols as Record<string, string>),
+    _columnas: cols as Record<string, string>,
   };
 }
 
@@ -214,13 +235,14 @@ export async function getDeportistas(): Promise<Deportista[]> {
 
 /**
  * Búsqueda rápida: retorna solo los deportistas cuyo CÓDIGO coincida.
- * Llama al endpoint /api/calidoso-login que hace UNA query a Supabase.
- * Fallback a caché en memoria o localStorage si la red falla.
+ * Llama al endpoint /api/calidoso-login que hace UNA query a Supabase (vía RPC).
+ * Si el RPC falla, intenta query directa al SDK.
+ * Fallback final a caché en memoria o localStorage.
  */
 export async function buscarPorCodigo(codigo: string): Promise<Deportista[]> {
   const RX_COD = /^c[oó]d/i;
 
-  // ── Intento 1: endpoint rápido de Supabase (1 fila, no 1.139) ──
+  // ── Intento 1: endpoint rápido vía RPC buscar_calidoso ──
   try {
     const ctrl  = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8_000);
@@ -228,16 +250,63 @@ export async function buscarPorCodigo(codigo: string): Promise<Deportista[]> {
       `/api/calidoso-login?codigo=${encodeURIComponent(codigo)}`,
       { cache: 'no-store', signal: ctrl.signal }
     ).finally(() => clearTimeout(timer));
+
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         return data.map(rowToDeportista);
       }
+      // FIX Bug A + Bug B: leer cabecera de error que ahora expone route.ts
+      const rpcErr = res.headers.get('X-Calidoso-Error');
+      if (rpcErr) {
+        console.error('[buscarPorCodigo] RPC reportó error:', rpcErr, '→ intentando SDK directo');
+      } else {
+        console.warn('[buscarPorCodigo] RPC OK pero 0 resultados para código:', codigo, '→ intentando SDK directo');
+      }
+    } else {
+      console.error('[buscarPorCodigo] API HTTP', res.status, '→ intentando SDK directo');
     }
-  } catch { /* caída silenciosa → buscar en caché */ }
+  } catch (e: any) {
+    // FIX Bug A: ya no es silencioso — se loguea el error real
+    const isTimeout = e?.name === 'AbortError';
+    console.error('[buscarPorCodigo] fetch error:', isTimeout ? 'TIMEOUT 8s' : (e?.message ?? e), '→ intentando SDK directo');
+  }
 
-  // ── Fallback: filtrar la caché en memoria o localStorage ──
+  // ── Intento 2: query directa SDK — bypass RPC (funciona aunque buscar_calidoso no exista) ──
+  // FIX Bug D: prueba varias variantes del nombre de la columna "código" en el JSONB
+  try {
+    const LLAVES_CODIGO = [
+      'CÓDIGO', 'CODIGO', 'CÓD', 'COD',
+      'CÓDIGO DEPORTISTA', 'CODIGO DEPORTISTA',
+      'COD. DEPORTISTA', 'CÓD. DEPORTISTA',
+    ];
+    for (const llave of LLAVES_CODIGO) {
+      const { data, error } = await supabase()
+        .from('deportistas')
+        .select('id, nombre, columnas')
+        .eq(`columnas->>${llave}`, codigo)
+        .limit(5);
+      if (error) {
+        // Error esperado si la llave no existe en el JSONB — continuar
+        continue;
+      }
+      if (data && data.length > 0) {
+        console.log('[buscarPorCodigo] SDK directo OK con llave de código:', llave);
+        return data.map(rowToDeportista);
+      }
+    }
+    console.warn('[buscarPorCodigo] SDK directo: ninguna llave de código encontró resultados para:', codigo);
+  } catch (e: any) {
+    console.error('[buscarPorCodigo] SDK directo catch:', e?.message);
+  }
+
+  // ── Fallback final: filtrar la caché en memoria o localStorage ──
   const fuente = _cacheDeportistas ?? lsGet<Deportista[]>(LS_DEPS, []);
+  if (fuente.length > 0) {
+    console.log('[buscarPorCodigo] usando caché local:', fuente.length, 'deportistas totales');
+  } else {
+    console.warn('[buscarPorCodigo] caché local vacía — login fallará si RPC y SDK fallaron');
+  }
   return fuente.filter(d => {
     const cols   = d._columnas ?? {};
     const codKey = Object.keys(cols).find(k => RX_COD.test(k.trim().normalize('NFC')));
@@ -424,39 +493,42 @@ export async function getPagos(): Promise<AllPagos> {
      Así, si Supabase falla parcialmente para algunos deportistas,
      el localStorage los cubre sin destruir los datos del import. ──*/
 
-  // ── Intento 1: fetch() nativo ──
+  // ── Intento 1: fetch() nativo paginado (recorre todas las páginas) ──
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/pagos_estado?select=deportista_id,detalle,estado,v_pagado,v_cargado,destino,fecha&limit=5000`,
-      {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type':  'application/json',
-        },
-      }
+    const sbHeaders = {
+      'apikey':        SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type':  'application/json',
+    };
+    const data = await fetchAllPages(
+      `${SUPABASE_URL}/rest/v1/pagos_estado?select=deportista_id,detalle,estado,v_pagado,v_cargado,destino,fecha`,
+      sbHeaders,
+      1000
     );
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const sbAll = parseSb(data);
-        /* MERGE: localStorage (base completa) + Supabase (sobreescribe donde tiene datos).
-           Nunca sobreescribir localStorage desde aquí — solo saveAllPagos escribe LS. */
-        return { ...lsBase(), ...sbAll };
-      }
+    if (data.length > 0) {
+      const sbAll = parseSb(data);
+      /* MERGE: localStorage (base completa) + Supabase (sobreescribe donde tiene datos).
+         Nunca sobreescribir localStorage desde aquí — solo saveAllPagos escribe LS. */
+      return { ...lsBase(), ...sbAll };
     }
   } catch { /* intentar SDK */ }
 
-  // ── Intento 2: SDK ──
+  // ── Intento 2: SDK paginado ──
   try {
-    const { data, error } = await supabase()
-      .from('pagos_estado')
-      .select('deportista_id, detalle, estado, v_pagado, v_cargado, destino, fecha')
-      .limit(5000);
+    const all: any[] = [];
+    let offset = 0;
+    for (let i = 0; i < 20; i++) {
+      const { data, error } = await supabase()
+        .from('pagos_estado')
+        .select('deportista_id, detalle, estado, v_pagado, v_cargado, destino, fecha')
+        .range(offset, offset + 999);
+      if (error || !data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
 
-    if (error) throw error;
-
-    const sbAll = parseSb(data ?? []);
+    const sbAll = parseSb(all);
     if (Object.keys(sbAll).length > 0) {
       /* MERGE: Supabase + localStorage (cubre gaps de INSERT parcialmente fallido) */
       return { ...lsBase(), ...sbAll };
@@ -468,6 +540,80 @@ export async function getPagos(): Promise<AllPagos> {
     // Sin Supabase: localStorage completo
     return lsBase();
   }
+}
+
+/**
+ * Carga pagos SOLO para un conjunto de códigos/IDs de deportista.
+ * Mucho más eficiente que getPagos() — siempre trae ≤20 filas sin importar
+ * cuántos registros haya en total en pagos_estado.
+ * Úsala en estado-cuenta donde ya conocemos el deportista.
+ */
+export async function getPagosPorCodigos(codigos: string[]): Promise<AllPagos> {
+  if (!codigos.length) return {};
+
+  /* ── Helper: parsear filas Supabase → AllPagos ── */
+  const parseSb = (data: any[]): AllPagos => {
+    const result: AllPagos = {};
+    for (const r of data) {
+      if (!result[r.deportista_id]) result[r.deportista_id] = [];
+      result[r.deportista_id].push({
+        detalle:  r.detalle,
+        estado:   r.estado,
+        vPagado:  r.v_pagado  ?? '',
+        vCargado: r.v_cargado ?? '',
+        destino:  r.destino   ?? '',
+        fecha:    r.fecha     ?? '',
+      });
+    }
+    return result;
+  };
+
+  /* ── Fallback localStorage: solo las claves que nos interesan ── */
+  const lsBase = (): AllPagos => {
+    const libroAll = lsGet<AllPagos>(LS_LIBRO, {});
+    const lsAll    = lsGet<AllPagos>(LS_PAGOS, {});
+    const merged   = { ...lsAll, ...libroAll };
+    const filtrado: AllPagos = {};
+    for (const cod of codigos) {
+      if (merged[cod]) filtrado[cod] = merged[cod];
+    }
+    return filtrado;
+  };
+
+  const inClause = codigos.map(c => encodeURIComponent(c)).join(',');
+
+  /* ── Intento 1: fetch() nativo con filtro in() ── */
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/pagos_estado?select=deportista_id,detalle,estado,v_pagado,v_cargado,destino,fecha&deportista_id=in.(${inClause})`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return { ...lsBase(), ...parseSb(data) };
+      }
+    }
+  } catch { /* intentar SDK */ }
+
+  /* ── Intento 2: SDK ── */
+  try {
+    const { data, error } = await supabase()
+      .from('pagos_estado')
+      .select('deportista_id, detalle, estado, v_pagado, v_cargado, destino, fecha')
+      .in('deportista_id', codigos);
+    if (!error && data && data.length > 0) {
+      return { ...lsBase(), ...parseSb(data) };
+    }
+  } catch { /* ignorar */ }
+
+  return lsBase();
 }
 
 /** Guarda/actualiza pagos de UN deportista en Supabase. */
@@ -921,6 +1067,140 @@ export async function deleteAsistenciaFecha(
     if (error) console.error('[db] deleteAsistenciaFecha:', error.message);
   } catch (e) {
     console.error('[db] deleteAsistenciaFecha:', e);
+  }
+}
+
+// ── DOCUMENTOS DEPORTISTA ────────────────────────────────────
+// Tabla: documentos_deportista (deportista_id, tipo, nombre, datos, fecha)
+// PK: (deportista_id, tipo) — tipos: 'ti' | 'rc' | 'eps'
+
+export type DocTipo = 'ti' | 'rc' | 'eps';
+export interface DocFile { nombre: string; datos: string; fecha: string; }
+export type DocsDeportista = Partial<Record<DocTipo, DocFile>>;
+
+/** Carga los documentos (TI/RC/EPS) de un deportista desde Supabase. */
+export async function getDocumentos(deportistaId: string): Promise<DocsDeportista> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/documentos_deportista?select=tipo,nombre,datos,fecha&deportista_id=eq.${encodeURIComponent(deportistaId)}`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (res.ok) {
+      const rows = await res.json();
+      if (Array.isArray(rows)) {
+        const result: DocsDeportista = {};
+        for (const r of rows) result[r.tipo as DocTipo] = { nombre: r.nombre, datos: r.datos, fecha: r.fecha };
+        return result;
+      }
+    }
+  } catch { /* SDK fallback */ }
+
+  try {
+    const { data, error } = await supabase()
+      .from('documentos_deportista')
+      .select('tipo, nombre, datos, fecha')
+      .eq('deportista_id', deportistaId);
+    if (!error && data) {
+      const result: DocsDeportista = {};
+      for (const r of data) result[r.tipo as DocTipo] = { nombre: r.nombre, datos: r.datos, fecha: r.fecha };
+      return result;
+    }
+  } catch {}
+
+  return {};
+}
+
+/** Guarda o actualiza un documento de un deportista en Supabase. */
+export async function saveDocumento(deportistaId: string, tipo: DocTipo, doc: DocFile): Promise<void> {
+  try {
+    const { error } = await supabase()
+      .from('documentos_deportista')
+      .upsert(
+        { deportista_id: deportistaId, tipo, nombre: doc.nombre, datos: doc.datos, fecha: doc.fecha },
+        { onConflict: 'deportista_id,tipo' }
+      );
+    if (error) console.error('[db] saveDocumento:', error.message);
+  } catch (e) { console.error('[db] saveDocumento:', e); }
+}
+
+/** Elimina un documento de un deportista en Supabase. */
+export async function deleteDocumento(deportistaId: string, tipo: DocTipo): Promise<void> {
+  try {
+    const { error } = await supabase()
+      .from('documentos_deportista')
+      .delete()
+      .match({ deportista_id: deportistaId, tipo });
+    if (error) console.error('[db] deleteDocumento:', error.message);
+  } catch (e) { console.error('[db] deleteDocumento:', e); }
+}
+
+// ── CALIFICACIONES ───────────────────────────────────────────
+// Tabla: calificaciones (deportista_id TEXT, anio_mes TEXT, valor TEXT)
+// PK: (deportista_id, anio_mes) — sigue al deportista aunque cambie de proyecto
+
+/**
+ * Lee calificaciones para una lista de deportista_ids y un mes.
+ * Retorna { [deportista_id]: valor }
+ */
+export async function getCalificaciones(ids: string[], anioMes: string): Promise<Record<string, string>> {
+  if (!ids.length) return {};
+
+  const inParam = `(${ids.map(id => encodeURIComponent(id)).join(',')})`;
+
+  // Intento 1: fetch() directo
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/calificaciones?select=deportista_id,valor&deportista_id=in.${inParam}&anio_mes=eq.${encodeURIComponent(anioMes)}`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer':        'count=none',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const result: Record<string, string> = {};
+        for (const r of data) result[r.deportista_id] = r.valor ?? '';
+        return result;
+      }
+    }
+  } catch { /* intentar SDK */ }
+
+  // Intento 2: SDK
+  try {
+    const { data, error } = await supabase()
+      .from('calificaciones')
+      .select('deportista_id, valor')
+      .in('deportista_id', ids)
+      .eq('anio_mes', anioMes);
+    if (!error && data) {
+      const result: Record<string, string> = {};
+      for (const r of data) result[r.deportista_id] = r.valor ?? '';
+      return result;
+    }
+  } catch {}
+
+  return {};
+}
+
+/**
+ * Guarda/actualiza la calificación de un deportista para un mes.
+ * Keyed por deportista_id — no por proyecto, así sobrevive traslados.
+ */
+export async function saveCalificacion(deportistaId: string, anioMes: string, valor: string): Promise<void> {
+  try {
+    const { error } = await supabase()
+      .from('calificaciones')
+      .upsert(
+        { deportista_id: deportistaId, anio_mes: anioMes, valor },
+        { onConflict: 'deportista_id,anio_mes' }
+      );
+    if (error) console.error('[db] saveCalificacion:', error.message);
+  } catch (e) {
+    console.error('[db] saveCalificacion:', e);
   }
 }
 
