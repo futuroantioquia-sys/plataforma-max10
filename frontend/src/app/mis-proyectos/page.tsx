@@ -115,9 +115,10 @@ export default function MisProyectosPage() {
           <h1 className="text-white font-black text-base leading-tight">Mis Proyectos</h1>
           <p className="text-white/60 text-[11px]">Futuro Antioquia · MAX 10</p>
         </div>
-        <div className="relative flex flex-col items-end">
+        <div className="relative flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+          <p className="text-white/50 text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 
