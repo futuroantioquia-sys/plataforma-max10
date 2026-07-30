@@ -675,7 +675,7 @@ export default function PerfilDeportista() {
           )}
           <div className="flex items-center gap-2 border-l border-white/30 pl-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/ESCUDO%20F.A%202020.png" alt="FA" className="w-7 h-7 object-contain" />
+            <img src="/logo-max10.svg" alt="MAX10" className="w-8 h-8 object-contain" />
             <div className="text-right leading-tight">
               <p className="text-white font-black text-xs tracking-widest leading-none">MAX 10 SPORT</p>
               <p className="text-white/50 text-[10px] leading-none mt-0.5">Conecta, Gestiona, Gana</p>
