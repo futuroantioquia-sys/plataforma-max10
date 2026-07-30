@@ -673,10 +673,10 @@ export default function PerfilDeportista() {
               {editando ? <><Save className="w-4 h-4" /> Guardar</> : <><Edit3 className="w-4 h-4" /> Editar</>}
             </button>
           )}
-          <div className="flex items-center gap-2 border-l border-white/30 pl-3">
+          <div className="flex flex-col items-center border-l border-white/30 pl-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/MAX%2010.png" alt="MAX10" className="h-8 object-contain" />
-            <p className="text-white/50 text-[10px] leading-none">Conecta, Gestiona, Gana</p>
+            <img src="/MAX%2010.png" alt="MAX10" className="h-7 object-contain" />
+            <p className="text-white/50 text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
           </div>
         </div>
       </header>
