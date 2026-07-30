@@ -13,14 +13,14 @@ export default function LoginPage() {
   const router  = useRouter();
   const { cargando } = useAuthStore();
 
-  const [tab,         setTab]         = useState<Tab>('admin');
+  const [tab,         setTab]         = useState<Tab | null>(null);
   const [usuario,     setUsuario]     = useState('');
   const [clave,       setClave]       = useState('');
   const [mostrarPass, setMostrarPass] = useState(false);
   const [errLocal,    setErrLocal]    = useState('');
   const [enviando,    setEnviando]    = useState(false);
 
-  function cambiarTab(t: Tab) {
+  function cambiarTab(t: Tab | null) {
     setTab(t);
     setUsuario('');
     setClave('');
@@ -283,7 +283,7 @@ export default function LoginPage() {
     },
   };
 
-  const cfg     = config[tab];
+  const cfg     = tab ? config[tab] : null;
   const ocupado = enviando || cargando;
 
   /* Gradiente de fondo según tab */
@@ -293,11 +293,12 @@ export default function LoginPage() {
     calidoso: 'from-[#431407] via-[#92400e] to-[#f97316]',
     nuevo:    'from-[#2e1065] via-[#7c3aed] to-[#a855f7]',
   };
+  const fondo = tab ? fondoMap[tab] : 'from-[#064e1e] via-[#0a6628] to-[#22c55e]';
 
   return (
     <div className={cn(
       'relative min-h-screen bg-gradient-to-br flex items-center justify-center p-4 overflow-hidden transition-all duration-500',
-      fondoMap[tab],
+      fondo,
     )}>
       {/* Patrón de balones */}
       <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
@@ -347,14 +348,15 @@ export default function LoginPage() {
         {/* Selector de rol (dropdown) */}
         <div className="relative mb-5">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none select-none z-10">
-            {tab === 'admin' ? '🛡️' : tab === 'profe' ? '👥' : tab === 'calidoso' ? '⭐' : '➕'}
+            {tab === 'admin' ? '🛡️' : tab === 'profe' ? '👥' : tab === 'calidoso' ? '⭐' : tab === 'nuevo' ? '➕' : '👤'}
           </span>
           <select
-            value={tab}
-            onChange={e => cambiarTab(e.target.value as Tab)}
+            value={tab ?? ''}
+            onChange={e => cambiarTab((e.target.value as Tab) || null)}
             className="w-full appearance-none bg-white/15 backdrop-blur-sm border border-white/30 rounded-xl pl-8 pr-7 py-2 text-white font-black text-xs focus:outline-none focus:border-white/60 focus:bg-white/22 transition-all cursor-pointer"
             style={{ WebkitAppearance: 'none' }}
           >
+            <option value="" className="bg-gray-900 text-gray-400">— Selecciona tu perfil —</option>
             <option value="admin"    className="bg-gray-900 text-white font-bold">Admin</option>
             <option value="profe"    className="bg-gray-900 text-white font-bold">Profe</option>
             <option value="calidoso" className="bg-gray-900 text-white font-bold">Calidoso</option>
@@ -363,7 +365,8 @@ export default function LoginPage() {
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 pointer-events-none text-[10px]">▼</span>
         </div>
 
-        {/* Tarjeta */}
+        {/* Tarjeta — solo visible cuando hay rol seleccionado */}
+        {tab && cfg && (
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in">
 
           {/* Franja superior de color */}
@@ -455,6 +458,7 @@ export default function LoginPage() {
             </form>
           </div>
         </div>
+        )}
 
         <p className="text-center text-white/30 text-xs mt-6 font-medium">
           © 2026 Futuro Antioquia · Medellín, Colombia
