@@ -132,13 +132,29 @@ export default function PerfilDeportista() {
 
   useEffect(() => {
     getDeportistas().then(lista => {
-      const d = lista.find(x => x.id === id);
+      let d = lista.find(x => x.id === id);
+
+      // Para calidosos con IDs temporales (dep-xxxxx), buscar por nombre
+      // y redirigir al UUID real para que sub-páginas (asistencia, pagos, etc.) funcionen.
+      if (!d && esPadre) {
+        try {
+          const nombre = (localStorage.getItem('futuro-calidoso-nombre') ?? '').trim().toLowerCase();
+          if (nombre) d = lista.find(x => (x._nombre ?? '').trim().toLowerCase() === nombre);
+        } catch {}
+        if (d) {
+          // Guardar UUID real y redirigir → todas las sub-páginas quedan correctas
+          try { localStorage.setItem('futuro-calidoso-id', d.id); } catch {}
+          router.replace(`/alumnos/${d.id}`);
+          return;
+        }
+      }
+
       if (d) { setDep(d); setEdits({ ...d._columnas }); }
     });
     getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {
       try { const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); if (fotos[id]) setFoto(fotos[id]); } catch {}
     });
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -326,19 +342,22 @@ export default function PerfilDeportista() {
           {/* Botones */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginTop: 16 }}>
             {[
-              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`    },
-              { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta` },
-              { label: 'INFORMES',   href: '/evaluaciones'                },
-              { label: 'MENSAJES',   href: '/mensajes'                    },
-            ].map(({ label, href }) => (
+              { label: 'PAGOS',       href: `/alumnos/${id}/estado-cuenta`,   mant: false },
+              { label: 'ASISTENCIA',  href: `/alumnos/${id}/asistencia`,      mant: false },
+              { label: 'VALORACIÓN',  href: '/mantenimiento',                  mant: true  },
+              { label: 'MENSAJES',    href: '/mantenimiento',                 mant: true  },
+            ].map(({ label, href, mant }) => (
               <button key={label} onClick={() => router.push(href)} style={{
-                background: 'rgba(255,255,255,0.11)',
-                border: '1.5px solid rgba(255,255,255,0.22)',
-                borderRadius: 13, padding: '11px 2px',
-                color: '#fff', fontWeight: 900, fontSize: 9.5,
+                background: mant ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.11)',
+                border: mant ? '1.5px solid rgba(255,255,255,0.12)' : '1.5px solid rgba(255,255,255,0.22)',
+                borderRadius: 13, padding: '8px 2px 6px',
+                color: mant ? 'rgba(255,255,255,0.45)' : '#fff',
+                fontWeight: 900, fontSize: 9.5,
                 letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               }}>
-                {label}
+                <span>{label}</span>
+                {mant && <span style={{ fontSize: 7, fontWeight: 700, color: 'rgba(255,200,50,0.8)', letterSpacing: '0.03em' }}>🔧 MANT.</span>}
               </button>
             ))}
           </div>

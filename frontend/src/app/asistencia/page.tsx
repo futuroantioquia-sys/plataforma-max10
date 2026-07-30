@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import React, { Suspense, useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp, Home, LogOut } from 'lucide-react';
-import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha } from '@/lib/db';
+import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, getAsistenciaDeportistas, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -231,21 +231,27 @@ function AsistenciaInner() {
 
     // 3. Carga de datos usando isProfe local (sin stale closure)
     if (isProfe) {
-      // Profe: carga SOLO el proyecto asignado (no los 50 000 filas globales)
+      // Profe: carga proyecto asignado → luego asistencia por IDs (sigue al deportista aunque cambie de proyecto)
       const proyUrl = searchParams.get('proyecto');
       if (proyUrl) {
         setCargandoProy(true);
-        Promise.all([
-          getDeportistasPorProyecto(proyUrl),
-          getAsistenciaPorProyecto(proyUrl),
-        ]).then(([{ data: deps }, asistData]) => {
-          setCargandoProy(false);
-          if (deps.length) setDeportistas(deps);
-          if (Object.keys(asistData).length) setAsistencia(asistData as any);
-        }).catch(err => {
-          console.error('[asistencia] carga profe:', err);
-          setCargandoProy(false);
-        });
+        getDeportistasPorProyecto(proyUrl)
+          .then(({ data: deps }) => {
+            if (deps.length) setDeportistas(deps);
+            const ids = deps.map(d => d.id);
+            // Cargar asistencia por deportista_id para que los traslados de proyecto no pierdan historial
+            return ids.length
+              ? getAsistenciaDeportistas(ids)
+              : getAsistenciaPorProyecto(proyUrl); // fallback si no hay IDs aún
+          })
+          .then(asistData => {
+            setCargandoProy(false);
+            if (Object.keys(asistData).length) setAsistencia(asistData as any);
+          })
+          .catch(err => {
+            console.error('[asistencia] carga profe:', err);
+            setCargandoProy(false);
+          });
       } else {
         // Sin proyecto en URL → redirigir a mis-proyectos
         router.replace('/mis-proyectos');
@@ -272,16 +278,18 @@ function AsistenciaInner() {
   useEffect(() => {
     if (!proyecto || proyecto === searchParams.get('proyecto')) return;
     if (esProfe) {
-      // Profe cambia de proyecto → recargar deportistas + asistencia del nuevo proyecto
+      // Profe cambia de proyecto → recargar deportistas + asistencia por IDs
       setCargandoProy(true);
       setDeportistas([]);
-      Promise.all([
-        getDeportistasPorProyecto(proyecto),
-        getAsistenciaPorProyecto(proyecto),
-      ]).then(([{ data: deps }, asistData]) => {
-        setCargandoProy(false);
-        if (deps.length) setDeportistas(deps);
-        if (Object.keys(asistData).length) setAsistencia(asistData as any);
+      getDeportistasPorProyecto(proyecto)
+        .then(({ data: deps }) => {
+          if (deps.length) setDeportistas(deps);
+          const ids = deps.map(d => d.id);
+          return ids.length ? getAsistenciaDeportistas(ids) : getAsistenciaPorProyecto(proyecto);
+        })
+        .then(asistData => {
+          setCargandoProy(false);
+          if (Object.keys(asistData).length) setAsistencia(asistData as any);
       }).catch(err => {
         console.error('[asistencia] cambio proyecto profe:', err);
         setCargandoProy(false);
@@ -399,7 +407,8 @@ function AsistenciaInner() {
       const p = getCol(d, /^program/i);
       if (p) set.add(p);
     });
-    return Array.from(set).sort();
+    const numN = (s: string) => { const m = s.match(/\d+/); return m ? parseInt(m[0], 10) : 9999; };
+    return Array.from(set).sort((a, b) => numN(a) - numN(b) || a.localeCompare(b, 'es'));
   }, [deportistas, esProfe]);
 
   const proyectos = useMemo(() => {
@@ -411,7 +420,8 @@ function AsistenciaInner() {
         const p = proyectoDe(d);
         if (p !== '__SIN_PROYECTO__') set.add(p);
       });
-    return Array.from(set).sort();
+    const numN = (s: string) => { const m = s.match(/\d+/); return m ? parseInt(m[0], 10) : 9999; };
+    return Array.from(set).sort((a, b) => numN(a) - numN(b) || a.localeCompare(b, 'es'));
   }, [deportistas, programa, esProfe, proyectosProfe]);
 
   useEffect(() => {
@@ -448,13 +458,23 @@ function AsistenciaInner() {
   }, [mes, anio, diasSel]);
 
   // ── Memoizar estado por celda ────────────────────────────────
+  // Busca en TODOS los proyectos: si el deportista cambió de proyecto su historial lo sigue
   const estadoMap = useMemo(() => {
     const m: Record<string, Record<string, Estado>> = {};
     atletas.forEach(dep => {
       m[dep.id] = {};
       diasDelMes.forEach(d => {
         const fk = d.toISOString().split('T')[0];
-        m[dep.id][fk] = asistencia[proyecto]?.[mesKey]?.[dep.id]?.[fk] ?? '';
+        // 1. Proyecto actual (prioridad para nuevos registros)
+        let est: Estado = asistencia[proyecto]?.[mesKey]?.[dep.id]?.[fk] ?? '';
+        // 2. Si no encontró, busca en proyectos anteriores (traslado)
+        if (!est) {
+          for (const proyData of Object.values(asistencia)) {
+            const v = proyData?.[mesKey]?.[dep.id]?.[fk] ?? '';
+            if (v) { est = v as Estado; break; }
+          }
+        }
+        m[dep.id][fk] = est;
       });
     });
     return m;
@@ -714,6 +734,7 @@ function AsistenciaInner() {
             </>
           )}
           <div className="flex flex-col items-end flex-shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
             <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
           </div>

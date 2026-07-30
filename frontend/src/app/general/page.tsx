@@ -498,9 +498,12 @@ export default function GeneralPage() {
       }
 
       // Clave de nombre real en el consolidado
-      const existingNomKey = existingKeys.find(k =>
-        /deportista|alumno|jugador|atleta|^nombre/i.test(k.trim())
-      ) ?? '';
+      // EXCLUYE columnas COD-prefijo (ej: "COD. DEPORTISTA") que contienen el código
+      const existingNomKey = existingKeys.find(k => {
+        const t = k.trim();
+        if (/^c[oó]d/i.test(t)) return false;
+        return /deportista|alumno|jugador|atleta|^nombre/i.test(t);
+      }) ?? '';
 
       // Índice de códigos y nombres existentes para detectar duplicados
       const codsExist  = new Set(deportistas.map(d => getColVal(d, /^c[oó]d/i).trim().toLowerCase()).filter(Boolean));
@@ -519,13 +522,19 @@ export default function GeneralPage() {
           });
 
           // Extraer nombre: buscar la clave de nombre del consolidado, o por regex
-          const kNom = existingNomKey && cols[existingNomKey]
+          // EXCLUYE columnas COD-prefijo (no deben usarse como nombre)
+          const kNom = existingNomKey && cols[existingNomKey] && !/^\d+$/.test(cols[existingNomKey])
             ? existingNomKey
-            : (Object.keys(cols).find(k => RX_NOM.test(k.trim())) ?? '');
+            : (Object.keys(cols).find(k => {
+                const t = k.trim();
+                if (RX_COD.test(t)) return false;   // excluir COD..., CÓDIGO...
+                return RX_NOM.test(t);
+              }) ?? '');
           // Evitar que un código numérico puro se convierta en nombre
-          const nombre = kNom
-            ? cols[kNom]
-            : (Object.values(cols).find(v => v && !/^\d{4,6}$/.test(v)) ?? '');
+          const rawNom = kNom ? cols[kNom] : '';
+          const nombre = (rawNom && !/^\d+$/.test(rawNom))
+            ? rawNom
+            : (Object.values(cols).find(v => v && !/^\d{3,6}$/.test(v) && v.length > 3) ?? '');
 
           // Detectar duplicado por código o nombre
           const kCod = Object.keys(cols).find(k => RX_COD.test(k.trim())) ?? '';

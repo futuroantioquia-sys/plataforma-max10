@@ -1053,13 +1053,9 @@ export default function AfiliacionPage() {
             </div>
           </div>
         )}
-        <button onClick={reiniciar}
+        <button onClick={() => depId ? router.push(`/alumnos/${depId}`) : router.push('/login')}
           className="w-full bg-[#16a34a] hover:bg-[#064e1e] text-white font-bold py-3.5 rounded-xl transition">
-          Volver al inicio
-        </button>
-        <button onClick={() => router.push('/dashboard')}
-          className="w-full mt-3 text-gray-400 hover:text-gray-600 font-semibold py-2 rounded-xl transition text-sm">
-          Ir al dashboard
+          {depId ? 'Ver mi perfil' : 'Finalizar'}
         </button>
       </div>
     </div>

@@ -204,6 +204,10 @@ function EstadoCuentaInner() {
   const soporteInputRef = useRef<HTMLInputElement>(null);
   const [soportes,    setSoportes]    = useState<{ name: string; data: string; date: string }[]>([]);
   const [verSoportes, setVerSoportes] = useState(false);
+  const [pendingFiles,     setPendingFiles]     = useState<{ name: string; data: string; date: string }[]>([]);
+  const [nombreSoporte,    setNombreSoporte]    = useState('');
+  const [showNombreModal,  setShowNombreModal]  = useState(false);
+  const [toastSoporte,     setToastSoporte]     = useState(false);
 
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -228,24 +232,40 @@ function EstadoCuentaInner() {
   function subirSoporte(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
+    if (soporteInputRef.current) soporteInputRef.current.value = '';
     Promise.all(
       files.map(file => new Promise<{ name: string; data: string; date: string }>(resolve => {
         const reader = new FileReader();
         reader.onload = ev => resolve({
-          name: file.name,
+          name: file.name.replace(/\.[^.]+$/, ''), // sin extensión — editable en modal
           data: ev.target?.result as string,
           date: new Date().toLocaleDateString('es-CO'),
         });
         reader.readAsDataURL(file);
       }))
-    ).then(nuevos => {
-      setSoportes(prev => {
-        const updated = [...prev, ...nuevos];
-        try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(updated)); } catch {}
-        return updated;
-      });
-      if (soporteInputRef.current) soporteInputRef.current.value = '';
+    ).then(leidos => {
+      setPendingFiles(leidos);
+      setNombreSoporte(leidos[0]?.name ?? '');
+      setShowNombreModal(true);
     });
+  }
+
+  function confirmarNombreSoporte() {
+    const base = nombreSoporte.trim() || pendingFiles[0]?.name || 'soporte';
+    const nuevos = pendingFiles.map((f, i) => ({
+      ...f,
+      name: pendingFiles.length > 1 ? `${base} (${i + 1})` : base,
+    }));
+    setSoportes(prev => {
+      const updated = [...prev, ...nuevos];
+      try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    setPendingFiles([]);
+    setNombreSoporte('');
+    setShowNombreModal(false);
+    setToastSoporte(true);
+    setTimeout(() => setToastSoporte(false), 5000);
   }
 
   function eliminarSoporte(idx: number) {
@@ -527,9 +547,9 @@ function EstadoCuentaInner() {
           <h1 className="text-white font-black text-lg">Estado de Cuenta</h1>
           <p className="text-white/60 text-xs">Control de pagos individual</p>
         </div>
-        <div className="relative text-right leading-tight">
-          <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-          <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
+        <div className="flex flex-col items-end flex-shrink-0">
+          <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+          <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 
@@ -588,20 +608,22 @@ function EstadoCuentaInner() {
                 {/* Botones 2×2 */}
                 <div className="flex-shrink-0 grid grid-cols-2 gap-1.5">
                   {[
-                    { label: 'PAGOS',      href: null },
-                    { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia` },
-                    { label: 'INFORMES',   href: '/evaluaciones' },
-                    { label: 'MENSAJES',   href: '/mensajes' },
-                  ].map(({ label, href }) => (
+                    { label: 'PAGOS',      href: null,                          mant: false },
+                    { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`,   mant: false },
+                    { label: 'INFORMES',   href: '/mantenimiento',              mant: true  },
+                    { label: 'MENSAJES',   href: '/mantenimiento',              mant: true  },
+                  ].map(({ label, href, mant }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(
                         'transition rounded-lg py-2 px-2 text-[9px] font-black tracking-wide text-center leading-tight',
                         !href
                           ? 'bg-[#16a34a] text-white'
-                          : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
+                          : mant
+                            ? 'bg-orange-500 hover:bg-orange-600 text-white border border-orange-400'
+                            : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
                       )}>
-                      {label}
+                      {mant ? `🔧 ${label}` : label}
                     </button>
                   ))}
                 </div>
@@ -672,18 +694,19 @@ function EstadoCuentaInner() {
         </div>
 
         {/* ── TABLA ── */}
-        <div className="rounded-2xl overflow-hidden shadow-md border border-gray-200">
-          <table className="w-full border-collapse text-sm">
+        <div className="rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto w-full -webkit-overflow-scrolling-touch">
+          <table className="border-collapse" style={{ width: '100%', minWidth: 380 }}>
             <thead>
               <tr>
                 {[
-                  { label: 'FECHA',        w: '16%' },
-                  { label: 'DESCRIPCIÓN',  w: '22%' },
-                  { label: 'V. PAGADO',    w: '20%' },
-                  { label: 'DETALLE',      w: '20%' },
-                  { label: 'ESTADO PAGO',  w: '22%' },
-                ].map(({ label, w }) => (
-                  <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '10px 8px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', width: w }}>
+                  { label: 'FECHA',       pct: '17%' },
+                  { label: 'DESCRIPCIÓN', pct: '26%' },
+                  { label: 'V. PAGADO',   pct: '18%' },
+                  { label: 'DETALLE',     pct: '19%' },
+                  { label: 'ESTADO',      pct: '20%' },
+                ].map(({ label, pct }) => (
+                  <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '9px 5px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', width: pct }}>
                     {label}
                   </th>
                 ))}
@@ -769,9 +792,9 @@ function EstadoCuentaInner() {
                                   </span>
                                 : <button
                                     onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
-                                    className="px-2 py-2 rounded-lg font-black text-[14px] w-full block text-center text-white tracking-wide shadow-sm active:scale-95 transition-transform animate-pulse"
+                                    className="px-1 py-2 rounded-lg font-black text-[11px] w-full block text-center text-white shadow-sm active:scale-95 transition-transform animate-pulse whitespace-nowrap"
                                     style={{ background: '#dc2626' }}>
-                                    💳 PAGAR AHORA
+                                    💳 PAGAR
                                   </button>
                       }
                     </td>
@@ -781,6 +804,7 @@ function EstadoCuentaInner() {
             </tbody>
 
           </table>
+          </div>
         </div>
 
         {/* ── NOTA ── */}
@@ -862,6 +886,22 @@ function EstadoCuentaInner() {
       {/* ── MODAL PAGAR (vista calidoso) ── */}
       {showPagoModal && (() => {
         const filaModal = pagoModalIdx !== null ? pagosVista[pagoModalIdx] : null;
+        // Quita tildes para comparación robusta
+        const sinAcento = (s: string) => s.toUpperCase().trim()
+          .replace(/[ÁÀÂÃÄ]/g,'A').replace(/[ÉÈÊË]/g,'E').replace(/[ÍÌÎÏ]/g,'I')
+          .replace(/[ÓÒÔÕÖ]/g,'O').replace(/[ÚÙÛÜ]/g,'U').replace(/Ñ/g,'N');
+        // Los datos reales: PROGRAMA="Selección" y PROY="SUB 15B" (por separado)
+        const progNorm = sinAcento(catVal ?? '');   // columna PROGRAMA
+        const proyNorm = sinAcento(proyecto ?? ''); // columna PROY
+        const esSelDesarr = /SELECC|DESARROLLO/.test(progNorm);
+        const esSub131415 = /SUB[\s\-]*(13|14|15)/.test(proyNorm);
+        // También soporta nombres completos como "SELECCIÓN SUB 15" en un solo campo
+        const nombreCompleto = progNorm + ' ' + proyNorm;
+        const PROYECTOS_MAX10 = ['DESARROLLO SUB 15','DESARROLLO SUB 14','DESARROLLO SUB 13','SELECCION SUB 15','SELECCION SUB 14','SELECCION SUB 13'];
+        const esMax10 = (esSelDesarr && esSub131415) || PROYECTOS_MAX10.some(p => nombreCompleto.includes(p));
+        const cuentaNum   = esMax10 ? '36000004823' : '10182764613';
+        const cuentaTitul = esMax10 ? 'MAX 10 SPORT'  : 'FUTURO ANTIOQUIA';
+        const cuentaNit   = esMax10 ? null             : '811036997';
         return (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
              onClick={() => { setShowPagoModal(false); setPagoModalIdx(null); }}>
@@ -899,9 +939,9 @@ function EstadoCuentaInner() {
                 {([
                   { label: 'BANCO',   val: 'BANCOLOMBIA' },
                   { label: 'TIPO',    val: 'CUENTA DE AHORROS' },
-                  { label: 'NÚMERO',  val: '10182764613', copy: true },
-                  { label: 'TITULAR', val: 'FUTURO ANTIOQUIA' },
-                  { label: 'NIT',     val: '811036997' },
+                  { label: 'NÚMERO',  val: cuentaNum, copy: true },
+                  { label: 'TITULAR', val: cuentaTitul },
+                  ...(cuentaNit ? [{ label: 'NIT', val: cuentaNit }] : []),
                 ] as Array<{ label: string; val: string; copy?: boolean }>).map(({ label, val, copy }) => (
                   <div key={label} className="flex items-center gap-3">
                     <span className="text-white text-[10px] font-black px-2.5 py-[5px] rounded-lg text-center flex-shrink-0 tracking-wide"
@@ -911,7 +951,7 @@ function EstadoCuentaInner() {
                     <span className="text-white font-semibold text-[13px] tracking-wide flex-1">{val}</span>
                     {copy && (
                       <button
-                        onClick={() => { try { navigator.clipboard.writeText('10182764613'); } catch {} }}
+                        onClick={() => { try { navigator.clipboard.writeText(cuentaNum); } catch {} }}
                         className="flex items-center gap-1 text-white/70 hover:text-white transition flex-shrink-0"
                         title="Copiar número">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1072,6 +1112,57 @@ function EstadoCuentaInner() {
                 onClick={() => editIdx !== null && eliminarMes(editIdx)}
                 className="text-red-400 hover:text-red-600 text-xs font-bold transition underline underline-offset-2">
                 No cobrar este mes (eliminar del estado de cuenta)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOAST SOPORTE GUARDADO ── */}
+      {toastSoporte && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[#16a34a] text-white px-5 py-3.5 rounded-2xl shadow-2xl animate-fade-in-up"
+          style={{ animation: 'fadeInUp 0.3s ease' }}>
+          <span className="text-xl">✅</span>
+          <div>
+            <p className="font-black text-sm leading-tight">¡Soporte enviado!</p>
+            <p className="text-white/80 text-xs">Tu comprobante fue guardado correctamente</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL NOMBRE SOPORTE ── */}
+      {showNombreModal && (
+        <div
+          className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center p-4 pb-10"
+          onClick={() => { setPendingFiles([]); setShowNombreModal(false); }}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm"
+            onClick={e => e.stopPropagation()}>
+            <h3 className="font-black text-gray-900 text-base mb-1">📎 Nombre del soporte</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Dale un nombre claro para identificarlo fácilmente
+              {pendingFiles.length > 1 && ` (${pendingFiles.length} archivos)`}
+            </p>
+            <input
+              autoFocus
+              type="text"
+              value={nombreSoporte}
+              onChange={e => setNombreSoporte(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmarNombreSoporte(); if (e.key === 'Escape') { setPendingFiles([]); setShowNombreModal(false); } }}
+              placeholder="Ej: Pago agosto 2026"
+              className="w-full border-2 border-blue-300 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:border-blue-600 mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setPendingFiles([]); setShowNombreModal(false); }}
+                className="flex-1 py-3 rounded-xl font-bold text-sm text-gray-600 bg-gray-100 active:scale-95 transition">
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarNombreSoporte}
+                className="flex-1 py-3 rounded-xl font-black text-sm text-white active:scale-95 transition"
+                style={{ background: '#16a34a' }}>
+                ✅ Guardar
               </button>
             </div>
           </div>

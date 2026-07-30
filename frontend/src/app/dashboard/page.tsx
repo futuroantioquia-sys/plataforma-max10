@@ -343,12 +343,21 @@ function DashboardProfesor() {
 
 // ── DASHBOARD PADRE / DEPORTISTA ─────────────────────────────────
 function DashboardPadre() {
+  const [depNombre, setDepNombre] = useState<string>('');
+
+  useEffect(() => {
+    try {
+      const nombre = localStorage.getItem('futuro-calidoso-nombre') ?? '';
+      setDepNombre(nombre);
+    } catch {}
+  }, []);
+
   const accesos = [
-    { titulo: 'Formulario Afiliación', icono: ClipboardList, href: '/afiliacion',   descripcion: 'Actualiza tu ficha',          color: 'verde',  disabled: false },
-    { titulo: 'Ver Evaluaciones',      icono: Star,          href: '/evaluaciones', descripcion: 'Progreso técnico y formativo', color: 'dorado', disabled: false },
-    { titulo: 'Mis Pagos',            icono: DollarSign,    href: '/pagos',        descripcion: 'Estado de mensualidades',     color: 'azul',   disabled: false },
-    { titulo: 'Calendario',           icono: Calendar,       href: '/calendario',   descripcion: 'Próximos entrenamientos',     color: 'teal',   disabled: false },
-    { titulo: 'Informes',             icono: HardHat,        href: '#',             descripcion: 'EN CONSTRUCCIÓN',             color: 'purple', disabled: true  },
+    { titulo: 'Formulario Afiliación', icono: ClipboardList, href: '/afiliacion',    descripcion: 'Actualiza tu ficha',          color: 'verde',  disabled: false },
+    { titulo: 'Ver Evaluaciones',      icono: Star,          href: '/evaluaciones',  descripcion: 'Progreso técnico y formativo', color: 'dorado', disabled: false },
+    { titulo: 'Mis Pagos',            icono: DollarSign,    href: '/pagos',         descripcion: 'Estado de mensualidades',     color: 'azul',   disabled: false },
+    { titulo: 'Calendario',           icono: Calendar,       href: '/calendario',    descripcion: 'Próximos entrenamientos',     color: 'teal',   disabled: false },
+    { titulo: 'Informes',             icono: HardHat,        href: '/mantenimiento', descripcion: 'EN CONSTRUCCIÓN',             color: 'purple', disabled: false },
   ];
   return (
     <div className="space-y-6">
@@ -357,8 +366,10 @@ function DashboardPadre() {
           <svg className="w-full h-full"><defs><pattern id="sp-p" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse"><circle cx="30" cy="30" r="14" fill="none" stroke="white" strokeWidth="1"/></pattern></defs><rect width="100%" height="100%" fill="url(#sp-p)"/></svg>
         </div>
         <p className="relative text-white/70 text-xs font-semibold uppercase tracking-wider mb-1">Mi deportista</p>
-        <p className="relative text-xl font-bold">Pendiente de registro</p>
-        <p className="relative text-white/70 text-sm mt-1">Los datos aparecerán una vez se importe la lista</p>
+        <p className="relative text-xl font-bold">{depNombre || '—'}</p>
+        {depNombre && (
+          <p className="relative text-white/70 text-sm mt-1">Bienvenido/a a tu espacio deportivo</p>
+        )}
         <div className="relative grid grid-cols-3 gap-3 mt-4">
           {[{ v: '—', l: 'Asistencia' }, { v: '—', l: 'Nota técnica' }, { v: '—', l: 'Evaluaciones' }].map((s) => (
             <div key={s.l} className="bg-white/15 rounded-xl p-3 text-center">
@@ -529,7 +540,17 @@ function DashboardInner() {
 
   useEffect(() => {
     if (!montado) return;
-    if (!usuario && !cargando) router.replace('/login');
+    if (!usuario && !cargando) { router.replace('/login'); return; }
+    // Calidosos (padre / deportista) NO tienen dashboard de módulos —
+    // se redirigen directamente a su página de perfil (foto + botones).
+    if (usuario && (usuario.rol === 'padre' || usuario.rol === 'deportista')) {
+      try {
+        const id = localStorage.getItem('futuro-calidoso-id');
+        if (id) { router.replace(`/alumnos/${id}`); return; }
+      } catch {}
+      // Sin ID en localStorage → volver al login
+      router.replace('/login');
+    }
   }, [usuario, cargando, router, montado]);
 
   // Captura promesas rechazadas no manejadas — evita la pantalla de error de Next.js

@@ -218,7 +218,9 @@ function TarjetaProyecto({
   const inputRef = useRef<HTMLInputElement>(null);
   const profes   = [...new Set(lista.map(d => colProfe(d)).filter(Boolean))];
   const profe    = profes[0] ?? '';
-  const fotoP    = profe ? fotosProfe[profe] : null;
+  const fotoP    = profe
+    ? (fotosProfe[profe] ?? Object.entries(fotosProfe).find(([k]) => k.toLowerCase() === profe.toLowerCase())?.[1] ?? null)
+    : null;
 
   function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
     e.stopPropagation();
@@ -296,7 +298,7 @@ function TarjetaProyecto({
 // ── Dashboard del Proyecto (tabla horizontal) ─────────────────
 function DashboardProyecto({
   proy, lista, programa, pal, fotos, fotosProfe, esProfe,
-  onFotoProfe, onVerPerfil, onPosicion,
+  onFotoProfe, onVerPerfil, onPosicion, onCal, onCom,
 }: {
   proy: string; lista: Deportista[]; programa: string;
   pal: typeof PALETA[0]; fotos: Record<string, string>;
@@ -305,13 +307,18 @@ function DashboardProyecto({
   onFotoProfe: (profe: string, b64: string) => void;
   onVerPerfil: (id: string) => void;
   onPosicion: (depId: string, val: string) => void;
+  onCal: (depId: string, val: string) => void;
+  onCom: (depId: string, val: string) => void;
 }) {
   const inputRef      = useRef<HTMLInputElement>(null);
   const printRef      = useRef<HTMLDivElement>(null);
   const tableScrollRef= useRef<HTMLDivElement>(null);
   const profes   = [...new Set(lista.map(d => colProfe(d)).filter(Boolean))];
   const profe    = profes[0] ?? '';
-  const fotoP    = profe ? fotosProfe[profe] : null;
+  // Búsqueda de foto insensible a mayúsculas/minúsculas
+  const fotoP    = profe
+    ? (fotosProfe[profe] ?? Object.entries(fotosProfe).find(([k]) => k.toLowerCase() === profe.toLowerCase())?.[1] ?? null)
+    : null;
 
   const [busqueda,    setBusqueda]   = useState('');
   const [vistaTabla,  setVistaTabla] = useState(true);
@@ -325,16 +332,24 @@ function DashboardProyecto({
   const calStorageKey = `futuro_cal_${proy}_${mesKey}`;
   const comStorageKey = `futuro_com_${proy}_${mesKey}`;
   const [calMap, setCalMap] = useState<Record<string, string>>(() => {
+    // Semilla: datos del jugador en _columnas (falllback si localStorage está vacío)
+    const fromCols: Record<string, string> = {};
+    lista.forEach(d => { const v = getCol(d, /^cal$/i); if (v) fromCols[d.id] = v; });
     try {
       const raw = localStorage.getItem(`futuro_cal_${proy}_${(() => { const n = new Date(); return `${n.getFullYear()}_${String(n.getMonth()+1).padStart(2,'0')}`; })()}`);
-      return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
+      const stored = raw ? JSON.parse(raw) : {};
+      return { ...fromCols, ...stored }; // localStorage tiene prioridad sobre columnas
+    } catch { return fromCols; }
   });
   const [comMap, setComMap] = useState<Record<string, string>>(() => {
+    // Semilla: datos del jugador en _columnas (columna COM del Excel)
+    const fromCols: Record<string, string> = {};
+    lista.forEach(d => { const v = getCol(d, /^com$/i); if (v) fromCols[d.id] = v; });
     try {
       const raw = localStorage.getItem(`futuro_com_${proy}_${(() => { const n = new Date(); return `${n.getFullYear()}_${String(n.getMonth()+1).padStart(2,'0')}`; })()}`);
-      return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
+      const stored = raw ? JSON.parse(raw) : {};
+      return { ...fromCols, ...stored };
+    } catch { return fromCols; }
   });
   function setCal(depId: string, value: string) {
     setCalMap(prev => {
@@ -342,6 +357,7 @@ function DashboardProyecto({
       try { localStorage.setItem(calStorageKey, JSON.stringify(updated)); } catch {}
       return updated;
     });
+    onCal(depId, value); // persistir en Supabase vía _columnas
   }
   function setCom(depId: string, value: string) {
     setComMap(prev => {
@@ -349,7 +365,18 @@ function DashboardProyecto({
       try { localStorage.setItem(comStorageKey, JSON.stringify(updated)); } catch {}
       return updated;
     });
+    onCom(depId, value); // persistir en Supabase vía _columnas
   }
+
+  // Migración única: si hay datos en localStorage que no están en _columnas,
+  // los sube a Supabase para que el admin también los vea.
+  useEffect(() => {
+    const pendCal = lista.filter(d => calMap[d.id] && d._columnas?.['CAL'] !== calMap[d.id]);
+    const pendCom = lista.filter(d => comMap[d.id] && d._columnas?.['COM'] !== comMap[d.id]);
+    pendCal.forEach(d => onCal(d.id, calMap[d.id]));
+    pendCom.forEach(d => onCom(d.id, comMap[d.id]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // solo al montar
 
   // ── Descarga PDF tamaño carta ─────────────────────────────────
   async function descargar() {
@@ -423,6 +450,40 @@ function DashboardProyecto({
       if (scrollEl) { scrollEl.style.maxHeight = origMaxH; scrollEl.style.overflowY = origOvY; }
       setDescargando(false);
     }
+  }
+
+  // ── Exportar todos los deportistas a Excel (CSV con BOM) ─────
+  function exportarExcel() {
+    if (!deportistas.length) return;
+
+    // Recolectar todas las columnas presentes en cualquier deportista
+    const colSet = new Set<string>();
+    deportistas.forEach(d => Object.keys(d._columnas ?? {}).forEach(k => colSet.add(k)));
+    const cols = Array.from(colSet);
+
+    // Escapar celda para CSV
+    const esc = (v: unknown) => {
+      const s = String(v ?? '');
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const headers = ['ID', 'NOMBRE', ...cols];
+    const rows = deportistas.map(d => [
+      esc(d.id),
+      esc(d._nombre ?? ''),
+      ...cols.map(c => esc(d._columnas?.[c] ?? '')),
+    ].join(','));
+
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    // BOM UTF-8 para que Excel abra tildes correctamente
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    a.href     = url;
+    a.download = `BACKUP_AFILIADOS_${fecha}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -532,10 +593,18 @@ function DashboardProyecto({
   const hayCal     = lista.some(d => getRK(d, /^cal$/i));
   const hayAfil    = lista.some(d => val(d, 'afiliacion') !== '');
 
+  // Offsets para columnas sticky (# = 36px fijo siempre)
+  const W_NUM    = 36;
+  const W_ESTADO = 100;
+  const W_AFIL   = 130;
+  const W_COD    = 80;
+  const leftCod    = W_NUM + W_ESTADO + (hayAfil ? W_AFIL : 0);
+  const leftNombre = leftCod + (hasCodigo ? W_COD : 0);
+
   const cols: Col[] = [
-    {                  key:'estado',     label:'ESTADO',        minW:100           },
-    ...(hayAfil   ? [{ key:'afiliacion', label:'AFILIACIÓN',   minW:130           }] : []),
-    ...(hasCodigo ? [{ key:'codigo',     label:'CÓDIGO',        minW:80            }] : []),
+    {                  key:'estado',     label:'ESTADO',        minW:W_ESTADO      },
+    ...(hayAfil   ? [{ key:'afiliacion', label:'AFILIACIÓN',   minW:W_AFIL        }] : []),
+    ...(hasCodigo ? [{ key:'codigo',     label:'CÓDIGO',        minW:W_COD         }] : []),
     {                  key:'nombre',     label:'DEPORTISTA',    minW:200           },
     ...(hayAnio   ? [{ key:'anio',       label:'AÑO',           minW:60, center:true }] : []),
     ...(hasMes    ? [{ key:'mes',        label:'MES',           minW:90            }] : []),
@@ -642,15 +711,21 @@ function DashboardProyecto({
           </table>
 
           {/* Tabla */}
-          <div ref={tableScrollRef} className="overflow-x-auto" style={{ maxHeight: '65vh', overflowY: 'auto', overflowX: 'visible' }}>
+          <div ref={tableScrollRef} style={{ maxHeight: '65vh', overflowY: 'auto', overflowX: 'auto' }}>
             <table className="text-xs border-collapse" style={{ minWidth: '100%' }}>
-              <thead className="sticky top-0 z-10">
+              <thead className="sticky top-0 z-20">
                 <tr style={{ background: '#16a34a' }}>
-                  <th className="border border-[#16375a] px-2 py-2 text-[10px] text-white/40 w-9 select-none text-center">#</th>
+                  {/* # — sticky izquierda */}
+                  <th className="border border-[#16375a] px-2 py-2 text-[10px] text-white/40 select-none text-center"
+                    style={{ position: 'sticky', left: 0, zIndex: 25, background: '#16a34a', width: W_NUM, minWidth: W_NUM }}>#</th>
                   {cols.map(c => (
                     <th key={c.key}
                       className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap"
-                      style={{ minWidth: c.minW, textAlign: c.center ? 'center' : 'left' }}>
+                      style={{
+                        minWidth: c.minW,
+                        textAlign: c.center ? 'center' : 'left',
+                        // solo # es sticky; código y nombre scrollean libremente
+                      }}>
                       {c.label}
                     </th>
                   ))}
@@ -678,12 +753,13 @@ function DashboardProyecto({
 
                   return (
                     <tr key={dep.id} style={{ background: bg }} className="hover:brightness-95 transition-all">
+                      {/* # sticky */}
                       <td className="border border-white px-2 py-1.5 text-center text-[10px] font-bold select-none"
-                        style={{ color: '#111827', background: bg }}>{i + 1}</td>
+                        style={{ color: '#111827', background: bg, position: 'sticky', left: 0, zIndex: 10 }}>{i + 1}</td>
 
                       {cols.map(c => {
                         const v = val(dep, c.key);
-                        // CÓDIGO — fondo por tipo de afiliación
+                        // CÓDIGO — sticky + fondo por tipo de afiliación
                         if (c.key === 'codigo') return (
                           <td key={c.key}
                             className="border border-white px-2 py-1.5 text-center whitespace-nowrap font-black text-white text-sm"
@@ -812,8 +888,8 @@ function AlumnosPageContent() {
         setCargando(false);
         if (lista.length > 0) {
           setDeportistas(lista);
-          const prog = lista[0]?._columnas?.['PROGRAMA'] ?? lista[0]?._columnas?.['Programa'] ?? 'Sin programa';
-          setPrograma(prog);
+          const rawProg = lista[0]?._columnas?.['PROGRAMA'] ?? lista[0]?._columnas?.['Programa'] ?? 'Sin programa';
+          setPrograma(normalizarPrograma(rawProg)); // normalizar igual que colPrograma()
           setProy(proyParam);
         } else if (error) {
           setErrorCarga(error);
@@ -826,8 +902,23 @@ function AlumnosPageContent() {
     try {
       const f = localStorage.getItem('futuro_fotos_deportistas');
       if (f) setFotos(JSON.parse(f));
+
+      // Formato 1: futuro_fotos_profes (guardado desde /alumnos)
+      const fotosMap: Record<string, string> = {};
       const fp = localStorage.getItem(FOTOS_PROFE_KEY);
-      if (fp) setFotosProfe(JSON.parse(fp));
+      if (fp) Object.assign(fotosMap, JSON.parse(fp));
+
+      // Formato 2: futuro-foto-profe-NOMBRE (guardado desde /asistencia y /mis-proyectos)
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith('futuro-foto-profe-')) {
+          const nombre = k.replace('futuro-foto-profe-', ''); // ej: "CASTRO"
+          const foto   = localStorage.getItem(k);
+          if (foto && !fotosMap[nombre]) fotosMap[nombre] = foto;
+        }
+      }
+
+      if (Object.keys(fotosMap).length > 0) setFotosProfe(fotosMap);
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -898,7 +989,11 @@ function AlumnosPageContent() {
   const porProy     = depPrograma.reduce<Record<string, Deportista[]>>((acc, d) => {
     const p = colProy(d); (acc[p] = acc[p] || []).push(d); return acc;
   }, {});
-  const proysSorted = Object.entries(porProy).sort((a, b) => a[0].localeCompare(b[0]));
+  // Orden numérico: extrae el primer número del nombre (SUB 9 → 9, SUB 10 → 10, etc.)
+  const numPorNombre = (s: string) => { const m = s.match(/\d+/); return m ? parseInt(m[0], 10) : 9999; };
+  const proysSorted = Object.entries(porProy).sort((a, b) =>
+    numPorNombre(a[0]) - numPorNombre(b[0]) || a[0].localeCompare(b[0], 'es')
+  );
 
   const palIdx = (nombre: string, lista: [string, any][]) =>
     PALETA[lista.findIndex(([n]) => n === nombre) % PALETA.length];
@@ -920,6 +1015,31 @@ function AlumnosPageContent() {
       return next;
     });
   }
+
+  function handleCal(depId: string, val: string) {
+    setDeportistas(prev => {
+      const next = prev.map(d =>
+        d.id === depId
+          ? { ...d, _columnas: { ...(d._columnas ?? {}), 'CAL': val } }
+          : d
+      );
+      saveDeportistas(next);
+      return next;
+    });
+  }
+
+  function handleCom(depId: string, val: string) {
+    setDeportistas(prev => {
+      const next = prev.map(d =>
+        d.id === depId
+          ? { ...d, _columnas: { ...(d._columnas ?? {}), 'COM': val } }
+          : d
+      );
+      saveDeportistas(next);
+      return next;
+    });
+  }
+
 
   // ══ NIVEL 1: PROGRAMAS ═══════════════════════════════════════
   // Guard: URL con ?proyecto= → nunca mostrar Level 1 admin, solo loading o error de conexión
@@ -993,6 +1113,13 @@ function AlumnosPageContent() {
           {!esProfe && deportistas.length > 0 && (
             <button onClick={limpiar} className="w-9 h-9 flex items-center justify-center rounded-xl border border-red-200 text-red-400 hover:bg-red-50 transition">
               <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          {!esProfe && deportistas.length > 0 && (
+            <button onClick={exportarExcel}
+              className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 transition shadow-sm"
+              title="Descargar copia de seguridad en Excel">
+              <Download className="w-4 h-4" /> Backup Excel
             </button>
           )}
           {!esProfe && (
@@ -1330,11 +1457,7 @@ function AlumnosPageContent() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {(() => {
           // Agrupar proyectos por su sede principal (la más frecuente en el proyecto)
-          // Función de orden numérico: extrae el primer número del nombre
-          const numProy = (nombre: string) => {
-            const m = nombre.match(/\d+/);
-            return m ? parseInt(m[0], 10) : 9999;
-          };
+          const numProy = numPorNombre; // orden numérico definido en el scope externo
           const proyPorSede: Record<string, [string, Deportista[]][]> = {};
           proysSorted.forEach(entry => {
             const [, lista] = entry;
@@ -1444,6 +1567,8 @@ function AlumnosPageContent() {
           onFotoProfe={guardarFotoProfe}
           onVerPerfil={id => router.push(`/alumnos/${id}`)}
           onPosicion={handlePosicion}
+          onCal={handleCal}
+          onCom={handleCom}
         />
       </main>
     </div>

@@ -60,10 +60,16 @@ function derivarNombre(nombre: string, columnas: Record<string, string>): string
   const cols = columnas ?? {};
 
   // Prioridad 1: columna que contenga "deportista" o "alumno" o "jugador"
-  const key1 = Object.keys(cols).find(k =>
-    /deportista|alumno|jugador|atleta/i.test(k.trim())
-  );
-  if (key1 && cols[key1]?.trim()) return cols[key1].trim();
+  // EXCLUYE columnas COD-prefijo (ej: "COD. DEPORTISTA", "CÓDIGO ALUMNO")
+  // y verifica que el valor no sea un código numérico puro.
+  const key1 = Object.keys(cols).find(k => {
+    const t = k.trim();
+    if (/^c[oó]d/i.test(t)) return false; // excluir "COD DEPORTISTA", etc.
+    return /deportista|alumno|jugador|atleta/i.test(t);
+  });
+  if (key1 && cols[key1]?.trim() && !/^\d+$/.test(cols[key1].trim())) {
+    return cols[key1].trim();
+  }
 
   // Prioridad 2: cualquier columna que contenga "nombre"
   // (pero que no sea solo el CÓDIGO)
@@ -721,6 +727,57 @@ export async function saveAsistencia(data: AsistenciaData): Promise<void> {
   }
 }
 
+/**
+ * Carga asistencia de UN deportista específico (para vista calidoso).
+ * Evita traer las 20k+ filas de todos los deportistas.
+ */
+export async function getAsistenciaDeportista(deportistaId: string): Promise<AsistenciaData> {
+  const parse = (data: any[]): AsistenciaData => {
+    const result: AsistenciaData = {};
+    for (const r of data) {
+      if (!result[r.proyecto]) result[r.proyecto] = {};
+      if (!result[r.proyecto][r.anio_mes]) result[r.proyecto][r.anio_mes] = {};
+      if (!result[r.proyecto][r.anio_mes][r.deportista_id]) result[r.proyecto][r.anio_mes][r.deportista_id] = {};
+      result[r.proyecto][r.anio_mes][r.deportista_id][r.fecha] = r.estado;
+    }
+    return result;
+  };
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&deportista_id=eq.${encodeURIComponent(deportistaId)}&limit=2000&order=anio_mes.desc`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'count=none',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) return parse(data);
+    }
+  } catch { /* ignorar */ }
+
+  // Fallback: filtrar del localStorage si ya estaba cacheado
+  try {
+    const full = lsGet<AsistenciaData>(LS_ASIST, {});
+    const result: AsistenciaData = {};
+    for (const [proy, meses] of Object.entries(full)) {
+      for (const [mes, deps] of Object.entries(meses)) {
+        if (deps[deportistaId]) {
+          if (!result[proy]) result[proy] = {};
+          if (!result[proy][mes]) result[proy][mes] = {};
+          result[proy][mes][deportistaId] = deps[deportistaId];
+        }
+      }
+    }
+    return result;
+  } catch { return {}; }
+}
+
 /** Carga asistencia filtrada por proyecto (para profes — evita cargar todo). */
 export async function getAsistenciaPorProyecto(proyecto: string): Promise<AsistenciaData> {
   const parseRows = (data: any[]): AsistenciaData => {
@@ -764,6 +821,55 @@ export async function getAsistenciaPorProyecto(proyecto: string): Promise<Asiste
   // Fallback: localStorage (filtrado)
   const all = lsGet<AsistenciaData>(LS_ASIST, {});
   return all[proyecto] ? { [proyecto]: all[proyecto] } : {};
+}
+
+/**
+ * Carga asistencia para una lista de deportista_ids.
+ * Permite que los registros históricos sigan al deportista aunque cambie de proyecto.
+ */
+export async function getAsistenciaDeportistas(ids: string[]): Promise<AsistenciaData> {
+  if (!ids.length) return {};
+
+  const parseRows = (data: any[]): AsistenciaData => {
+    const result: AsistenciaData = {};
+    for (const r of data) {
+      if (!result[r.proyecto]) result[r.proyecto] = {};
+      if (!result[r.proyecto][r.anio_mes]) result[r.proyecto][r.anio_mes] = {};
+      if (!result[r.proyecto][r.anio_mes][r.deportista_id]) result[r.proyecto][r.anio_mes][r.deportista_id] = {};
+      result[r.proyecto][r.anio_mes][r.deportista_id][r.fecha] = r.estado;
+    }
+    return result;
+  };
+
+  // Supabase IN filter: deportista_id=in.(id1,id2,...)
+  const inParam = `(${ids.map(id => encodeURIComponent(id)).join(',')})`;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&deportista_id=in.${inParam}&limit=10000&order=anio_mes.desc`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer':        'count=none',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) return parseRows(data);
+    }
+  } catch { /* fallback */ }
+
+  // SDK fallback
+  try {
+    const { data, error } = await supabase()
+      .from('asistencia')
+      .select('proyecto, anio_mes, deportista_id, fecha, estado')
+      .in('deportista_id', ids);
+    if (!error && data && data.length > 0) return parseRows(data);
+  } catch {}
+
+  return {};
 }
 
 /** Guarda asistencia en localStorage inmediatamente (sin esperar Supabase). */

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Calendar, BarChart2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getAsistencia, getFoto } from '@/lib/db';
+import { getDeportistas, getAsistencia, getAsistenciaDeportista, getFoto } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import LoadingBall from '@/components/LoadingBall';
 
@@ -75,26 +75,80 @@ export default function AsistenciaAtletaPage() {
   const [vista,      setVista]      = useState<'mes' | 'consolidado'>('mes');
   const [certDesde,  setCertDesde]  = useState(1);   // Febrero
   const [certHasta,  setCertHasta]  = useState(11);  // Diciembre
+  // realId = UUID real de Supabase (puede diferir de 'id' cuando era un ID temporal)
+  const [realId,     setRealId]     = useState<string>(id);
 
   useEffect(() => {
     getDeportistas().then(lista => {
-      const found = lista.find(d => d.id === id);
-      if (found) setDep(found);
+      let found = lista.find(d => d.id === id);
+
+      // Calidosos con IDs temporales (dep-xxxxx): buscar por nombre para obtener UUID real
+      if (!found) {
+        try {
+          const nombre = (localStorage.getItem('futuro-calidoso-nombre') ?? '').trim().toLowerCase();
+          if (nombre) found = lista.find(d => (d._nombre ?? '').trim().toLowerCase() === nombre);
+        } catch {}
+        if (found) {
+          // Actualizar localStorage con UUID real
+          try { localStorage.setItem('futuro-calidoso-id', found.id); } catch {}
+          setRealId(found.id);
+        }
+      }
+
+      if (found) {
+        setDep(found);
+      } else {
+        // Último fallback — sin UUID real, al menos mostramos el nombre
+        try {
+          const nombre = localStorage.getItem('futuro-calidoso-nombre') ?? '';
+          setDep({ id, _nombre: nombre || id, _columnas: {} });
+        } catch {
+          setDep({ id, _nombre: id, _columnas: {} });
+        }
+      }
     });
     getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {
       try { const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); if (fotos[id]) setFoto(fotos[id]); } catch {}
     });
-    getAsistencia().then(data => { if (Object.keys(data).length) setAsistencia(data as any); });
-  }, [id]);
+    // Cargar solo los datos de ESTE deportista — la tabla tiene 20k+ filas y el límite
+    // de getAsistencia() corta datos. getAsistenciaDeportista filtra por deportista_id.
+    getAsistenciaDeportista(id).then(data => {
+      if (Object.keys(data).length) setAsistencia(data as any);
+      else getAsistencia().then(full => { if (Object.keys(full).length) setAsistencia(full as any); });
+    });
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Datos derivados del deportista (seguros con dep ?? null) */
-  const nombre   = dep?._nombre ?? '';
-  const initials = nombre.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
-  const catVal   = dep ? getCol(dep, /^program|^categ/i) : '';
-  const proyecto = dep ? (getCol(dep, /^proy/i) || '__SIN_PROYECTO__') : '__SIN_PROYECTO__';
+  const nombre    = dep?._nombre ?? '';
+  const initials  = nombre.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  const catVal    = dep ? getCol(dep, /^program|^categ/i) : '';
+  const proyecto  = dep ? (getCol(dep, /^proy/i) || '__SIN_PROYECTO__') : '__SIN_PROYECTO__';
+  const codVal    = dep ? getCol(dep, /^c[oó]d/i) : '';
+  const fechaAfil = dep ? getCol(dep, /fecha.*afil|afil.*fecha/i) : '';
+  const tarifa    = dep ? getCol(dep, /mensual|tarifa|valor/i) : '';
   const gradiente = gradientePrograma(catVal);
 
   const mesKey = `${anio}_${String(mes+1).padStart(2,'0')}`;
+
+  /**
+   * Consolida TODOS los registros de este deportista (id) a lo largo de todos los
+   * proyectos. Así no falla si el nombre de proyecto en _columnas no coincide
+   * exactamente con el key en la tabla de asistencia.
+   * Resultado: { "2026_07": { "2026-07-01": "A", ... }, ... }
+   */
+  const depAsist = useMemo(() => {
+    const out: Record<string, Record<string, string>> = {};
+    for (const proy of Object.keys(asistencia)) {
+      for (const mk of Object.keys(asistencia[proy])) {
+        // Usar realId (UUID de Supabase) — no el ID temporal del URL
+        const dias = asistencia[proy][mk][realId];
+        if (!dias) continue;
+        if (!out[mk]) out[mk] = {};
+        Object.assign(out[mk], dias);
+      }
+    }
+    return out;
+  }, [asistencia, realId]);
 
   /* Días del mes actual */
   const diasMes = useMemo(() => {
@@ -104,26 +158,26 @@ export default function AsistenciaAtletaPage() {
     return dias;
   }, [mes, anio]);
 
-  /* Estado de un día para este deportista */
+  /* Estado de un día para este deportista — busca en todos los proyectos */
   const getEstado = (fecha: Date): Estado => {
     const fk = fecha.toISOString().split('T')[0];
-    return asistencia[proyecto]?.[mesKey]?.[id]?.[fk] ?? '';
+    return (depAsist[mesKey]?.[fk] ?? '') as Estado;
   };
 
   /* Resumen del mes */
   const resumenMes = useMemo(() => {
-    const asistio = diasMes.filter(d => { const e = asistencia[proyecto]?.[mesKey]?.[id]?.[d.toISOString().split('T')[0]] ?? ''; return e==='A'||e==='C'; }).length;
-    const falto   = diasMes.filter(d => { const e = asistencia[proyecto]?.[mesKey]?.[id]?.[d.toISOString().split('T')[0]] ?? ''; return ['F','S','ES','FA','NQ'].includes(e); }).length;
+    const asistio = diasMes.filter(d => { const e = depAsist[mesKey]?.[d.toISOString().split('T')[0]] ?? ''; return e==='A'||e==='C'; }).length;
+    const falto   = diasMes.filter(d => { const e = depAsist[mesKey]?.[d.toISOString().split('T')[0]] ?? ''; return ['F','S','ES','FA','NQ'].includes(e); }).length;
     const total   = asistio + falto;
     const pct     = total > 0 ? Math.round((asistio/total)*100) : null;
     return { asistio, falto, total, pct };
-  }, [diasMes, asistencia, proyecto, id, mesKey]);
+  }, [diasMes, depAsist, mesKey]);
 
   /* Consolidado anual mes a mes */
   const consolidado = useMemo(() => {
     return MESES.map((nombreMes, mi) => {
       const mk = `${anio}_${String(mi+1).padStart(2,'0')}`;
-      const registros = asistencia[proyecto]?.[mk]?.[id] ?? {};
+      const registros = depAsist[mk] ?? {};
       const dias = Object.values(registros) as Estado[];
       const asistio = dias.filter(e => e==='A'||e==='C').length;
       const falto   = dias.filter(e => ['F','S','ES','FA','NQ'].includes(e)).length;
@@ -131,7 +185,7 @@ export default function AsistenciaAtletaPage() {
       const pct     = total > 0 ? Math.round((asistio/total)*100) : null;
       return { mes: nombreMes, asistio, falto, total, pct };
     });
-  }, [asistencia, proyecto, id, anio]);
+  }, [depAsist, anio]);
 
   /* ── Loading (DESPUÉS de todos los hooks) ── */
   if (!dep) {
@@ -291,35 +345,85 @@ export default function AsistenciaAtletaPage() {
           <h1 className="text-white font-black text-lg leading-tight truncate">{nombre}</h1>
           <p className="text-white/60 text-xs">{catVal}{proyecto !== '__SIN_PROYECTO__' ? ` · ${proyecto}` : ''}</p>
         </div>
-        <div className="relative text-right leading-tight flex-shrink-0">
-          <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-          <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
+        <div className="relative flex flex-col items-end flex-shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+          <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 
       <main className="max-w-xl mx-auto px-3 py-4 space-y-4">
 
-        {/* ── TARJETA ATLETA ── */}
-        <div className="rounded-2xl bg-gradient-to-br from-[#064e1e] via-[#052a10] to-black p-4 flex items-center gap-4">
-          <div className="w-16 h-16 rounded-xl ring-4 ring-white/25 overflow-hidden bg-white/20 flex items-center justify-center flex-shrink-0">
-            {foto
-              ? <img src={foto} alt="" className="w-full h-full object-cover" />
-              : <span className="text-white font-black text-xl">{initials}</span>
-            }
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-black text-base leading-tight">{nombre}</p>
-            {catVal && <span className="inline-block mt-1 bg-white/20 text-white/90 text-xs font-semibold px-2 py-0.5 rounded-full">{catVal}</span>}
-            {proyecto !== '__SIN_PROYECTO__' && (
-              <p className="text-white/70 text-xs mt-0.5">Proyecto: <strong className="text-white">{proyecto}</strong></p>
+        {/* ── TARJETA HERO ── */}
+        <div className="rounded-2xl bg-gradient-to-br from-[#0a2e12] via-[#052a10] to-black p-4 shadow-xl">
+          <div className="flex items-stretch gap-3">
+            {/* Foto */}
+            <div className="relative flex-shrink-0">
+              <div className="w-[72px] h-[96px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex flex-col items-center justify-center">
+                {foto
+                  ? <img src={foto} alt="" className="w-full h-full object-cover object-top"/>
+                  : <span className="text-white font-black text-3xl select-none">{initials}</span>
+                }
+              </div>
+            </div>
+
+            {/* Nombre + datos + botones */}
+            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide">{nombre}</h1>
+              <div className="flex gap-2 items-start">
+                {/* Filas de datos */}
+                <div className="flex-1 min-w-0 space-y-[5px]">
+                  {[
+                    { label: 'PROGRAMA',    val: catVal },
+                    { label: 'PROYECTO',    val: proyecto !== '__SIN_PROYECTO__' ? proyecto : '' },
+                    { label: 'FECHA AFIL.', val: fechaAfil },
+                    { label: 'MENSUALIDAD', val: tarifa },
+                  ].filter(r => r.val).map(({ label, val }) => (
+                    <div key={label} className="flex items-center gap-2">
+                      <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
+                        {label}
+                      </span>
+                      <span className="text-white text-[11px] font-semibold truncate">
+                        {String(val).toUpperCase()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {/* Botones 2×2 */}
+                <div className="flex-shrink-0 grid grid-cols-2 gap-1.5">
+                  {[
+                    { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta`, mant: false, active: false },
+                    { label: 'ASISTENCIA', href: null,                            mant: false, active: true  },
+                    { label: 'INFORMES',   href: '/mantenimiento',                mant: true,  active: false },
+                    { label: 'MENSAJES',   href: '/mantenimiento',                mant: true,  active: false },
+                  ].map(({ label, href, mant, active }) => (
+                    <button key={label}
+                      onClick={() => href && router.push(href)}
+                      className={cn(
+                        'transition rounded-lg py-2 px-2 text-[9px] font-black tracking-wide text-center leading-tight',
+                        active
+                          ? 'bg-[#16a34a] text-white'
+                          : mant
+                            ? 'bg-orange-500 hover:bg-orange-600 text-white border border-orange-400'
+                            : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
+                      )}>
+                      {mant ? `🔧 ${label}` : label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* CÓDIGO */}
+            {codVal && (
+              <div className="flex-shrink-0 text-center self-start">
+                <p className="text-white/60 text-[9px] font-black tracking-widest uppercase mb-1">CÓDIGO</p>
+                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
+                  {codVal}
+                </div>
+              </div>
             )}
           </div>
-          {resumenMes.pct !== null && (
-            <div className="flex-shrink-0 text-center bg-white/15 rounded-xl px-3 py-2">
-              <p className="text-white font-black text-2xl leading-none">{resumenMes.pct}%</p>
-              <p className="text-white/70 text-[10px] font-semibold mt-0.5">ESTE MES</p>
-            </div>
-          )}
         </div>
 
         {/* ── TABS ── */}

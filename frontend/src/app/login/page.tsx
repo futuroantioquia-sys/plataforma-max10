@@ -64,7 +64,7 @@ export default function LoginPage() {
       /* ── PROFE ─── */
       if (tab === 'profe') {
         const listaProfes = await getProfes();
-        const profe = listaProfes.find(p => p.usuario === u && p.clave === c);
+        const profe = listaProfes.find(p => p.usuario.toUpperCase() === u && p.clave === c);
         if (profe) {
           useAuthStore.setState({
             usuario: {

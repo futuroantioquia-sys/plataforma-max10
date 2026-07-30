@@ -6,8 +6,9 @@ const RUTAS_PUBLICAS = ['/login', '/afiliacion', '/api'];
 // Rutas permitidas para el rol profesor — asistencia + portal propio + vista alumnos
 const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/sesiones', '/postpartido', '/mis-proyectos', '/alumnos'];
 
-// Rutas permitidas para deportista (calidoso) — solo su perfil, pagos y dashboard
-const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/pagos', '/evaluaciones', '/afiliacion', '/calendario'];
+// Rutas permitidas para deportista (calidoso) — solo su perfil y secciones propias
+// EXCLUYE /pagos (muestra todos los deportistas) y /dashboard (redirige desde allí)
+const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/evaluaciones', '/afiliacion', '/calendario', '/mantenimiento', '/mis-pagos'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
