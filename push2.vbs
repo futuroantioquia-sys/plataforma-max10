@@ -5,7 +5,7 @@ Set oExec = oShell.Exec("git -C """ & gitDir & """ add -A")
 oExec.StdOut.ReadAll()
 oExec.StdErr.ReadAll()
 
-Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""fix: readonly mode en estado-cuenta + eliminar soporte en Supabase""")
+Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""fix: asistencia - quitar INFO/MENS, botones PAGOS/ASIST mas grandes, fecha afiliacion legible""")
 Dim commitOut : commitOut = oExec2.StdOut.ReadAll()
 Dim commitErr : commitErr = oExec2.StdErr.ReadAll()
 

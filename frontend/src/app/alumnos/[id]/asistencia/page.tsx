@@ -127,7 +127,17 @@ export default function AsistenciaAtletaPage() {
   const catVal    = dep ? getCol(dep, /^program|^categ/i) : '';
   const proyecto  = dep ? (getCol(dep, /^proy/i) || '__SIN_PROYECTO__') : '__SIN_PROYECTO__';
   const codVal    = dep ? getCol(dep, /^c[oó]d/i) : '';
-  const fechaAfil = dep ? getCol(dep, /fecha.*afil|afil.*fecha/i) : '';
+  const fechaAfilRaw = dep ? getCol(dep, /fecha.*afil|afil.*fecha/i) : '';
+  const fechaAfil = (() => {
+    if (!fechaAfilRaw) return '';
+    const n = Number(fechaAfilRaw);
+    if (!isNaN(n) && n > 40000) {
+      // Excel serial → fecha legible
+      const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+      return d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+    return String(fechaAfilRaw);
+  })();
   const tarifa    = dep ? getCol(dep, /mensual|tarifa|valor/i) : '';
   const gradiente = gradientePrograma(catVal);
 
@@ -399,22 +409,18 @@ export default function AsistenciaAtletaPage() {
                 <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
                   {codVal}
                 </div>
-                <div className="grid grid-cols-2 gap-1 w-full">
+                <div className="flex flex-col gap-1.5 w-full">
                   {[
-                    { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta`, mant: false, active: false },
-                    { label: 'ASIST.',     href: null,                            mant: false, active: true  },
-                    { label: '🔧 INFO.',   href: '/mantenimiento',                mant: true,  active: false },
-                    { label: '🔧 MENS.',   href: '/mantenimiento',                mant: true,  active: false },
-                  ].filter(b => !esProfesor || !b.mant).map(({ label, href, mant, active }) => (
+                    { label: 'PAGOS',  href: `/alumnos/${id}/estado-cuenta`, active: false },
+                    { label: 'ASIST.', href: null,                            active: true  },
+                  ].map(({ label, href, active }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(
-                        'transition rounded-lg py-[5px] px-1 text-[7px] font-black tracking-wide text-center leading-tight',
+                        'transition rounded-lg py-2 px-3 text-[11px] font-black tracking-wide text-center w-full',
                         active
                           ? 'bg-[#16a34a] text-white'
-                          : mant
-                            ? 'bg-orange-500 hover:bg-orange-600 text-white border border-orange-400'
-                            : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
+                          : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
                       )}>
                       {label}
                     </button>
