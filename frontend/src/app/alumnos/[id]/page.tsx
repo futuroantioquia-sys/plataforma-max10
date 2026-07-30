@@ -121,8 +121,9 @@ export default function PerfilDeportista() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const usuario = useAuthStore(s => s.usuario);
-  const esPadre = usuario?.rol === 'padre';
-  const esAdmin = usuario?.rol === 'administracion';
+  const esPadre    = usuario?.rol === 'padre';
+  const esAdmin    = usuario?.rol === 'administracion';
+  const esProfesor = usuario?.rol === 'profesor';
 
   const [dep,           setDep]          = useState<Deportista | null>(null);
   const [loading,       setLoading]      = useState(true);
@@ -414,7 +415,7 @@ export default function PerfilDeportista() {
               { label: 'ASISTENCIA',  href: `/alumnos/${id}/asistencia`,      mant: false },
               { label: 'VALORACIÓN',  href: '/mantenimiento',                  mant: true  },
               { label: 'MENSAJES',    href: '/mantenimiento',                 mant: true  },
-            ].map(({ label, href, mant }) => (
+            ].filter(b => !esProfesor || !b.mant).map(({ label, href, mant }) => (
               <button key={label} onClick={() => router.push(href)} style={{
                 background: mant ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.11)',
                 border: mant ? '1.5px solid rgba(255,255,255,0.12)' : '1.5px solid rgba(255,255,255,0.22)',
@@ -740,13 +741,13 @@ export default function PerfilDeportista() {
           </div>
 
           {/* Botones de acceso */}
-          <div className="grid grid-cols-4 gap-2 mt-4">
+          <div className={`grid gap-2 mt-4 ${esProfesor ? 'grid-cols-2' : 'grid-cols-4'}`}>
             {[
-              { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta` },
-              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia` },
-              { label: 'INFORMES',   href: '/evaluaciones' },
-              { label: 'MENSAJES',   href: '/mensajes' },
-            ].map(({ label, href }) => (
+              { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta`, profe: true  },
+              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`,    profe: true  },
+              { label: 'INFORMES',   href: '/evaluaciones',                 profe: false },
+              { label: 'MENSAJES',   href: '/mensajes',                     profe: false },
+            ].filter(b => !esProfesor || b.profe).map(({ label, href }) => (
               <button key={label} onClick={() => router.push(href)}
                 className="bg-white/10 hover:bg-white/20 border border-white/20 active:bg-white/30 transition rounded-xl py-2.5 text-white font-black text-[10px] tracking-wide">
                 {label}

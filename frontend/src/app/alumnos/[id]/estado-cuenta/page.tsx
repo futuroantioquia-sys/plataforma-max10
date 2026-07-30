@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago } from '@/lib/db';
+import { useAuthStore } from '@/store/auth.store';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
 const PAGOS_KEY    = 'futuro_pagos_estado';
@@ -189,6 +190,8 @@ function EstadoCuentaInner() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const puedeEditar = searchParams.get('edit') === '1';
+  const { usuario } = useAuthStore();
+  const esProfesor  = usuario?.rol === 'profesor';
 
   const [dep,      setDep]     = useState<Deportista | null>(null);
   const [foto,     setFoto]    = useState<string | null>(null);
@@ -629,7 +632,7 @@ function EstadoCuentaInner() {
                     { label: 'ASIST.',     href: `/alumnos/${id}/asistencia`, mant: false },
                     { label: '🔧 INFO.',   href: '/mantenimiento',            mant: true  },
                     { label: '🔧 MENS.',   href: '/mantenimiento',            mant: true  },
-                  ].map(({ label, href, mant }) => (
+                  ].filter(b => !esProfesor || (!b.mant)).map(({ label, href, mant }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(
@@ -784,6 +787,9 @@ function EstadoCuentaInner() {
                                 : isProx
                                   ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
                                       style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
+                                  : esProfesor
+                                  ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
+                                      style={{ background:'#fee2e2', color:'#dc2626' }}>PEND</span>
                                   : <button
                                       onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
                                       className="px-1 py-2 rounded-lg font-black text-[11px] w-full block text-center text-white shadow-sm active:scale-95 transition-transform animate-pulse whitespace-nowrap"
@@ -814,17 +820,17 @@ function EstadoCuentaInner() {
                 Solo lectura · Edición disponible desde Control de Pagos
               </p>
         }
-        <p className="text-center text-[11px] text-gray-400 pb-4">
+        {!esProfesor && <p className="text-center text-[11px] text-gray-400 pb-4">
           ¿Tienes dudas? Comunícate con la línea de pagos{' '}
           <a href="https://wa.me/573045401497" target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-0.5 font-black text-[#16a34a] underline underline-offset-2">
             <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.117.554 4.103 1.523 5.824L.057 23.5a.5.5 0 0 0 .609.61l5.79-1.477A11.952 11.952 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.9a9.9 9.9 0 0 1-5.031-1.371l-.361-.214-3.733.952.984-3.617-.235-.374A9.859 9.859 0 0 1 2.1 12C2.1 6.525 6.525 2.1 12 2.1S21.9 6.525 21.9 12 17.475 21.9 12 21.9z"/></svg>
             304 540 1497
           </a>
-        </p>
+        </p>}
 
-        {/* ── SUBIR / VER SOPORTES (solo vista calidoso) ── */}
-        {!puedeEditar && (
+        {/* ── SUBIR / VER SOPORTES (solo vista calidoso, no profe) ── */}
+        {!puedeEditar && !esProfesor && (
           <div className="flex gap-3 pb-4">
             <input
               ref={soporteInputRef}

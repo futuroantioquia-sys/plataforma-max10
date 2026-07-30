@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { getDeportistas, getAsistencia, getAsistenciaDeportista, getFoto } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import LoadingBall from '@/components/LoadingBall';
+import { useAuthStore } from '@/store/auth.store';
 
 const ASISTENCIA_KEY = 'futuro_asistencia';
 const FOTOS_KEY      = 'futuro_fotos_deportistas';
@@ -65,6 +66,8 @@ function gradientePrograma(val: string) {
 export default function AsistenciaAtletaPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const { usuario } = useAuthStore();
+  const esProfesor  = usuario?.rol === 'profesor';
 
   /* ── Todos los hooks PRIMERO, sin returns condicionales entre ellos ── */
   const [dep,        setDep]        = useState<Deportista | null>(null);
@@ -402,7 +405,7 @@ export default function AsistenciaAtletaPage() {
                     { label: 'ASIST.',     href: null,                            mant: false, active: true  },
                     { label: '🔧 INFO.',   href: '/mantenimiento',                mant: true,  active: false },
                     { label: '🔧 MENS.',   href: '/mantenimiento',                mant: true,  active: false },
-                  ].map(({ label, href, mant, active }) => (
+                  ].filter(b => !esProfesor || !b.mant).map(({ label, href, mant, active }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(
