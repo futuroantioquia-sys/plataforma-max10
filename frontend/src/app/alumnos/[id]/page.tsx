@@ -650,8 +650,8 @@ export default function PerfilDeportista() {
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-lg">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/alumnos')} className="text-white/80 hover:text-white text-sm font-bold">
-            ← Deportistas
+          <button onClick={() => router.back()} className="text-white/80 hover:text-white text-sm font-bold">
+            ← Volver
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -676,10 +676,7 @@ export default function PerfilDeportista() {
           <div className="flex items-center gap-2 border-l border-white/30 pl-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-max10.svg" alt="MAX10" className="w-8 h-8 object-contain" />
-            <div className="text-right leading-tight">
-              <p className="text-white font-black text-xs tracking-widest leading-none">MAX 10 SPORT</p>
-              <p className="text-white/50 text-[10px] leading-none mt-0.5">Conecta, Gestiona, Gana</p>
-            </div>
+            <p className="text-white/50 text-[10px] leading-none">Conecta, Gestiona, Gana</p>
           </div>
         </div>
       </header>
