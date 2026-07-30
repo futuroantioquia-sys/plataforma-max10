@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
+import { BalonCargando } from '@/components/BalonCargando';
 
 const FOTOS_KEY = 'futuro_fotos_deportistas';
 
@@ -123,6 +124,7 @@ export default function PerfilDeportista() {
   const esPadre = usuario?.rol === 'padre';
 
   const [dep,           setDep]          = useState<Deportista | null>(null);
+  const [loading,       setLoading]      = useState(true);
   const [foto,          setFoto]          = useState<string | null>(null);
   const [editando,      setEditando]      = useState(false);
   const [edits,         setEdits]         = useState<Record<string, string>>({});
@@ -159,6 +161,7 @@ export default function PerfilDeportista() {
       }
 
       if (d) { setDep(d); setEdits({ ...d._columnas }); }
+      setLoading(false);
     });
     getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {
       try { const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); if (fotos[id]) setFoto(fotos[id]); } catch {}
@@ -258,6 +261,14 @@ export default function PerfilDeportista() {
     const lista = await getDeportistas();
     await saveDeportistas(lista.filter(d => d.id !== id));
     router.push('/alumnos');
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <BalonCargando texto="Cargando perfil…" />
+      </div>
+    );
   }
 
   if (!dep) {
