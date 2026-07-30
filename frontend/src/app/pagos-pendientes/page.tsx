@@ -65,7 +65,7 @@ export default function PagosPendientesPage() {
         return {
           ...s,
           depId:       dep?.id ?? s.deportista_id,
-          depNombre:   dep?.nombre ?? '—',
+          depNombre:   dep?._nombre ?? '—',
           depCodigo:   dep ? getCodigo(dep) : '—',
           depPrograma: dep ? getCol(dep, /^PROG/i) : '—',
           depProyecto: dep ? getCol(dep, /^PROY/i) : '—',
@@ -267,7 +267,7 @@ export default function PagosPendientesPage() {
                           <XCircle className="w-3.5 h-3.5"/>
                         </button>
                         <button
-                          onClick={() => router.push(`/alumnos/${s.depId}/estado-cuenta`)}
+                          onClick={() => router.push(`/alumnos/${s.depId}/estado-cuenta?readonly=1`)}
                           title="Ver cuenta"
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold text-[11px] transition whitespace-nowrap">
                           <Eye className="w-3.5 h-3.5"/> Cuenta

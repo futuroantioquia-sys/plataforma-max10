@@ -8,7 +8,7 @@ import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
-import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago } from '@/lib/db';
+import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
@@ -190,6 +190,7 @@ function EstadoCuentaInner() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const puedeEditar = searchParams.get('edit') === '1';
+  const esReadonly  = searchParams.get('readonly') === '1';
   const { usuario } = useAuthStore();
   const esProfesor  = usuario?.rol === 'profesor';
 
@@ -278,6 +279,8 @@ function EstadoCuentaInner() {
   }
 
   function eliminarSoporte(idx: number) {
+    const nombre = soportes[idx]?.name;
+    if (nombre && id) eliminarSoportePorNombre(id as string, nombre);
     setSoportes(prev => {
       const updated = prev.filter((_, i) => i !== idx);
       try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(updated)); } catch {}
@@ -632,7 +635,7 @@ function EstadoCuentaInner() {
                     { label: 'ASIST.',     href: `/alumnos/${id}/asistencia`, mant: false },
                     { label: '🔧 INFO.',   href: '/mantenimiento',            mant: true  },
                     { label: '🔧 MENS.',   href: '/mantenimiento',            mant: true  },
-                  ].filter(b => !esProfesor || (!b.mant)).map(({ label, href, mant }) => (
+                  ].filter(b => (!esProfesor && !esReadonly) || (!b.mant)).map(({ label, href, mant }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(
@@ -787,7 +790,7 @@ function EstadoCuentaInner() {
                                 : isProx
                                   ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
                                       style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
-                                  : esProfesor
+                                  : (esProfesor || esReadonly)
                                   ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
                                       style={{ background:'#fee2e2', color:'#dc2626' }}>PEND</span>
                                   : <button
@@ -820,7 +823,7 @@ function EstadoCuentaInner() {
                 Solo lectura · Edición disponible desde Control de Pagos
               </p>
         }
-        {!esProfesor && <p className="text-center text-[11px] text-gray-400 pb-4">
+        {!esProfesor && !esReadonly && <p className="text-center text-[11px] text-gray-400 pb-4">
           ¿Tienes dudas? Comunícate con la línea de pagos{' '}
           <a href="https://wa.me/573045401497" target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-0.5 font-black text-[#16a34a] underline underline-offset-2">
@@ -829,8 +832,8 @@ function EstadoCuentaInner() {
           </a>
         </p>}
 
-        {/* ── SUBIR / VER SOPORTES (solo vista calidoso, no profe) ── */}
-        {!puedeEditar && !esProfesor && (
+        {/* ── SUBIR / VER SOPORTES (solo vista calidoso, no profe, no readonly) ── */}
+        {!puedeEditar && !esProfesor && !esReadonly && (
           <div className="flex gap-3 pb-4">
             <input
               ref={soporteInputRef}

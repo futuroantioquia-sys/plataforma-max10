@@ -1321,6 +1321,27 @@ export async function eliminarSoportePago(soporteId: string): Promise<void> {
   } catch (e) { console.error('[db] eliminarSoportePago:', e); }
 }
 
+/** Elimina soportes NO confirmados por deportista_id + nombre de archivo.
+ *  Usado cuando el calidoso borra un soporte local → también lo elimina de Supabase. */
+export async function eliminarSoportePorNombre(
+  deportistaId: string,
+  nombre: string,
+): Promise<void> {
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/soportes_pago?deportista_id=eq.${encodeURIComponent(deportistaId)}&nombre=eq.${encodeURIComponent(nombre)}&confirmado=eq.false`,
+      {
+        method: 'DELETE',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer':        'return=minimal',
+        },
+      }
+    );
+  } catch (e) { console.error('[db] eliminarSoportePorNombre:', e); }
+}
+
 // ── VISTA CONTABLE ────────────────────────────────────────────
 
 export type FilaVC = Record<string, string>; // { CÓDIGO, NOMBRE, MATRÍCULA, FEBRERO... }
