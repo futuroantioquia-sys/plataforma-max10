@@ -230,7 +230,7 @@ function DashboardAdmin() {
       <CategoriaSection emoji="💰" titulo="Finanzas" color="azul" delay={200}>
         <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="azul" />
         <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" />
-        <AccesoCard titulo="Pagos Pendientes"      icono={Clock}        href="/pagos-pendientes"         descripcion="Soportes enviados por padres"  color="azul" badge={pendientesSoportes} />
+        <AccesoCard titulo="Confirmar Pagos"      icono={Clock}        href="/pagos-pendientes"         descripcion="Soportes enviados por padres"  color="azul" badge={pendientesSoportes} />
       </CategoriaSection>
 
       <div className="divider-fade" />
