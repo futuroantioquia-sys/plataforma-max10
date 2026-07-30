@@ -675,7 +675,7 @@ export default function PerfilDeportista() {
           )}
           <div className="flex items-center gap-2 border-l border-white/30 pl-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-max10.svg" alt="MAX10" className="w-8 h-8 object-contain" />
+            <img src="/MAX%2010.png" alt="MAX10" className="h-8 object-contain" />
             <p className="text-white/50 text-[10px] leading-none">Conecta, Gestiona, Gana</p>
           </div>
         </div>
