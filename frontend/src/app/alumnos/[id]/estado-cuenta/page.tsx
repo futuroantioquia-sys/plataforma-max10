@@ -779,23 +779,26 @@ function EstadoCuentaInner() {
                               ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default bg-green-500">
                                   PAGÓ
                                 </span>
-                              : hasSoporte
-                                ? <span className="px-1 py-[5px] rounded-lg font-black text-[9px] w-full block text-center leading-tight whitespace-nowrap"
-                                    style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24' }}>
-                                    ⏳ POR CONFIRMAR
-                                  </span>
-                                : isProx
+                              : (esProfesor || esReadonly)
+                                ? isProx
                                   ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
                                       style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
-                                  : (esProfesor || esReadonly)
-                                  ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
+                                  : <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
                                       style={{ background:'#fee2e2', color:'#dc2626' }}>PEND</span>
-                                  : <button
-                                      onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
-                                      className="px-1 py-2 rounded-lg font-black text-[11px] w-full block text-center text-white shadow-sm active:scale-95 transition-transform animate-pulse whitespace-nowrap"
-                                      style={{ background: '#dc2626' }}>
-                                      💳 PAGAR
-                                    </button>
+                                : hasSoporte
+                                  ? <span className="px-1 py-[5px] rounded-lg font-black text-[9px] w-full block text-center leading-tight whitespace-nowrap"
+                                      style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24' }}>
+                                      ⏳ POR CONFIRMAR
+                                    </span>
+                                  : isProx
+                                    ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
+                                        style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
+                                    : <button
+                                        onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
+                                        className="px-1 py-2 rounded-lg font-black text-[11px] w-full block text-center text-white shadow-sm active:scale-95 transition-transform animate-pulse whitespace-nowrap"
+                                        style={{ background: '#dc2626' }}>
+                                        💳 PAGAR
+                                      </button>
                       }
                     </td>
                   </tr>

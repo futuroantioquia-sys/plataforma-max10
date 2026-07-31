@@ -5,7 +5,7 @@ Set oExec = oShell.Exec("git -C """ & gitDir & """ add -A")
 oExec.StdOut.ReadAll()
 oExec.StdErr.ReadAll()
 
-Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""fix: quitar MENS/VAL de nav, solo PAGOS y ASIST en estado-cuenta y asistencia""")
+Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""fix: profe ve PAGÓ/PEND/PRÓX en estado-cuenta, sin POR CONFIRMAR ni PAGAR""")
 Dim commitOut : commitOut = oExec2.StdOut.ReadAll()
 Dim commitErr : commitErr = oExec2.StdErr.ReadAll()
 
