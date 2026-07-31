@@ -409,13 +409,11 @@ export default function AsistenciaAtletaPage() {
                 <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
                   {codVal}
                 </div>
-                {/* Botones 2×2: PAGOS, ASIST, MENS, VAL */}
+                {/* Botones nav: PAGOS, ASIST */}
                 <div className="grid grid-cols-2 gap-1 w-full">
                   {[
                     { label: 'PAGOS',  href: `/alumnos/${id}/estado-cuenta`,  active: false },
                     { label: 'ASIST.', href: null,                             active: true  },
-                    { label: 'MENS.',  href: '/mantenimiento',                 active: false },
-                    { label: 'VAL.',   href: `/alumnos/${id}/seguimiento`,     active: false },
                   ].map(({ label, href, active }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
