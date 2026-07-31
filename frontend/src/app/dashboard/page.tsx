@@ -54,8 +54,8 @@ function AccesoCard({
       )}
     >
       {badge != null && badge > 0 && (
-        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 shadow-md z-10">
-          {badge > 99 ? '99+' : badge}
+        <span className="absolute -top-2.5 -right-2.5 bg-red-500 text-white text-[11px] font-black rounded-full min-w-[24px] h-6 flex items-center justify-center px-1.5 shadow-md z-10">
+          {badge}
         </span>
       )}
       <div className={cn(
