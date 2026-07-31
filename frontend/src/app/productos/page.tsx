@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
@@ -53,6 +53,15 @@ export default function ProductosPage() {
   const [desc, setDesc]         = useState('');
   const [valor, setValor]       = useState('');
   const [editId, setEditId]     = useState<string | null>(null);
+
+  // Carga masiva
+  const xlsxRef                           = useRef<HTMLInputElement>(null);
+  const [showMasiva, setShowMasiva]       = useState(false);
+  const [masivaProd, setMasivaProd]       = useState('');
+  const [masivaFilas, setMasivaFilas]     = useState<{ codigo: string; nombre: string; ok: boolean; msg: string }[]>([]);
+  const [masivaCargando, setMasivaCargando] = useState(false);
+  const [masivaSubiendo, setMasivaSubiendo] = useState(false);
+  const [masivaResumen, setMasivaResumen] = useState('');
 
   const esAdmin = usuario?.rol === 'administracion' || usuario?.rol === 'contable';
 
@@ -118,6 +127,113 @@ export default function ProductosPage() {
     setDesc(p.descripcion);
     setValor(String(p.valor));
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ── Carga masiva: leer Excel ───────────────────────────────────────────────
+  async function leerExcel(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (xlsxRef.current) xlsxRef.current.value = '';
+    setMasivaFilas([]); setMasivaResumen('');
+
+    // Cargar SheetJS desde CDN
+    if (!(window as any).XLSX) {
+      await new Promise<void>((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = () => res(); s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const XLSX = (window as any).XLSX;
+    const buf  = await file.arrayBuffer();
+    const wb   = XLSX.read(buf);
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
+
+    // Determinar columnas (buscar encabezado CODIGO / NOMBRE)
+    // Acepta: fila 1 = encabezados, o sin encabezado (col A = codigo, col B = nombre)
+    let startRow = 0;
+    let colCod   = 0;
+    let colNom   = 1;
+    const header = rows[0]?.map((c: any) => String(c).toUpperCase().trim()) ?? [];
+    const idxCod = header.findIndex(h => h.includes('COD') || h.includes('ID'));
+    const idxNom = header.findIndex(h => h.includes('NOM') || h.includes('ATLETA') || h.includes('DEPORT'));
+    if (idxCod >= 0) { startRow = 1; colCod = idxCod; }
+    if (idxNom >= 0) { colNom = idxNom; }
+
+    const filas = rows.slice(startRow)
+      .filter(r => r[colCod] !== undefined && r[colCod] !== '')
+      .map(r => ({
+        codigo: String(r[colCod]).trim(),
+        nombre: r[colNom] ? String(r[colNom]).trim() : '',
+        ok: true,
+        msg: '',
+      }));
+
+    setMasivaFilas(filas);
+  }
+
+  // ── Carga masiva: subir a Supabase ────────────────────────────────────────
+  async function subirMasiva() {
+    const prod = productos.find(p => p.id === masivaProd);
+    if (!prod || masivaFilas.length === 0) return;
+
+    setMasivaSubiendo(true); setMasivaResumen('');
+    try {
+      // 1. Traer todos los deportistas para resolver código → id
+      const resD = await fetch(
+        `${SUPABASE_URL}/rest/v1/deportistas?select=id,codigo,nombre&order=nombre.asc`,
+        { headers: HEADERS }
+      );
+      const deportistas: { id: string; codigo: string; nombre: string }[] =
+        await resD.json();
+
+      // Mapa código → deportista
+      const porCodigo = new Map(deportistas.map(d => [String(d.codigo).trim(), d]));
+
+      let ok = 0; let err = 0;
+      const filasActualizadas = [...masivaFilas];
+
+      for (let i = 0; i < filasActualizadas.length; i++) {
+        const fila = filasActualizadas[i];
+        const dep  = porCodigo.get(fila.codigo);
+
+        if (!dep) {
+          filasActualizadas[i] = { ...fila, ok: false, msg: 'Código no encontrado' };
+          err++;
+          continue;
+        }
+
+        const body = {
+          deportista_id: dep.id,
+          producto_id:   prod.id,
+          descripcion:   prod.descripcion,
+          tipo:          prod.tipo,
+          valor:         prod.valor,
+          estado:        'PEND',
+        };
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/otros_pagos`, {
+          method: 'POST', headers: HEADERS, body: JSON.stringify(body),
+        });
+
+        if (r.ok || r.status === 201) {
+          filasActualizadas[i] = { ...fila, ok: true, msg: dep.nombre || '✓' };
+          ok++;
+        } else {
+          const txt = await r.text();
+          filasActualizadas[i] = { ...fila, ok: false, msg: `Error ${r.status}` };
+          err++;
+        }
+      }
+
+      setMasivaFilas(filasActualizadas);
+      setMasivaResumen(`✅ ${ok} cargados · ❌ ${err} errores`);
+    } catch (e: any) {
+      setMasivaResumen('Error: ' + e.message);
+    } finally {
+      setMasivaSubiendo(false);
+    }
   }
 
   return (
@@ -276,7 +392,145 @@ export default function ProductosPage() {
           )}
         </div>
 
+        {/* Botón Carga Masiva */}
+        <button
+          onClick={() => { setShowMasiva(true); setMasivaProd(''); setMasivaFilas([]); setMasivaResumen(''); }}
+          className="w-full py-3.5 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
+          style={{ background: 'linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%)' }}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          CARGA MASIVA DESDE EXCEL
+        </button>
+
       </div>
+
+      {/* ── Modal Carga Masiva ────────────────────────────────────────────── */}
+      {showMasiva && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
+            style={{ maxHeight: '90vh' }}>
+
+            {/* Header modal */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h3 className="font-black text-gray-800 text-base">Carga Masiva</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Asigna un producto a varios deportistas desde Excel</p>
+              </div>
+              <button onClick={() => setShowMasiva(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition text-gray-500 font-black text-lg leading-none">
+                ×
+              </button>
+            </div>
+
+            {/* Body modal */}
+            <div className="overflow-y-auto flex-1 p-5 space-y-4">
+
+              {/* 1. Seleccionar producto */}
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5">
+                  1. Seleccionar Producto
+                </label>
+                <select
+                  value={masivaProd}
+                  onChange={e => setMasivaProd(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition bg-white">
+                  <option value="">-- Elige un producto --</option>
+                  {productos.map(p => (
+                    <option key={p.id} value={p.id}>
+                      [{p.tipo === 'torneo' ? 'Torneo' : 'Implemento'}] {p.descripcion} — {formatPeso(p.valor)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 2. Subir Excel */}
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5">
+                  2. Cargar Excel de Deportistas
+                </label>
+                <p className="text-[11px] text-gray-400 mb-2">
+                  El archivo debe tener una columna <strong>CODIGO</strong> con los códigos de los deportistas.
+                  Opcionalmente columna <strong>NOMBRE</strong>. La fila 1 puede ser encabezado o datos directo.
+                </p>
+                <label className={cn(
+                  'flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-5 cursor-pointer transition',
+                  masivaProd ? 'border-purple-300 hover:border-purple-400 bg-purple-50' : 'border-gray-200 bg-gray-50 opacity-50 pointer-events-none'
+                )}>
+                  <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                  </svg>
+                  <span className="text-sm font-black text-purple-600">Seleccionar archivo .xlsx / .xls</span>
+                  <input
+                    ref={xlsxRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    disabled={!masivaProd}
+                    onChange={leerExcel}
+                  />
+                </label>
+              </div>
+
+              {/* 3. Preview */}
+              {masivaFilas.length > 0 && (
+                <div>
+                  <p className="text-xs font-black text-gray-500 uppercase tracking-wide mb-2">
+                    3. Vista Previa — {masivaFilas.length} filas
+                  </p>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="grid grid-cols-3 bg-gray-100 px-3 py-1.5 text-[10px] font-black text-gray-500 uppercase tracking-wide">
+                      <span>Código</span>
+                      <span>Nombre Excel</span>
+                      <span>Estado</span>
+                    </div>
+                    <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                      {masivaFilas.map((f, i) => (
+                        <div key={i} className="grid grid-cols-3 px-3 py-1.5 text-xs">
+                          <span className="font-mono font-bold text-gray-700">{f.codigo}</span>
+                          <span className="text-gray-500 truncate">{f.nombre || '—'}</span>
+                          <span className={cn('font-bold text-[11px]', f.msg
+                            ? (f.ok ? 'text-green-600' : 'text-red-500')
+                            : 'text-gray-400')}>
+                            {f.msg || '—'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Resumen */}
+              {masivaResumen && (
+                <p className="text-sm font-black text-center py-2 rounded-xl bg-gray-50 text-gray-700">
+                  {masivaResumen}
+                </p>
+              )}
+            </div>
+
+            {/* Footer modal */}
+            <div className="px-5 py-4 border-t border-gray-100 flex gap-2 flex-shrink-0">
+              <button onClick={() => setShowMasiva(false)}
+                className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-black text-sm hover:bg-gray-50 transition">
+                Cerrar
+              </button>
+              <button
+                onClick={subirMasiva}
+                disabled={!masivaProd || masivaFilas.length === 0 || masivaSubiendo}
+                className="flex-1 py-3 rounded-xl font-black text-sm text-white transition active:scale-95 disabled:opacity-40"
+                style={{ background: '#7c3aed' }}>
+                {masivaSubiendo
+                  ? `Cargando ${masivaFilas.length}...`
+                  : `CARGAR ${masivaFilas.length > 0 ? masivaFilas.length + ' DEPORTISTAS' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
