@@ -193,7 +193,7 @@ function EstadoCuentaInner() {
   const esReadonly  = searchParams.get('readonly') === '1';
   const { usuario } = useAuthStore();
   const esProfesor   = usuario?.rol === 'profesor';
-  const esDeportista = usuario?.rol === 'deportista';
+  const esDeportista = usuario?.rol === 'deportista' || usuario?.rol === 'padre';
 
   const [dep,      setDep]     = useState<Deportista | null>(null);
   const [foto,     setFoto]    = useState<string | null>(null);
