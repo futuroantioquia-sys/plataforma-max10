@@ -228,7 +228,6 @@ function EstadoCuentaInner() {
   const [productosLst,  setProductosLst]  = useState<Producto[]>([]);
   const [showAddOtro,   setShowAddOtro]   = useState(false);
   const [selProdId,     setSelProdId]     = useState('');
-  const [otroFecha,     setOtroFecha]     = useState('');
   const [guardandoOtro, setGuardandoOtro] = useState(false);
   const esAdmin = usuario?.rol === 'administracion' || usuario?.rol === 'contable';
 
@@ -245,11 +244,12 @@ function EstadoCuentaInner() {
     if (!prod) return;
     setGuardandoOtro(true);
     try {
-      const body = { deportista_id: id, producto_id: prod.id, descripcion: prod.descripcion, tipo: prod.tipo, valor: prod.valor, fecha: otroFecha || null, estado: 'PEND' };
+      const body = { deportista_id: id, producto_id: prod.id, descripcion: prod.descripcion, tipo: prod.tipo, valor: prod.valor, estado: 'PEND' };
       const res = await fetch(`${SB_URL}/rest/v1/otros_pagos`, { method: 'POST', headers: SB_HDR, body: JSON.stringify(body) });
-      const [nuevo] = await res.json();
+      const data = await res.json();
+      const nuevo = Array.isArray(data) ? data[0] : null;
       if (nuevo) setOtrosPagos(prev => [...prev, nuevo]);
-      setShowAddOtro(false); setSelProdId(''); setOtroFecha('');
+      setShowAddOtro(false); setSelProdId('');
     } finally { setGuardandoOtro(false); }
   }
 
@@ -1024,13 +1024,8 @@ function EstadoCuentaInner() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="text-xs font-black text-gray-500 uppercase tracking-wide block mb-1">Fecha (opcional)</label>
-                    <input type="date" value={otroFecha} onChange={e => setOtroFecha(e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none focus:border-green-500"/>
-                  </div>
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => { setShowAddOtro(false); setSelProdId(''); setOtroFecha(''); }}
+                    <button onClick={() => { setShowAddOtro(false); setSelProdId(''); }}
                       className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-black text-sm hover:bg-gray-50">Cancelar</button>
                     <button onClick={agregarOtroPago} disabled={!selProdId || guardandoOtro}
                       className="flex-1 py-3 rounded-xl font-black text-sm text-white transition"
