@@ -202,32 +202,42 @@ export default function ProductosPage() {
 
     setMasivaSubiendo(true); setMasivaResumen('');
     try {
-      // 1. Traer todos los deportistas — select=* para evitar errores de columna,
-      //    header Range para saltarse límite de 1000
+      // 1. Traer todos los deportistas — columnas tiene el JSON con el código
       const resD = await fetch(
-        `${SUPABASE_URL}/rest/v1/deportistas?select=id,codigo,nombre`,
+        `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas&order=nombre`,
         { headers: { ...HEADERS, 'Range-Unit': 'items', 'Range': '0-9999' } }
       );
       const rawDeps = await resD.json();
 
       if (!Array.isArray(rawDeps)) {
-        // Supabase devolvió un error — mostrarlo directamente
         const msg = rawDeps?.message || rawDeps?.hint || JSON.stringify(rawDeps);
         setMasivaResumen('❌ Error cargando deportistas: ' + msg);
         return;
       }
 
-      const deportistas = rawDeps as { id: string; codigo: string | number; nombre: string }[];
+      // Extraer código de columnas JSON (misma lógica que db.ts getDeportistas)
+      type DepRaw = { id: string; nombre: string; columnas: Record<string, string> | string | null };
+      const deportistas = (rawDeps as DepRaw[]).map(d => {
+        let cols: Record<string, string> = {};
+        if (d.columnas) {
+          cols = typeof d.columnas === 'string' ? JSON.parse(d.columnas) : d.columnas as Record<string, string>;
+        }
+        const kCod = Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim()));
+        const codigo = kCod ? String(cols[kCod] ?? '').replace(/\D/g, '').replace(/^0+/, '') : '';
+        return { id: d.id, nombre: d.nombre, codigo };
+      });
 
-      // Mapa código (string) → deportista
-      const porCodigo = new Map(deportistas.map(d => [String(d.codigo ?? '').trim(), d]));
+      // Mapa código (string, sin ceros iniciales) → deportista
+      const porCodigo = new Map(deportistas.filter(d => d.codigo).map(d => [d.codigo, d]));
 
       let ok = 0; let err = 0;
       const filasActualizadas = [...masivaFilas];
 
       for (let i = 0; i < filasActualizadas.length; i++) {
         const fila = filasActualizadas[i];
-        const dep  = porCodigo.get(fila.codigo);
+        // Normalizar código del Excel igual que el de Supabase (solo dígitos, sin ceros)
+        const codNorm = String(fila.codigo ?? '').replace(/\D/g, '').replace(/^0+/, '');
+        const dep  = porCodigo.get(codNorm);
 
         if (!dep) {
           filasActualizadas[i] = { ...fila, ok: false, msg: 'Código no encontrado' };
