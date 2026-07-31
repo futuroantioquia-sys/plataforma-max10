@@ -5,7 +5,7 @@ Set oExec = oShell.Exec("git -C """ & gitDir & """ add -A")
 oExec.StdOut.ReadAll()
 oExec.StdErr.ReadAll()
 
-Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""fix: cargar xlsx desde CDN en lugar de paquete npm (evita build error)""")
+Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""fix: contar pagos individuales en badge dashboard + xlsx CDN + botones nav por rol""")
 Dim commitOut : commitOut = oExec2.StdOut.ReadAll()
 Dim commitErr : commitErr = oExec2.StdErr.ReadAll()
 

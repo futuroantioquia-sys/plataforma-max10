@@ -218,7 +218,7 @@ function DashboardAdmin() {
     try {
       const raw = localStorage.getItem('futuro_libro_pagos');
       const allPagos: Record<string, unknown[]> = raw ? JSON.parse(raw) : {};
-      const n = Object.values(allPagos).filter(v => Array.isArray(v) && v.length > 0).length;
+      const n = Object.values(allPagos).reduce((acc, v) => acc + (Array.isArray(v) ? v.length : 0), 0);
       setPagosCargados(n);
     } catch {}
   }, []);
