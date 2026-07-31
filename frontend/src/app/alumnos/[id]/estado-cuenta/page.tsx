@@ -703,12 +703,20 @@ function EstadoCuentaInner() {
                 <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
                   {codVal}
                 </div>
-                {/* Botones nav: PAGOS, ASIST */}
-                <div className="grid grid-cols-2 gap-1 w-full">
-                  {[
-                    { label: 'PAGOS',  href: null,                               active: true  },
-                    { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false },
-                  ].map(({ label, href, active }) => (
+                {/* Botones nav: calidoso ve 4, admin/profe ven 2 */}
+                <div className={cn('gap-1 w-full', esDeportista ? 'grid grid-cols-2' : 'grid grid-cols-2')}>
+                  {(esDeportista
+                    ? [
+                        { label: 'PAGOS',  href: null,                               active: true  },
+                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false },
+                        { label: 'MENS.',  href: `/alumnos/${id}/mensajes`,          active: false },
+                        { label: 'VAL.',   href: `/alumnos/${id}/valoracion`,        active: false },
+                      ]
+                    : [
+                        { label: 'PAGOS',  href: null,                               active: true  },
+                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false },
+                      ]
+                  ).map(({ label, href, active }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(

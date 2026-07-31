@@ -67,7 +67,8 @@ export default function AsistenciaAtletaPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const { usuario } = useAuthStore();
-  const esProfesor  = usuario?.rol === 'profesor';
+  const esProfesor   = usuario?.rol === 'profesor';
+  const esDeportista = usuario?.rol === 'deportista' || usuario?.rol === 'padre';
 
   /* ── Todos los hooks PRIMERO, sin returns condicionales entre ellos ── */
   const [dep,        setDep]        = useState<Deportista | null>(null);
@@ -409,12 +410,20 @@ export default function AsistenciaAtletaPage() {
                 <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
                   {codVal}
                 </div>
-                {/* Botones nav: PAGOS, ASIST */}
+                {/* Botones nav: calidoso ve 4, admin/profe ven 2 */}
                 <div className="grid grid-cols-2 gap-1 w-full">
-                  {[
-                    { label: 'PAGOS',  href: `/alumnos/${id}/estado-cuenta`,  active: false },
-                    { label: 'ASIST.', href: null,                             active: true  },
-                  ].map(({ label, href, active }) => (
+                  {(esDeportista
+                    ? [
+                        { label: 'PAGOS',  href: `/alumnos/${id}/estado-cuenta`,  active: false },
+                        { label: 'ASIST.', href: null,                             active: true  },
+                        { label: 'MENS.',  href: `/alumnos/${id}/mensajes`,        active: false },
+                        { label: 'VAL.',   href: `/alumnos/${id}/valoracion`,      active: false },
+                      ]
+                    : [
+                        { label: 'PAGOS',  href: `/alumnos/${id}/estado-cuenta`,  active: false },
+                        { label: 'ASIST.', href: null,                             active: true  },
+                      ]
+                  ).map(({ label, href, active }) => (
                     <button key={label}
                       onClick={() => href && router.push(href)}
                       className={cn(
