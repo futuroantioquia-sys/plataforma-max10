@@ -951,59 +951,81 @@ function EstadoCuentaInner() {
               )}
             </div>
 
-            {/* Tabla */}
+            {/* Tabla — mismo layout que mensualidades */}
             {otrosPagos.length === 0 ? (
               <p className="text-center text-[11px] text-gray-400 py-3 border border-dashed border-gray-200 rounded-xl">
                 Sin otros pagos registrados
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-gray-200">
-                <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+              <div className="rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto w-full">
+                <table className="border-collapse" style={{ width: '100%', minWidth: 280 }}>
                   <thead>
-                    <tr style={{ background: '#1e293b', color: 'white' }}>
-                      {['DESCRIPCIÓN','TIPO','VALOR','FECHA','ESTADO'].map(h => (
-                        <th key={h} style={{ padding: '6px 8px', fontWeight: 900, textAlign: 'center', whiteSpace: 'nowrap' }}>{h}</th>
+                    <tr>
+                      {[
+                        { label: 'FECHA',     pct: '20%' },
+                        { label: 'V. PAGADO', pct: '22%' },
+                        { label: 'DETALLE',   pct: esAdmin ? '34%' : '32%' },
+                        { label: 'ESTADO',    pct: esAdmin ? '18%' : '26%' },
+                      ].map(({ label, pct }) => (
+                        <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '9px 5px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', width: pct }}>
+                          {label}
+                        </th>
                       ))}
-                      {esAdmin && <th style={{ padding: '6px 4px', fontWeight: 900 }}></th>}
+                      {esAdmin && <th style={{ background: '#111827', border: BW, padding: '9px 4px', width: '6%' }}></th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {otrosPagos.map(op => (
-                      <tr key={op.id} style={{ background: '#fff', borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '6px 8px', fontWeight: 700, textAlign: 'center' }}>{op.descripcion}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                          <span className={cn('px-2 py-0.5 rounded-full font-black text-[9px]',
-                            op.tipo === 'torneo' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')}>
-                            {op.tipo === 'torneo' ? 'Torneo' : 'Implemento'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 900, color: '#16a34a' }}>
-                          ${Number(op.valor).toLocaleString('es-CO')}
-                        </td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center', color: '#6b7280' }}>{op.fecha || '—'}</td>
-                        <td style={{ padding: '6px 4px', textAlign: 'center' }}>
-                          {esAdmin
-                            ? <button onClick={() => toggleEstadoOtro(op)}
-                                className={cn('px-2 py-1 rounded font-black text-[10px] text-white transition w-full',
-                                  op.estado === 'PAGÓ' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
-                                {op.estado}
-                              </button>
-                            : <span className={cn('px-2 py-1 rounded font-black text-[10px] text-white block text-center',
-                                op.estado === 'PAGÓ' ? 'bg-green-500' : 'bg-red-400')}>
-                                {op.estado}
-                              </span>
-                          }
-                        </td>
-                        {esAdmin && (
-                          <td style={{ padding: '4px' }}>
-                            <button onClick={() => eliminarOtroPago(op)}
-                              className="w-6 h-6 rounded bg-red-50 hover:bg-red-100 flex items-center justify-center transition text-red-400 text-xs mx-auto">✕</button>
+                    {otrosPagos.map(op => {
+                      const isPaidO  = op.estado === 'PAGÓ';
+                      const detBgO   = isPaidO ? '#374151' : '#dc2626';
+                      const rowBgO   = ROW;
+                      return (
+                        <tr key={op.id}>
+                          {/* FECHA */}
+                          <td style={{ background: rowBgO, border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                            <span className="text-[9px] font-semibold text-[#111827]">{op.fecha || 'DD/MM/AAAA'}</span>
                           </td>
-                        )}
-                      </tr>
-                    ))}
+                          {/* V. PAGADO */}
+                          <td style={{ background: '#e5e7eb', border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                            <span className={cn('text-[9px] font-bold', isPaidO ? 'text-[#374151]' : 'text-[#9ca3af]')}>
+                              {isPaidO ? `$${Number(op.valor).toLocaleString('es-CO')}` : '—'}
+                            </span>
+                          </td>
+                          {/* DETALLE — descripcion + tipo */}
+                          <td style={{ background: detBgO, color: 'white', border: BW, padding: '6px 8px', textAlign: 'center', fontWeight: 900, fontSize: 10 }}>
+                            <span className="block leading-tight">{op.descripcion}</span>
+                            <span className={cn('text-[8px] font-black px-1.5 py-0.5 rounded-full mt-0.5 inline-block',
+                              op.tipo === 'torneo' ? 'bg-blue-200 text-blue-900' : 'bg-purple-200 text-purple-900')}>
+                              {op.tipo === 'torneo' ? 'Torneo' : 'Implemento'} · ${Number(op.valor).toLocaleString('es-CO')}
+                            </span>
+                          </td>
+                          {/* ESTADO */}
+                          <td style={{ background: rowBgO, border: BW, padding: '6px 4px', textAlign: 'center' }}>
+                            {esAdmin
+                              ? <button onClick={() => toggleEstadoOtro(op)}
+                                  className={cn('px-2 py-1 rounded font-black text-[10px] text-white transition w-full',
+                                    isPaidO ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
+                                  {op.estado}
+                                </button>
+                              : <span className={cn('px-2 py-1 rounded font-black text-[10px] text-white block text-center',
+                                  isPaidO ? 'bg-green-500' : 'bg-red-400')}>
+                                  {op.estado}
+                                </span>
+                            }
+                          </td>
+                          {esAdmin && (
+                            <td style={{ background: rowBgO, border: BW, padding: '4px' }}>
+                              <button onClick={() => eliminarOtroPago(op)}
+                                className="w-6 h-6 rounded bg-red-50 hover:bg-red-100 flex items-center justify-center transition text-red-400 text-xs mx-auto">✕</button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
 

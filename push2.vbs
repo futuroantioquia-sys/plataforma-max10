@@ -5,7 +5,7 @@ Set oExec = oShell.Exec("git -C """ & gitDir & """ add -A")
 oExec.StdOut.ReadAll()
 oExec.StdErr.ReadAll()
 
-Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""feat: carga masiva desde Excel en /productos""")
+Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""feat: otros_pagos tabla igual a mensualidades + carga masiva Excel""")
 Dim commitOut : commitOut = oExec2.StdOut.ReadAll()
 Dim commitErr : commitErr = oExec2.StdErr.ReadAll()
 
