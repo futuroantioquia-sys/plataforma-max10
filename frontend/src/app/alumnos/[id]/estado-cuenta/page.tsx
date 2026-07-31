@@ -269,11 +269,21 @@ function EstadoCuentaInner() {
     const file = e.target.files?.[0];
     if (!file || !id) return;
     if (xlsxInputRef.current) xlsxInputRef.current.value = '';
-    const XLSX = await import('xlsx');
+    // Cargar SheetJS desde CDN (no requiere instalación local)
+    if (!(window as any).XLSX) {
+      await new Promise<void>((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = () => resolve();
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const XLSX = (window as any).XLSX;
     const buf = await file.arrayBuffer();
     const wb  = XLSX.read(buf);
     const ws  = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { header: 1 }) as unknown[][];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
     const body = rows.slice(1).filter(r => r[0]).map(r => ({
       deportista_id: id,
       producto_id: null,
