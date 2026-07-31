@@ -201,6 +201,7 @@ function LinkInscripcionCard() {
 function DashboardAdmin() {
   const [pendientesAsign,    setPendientesAsign]    = useState(0);
   const [pendientesSoportes, setPendientesSoportes] = useState(0);
+  const [pagosCargados,      setPagosCargados]      = useState(0);
 
   useEffect(() => {
     getDeportistas().then(lista => {
@@ -212,6 +213,14 @@ function DashboardAdmin() {
     }).catch(() => {});
 
     countSoportesPendientes().then(n => setPendientesSoportes(n)).catch(() => {});
+
+    // Contar deportistas con pagos cargados en el Libro Contable (localStorage)
+    try {
+      const raw = localStorage.getItem('futuro_libro_pagos');
+      const allPagos: Record<string, unknown[]> = raw ? JSON.parse(raw) : {};
+      const n = Object.values(allPagos).filter(v => Array.isArray(v) && v.length > 0).length;
+      setPagosCargados(n);
+    } catch {}
   }, []);
 
   return (
@@ -229,7 +238,7 @@ function DashboardAdmin() {
       {/* Categoría: Finanzas */}
       <CategoriaSection emoji="💰" titulo="Finanzas" color="azul" delay={200}>
         <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="azul" />
-        <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" />
+        <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" badge={pagosCargados} />
         <AccesoCard titulo="Confirmar Pagos"      icono={Clock}        href="/pagos-pendientes"         descripcion="Soportes enviados por padres"  color="azul" badge={pendientesSoportes} />
       </CategoriaSection>
 
