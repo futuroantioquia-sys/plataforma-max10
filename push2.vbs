@@ -5,7 +5,7 @@ Set oExec = oShell.Exec("git -C """ & gitDir & """ add -A")
 oExec.StdOut.ReadAll()
 oExec.StdErr.ReadAll()
 
-Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""fix: calidoso (rol padre) ve botones subir/ver soportes en estado-cuenta""")
+Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""feat: 4 botones nav 2x2 (PAGOS/ASIST/MENS/VAL) en estado-cuenta y asistencia""")
 Dim commitOut : commitOut = oExec2.StdOut.ReadAll()
 Dim commitErr : commitErr = oExec2.StdErr.ReadAll()
 
