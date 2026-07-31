@@ -5,7 +5,7 @@ Set oExec = oShell.Exec("git -C """ & gitDir & """ add -A")
 oExec.StdOut.ReadAll()
 oExec.StdErr.ReadAll()
 
-Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""feat: otros_pagos tabla igual a mensualidades + carga masiva Excel""")
+Set oExec2 = oShell.Exec("git -C """ & gitDir & """ commit -m ""fix: subirMasiva Array.isArray guard - deportistas.map error""")
 Dim commitOut : commitOut = oExec2.StdOut.ReadAll()
 Dim commitErr : commitErr = oExec2.StdErr.ReadAll()
 

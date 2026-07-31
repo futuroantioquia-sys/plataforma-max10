@@ -58,7 +58,8 @@ export default function ProductosPage() {
   const xlsxRef                           = useRef<HTMLInputElement>(null);
   const [showMasiva, setShowMasiva]       = useState(false);
   const [masivaProd, setMasivaProd]       = useState('');
-  const [masivaFilas, setMasivaFilas]     = useState<{ codigo: string; nombre: string; ok: boolean; msg: string }[]>([]);
+  const [masivaMode, setMasivaMode]       = useState<'producto' | 'libre'>('producto'); // libre = 4 cols con torneo+valor propios
+  const [masivaFilas, setMasivaFilas]     = useState<{ codigo: string; nombre: string; ok: boolean; msg: string; torneo?: string; valorPropio?: number }[]>([]);
   const [masivaCargando, setMasivaCargando] = useState(false);
   const [masivaSubiendo, setMasivaSubiendo] = useState(false);
   const [masivaResumen, setMasivaResumen] = useState('');
@@ -151,46 +152,75 @@ export default function ProductosPage() {
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
 
-    // Determinar columnas (buscar encabezado CODIGO / NOMBRE)
-    // Acepta: fila 1 = encabezados, o sin encabezado (col A = codigo, col B = nombre)
+    // ── Detectar encabezado y columnas ──────────────────────────────────────
     let startRow = 0;
-    let colCod   = 0;
-    let colNom   = 1;
     const header = rows[0]?.map((c: any) => String(c).toUpperCase().trim()) ?? [];
-    const idxCod = header.findIndex(h => h.includes('COD') || h.includes('ID'));
-    const idxNom = header.findIndex(h => h.includes('NOM') || h.includes('ATLETA') || h.includes('DEPORT'));
-    if (idxCod >= 0) { startRow = 1; colCod = idxCod; }
-    if (idxNom >= 0) { colNom = idxNom; }
+    const hasHeader = header.some(h =>
+      h.includes('COD') || h.includes('NOM') || h.includes('DEPORT') ||
+      h.includes('TORNEO') || h.includes('VALOR') || h.includes('ID')
+    );
+    if (hasHeader) startRow = 1;
 
-    const filas = rows.slice(startRow)
-      .filter(r => r[colCod] !== undefined && r[colCod] !== '')
-      .map(r => ({
-        codigo: String(r[colCod]).trim(),
-        nombre: r[colNom] ? String(r[colNom]).trim() : '',
-        ok: true,
-        msg: '',
-      }));
+    // Detectar columnas por nombre de encabezado, con fallback a posición fija
+    let colCod = header.findIndex(h => h.includes('COD') || h.includes('ID'));
+    let colNom = header.findIndex(h => h.includes('NOM') || h.includes('DEPORT') || h.includes('ATLETA'));
+    let colTor = header.findIndex(h => h.includes('TORNEO') || h.includes('IMPLEMENT') || h.includes('PRODUCT') || h.includes('DETALLE'));
+    let colVal = header.findIndex(h => h.includes('VALOR') || h.includes('PRECIO') || h.includes('MONTO'));
+    // Fallback a posiciones fijas: A=0, B=1, C=2, D=3
+    if (colCod < 0) colCod = 0;
+    if (colNom < 0) colNom = 1;
+    if (colTor < 0) colTor = 2;
+    if (colVal < 0) colVal = 3;
+
+    // ── Detectar formato libre (4 cols: código, deportista, torneo, valor) ──
+    const dataRows = rows.slice(startRow).filter(r => r[colCod] !== undefined && r[colCod] !== '');
+    const tieneColTorneo = dataRows.some(r => r[colTor] && String(r[colTor]).trim() !== '');
+    const tieneColValor  = dataRows.some(r => r[colVal] && !isNaN(Number(String(r[colVal]).replace(/[^0-9.]/g,''))));
+    const esFormatoLibre = tieneColTorneo && tieneColValor;
+
+    setMasivaMode(esFormatoLibre ? 'libre' : 'producto');
+
+    const filas = dataRows.map(r => ({
+      codigo:     String(r[colCod]).trim(),
+      nombre:     r[colNom] ? String(r[colNom]).trim() : '',
+      ok:         true,
+      msg:        '',
+      torneo:     esFormatoLibre && r[colTor] ? String(r[colTor]).trim() : undefined,
+      valorPropio: esFormatoLibre && r[colVal]
+        ? Number(String(r[colVal]).replace(/[^0-9.]/g, ''))
+        : undefined,
+    }));
 
     setMasivaFilas(filas);
   }
 
   // ── Carga masiva: subir a Supabase ────────────────────────────────────────
   async function subirMasiva() {
+    if (masivaFilas.length === 0) return;
     const prod = productos.find(p => p.id === masivaProd);
-    if (!prod || masivaFilas.length === 0) return;
+    if (masivaMode === 'producto' && !prod) return;
 
     setMasivaSubiendo(true); setMasivaResumen('');
     try {
-      // 1. Traer todos los deportistas para resolver código → id
+      // 1. Traer todos los deportistas — select=* para evitar errores de columna,
+      //    header Range para saltarse límite de 1000
       const resD = await fetch(
-        `${SUPABASE_URL}/rest/v1/deportistas?select=id,codigo,nombre&order=nombre.asc`,
-        { headers: HEADERS }
+        `${SUPABASE_URL}/rest/v1/deportistas?select=id,codigo,nombre`,
+        { headers: { ...HEADERS, 'Range-Unit': 'items', 'Range': '0-9999' } }
       );
-      const deportistas: { id: string; codigo: string; nombre: string }[] =
-        await resD.json();
+      const rawDeps = await resD.json();
 
-      // Mapa código → deportista
-      const porCodigo = new Map(deportistas.map(d => [String(d.codigo).trim(), d]));
+      if (!Array.isArray(rawDeps)) {
+        // Supabase devolvió un error — mostrarlo directamente
+        const msg = rawDeps?.message || rawDeps?.hint || JSON.stringify(rawDeps);
+        setMasivaResumen('❌ Error cargando deportistas: ' + msg);
+        return;
+      }
+
+      const deportistas = rawDeps as { id: string; codigo: string | number; nombre: string }[];
+
+      // Mapa código (string) → deportista
+      const porCodigo = new Map(deportistas.map(d => [String(d.codigo ?? '').trim(), d]));
 
       let ok = 0; let err = 0;
       const filasActualizadas = [...masivaFilas];
@@ -205,14 +235,10 @@ export default function ProductosPage() {
           continue;
         }
 
-        const body = {
-          deportista_id: dep.id,
-          producto_id:   prod.id,
-          descripcion:   prod.descripcion,
-          tipo:          prod.tipo,
-          valor:         prod.valor,
-          estado:        'PEND',
-        };
+        const body = masivaMode === 'libre'
+          ? { deportista_id: dep.id, producto_id: null, descripcion: fila.torneo || 'Torneo', tipo: 'torneo', valor: fila.valorPropio ?? 0, estado: 'PEND' }
+          : { deportista_id: dep.id, producto_id: prod!.id, descripcion: prod!.descripcion, tipo: prod!.tipo, valor: prod!.valor, estado: 'PEND' };
+
         const r = await fetch(`${SUPABASE_URL}/rest/v1/otros_pagos`, {
           method: 'POST', headers: HEADERS, body: JSON.stringify(body),
         });
@@ -221,7 +247,7 @@ export default function ProductosPage() {
           filasActualizadas[i] = { ...fila, ok: true, msg: dep.nombre || '✓' };
           ok++;
         } else {
-          const txt = await r.text();
+          const txt = await r.text().catch(() => r.status.toString());
           filasActualizadas[i] = { ...fila, ok: false, msg: `Error ${r.status}` };
           err++;
         }
@@ -230,7 +256,7 @@ export default function ProductosPage() {
       setMasivaFilas(filasActualizadas);
       setMasivaResumen(`✅ ${ok} cargados · ❌ ${err} errores`);
     } catch (e: any) {
-      setMasivaResumen('Error: ' + e.message);
+      setMasivaResumen('❌ ' + (e.message || 'Error desconocido'));
     } finally {
       setMasivaSubiendo(false);
     }
@@ -427,78 +453,105 @@ export default function ProductosPage() {
             {/* Body modal */}
             <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
-              {/* 1. Seleccionar producto */}
+              {/* 1. Cargar Excel — primero */}
               <div>
                 <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5">
-                  1. Seleccionar Producto
-                </label>
-                <select
-                  value={masivaProd}
-                  onChange={e => setMasivaProd(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition bg-white">
-                  <option value="">-- Elige un producto --</option>
-                  {productos.map(p => (
-                    <option key={p.id} value={p.id}>
-                      [{p.tipo === 'torneo' ? 'Torneo' : 'Implemento'}] {p.descripcion} — {formatPeso(p.valor)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 2. Subir Excel */}
-              <div>
-                <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5">
-                  2. Cargar Excel de Deportistas
+                  1. Cargar Excel
                 </label>
                 <p className="text-[11px] text-gray-400 mb-2">
-                  El archivo debe tener una columna <strong>CODIGO</strong> con los códigos de los deportistas.
-                  Opcionalmente columna <strong>NOMBRE</strong>. La fila 1 puede ser encabezado o datos directo.
+                  Acepta dos formatos:<br/>
+                  <strong>· 2 cols:</strong> CÓDIGO, NOMBRE → selecciona el producto abajo.<br/>
+                  <strong>· 4 cols:</strong> CÓDIGO, DEPORTISTA, TORNEO, VALOR → se detecta automáticamente.
                 </p>
-                <label className={cn(
-                  'flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-5 cursor-pointer transition',
-                  masivaProd ? 'border-purple-300 hover:border-purple-400 bg-purple-50' : 'border-gray-200 bg-gray-50 opacity-50 pointer-events-none'
-                )}>
+                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-purple-300 hover:border-purple-400 bg-purple-50 rounded-xl py-5 cursor-pointer transition">
                   <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                   </svg>
                   <span className="text-sm font-black text-purple-600">Seleccionar archivo .xlsx / .xls</span>
-                  <input
-                    ref={xlsxRef}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    className="hidden"
-                    disabled={!masivaProd}
-                    onChange={leerExcel}
-                  />
+                  <input ref={xlsxRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={leerExcel} />
                 </label>
+
+                {/* Badge de modo detectado */}
+                {masivaFilas.length > 0 && (
+                  <div className={cn('mt-2 px-3 py-2 rounded-lg text-[11px] font-black',
+                    masivaMode === 'libre'
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                      : 'bg-gray-50 text-gray-600 border border-gray-200')}>
+                    {masivaMode === 'libre'
+                      ? '🏆 Formato libre detectado — torneo y valor tomados del Excel por fila'
+                      : '📦 Formato producto — selecciona el producto a asignar abajo'}
+                  </div>
+                )}
               </div>
+
+              {/* 2. Seleccionar producto (solo en modo producto) */}
+              {masivaMode === 'producto' && (
+                <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5">
+                    2. Seleccionar Producto
+                  </label>
+                  <select
+                    value={masivaProd}
+                    onChange={e => setMasivaProd(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition bg-white">
+                    <option value="">-- Elige un producto --</option>
+                    {productos.map(p => (
+                      <option key={p.id} value={p.id}>
+                        [{p.tipo === 'torneo' ? 'Torneo' : 'Implemento'}] {p.descripcion} — {formatPeso(p.valor)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* 3. Preview */}
               {masivaFilas.length > 0 && (
                 <div>
                   <p className="text-xs font-black text-gray-500 uppercase tracking-wide mb-2">
-                    3. Vista Previa — {masivaFilas.length} filas
+                    {masivaMode === 'producto' ? '3' : '2'}. Vista Previa — {masivaFilas.length} deportistas
                   </p>
                   <div className="border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-3 bg-gray-100 px-3 py-1.5 text-[10px] font-black text-gray-500 uppercase tracking-wide">
-                      <span>Código</span>
-                      <span>Nombre Excel</span>
-                      <span>Estado</span>
-                    </div>
-                    <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
-                      {masivaFilas.map((f, i) => (
-                        <div key={i} className="grid grid-cols-3 px-3 py-1.5 text-xs">
-                          <span className="font-mono font-bold text-gray-700">{f.codigo}</span>
-                          <span className="text-gray-500 truncate">{f.nombre || '—'}</span>
-                          <span className={cn('font-bold text-[11px]', f.msg
-                            ? (f.ok ? 'text-green-600' : 'text-red-500')
-                            : 'text-gray-400')}>
-                            {f.msg || '—'}
-                          </span>
+                    {masivaMode === 'libre' ? (
+                      <>
+                        <div className="grid grid-cols-4 bg-gray-100 px-3 py-1.5 text-[10px] font-black text-gray-500 uppercase tracking-wide">
+                          <span>Código</span><span>Deportista</span><span>Torneo</span><span>Valor / Estado</span>
                         </div>
-                      ))}
-                    </div>
+                        <div className="divide-y divide-gray-50 max-h-52 overflow-y-auto">
+                          {masivaFilas.map((f, i) => (
+                            <div key={i} className="grid grid-cols-4 px-3 py-1.5 text-xs">
+                              <span className="font-mono font-bold text-gray-700">{f.codigo}</span>
+                              <span className="text-gray-500 truncate">{f.nombre || '—'}</span>
+                              <span className="text-blue-700 font-bold truncate">{f.torneo || '—'}</span>
+                              <span className={cn('font-bold text-[11px]', f.msg
+                                ? (f.ok ? 'text-green-600' : 'text-red-500')
+                                : 'text-gray-500')}>
+                                {f.msg ? f.msg : (f.valorPropio ? `$${f.valorPropio.toLocaleString('es-CO')}` : '—')}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-3 bg-gray-100 px-3 py-1.5 text-[10px] font-black text-gray-500 uppercase tracking-wide">
+                          <span>Código</span><span>Nombre Excel</span><span>Estado</span>
+                        </div>
+                        <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                          {masivaFilas.map((f, i) => (
+                            <div key={i} className="grid grid-cols-3 px-3 py-1.5 text-xs">
+                              <span className="font-mono font-bold text-gray-700">{f.codigo}</span>
+                              <span className="text-gray-500 truncate">{f.nombre || '—'}</span>
+                              <span className={cn('font-bold text-[11px]', f.msg
+                                ? (f.ok ? 'text-green-600' : 'text-red-500')
+                                : 'text-gray-400')}>
+                                {f.msg || '—'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -519,7 +572,7 @@ export default function ProductosPage() {
               </button>
               <button
                 onClick={subirMasiva}
-                disabled={!masivaProd || masivaFilas.length === 0 || masivaSubiendo}
+                disabled={masivaFilas.length === 0 || masivaSubiendo || (masivaMode === 'producto' && !masivaProd)}
                 className="flex-1 py-3 rounded-xl font-black text-sm text-white transition active:scale-95 disabled:opacity-40"
                 style={{ background: '#7c3aed' }}>
                 {masivaSubiendo
