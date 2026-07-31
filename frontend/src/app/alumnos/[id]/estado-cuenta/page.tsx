@@ -722,8 +722,11 @@ function EstadoCuentaInner() {
                 const hasSoporte   = !isPaid && soportes.some(s =>
                   !s.meses || s.meses.length === 0 || s.meses.includes(row.detalle)
                 );
-                const rowBg        = (isProx && !hasSoporte) ? '#f9fafb' : ROW;
-                const detBg        = becado ? '#374151' : isPaid ? '#374151' : hasSoporte ? '#d97706' : isProx ? '#9ca3af' : '#dc2626';
+                const rowBg        = (isProx && (!hasSoporte || esProfesor || esReadonly)) ? '#f9fafb' : ROW;
+                const detBg        = becado ? '#374151' : isPaid ? '#374151'
+                  : (esProfesor || esReadonly)
+                    ? (isProx ? '#9ca3af' : '#dc2626')
+                    : hasSoporte ? '#d97706' : isProx ? '#9ca3af' : '#dc2626';
                 return (
                   <tr key={idx} style={{ opacity: isProx ? 0.6 : 1 }}>
 
