@@ -14,6 +14,13 @@ import { useAuthStore } from '@/store/auth.store';
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
 const PAGOS_KEY    = 'futuro_pagos_estado';
 
+const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
+const SB_HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
+
+interface OtroPago { id: string; producto_id: string | null; descripcion: string; tipo: string; valor: number; fecha: string | null; estado: 'PAGÓ' | 'PEND'; }
+interface Producto  { id: string; tipo: string; descripcion: string; valor: number; }
+
 const DETALLE_ROWS = [
   'MATRÍCULA 2026',
   'FEBRERO 2026','MARZO 2026','ABRIL 2026','MAYO 2026','JUNIO 2026',
@@ -214,6 +221,73 @@ function EstadoCuentaInner() {
   const [showNombreModal,  setShowNombreModal]  = useState(false);
   const [mesesSelSoporte,  setMesesSelSoporte]  = useState<string[]>([]);
   const [toastSoporte,     setToastSoporte]     = useState(false);
+
+  // ── OTROS PAGOS ────────────────────────────────────────────────
+  const xlsxInputRef            = useRef<HTMLInputElement>(null);
+  const [otrosPagos,    setOtrosPagos]    = useState<OtroPago[]>([]);
+  const [productosLst,  setProductosLst]  = useState<Producto[]>([]);
+  const [showAddOtro,   setShowAddOtro]   = useState(false);
+  const [selProdId,     setSelProdId]     = useState('');
+  const [otroFecha,     setOtroFecha]     = useState('');
+  const [guardandoOtro, setGuardandoOtro] = useState(false);
+  const esAdmin = usuario?.rol === 'administracion' || usuario?.rol === 'contable';
+
+  useEffect(() => {
+    if (!id) return;
+    fetch(`${SB_URL}/rest/v1/otros_pagos?deportista_id=eq.${id}&order=created_at.asc`, { headers: SB_HDR })
+      .then(r => r.json()).then(d => setOtrosPagos(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch(`${SB_URL}/rest/v1/productos?activo=eq.true&order=tipo.asc,descripcion.asc`, { headers: SB_HDR })
+      .then(r => r.json()).then(d => setProductosLst(Array.isArray(d) ? d : [])).catch(() => {});
+  }, [id]);
+
+  async function agregarOtroPago() {
+    const prod = productosLst.find(p => p.id === selProdId);
+    if (!prod) return;
+    setGuardandoOtro(true);
+    try {
+      const body = { deportista_id: id, producto_id: prod.id, descripcion: prod.descripcion, tipo: prod.tipo, valor: prod.valor, fecha: otroFecha || null, estado: 'PEND' };
+      const res = await fetch(`${SB_URL}/rest/v1/otros_pagos`, { method: 'POST', headers: SB_HDR, body: JSON.stringify(body) });
+      const [nuevo] = await res.json();
+      if (nuevo) setOtrosPagos(prev => [...prev, nuevo]);
+      setShowAddOtro(false); setSelProdId(''); setOtroFecha('');
+    } finally { setGuardandoOtro(false); }
+  }
+
+  async function toggleEstadoOtro(op: OtroPago) {
+    const nuevo = op.estado === 'PAGÓ' ? 'PEND' : 'PAGÓ';
+    await fetch(`${SB_URL}/rest/v1/otros_pagos?id=eq.${op.id}`, { method: 'PATCH', headers: SB_HDR, body: JSON.stringify({ estado: nuevo }) });
+    setOtrosPagos(prev => prev.map(p => p.id === op.id ? { ...p, estado: nuevo } : p));
+  }
+
+  async function eliminarOtroPago(op: OtroPago) {
+    if (!confirm(`¿Eliminar "${op.descripcion}"?`)) return;
+    await fetch(`${SB_URL}/rest/v1/otros_pagos?id=eq.${op.id}`, { method: 'DELETE', headers: SB_HDR });
+    setOtrosPagos(prev => prev.filter(p => p.id !== op.id));
+  }
+
+  async function importarXlsx(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !id) return;
+    if (xlsxInputRef.current) xlsxInputRef.current.value = '';
+    const XLSX = await import('xlsx');
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf);
+    const ws  = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { header: 1 }) as unknown[][];
+    const body = rows.slice(1).filter(r => r[0]).map(r => ({
+      deportista_id: id,
+      producto_id: null,
+      descripcion: String(r[0] ?? '').trim(),
+      tipo: String(r[1] ?? 'implemento').toLowerCase().includes('torneo') ? 'torneo' : 'implemento',
+      valor: parseFloat(String(r[2] ?? '0').replace(/[^0-9.]/g, '')) || 0,
+      fecha: r[3] ? String(r[3]).trim() : null,
+      estado: 'PEND',
+    })).filter(b => b.descripcion && b.valor > 0);
+    if (!body.length) { alert('No se encontraron filas válidas (columnas: Descripción, Tipo, Valor, Fecha)'); return; }
+    const res = await fetch(`${SB_URL}/rest/v1/otros_pagos`, { method: 'POST', headers: SB_HDR, body: JSON.stringify(body) });
+    const nuevos = await res.json();
+    if (Array.isArray(nuevos)) setOtrosPagos(prev => [...prev, ...nuevos]);
+  }
 
   function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -834,6 +908,123 @@ function EstadoCuentaInner() {
             304 540 1497
           </a>
         </p>}
+
+        {/* ── OTROS PAGOS (admin y profe ven; admin edita) ── */}
+        {!esDeportista && (
+          <div className="mb-4">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-black text-sm text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                <span>📦</span> Otros Pagos
+              </h3>
+              {esAdmin && (
+                <div className="flex gap-2">
+                  <input ref={xlsxInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={importarXlsx}/>
+                  <button onClick={() => xlsxInputRef.current?.click()}
+                    className="text-[10px] font-black px-2 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition">
+                    📥 Excel
+                  </button>
+                  <button onClick={() => setShowAddOtro(true)}
+                    className="text-[10px] font-black px-2 py-1 rounded-lg text-white transition"
+                    style={{ background: '#16a34a' }}>
+                    + Agregar
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Tabla */}
+            {otrosPagos.length === 0 ? (
+              <p className="text-center text-[11px] text-gray-400 py-3 border border-dashed border-gray-200 rounded-xl">
+                Sin otros pagos registrados
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-gray-200">
+                <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#1e293b', color: 'white' }}>
+                      {['DESCRIPCIÓN','TIPO','VALOR','FECHA','ESTADO'].map(h => (
+                        <th key={h} style={{ padding: '6px 8px', fontWeight: 900, textAlign: 'center', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                      {esAdmin && <th style={{ padding: '6px 4px', fontWeight: 900 }}></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {otrosPagos.map(op => (
+                      <tr key={op.id} style={{ background: '#fff', borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 700, textAlign: 'center' }}>{op.descripcion}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                          <span className={cn('px-2 py-0.5 rounded-full font-black text-[9px]',
+                            op.tipo === 'torneo' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')}>
+                            {op.tipo === 'torneo' ? 'Torneo' : 'Implemento'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 900, color: '#16a34a' }}>
+                          ${Number(op.valor).toLocaleString('es-CO')}
+                        </td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center', color: '#6b7280' }}>{op.fecha || '—'}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                          {esAdmin
+                            ? <button onClick={() => toggleEstadoOtro(op)}
+                                className={cn('px-2 py-1 rounded font-black text-[10px] text-white transition w-full',
+                                  op.estado === 'PAGÓ' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
+                                {op.estado}
+                              </button>
+                            : <span className={cn('px-2 py-1 rounded font-black text-[10px] text-white block text-center',
+                                op.estado === 'PAGÓ' ? 'bg-green-500' : 'bg-red-400')}>
+                                {op.estado}
+                              </span>
+                          }
+                        </td>
+                        {esAdmin && (
+                          <td style={{ padding: '4px' }}>
+                            <button onClick={() => eliminarOtroPago(op)}
+                              className="w-6 h-6 rounded bg-red-50 hover:bg-red-100 flex items-center justify-center transition text-red-400 text-xs mx-auto">✕</button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Modal agregar */}
+            {showAddOtro && (
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-4">
+                <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+                  <h3 className="font-black text-gray-800">Agregar Otro Pago</h3>
+                  <div>
+                    <label className="text-xs font-black text-gray-500 uppercase tracking-wide block mb-1">Producto</label>
+                    <select value={selProdId} onChange={e => setSelProdId(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none focus:border-green-500">
+                      <option value="">— Selecciona un producto —</option>
+                      {productosLst.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.tipo === 'torneo' ? '🏆' : '👟'} {p.descripcion} — ${Number(p.valor).toLocaleString('es-CO')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-black text-gray-500 uppercase tracking-wide block mb-1">Fecha (opcional)</label>
+                    <input type="date" value={otroFecha} onChange={e => setOtroFecha(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none focus:border-green-500"/>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => { setShowAddOtro(false); setSelProdId(''); setOtroFecha(''); }}
+                      className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-black text-sm hover:bg-gray-50">Cancelar</button>
+                    <button onClick={agregarOtroPago} disabled={!selProdId || guardandoOtro}
+                      className="flex-1 py-3 rounded-xl font-black text-sm text-white transition"
+                      style={{ background: selProdId && !guardandoOtro ? '#16a34a' : '#9ca3af' }}>
+                      {guardandoOtro ? 'Guardando...' : 'AGREGAR'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── SUBIR / VER SOPORTES (solo calidoso) ── */}
         {esDeportista && !esReadonly && (

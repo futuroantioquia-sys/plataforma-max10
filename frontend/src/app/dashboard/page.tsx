@@ -240,6 +240,7 @@ function DashboardAdmin() {
         <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="azul" />
         <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" badge={pagosCargados} />
         <AccesoCard titulo="Confirmar Pagos"      icono={Clock}        href="/pagos-pendientes"         descripcion="Soportes enviados por padres"  color="azul" badge={pendientesSoportes} />
+        <AccesoCard titulo="Productos"            icono={DollarSign}   href="/productos"                descripcion="Torneos e implementos"         color="azul" />
       </CategoriaSection>
 
       <div className="divider-fade" />
