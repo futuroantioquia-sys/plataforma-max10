@@ -202,22 +202,32 @@ export default function ProductosPage() {
 
     setMasivaSubiendo(true); setMasivaResumen('');
     try {
-      // 1. Traer todos los deportistas — columnas tiene el JSON con el código
-      const resD = await fetch(
-        `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas&order=nombre`,
-        { headers: { ...HEADERS, 'Range-Unit': 'items', 'Range': '0-9999' } }
-      );
-      const rawDeps = await resD.json();
-
-      if (!Array.isArray(rawDeps)) {
-        const msg = rawDeps?.message || rawDeps?.hint || JSON.stringify(rawDeps);
-        setMasivaResumen('❌ Error cargando deportistas: ' + msg);
+      // 1. Traer TODOS los deportistas con paginación (Supabase limita a 1000 por página)
+      type DepRaw = { id: string; nombre: string; columnas: Record<string, string> | string | null };
+      const allRawDeps: DepRaw[] = [];
+      let from = 0;
+      const PAGE = 1000;
+      let fetchError = '';
+      while (true) {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas`,
+          { headers: { ...HEADERS, 'Range-Unit': 'items', 'Range': `${from}-${from + PAGE - 1}` } }
+        );
+        const page = await res.json();
+        if (!Array.isArray(page)) {
+          fetchError = page?.message || page?.hint || JSON.stringify(page);
+          break;
+        }
+        allRawDeps.push(...(page as DepRaw[]));
+        if (page.length < PAGE) break;
+        from += PAGE;
+      }
+      if (fetchError) {
+        setMasivaResumen('❌ Error cargando deportistas: ' + fetchError);
         return;
       }
-
-      // Extraer código de columnas JSON (misma lógica que db.ts getDeportistas)
-      type DepRaw = { id: string; nombre: string; columnas: Record<string, string> | string | null };
-      const deportistas = (rawDeps as DepRaw[]).map(d => {
+      const rawDeps = allRawDeps;
+      const deportistas = rawDeps.map(d => {
         let cols: Record<string, string> = {};
         if (d.columnas) {
           cols = typeof d.columnas === 'string' ? JSON.parse(d.columnas) : d.columnas as Record<string, string>;

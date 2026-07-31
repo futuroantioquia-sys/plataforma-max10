@@ -37,7 +37,8 @@ export default function PostpartidoPage() {
   useEffect(() => {
     getDeportistas().then(deps => {
       setDeportistas(deps);
-      const lista = Array.from(new Set(deps.map(proyectoDe).filter(p => p !== '__SIN_PROYECTO__'))).sort();
+      const sortNum = (a: string, b: string) => { const na = parseInt(a,10), nb = parseInt(b,10); return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b,'es'); };
+      const lista = Array.from(new Set(deps.map(proyectoDe).filter(p => p !== '__SIN_PROYECTO__'))).sort(sortNum);
       setProyectos(lista);
       setCargando(false);
     });

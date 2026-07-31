@@ -140,7 +140,7 @@ export default function VistaContablePage() {
   const estados   = useMemo(() => [...new Set(filas.map(f => f.estado).filter(Boolean))].sort(),   [filas]);
   const proyectos = useMemo(() => [...new Set(
     filas.filter(f => !programa || f.programa === programa).map(f => f.proyecto).filter(Boolean)
-  )].sort(), [filas, programa]);
+  )].sort((a,b)=>{ const na=parseInt(a,10),nb=parseInt(b,10); return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b,'es'); }), [filas, programa]);
 
   const filtradas = useMemo(() => filas.filter(f => {
     if (programa && f.programa !== programa) return false;

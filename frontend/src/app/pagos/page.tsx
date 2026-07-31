@@ -127,7 +127,8 @@ function PagosInner() {
     const base = filtroPrograma
       ? deportistas.filter(d => getCol(d, /^program/i) === filtroPrograma)
       : deportistas;
-    return [...new Set(base.map(d => getCol(d, /^proy/i)).filter(Boolean))].sort();
+    const sortNum = (a: string, b: string) => { const na = parseInt(a,10), nb = parseInt(b,10); return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b,'es'); };
+    return [...new Set(base.map(d => getCol(d, /^proy/i)).filter(Boolean))].sort(sortNum);
   }, [deportistas, filtroPrograma]);
 
   const filtrados = useMemo(() => {

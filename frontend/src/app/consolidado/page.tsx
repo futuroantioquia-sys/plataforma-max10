@@ -59,12 +59,14 @@ export default function ConsolidadoPage() {
     return Array.from(s).sort();
   }, [deportistas]);
 
+  const sortNum = (a: string, b: string) => { const na = parseInt(a, 10), nb = parseInt(b, 10); return !isNaN(na) && !isNaN(nb) ? na - nb : a.localeCompare(b, 'es'); };
+
   const proyectos = useMemo(() => {
     const s = new Set<string>();
     deportistas
       .filter(d => !programa || getCol(d, /^program/i) === programa)
       .forEach(d => { const p = proyectoDe(d); if (p !== '__SIN_PROYECTO__') s.add(p); });
-    return Array.from(s).sort();
+    return Array.from(s).sort(sortNum);
   }, [deportistas, programa]);
 
   useEffect(() => {

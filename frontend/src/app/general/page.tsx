@@ -906,7 +906,7 @@ export default function GeneralPage() {
               <option value="">— Todos —</option>
               {(programaFiltro
                 ? (proyectosPorPrograma[programaFiltro] ?? [])
-                : Object.entries(proyectosPorPrograma).filter(([k]) => k !== '__RETIRADO__').flatMap(([,v]) => v).filter((v,i,a) => a.indexOf(v) === i).sort()
+                : Object.entries(proyectosPorPrograma).filter(([k]) => k !== '__RETIRADO__').flatMap(([,v]) => v).filter((v,i,a) => a.indexOf(v) === i).sort((a,b)=>{ const na=parseInt(a,10),nb=parseInt(b,10); return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b,'es'); })
               ).map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
@@ -1127,7 +1127,7 @@ export default function GeneralPage() {
                                 const progActual = getValCelda(dep, colPrograma).trim();
                                 const opsProy    = (proyectosPorPrograma[progActual] && proyectosPorPrograma[progActual].length > 0)
                                   ? proyectosPorPrograma[progActual]
-                                  : Object.entries(proyectosPorPrograma).filter(([k]) => k !== '__RETIRADO__').flatMap(([,v]) => v).filter((v,i,a)=>a.indexOf(v)===i).sort();
+                                  : Object.entries(proyectosPorPrograma).filter(([k]) => k !== '__RETIRADO__').flatMap(([,v]) => v).filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>{ const na=parseInt(a,10),nb=parseInt(b,10); return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b,'es'); });
                                 return (
                                   <td key={col}
                                     style={{ border: '2px solid white', backgroundColor: '#16a34a' }}
