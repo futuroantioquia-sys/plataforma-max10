@@ -1652,6 +1652,22 @@ export interface Evaluacion {
   disciplinaNivel: string; disciplinaDesc: string;
   trabajoNivel: string; trabajoDesc: string;
   observaciones: string;
+  // ── Campos completos de la Valoración Deportiva (se leen y se guardan) ──
+  driblingNivel?: string; driblingDesc?: string;
+  cabeceoNivel?: string; cabeceoDesc?: string;
+  quiteNivel?: string; quiteDesc?: string;
+  proteccionNivel?: string; proteccionDesc?: string;
+  amplitudNivel?: string; amplitudDesc?: string;
+  transicionNivel?: string; transicionDesc?: string;
+  superioridadNivel?: string; superioridadDesc?: string;
+  basculacionNivel?: string; basculacionDesc?: string;
+  identidadNivel?: string; identidadDesc?: string;
+  bloqueNivel?: string; bloqueDesc?: string;
+  climaNivel?: string; climaDesc?: string;
+  gestionCompNivel?: string; gestionCompDesc?: string;
+  responsabilidad?: string; puntualidad?: string; disciplinaComp?: string; respeto?: string;
+  tolerancia?: string; companerismo?: string; liderazgo?: string; trabajoEquipoComp?: string; sentidoPertenencia?: string;
+  logrosTrimestre?: string; objetivosTrimestre?: string;
 }
 
 const LS_EVALUACIONES = 'futuro_evaluaciones';
@@ -1684,6 +1700,25 @@ export async function getEvaluaciones(codigo?: string): Promise<Evaluacion[]> {
       disciplinaNivel: r.disciplina_nivel ?? '', disciplinaDesc: r.disciplina_desc ?? '',
       trabajoNivel: r.trabajo_nivel ?? '', trabajoDesc: r.trabajo_desc ?? '',
       observaciones: r.observaciones ?? '',
+      // ── Campos completos: se leen de vuelta para que al reabrir NO se pierdan ──
+      driblingNivel: r.dribling_nivel ?? '', driblingDesc: r.dribling_desc ?? '',
+      cabeceoNivel: r.cabeceo_nivel ?? '', cabeceoDesc: r.cabeceo_desc ?? '',
+      quiteNivel: r.quite_nivel ?? '', quiteDesc: r.quite_desc ?? '',
+      proteccionNivel: r.proteccion_nivel ?? '', proteccionDesc: r.proteccion_desc ?? '',
+      amplitudNivel: r.amplitud_nivel ?? '', amplitudDesc: r.amplitud_desc ?? '',
+      transicionNivel: r.transicion_nivel ?? '', transicionDesc: r.transicion_desc ?? '',
+      superioridadNivel: r.superioridad_nivel ?? '', superioridadDesc: r.superioridad_desc ?? '',
+      basculacionNivel: r.basculacion_nivel ?? '', basculacionDesc: r.basculacion_desc ?? '',
+      identidadNivel: r.identidad_nivel ?? '', identidadDesc: r.identidad_desc ?? '',
+      bloqueNivel: r.bloque_nivel ?? '', bloqueDesc: r.bloque_desc ?? '',
+      climaNivel: r.clima_nivel ?? '', climaDesc: r.clima_desc ?? '',
+      gestionCompNivel: r.gestion_comp_nivel ?? '', gestionCompDesc: r.gestion_comp_desc ?? '',
+      responsabilidad: r.responsabilidad ?? '', puntualidad: r.puntualidad ?? '',
+      disciplinaComp: r.disciplina_comp ?? '', respeto: r.respeto ?? '',
+      tolerancia: r.tolerancia ?? '', companerismo: r.companerismo ?? '',
+      liderazgo: r.liderazgo ?? '', trabajoEquipoComp: r.trabajo_equipo_comp ?? '',
+      sentidoPertenencia: r.sentido_pertenencia ?? '',
+      logrosTrimestre: r.logros_trimestre ?? '', objetivosTrimestre: r.objetivos_trimestre ?? '',
     }));
     lsSet(LS_EVALUACIONES, lista);
     return lista;
@@ -1744,6 +1779,113 @@ export async function saveEvaluacion(data: Omit<Evaluacion, 'id'>): Promise<void
     if (error) console.error('[db] saveEvaluacion:', error.message);
   } catch (e) {
     console.error('[db] saveEvaluacion:', e);
+  }
+}
+
+// ── MENSAJES (calidoso ⇄ administración) ─────────────────────
+
+export type EmisorMensaje = 'calidoso' | 'admin';
+
+export interface Mensaje {
+  id: string;
+  deportistaId: string;
+  codigo: string;
+  nombre: string;
+  texto: string;
+  de: EmisorMensaje;      // quién lo envió
+  leido: boolean;         // para mensajes del calidoso: si la admin ya lo leyó
+  createdAt: string;
+}
+
+const LS_MENSAJES = 'futuro_mensajes_db';
+
+/** Envía un mensaje. `de` = 'calidoso' (por defecto) o 'admin' (respuesta). */
+export async function enviarMensaje(data: {
+  deportistaId: string; codigo: string; nombre: string; texto: string; de?: EmisorMensaje;
+}): Promise<boolean> {
+  const texto = (data.texto ?? '').trim();
+  if (!texto) return false;
+  try {
+    const { error } = await supabase().from('mensajes').insert({
+      deportista_id: data.deportistaId ?? '',
+      codigo: (data.codigo ?? '').trim(),
+      nombre: (data.nombre ?? '').trim(),
+      texto,
+      de: data.de ?? 'calidoso',
+      // Los mensajes de la admin nacen "leídos" (no cuentan como pendientes de ella)
+      leido: (data.de ?? 'calidoso') === 'admin',
+    });
+    if (error) { console.error('[db] enviarMensaje:', error.message); return false; }
+    return true;
+  } catch (e) {
+    console.error('[db] enviarMensaje:', e);
+    return false;
+  }
+}
+
+/** Lee los mensajes. Si se pasa `codigo`, solo los de ese deportista (para el calidoso). */
+export async function getMensajes(codigo?: string): Promise<Mensaje[]> {
+  try {
+    let query = supabase().from('mensajes').select('*').order('created_at', { ascending: false });
+    if (codigo) query = query.eq('codigo', codigo.trim());
+    const { data, error } = await query;
+    if (error) throw error;
+    const lista: Mensaje[] = (data ?? []).map((r: any) => ({
+      id: r.id,
+      deportistaId: r.deportista_id ?? '',
+      codigo: r.codigo ?? '',
+      nombre: r.nombre ?? '',
+      texto: r.texto ?? '',
+      de: (r.de === 'admin' ? 'admin' : 'calidoso') as EmisorMensaje,
+      leido: !!r.leido,
+      createdAt: r.created_at ?? '',
+    }));
+    lsSet(LS_MENSAJES, lista);
+    return lista;
+  } catch {
+    const cached = lsGet<Mensaje[]>(LS_MENSAJES, []);
+    return codigo ? cached.filter(m => m.codigo === codigo.trim()) : cached;
+  }
+}
+
+/** Cuenta los mensajes de calidosos sin leer (para el tablero de la admin). */
+export async function countMensajesNoLeidos(): Promise<number> {
+  try {
+    const { count, error } = await supabase()
+      .from('mensajes')
+      .select('*', { count: 'exact', head: true })
+      .eq('leido', false)
+      .eq('de', 'calidoso');
+    if (error) throw error;
+    return count ?? 0;
+  } catch {
+    return lsGet<Mensaje[]>(LS_MENSAJES, []).filter(m => !m.leido && m.de !== 'admin').length;
+  }
+}
+
+/** Marca un mensaje como leído. */
+export async function marcarMensajeLeido(id: string): Promise<void> {
+  try {
+    const { error } = await supabase().from('mensajes').update({ leido: true }).eq('id', id);
+    if (error) console.error('[db] marcarMensajeLeido:', error.message);
+  } catch (e) {
+    console.error('[db] marcarMensajeLeido:', e);
+  }
+}
+
+/** Marca como leídos TODOS los mensajes del calidoso de una conversación (por código). */
+export async function marcarConversacionLeida(codigo: string): Promise<void> {
+  const cod = (codigo ?? '').trim();
+  if (!cod) return;
+  try {
+    const { error } = await supabase().from('mensajes')
+      .update({ leido: true })
+      .eq('codigo', cod)
+      .eq('de', 'calidoso')
+      .eq('leido', false);
+    if (error) console.error('[db] marcarConversacionLeida:', error.message);
+  } catch (e) {
+    console.error('[db] marcarConversacionLeida:', e);
   }
 }
 

@@ -757,21 +757,6 @@ export default function ValoracionPage() {
     setData(p => ({ ...p, [k]: v, ...extra }));
   };
 
-  // Al abrir con ?cod=CODIGO desde la ficha: precarga el código y CARGA la última
-  // valoración guardada de ese deportista (para que el profe no vea el formulario en blanco).
-  useEffect(() => {
-    const c = (() => { try { return new URLSearchParams(window.location.search).get('cod'); } catch { return null; } })();
-    if (!c || data.codigo) return;
-    set('codigo', c);
-    getEvaluaciones(c).then(list => {
-      if (list && list.length) {
-        const { id, ...resto } = list[0] as any;
-        setData(prev => ({ ...prev, ...resto }));
-      }
-    }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deportistas]);
-
   const guardar = async () => {
     if (!data.codigo.trim()) { alert('Ingresa el código del deportista antes de guardar.'); return; }
     setGuardando(true);
@@ -793,7 +778,9 @@ export default function ValoracionPage() {
 
   const cargarDeHistorial = (ev: Evaluacion) => {
     const { id, ...resto } = ev;
-    setData(resto);
+    // Combinar sobre INICIAL para no perder NINGÚN campo: así se recuperan
+    // todos los datos guardados (técnica, táctica, comportamiento, logros…).
+    setData({ ...INICIAL, ...(resto as Partial<Valoracion>) });
     setVerHistorial(false);
   };
 
@@ -845,7 +832,7 @@ export default function ValoracionPage() {
         <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.verde, color: '#fff', cursor: guardando ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, opacity: guardando ? 0.7 : 1 }}>
           <Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}
         </button>
-        <button onClick={() => setVistaGamificada(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+        <button onClick={() => router.push(`/valoracion-dinamica${data.codigo.trim() ? `?cod=${encodeURIComponent(data.codigo.trim())}` : ''}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
           🎮 Vista Padres
         </button>
         <button onClick={() => {

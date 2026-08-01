@@ -413,8 +413,8 @@ export default function PerfilDeportista() {
             {[
               { label: 'PAGOS',       href: `/alumnos/${id}/estado-cuenta`,   mant: false },
               { label: 'ASISTENCIA',  href: `/alumnos/${id}/asistencia`,      mant: false },
-              { label: 'VALORACIÓN',  href: `/valoracion-dinamica?cod=${codigoVal}`, mant: false },
-              { label: 'MENSAJES',    href: '/mantenimiento',                 mant: true  },
+              { label: 'VALORACIÓN',  href: '/mantenimiento',                 mant: true  },
+              { label: 'MENSAJES',    href: `/alumnos/${id}/mensajes`,        mant: false },
             ].filter(b => !esProfesor || !b.mant).map(({ label, href, mant }) => (
               <button key={label} onClick={() => router.push(href)} style={{
                 background: mant ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.11)',

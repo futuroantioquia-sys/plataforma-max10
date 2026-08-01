@@ -11,7 +11,7 @@ import {
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
-import { getDeportistas, countSoportesPendientes } from '@/lib/db';
+import { getDeportistas, countSoportesPendientes, countMensajesNoLeidos } from '@/lib/db';
 
 // ── CARD DE ACCESO RÁPIDO ────────────────────────────────────────
 function AccesoCard({
@@ -202,6 +202,7 @@ function DashboardAdmin() {
   const [pendientesAsign,    setPendientesAsign]    = useState(0);
   const [pendientesSoportes, setPendientesSoportes] = useState(0);
   const [pagosCargados,      setPagosCargados]      = useState(0);
+  const [mensajesNoLeidos,   setMensajesNoLeidos]   = useState(0);
 
   useEffect(() => {
     getDeportistas().then(lista => {
@@ -213,6 +214,8 @@ function DashboardAdmin() {
     }).catch(() => {});
 
     countSoportesPendientes().then(n => setPendientesSoportes(n)).catch(() => {});
+
+    countMensajesNoLeidos().then(n => setMensajesNoLeidos(n)).catch(() => {});
 
     // Contar deportistas con pagos cargados en el Libro Contable (localStorage)
     try {
@@ -241,7 +244,6 @@ function DashboardAdmin() {
         <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" badge={pagosCargados} />
         <AccesoCard titulo="Confirmar Pagos"      icono={Clock}        href="/pagos-pendientes"         descripcion="Soportes enviados por padres"  color="azul" badge={pendientesSoportes} />
         <AccesoCard titulo="Productos"            icono={DollarSign}   href="/productos"                descripcion="Torneos e implementos"         color="azul" />
-        <AccesoCard titulo="Cartera"              icono={BarChart3}    href="/cartera"                  descripcion="Quién debe qué (matrícula, meses, productos)" color="azul" />
       </CategoriaSection>
 
       <div className="divider-fade" />
@@ -261,7 +263,7 @@ function DashboardAdmin() {
       {/* Categoría: Gestión */}
       <CategoriaSection emoji="⚙️" titulo="Gestión" color="teal" delay={400}>
         <AccesoCard titulo="Info Proyectos y Formadores" icono={Shield} href="/usuarios" descripcion="Profes, sedes y proyectos" color="teal" />
-        <AccesoCard titulo="Mensajes"            icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"    color="teal" />
+        <AccesoCard titulo="Mensajes Pendientes"  icono={MessageCircle} href="/mensajes"  descripcion="Mensajes de los calidosos sin leer" color="teal" badge={mensajesNoLeidos} />
       </CategoriaSection>
 
       <div className="divider-fade" />

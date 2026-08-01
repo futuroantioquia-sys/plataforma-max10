@@ -10,6 +10,7 @@ import { BalonCargando } from '@/components/BalonCargando';
 const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
 const SB_HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
+const DEP_ESTADOS_KEY = 'futuro_dep_estados';
 
 type PagoRow = { detalle: string; estado: string };
 type AllPagos = Record<string, PagoRow[]>;
@@ -94,16 +95,22 @@ function mergeMapDe(dep: Deportista, allPagos: AllPagos): Map<string, PagoRow> {
 /* ¿El deportista DEBE ese mes? */
 function debeMes(dep: Deportista, mes: string, allPagos: AllPagos): boolean {
   if (esBecadoDep(dep)) return false;
+  // ── El mes SOLO cuenta si está "cargado" en su estado de cuenta ──
+  // Igual que estado-cuenta (pagosVista): la MATRÍCULA siempre aplica; los
+  // demás meses solo si son >= al mes de afiliación. Un mes anterior a la
+  // afiliación NO está cargado y NO se debe, aunque exista un registro PEND
+  // viejo (de una carga masiva previa a la afiliación).
+  const n = MES_NUM[mes];
+  if (n !== 0 && n < getMesAfil(dep._columnas)) return false;
   const saved = mergeMapDe(dep, allPagos).get(mes);
   if (saved) {
     const est = String(saved.estado ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
-    if (est === 'ELIM') return false;
-    if (est.startsWith('PAG')) return false;
-    if (est === 'PEND') return true;
+    if (est === 'ELIM') return false;        // mes eliminado → no cargado
+    if (est.startsWith('PAG')) return false; // ya pagó
+    if (est === 'PROX') return false;        // mes futuro → aún no se debe
+    if (est === 'PEND') return true;         // pendiente real
   }
-  // Sin registro: debe si el mes aplica (>= mes de afiliación) y no es futuro
-  const n = MES_NUM[mes];
-  if (n !== 0 && n < getMesAfil(dep._columnas)) return false;
+  // Sin registro: debe si el mes aplica y no es futuro
   if (esFuturo(mes)) return false;
   return true;
 }
@@ -119,10 +126,30 @@ export default function CarteraPage() {
   const [cargando, setCargando] = useState(true);
   const [seleccion, setSeleccion] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [depEstados, setDepEstados] = useState<Record<string, string>>({});
+
+  /* Recordar el filtro seleccionado para que, al volver del estado de cuenta
+     de un deportista (botón atrás), la Cartera siga mostrando el mismo mes
+     y no haya que filtrar de nuevo. */
+  useEffect(() => {
+    try {
+      const s = sessionStorage.getItem('cartera_seleccion');
+      if (s) setSeleccion(s);
+      const b = sessionStorage.getItem('cartera_busqueda');
+      if (b) setBusqueda(b);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { sessionStorage.setItem('cartera_seleccion', seleccion); } catch {}
+  }, [seleccion]);
+  useEffect(() => {
+    try { sessionStorage.setItem('cartera_busqueda', busqueda); } catch {}
+  }, [busqueda]);
 
   useEffect(() => {
     (async () => {
       try {
+        try { const raw = localStorage.getItem(DEP_ESTADOS_KEY); if (raw) setDepEstados(JSON.parse(raw)); } catch {}
         const [deps, pagos] = await Promise.all([getDeportistas(), getPagos()]);
         setDeportistas(deps);
         setAllPagos(pagos as any);
@@ -150,10 +177,19 @@ export default function CarteraPage() {
       const ids = new Set(otrosPend.filter(o => (o.descripcion ?? '').trim() === seleccion.trim()).map(o => o.deportista_id));
       lista = deportistas.filter(d => ids.has(d.id));
     }
+    // Solo ACTIVOS: excluir retirados y en pausa.
+    // Mismo criterio que Consolidado de Afiliados: la columna ESTADO del deportista.
+    lista = lista.filter(d => {
+      const e = getCol(d, /^estado/i).toLowerCase();
+      if (/retirad/.test(e) || /paus/.test(e) || /retiro/.test(e)) return false;
+      const manual = depEstados[d.id];
+      if (manual === 'RETIRADO' || manual === 'PAUSO') return false;
+      return true;
+    });
     const q = busqueda.trim().toLowerCase();
     if (q) lista = lista.filter(d => d._nombre.toLowerCase().includes(q) || codigoDe(d).toLowerCase().includes(q));
     return lista.sort((a, b) => codigoDe(a).localeCompare(codigoDe(b), 'es', { numeric: true }));
-  }, [seleccion, esMes, deportistas, allPagos, otrosPend, busqueda]);
+  }, [seleccion, esMes, deportistas, allPagos, otrosPend, busqueda, depEstados]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -240,6 +276,7 @@ export default function CarteraPage() {
                         <th className="px-3 py-2.5 text-left">Nombre</th>
                         <th className="px-3 py-2.5 text-left">Programa</th>
                         <th className="px-3 py-2.5 text-left">Proyecto</th>
+                        <th className="px-3 py-2.5 text-center">Estado</th>
                         <th className="px-3 py-2.5 text-center">Cuenta</th>
                       </tr>
                     </thead>
@@ -251,6 +288,9 @@ export default function CarteraPage() {
                           <td className="px-3 py-2.5 font-semibold text-gray-800 whitespace-nowrap">{d._nombre}</td>
                           <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{getCol(d, /^program/i) || '—'}</td>
                           <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{getCol(d, /^proy/i) || '—'}</td>
+                          <td className="px-3 py-2.5 text-center">
+                            <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full">{depEstados[d.id] ?? 'ACTIVO'}</span>
+                          </td>
                           <td className="px-3 py-2.5 text-center">
                             <button onClick={() => router.push(`/alumnos/${d.id}/estado-cuenta?edit=1`)}
                               className="bg-[#16a34a] text-white text-[10px] font-black px-3 py-1.5 rounded-lg hover:bg-green-700 transition">Ver</button>
