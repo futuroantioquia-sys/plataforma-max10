@@ -1023,6 +1023,30 @@ function AlumnosPageContent() {
     setDeportistas([]); setFotos({}); setPrograma(null); setProy(null);
   }
 
+  // Copia de seguridad de todos los afiliados en CSV (Excel)
+  function exportarExcel() {
+    if (!deportistas.length) return;
+    const colSet = new Set<string>();
+    deportistas.forEach(d => Object.keys(d._columnas ?? {}).forEach(k => colSet.add(k)));
+    const cols = Array.from(colSet);
+    const esc = (v: unknown) => {
+      const s = String(v ?? '');
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = ['ID', 'NOMBRE', ...cols];
+    const rows = deportistas.map(d => [
+      esc(d.id), esc(d._nombre ?? ''),
+      ...cols.map(c => esc(d._columnas?.[c] ?? '')),
+    ].join(','));
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    a.href = url; a.download = `BACKUP_AFILIADOS_${fecha}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function handlePosicion(depId: string, val: string) {
     setDeportistas(prev => {
       const next = prev.map(d =>
