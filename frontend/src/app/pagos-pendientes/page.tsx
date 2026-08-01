@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle, XCircle, Eye, Clock, AlertCircle } from 'lucide-react';
-import { getSoportesPendientes, confirmarSoportePago, eliminarSoportePago, getDeportistas } from '@/lib/db';
+import { getSoportesPendientes, confirmarSoportePago, eliminarSoportePago, getDeportistas, getPagos } from '@/lib/db';
 import type { SoportePago, Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -54,10 +54,30 @@ export default function PagosPendientesPage() {
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [pendientes, deportistas] = await Promise.all([
+      const [pendientes, deportistas, pagos] = await Promise.all([
         getSoportesPendientes(),
         getDeportistas(),
+        getPagos(),
       ]);
+
+      const norm = (s: string) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+
+      // Meses ya pagados (verificados) de un deportista — busca por id y por código
+      const mesesPagados = (depId: string, cod: string): Set<string> => {
+        const set = new Set<string>();
+        const keys = new Set<string>([depId, cod]);
+        const digits = String(cod ?? '').replace(/\D/g, '');
+        if (digits) { keys.add(digits); keys.add(String(parseInt(digits, 10))); }
+        keys.forEach(k => {
+          const rows = (pagos as any)[k];
+          if (Array.isArray(rows)) {
+            rows.forEach((r: any) => {
+              if (norm(r.estado).startsWith('PAG')) set.add(norm(r.detalle));
+            });
+          }
+        });
+        return set;
+      };
 
       // Enriquecer cada soporte con info del deportista
       const enriquecidos: SoporteEnriquecido[] = pendientes.map(s => {
@@ -72,7 +92,20 @@ export default function PagosPendientesPage() {
         };
       });
 
-      setSoportes(enriquecidos);
+      // Ocultar los soportes cuyos meses YA quedaron pagados (verificados en el estado de cuenta)
+      const visibles = enriquecidos.filter(s => {
+        if (!s.meses || s.meses.length === 0) return true;
+        const pagados = mesesPagados(s.depId, s.depCodigo);
+        if (pagados.size === 0) return true;
+        const todosPagados = s.meses.every(m => {
+          const nm = norm(m);
+          for (const p of pagados) { if (p === nm || p.startsWith(nm) || nm.startsWith(p)) return true; }
+          return false;
+        });
+        return !todosPagados;
+      });
+
+      setSoportes(visibles);
     } catch (e) {
       console.error('[pagos-pendientes] cargar:', e);
     }
@@ -254,12 +287,6 @@ export default function PagosPendientesPage() {
                     {/* Acciones */}
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-1.5 justify-center">
-                        <button
-                          onClick={() => setAccion({ idx, tipo: 'confirmar' })}
-                          title="Confirmar pago"
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white font-black text-[11px] transition whitespace-nowrap">
-                          <CheckCircle className="w-3.5 h-3.5"/> OK
-                        </button>
                         <button
                           onClick={() => setAccion({ idx, tipo: 'rechazar' })}
                           title="Rechazar soporte"

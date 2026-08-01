@@ -719,8 +719,8 @@ function EstadoCuentaInner() {
                     ? [
                         { label: 'PAGOS',  href: null,                               active: true  },
                         { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false },
-                        { label: 'MENS.',  href: `/alumnos/${id}/mensajes`,          active: false },
-                        { label: 'VAL.',   href: `/alumnos/${id}/valoracion`,        active: false },
+                        { label: 'MENS.',  href: `/mantenimiento`,                    active: false },
+                        { label: 'VAL.',   href: `/alumnos/${id}/seguimiento`,       active: false },
                       ]
                     : [
                         { label: 'PAGOS',  href: null,                               active: true  },

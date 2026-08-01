@@ -4,11 +4,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 const RUTAS_PUBLICAS = ['/login', '/afiliacion', '/api'];
 
 // Rutas permitidas para el rol profesor — asistencia + portal propio + vista alumnos
-const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/sesiones', '/postpartido', '/mis-proyectos', '/alumnos'];
+const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/valoracion-dinamica', '/sesiones', '/postpartido', '/mis-proyectos', '/alumnos'];
 
 // Rutas permitidas para deportista (calidoso) — solo su perfil y secciones propias
 // EXCLUYE /pagos (muestra todos los deportistas) y /dashboard (redirige desde allí)
-const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/evaluaciones', '/afiliacion', '/calendario', '/mantenimiento', '/mis-pagos'];
+const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/evaluaciones', '/valoracion-dinamica', '/afiliacion', '/calendario', '/mantenimiento', '/mis-pagos'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

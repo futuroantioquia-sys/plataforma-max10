@@ -222,6 +222,167 @@ function RadarChart({ eval: ev }: { eval: Evaluacion }) {
   );
 }
 
+/* ── VALORACIÓN DINÁMICA (versión colorida para el padre/familia) ─ */
+function fraseNivel(p: number): string {
+  if (p >= 90) return '¡Crack! 🌟';
+  if (p >= 75) return '¡Muy bien! 🔥';
+  if (p >= 60) return 'En buen camino 👏';
+  if (p >= 40) return 'Progresando 💪';
+  if (p > 0)   return 'Empezando 🌱';
+  return 'Por evaluar';
+}
+
+function ValoracionDinamica({ ev }: { ev: Evaluacion | null }) {
+  const [mostrar, setMostrar]   = useState(false);
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  useEffect(() => { const t = setTimeout(() => setMostrar(true), 150); return () => clearTimeout(t); }, [ev]);
+  const esDemo = !ev;
+  const toggle = (k: string) => setAbiertos(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+
+  type Sk = { label: string; emoji: string; nivel: string; desc: string; demo: number };
+  const CATS: { titulo: string; emoji: string; color: string; skills: Sk[] }[] = [
+    { titulo: 'Físico', emoji: '💪', color: '#dc2626', skills: [
+      { label: 'Fuerza',      emoji: '💪', nivel: ev?.fuerzaNivel ?? '',      desc: ev?.fuerzaDesc ?? '',      demo: 90 },
+      { label: 'Velocidad',   emoji: '🏃', nivel: ev?.velocidadNivel ?? '',   desc: ev?.velocidadDesc ?? '',   demo: 85 },
+      { label: 'Resistencia', emoji: '🔋', nivel: ev?.resistenciaNivel ?? '', desc: ev?.resistenciaDesc ?? '', demo: 80 },
+    ] },
+    { titulo: 'Técnico', emoji: '🎯', color: '#2563eb', skills: [
+      { label: 'Control de Balón', emoji: '⚽', nivel: ev?.controlNivel ?? '',  desc: ev?.controlDesc ?? '',  demo: 75 },
+      { label: 'Pase',             emoji: '👟', nivel: ev?.paseNivel ?? '',     desc: ev?.paseDesc ?? '',     demo: 82 },
+      { label: 'Remate',           emoji: '🥅', nivel: ev?.remataNivel ?? '',   desc: ev?.remataDesc ?? '',   demo: 70 },
+      { label: 'Conducción',       emoji: '🧭', nivel: ev?.conductaNivel ?? '', desc: ev?.conductaDesc ?? '', demo: 78 },
+    ] },
+    { titulo: 'Táctico', emoji: '🧠', color: '#7c3aed', skills: [
+      { label: 'Posicionamiento', emoji: '📍', nivel: ev?.posicionNivel ?? '', desc: ev?.posicionDesc ?? '', demo: 72 },
+      { label: 'Visión de Juego', emoji: '👁️', nivel: ev?.visionNivel ?? '',   desc: ev?.visionDesc ?? '',   demo: 88 },
+      { label: 'Defensa',         emoji: '🛡️', nivel: ev?.defensaNivel ?? '',  desc: ev?.defensaDesc ?? '',  demo: 76 },
+    ] },
+    { titulo: 'Actitudinal', emoji: '❤️', color: '#0891b2', skills: [
+      { label: 'Actitud',           emoji: '🔥', nivel: ev?.actitudNivel ?? '',    desc: ev?.actitudDesc ?? '',    demo: 95 },
+      { label: 'Disciplina',        emoji: '🎖️', nivel: ev?.disciplinaNivel ?? '', desc: ev?.disciplinaDesc ?? '', demo: 90 },
+      { label: 'Trabajo en Equipo', emoji: '🤝', nivel: ev?.trabajoNivel ?? '',    desc: ev?.trabajoDesc ?? '',    demo: 92 },
+    ] },
+  ];
+
+  const pctSkill = (sk: Sk) => esDemo ? sk.demo : nivelPct(nivelNum(sk.nivel));
+  const todas    = CATS.flatMap(c => c.skills.map(pctSkill));
+  const conDato  = todas.filter(p => p > 0);
+  const calPct   = nivelPct(nivelNum(ev?.calificacion ?? ''));
+  const promedio = esDemo
+    ? Math.round(todas.reduce((a, b) => a + b, 0) / todas.length)
+    : calPct > 0
+      ? calPct
+      : conDato.length ? Math.round(conDato.reduce((a, b) => a + b, 0) / conDato.length) : 0;
+
+  const CIRC = 2 * Math.PI * 52;
+
+  return (
+    <div className="rounded-3xl overflow-hidden shadow-lg border border-white/10"
+      style={{ background: 'linear-gradient(160deg,#0b1220 0%,#111c33 55%,#0a2e1a 100%)' }}>
+
+      {/* Encabezado */}
+      <div className="px-5 pt-5 pb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">⚡</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-black text-lg leading-none tracking-wide">Valoración Dinámica</p>
+            <p className="text-white/50 text-[11px] mt-1">El progreso de tu deportista, en vivo</p>
+          </div>
+          {esDemo && (
+            <span className="bg-amber-400 text-black text-[9px] font-black px-2 py-1 rounded-full uppercase tracking-wide flex-shrink-0">Ejemplo</span>
+          )}
+        </div>
+
+        {/* Hero puntaje global */}
+        <div className="mt-4 flex items-center gap-4">
+          <div className="relative flex-shrink-0">
+            <svg viewBox="0 0 120 120" className="w-24 h-24 -rotate-90">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="12"/>
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#22c55e" strokeWidth="12" strokeLinecap="round"
+                strokeDasharray={CIRC}
+                strokeDashoffset={CIRC * (1 - (mostrar ? promedio : 0) / 100)}
+                style={{ transition: 'stroke-dashoffset 1.2s ease-out' }}/>
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-white font-black text-2xl leading-none">{mostrar ? promedio : 0}%</span>
+              <span className="text-white/50 text-[8px] font-bold tracking-wider">GENERAL</span>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-3xl leading-none">🏅</p>
+            <p className="text-white font-black text-lg leading-tight mt-1">{fraseNivel(promedio)}</p>
+            <p className="text-white/50 text-[11px] mt-1 leading-snug">
+              {esDemo
+                ? 'Vista de ejemplo. Cuando el entrenador registre la valoración, aquí verás los datos reales.'
+                : 'Según la valoración deportiva del entrenador. Toca cada habilidad para ver el detalle.'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Categorías con todas las habilidades del formato */}
+      <div className="bg-black/20 px-4 py-4 space-y-5">
+        {CATS.map(cat => {
+          const nums = cat.skills.map(pctSkill).filter(p => p > 0);
+          const prom = nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0;
+          return (
+            <div key={cat.titulo}>
+              {/* Encabezado de categoría */}
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                  style={{ background: `${cat.color}33`, border: `1.5px solid ${cat.color}` }}>{cat.emoji}</div>
+                <span className="text-white font-black text-sm uppercase tracking-wide flex-1">{cat.titulo}</span>
+                <span className="text-[11px] font-black text-white px-2 py-0.5 rounded-full"
+                  style={{ background: `${cat.color}44` }}>{prom > 0 ? prom + '%' : '—'}</span>
+              </div>
+
+              {/* Habilidades */}
+              <div className="space-y-2.5">
+                {cat.skills.map((sk, i) => {
+                  const pct  = pctSkill(sk);
+                  const k    = cat.titulo + '-' + sk.label;
+                  const open = abiertos.has(k);
+                  return (
+                    <div key={sk.label}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+                          style={{ background: `${cat.color}22`, border: `1.5px solid ${cat.color}55` }}>{sk.emoji}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <button onClick={() => sk.desc && toggle(k)} className="text-white font-bold text-[13px] text-left flex items-center gap-1">
+                              {sk.label}
+                              {sk.desc ? <span className="text-white/30 text-[9px]">{open ? '▲' : '▼'}</span> : null}
+                            </button>
+                            <span className="font-black text-[13px] flex-shrink-0" style={{ color: cat.color }}>
+                              {pct > 0 ? `${mostrar ? pct : 0}%` : 'Por evaluar'}
+                            </span>
+                          </div>
+                          <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+                            <div className="h-full rounded-full"
+                              style={{
+                                width: `${mostrar ? pct : 0}%`,
+                                background: `linear-gradient(90deg, ${cat.color}, ${cat.color}bb)`,
+                                transition: `width 0.9s ease-out ${i * 0.08}s`,
+                              }}/>
+                          </div>
+                          <p className="text-white/40 text-[10px] font-semibold mt-0.5">{fraseNivel(pct)}</p>
+                          {open && sk.desc && (
+                            <p className="text-white/55 text-[11px] leading-snug mt-1.5 border-t border-white/10 pt-1.5">{sk.desc}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ── Página principal ────────────────────────────────────────── */
 export default function SeguimientoPage() {
   const router = useRouter();
@@ -327,16 +488,8 @@ export default function SeguimientoPage() {
 
       <main className="max-w-xl mx-auto px-3 py-4 space-y-4">
 
-        {/* Sin evaluaciones */}
-        {!ev && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-green-50 flex items-center justify-center mx-auto mb-4">
-              <Trophy className="w-8 h-8 text-[#16a34a]"/>
-            </div>
-            <p className="font-black text-[#111827] text-base mb-1">Sin evaluaciones aún</p>
-            <p className="text-gray-400 text-sm">El entrenador aún no ha registrado una valoración deportiva.</p>
-          </div>
-        )}
+        {/* ── VALORACIÓN DINÁMICA (vista colorida para el padre) ── */}
+        <ValoracionDinamica ev={ev} />
 
         {ev && (
           <>
@@ -414,48 +567,6 @@ export default function SeguimientoPage() {
 
             {/* ── Radar chart ── */}
             <RadarChart eval={ev}/>
-
-            {/* ── Categorías de habilidades ── */}
-            <Categoria
-              icon={Zap} titulo="Físico" color="#dc2626"
-              skills={[
-                { label: 'Fuerza',      nivelStr: ev.fuerzaNivel,      desc: ev.fuerzaDesc      },
-                { label: 'Velocidad',   nivelStr: ev.velocidadNivel,   desc: ev.velocidadDesc   },
-                { label: 'Resistencia', nivelStr: ev.resistenciaNivel, desc: ev.resistenciaDesc },
-              ]}
-              openSet={openSkills} onToggle={toggleSkill}
-            />
-
-            <Categoria
-              icon={Target} titulo="Técnico" color="#2563eb"
-              skills={[
-                { label: 'Control de Balón', nivelStr: ev.controlNivel,  desc: ev.controlDesc  },
-                { label: 'Pase',             nivelStr: ev.paseNivel,     desc: ev.paseDesc     },
-                { label: 'Remate',           nivelStr: ev.remataNivel,   desc: ev.remataDesc   },
-                { label: 'Conducción',       nivelStr: ev.conductaNivel, desc: ev.conductaDesc },
-              ]}
-              openSet={openSkills} onToggle={toggleSkill}
-            />
-
-            <Categoria
-              icon={Brain} titulo="Táctico" color="#7c3aed"
-              skills={[
-                { label: 'Posicionamiento', nivelStr: ev.posicionNivel, desc: ev.posicionDesc },
-                { label: 'Visión de Juego', nivelStr: ev.visionNivel,   desc: ev.visionDesc   },
-                { label: 'Defensa',         nivelStr: ev.defensaNivel,  desc: ev.defensaDesc  },
-              ]}
-              openSet={openSkills} onToggle={toggleSkill}
-            />
-
-            <Categoria
-              icon={Heart} titulo="Actitudinal" color="#0891b2"
-              skills={[
-                { label: 'Actitud',     nivelStr: ev.actitudNivel,    desc: ev.actitudDesc    },
-                { label: 'Disciplina',  nivelStr: ev.disciplinaNivel, desc: ev.disciplinaDesc },
-                { label: 'Trabajo',     nivelStr: ev.trabajoNivel,    desc: ev.trabajoDesc    },
-              ]}
-              openSet={openSkills} onToggle={toggleSkill}
-            />
 
             {/* ── Observaciones ── */}
             {ev.observaciones?.trim() && (

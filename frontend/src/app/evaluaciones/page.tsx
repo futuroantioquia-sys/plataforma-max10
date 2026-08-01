@@ -757,6 +757,21 @@ export default function ValoracionPage() {
     setData(p => ({ ...p, [k]: v, ...extra }));
   };
 
+  // Al abrir con ?cod=CODIGO desde la ficha: precarga el código y CARGA la última
+  // valoración guardada de ese deportista (para que el profe no vea el formulario en blanco).
+  useEffect(() => {
+    const c = (() => { try { return new URLSearchParams(window.location.search).get('cod'); } catch { return null; } })();
+    if (!c || data.codigo) return;
+    set('codigo', c);
+    getEvaluaciones(c).then(list => {
+      if (list && list.length) {
+        const { id, ...resto } = list[0] as any;
+        setData(prev => ({ ...prev, ...resto }));
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deportistas]);
+
   const guardar = async () => {
     if (!data.codigo.trim()) { alert('Ingresa el código del deportista antes de guardar.'); return; }
     setGuardando(true);

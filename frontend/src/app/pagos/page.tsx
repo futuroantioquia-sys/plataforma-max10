@@ -104,12 +104,13 @@ function PagosInner() {
     router.replace(qs ? `/pagos?${qs}` : '/pagos', { scroll: false });
   }, [router]);
   const [cargando,         setCargando]         = useState(true);
+  const [pagosListos,      setPagosListos]      = useState(false);
   const [depEstados,       setDepEstados]       = useState<Record<string, DepEstado>>({});
   const [mostrarRetirados, setMostrarRetirados] = useState(false);
 
   useEffect(() => {
     getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
-    getPagos().then(p => { if (Object.keys(p).length) setAllPagos(p as any); });
+    getPagos().then(p => { if (Object.keys(p).length) setAllPagos(p as any); setPagosListos(true); }).catch(() => setPagosListos(true));
     try {
       const raw = localStorage.getItem(DEP_ESTADOS_KEY);
       if (raw) setDepEstados(JSON.parse(raw));
@@ -333,7 +334,7 @@ function PagosInner() {
         </div>
 
         {/* LISTA DE DEPORTISTAS */}
-        {cargando ? (
+        {cargando || !pagosListos ? (
           <BalonCargando />
         ) : deportistas.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">

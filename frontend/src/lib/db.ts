@@ -783,6 +783,21 @@ export async function saveFoto(depId: string, base64: string): Promise<void> {
   }
 }
 
+/** Devuelve el conjunto de deportista_id que tienen un TORNEO sin pagar (estado PEND). */
+export async function getDeportistasDebenTorneo(): Promise<Set<string>> {
+  try {
+    const { data, error } = await supabase()
+      .from('otros_pagos')
+      .select('deportista_id')
+      .eq('tipo', 'torneo')
+      .eq('estado', 'PEND');
+    if (error) throw error;
+    return new Set((data ?? []).map((r: any) => r.deportista_id).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
 // ── ASISTENCIA ────────────────────────────────────────────────
 
 // [proyecto][anio_mes][deportistaId][fecha] = Estado
@@ -1704,6 +1719,25 @@ export async function saveEvaluacion(data: Omit<Evaluacion, 'id'>): Promise<void
       actitud_nivel: data.actitudNivel, actitud_desc: data.actitudDesc,
       disciplina_nivel: data.disciplinaNivel, disciplina_desc: data.disciplinaDesc,
       trabajo_nivel: data.trabajoNivel, trabajo_desc: data.trabajoDesc,
+      // ── Fundamentos y aspectos adicionales del formato completo ──
+      dribling_nivel: (data as any).driblingNivel ?? '',         dribling_desc: (data as any).driblingDesc ?? '',
+      cabeceo_nivel: (data as any).cabeceoNivel ?? '',           cabeceo_desc: (data as any).cabeceoDesc ?? '',
+      quite_nivel: (data as any).quiteNivel ?? '',               quite_desc: (data as any).quiteDesc ?? '',
+      proteccion_nivel: (data as any).proteccionNivel ?? '',     proteccion_desc: (data as any).proteccionDesc ?? '',
+      amplitud_nivel: (data as any).amplitudNivel ?? '',         amplitud_desc: (data as any).amplitudDesc ?? '',
+      transicion_nivel: (data as any).transicionNivel ?? '',     transicion_desc: (data as any).transicionDesc ?? '',
+      superioridad_nivel: (data as any).superioridadNivel ?? '', superioridad_desc: (data as any).superioridadDesc ?? '',
+      basculacion_nivel: (data as any).basculacionNivel ?? '',   basculacion_desc: (data as any).basculacionDesc ?? '',
+      identidad_nivel: (data as any).identidadNivel ?? '',       identidad_desc: (data as any).identidadDesc ?? '',
+      bloque_nivel: (data as any).bloqueNivel ?? '',             bloque_desc: (data as any).bloqueDesc ?? '',
+      clima_nivel: (data as any).climaNivel ?? '',               clima_desc: (data as any).climaDesc ?? '',
+      gestion_comp_nivel: (data as any).gestionCompNivel ?? '',  gestion_comp_desc: (data as any).gestionCompDesc ?? '',
+      responsabilidad: (data as any).responsabilidad ?? '',      puntualidad: (data as any).puntualidad ?? '',
+      disciplina_comp: (data as any).disciplinaComp ?? '',       respeto: (data as any).respeto ?? '',
+      tolerancia: (data as any).tolerancia ?? '',                companerismo: (data as any).companerismo ?? '',
+      liderazgo: (data as any).liderazgo ?? '',                  trabajo_equipo_comp: (data as any).trabajoEquipoComp ?? '',
+      sentido_pertenencia: (data as any).sentidoPertenencia ?? '',
+      logros_trimestre: (data as any).logrosTrimestre ?? '',     objetivos_trimestre: (data as any).objetivosTrimestre ?? '',
       observaciones: data.observaciones,
     };
     const { error } = await supabase().from('evaluaciones').insert(row);

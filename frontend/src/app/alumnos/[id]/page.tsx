@@ -413,7 +413,7 @@ export default function PerfilDeportista() {
             {[
               { label: 'PAGOS',       href: `/alumnos/${id}/estado-cuenta`,   mant: false },
               { label: 'ASISTENCIA',  href: `/alumnos/${id}/asistencia`,      mant: false },
-              { label: 'VALORACIÓN',  href: '/mantenimiento',                  mant: true  },
+              { label: 'VALORACIÓN',  href: `/valoracion-dinamica?cod=${codigoVal}`, mant: false },
               { label: 'MENSAJES',    href: '/mantenimiento',                 mant: true  },
             ].filter(b => !esProfesor || !b.mant).map(({ label, href, mant }) => (
               <button key={label} onClick={() => router.push(href)} style={{
@@ -741,12 +741,13 @@ export default function PerfilDeportista() {
           </div>
 
           {/* Botones de acceso */}
-          <div className={`grid gap-2 mt-4 ${esProfesor ? 'grid-cols-2' : 'grid-cols-4'}`}>
+          <div className="grid gap-2 mt-4 grid-cols-2">
             {[
-              { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta`, profe: true  },
-              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`,    profe: true  },
-              { label: 'INFORMES',   href: '/evaluaciones',                 profe: false },
-              { label: 'MENSAJES',   href: '/mensajes',                     profe: false },
+              { label: 'PAGOS',          href: `/alumnos/${id}/estado-cuenta`,          profe: true  },
+              { label: 'ASISTENCIA',     href: `/alumnos/${id}/asistencia`,             profe: true  },
+              { label: 'VAL. DEPORTIVA', href: `/evaluaciones?cod=${codigoVal}`,        profe: true  },
+              { label: 'VAL. DINÁMICA',  href: `/valoracion-dinamica?cod=${codigoVal}`, profe: true  },
+              { label: 'MENSAJES',       href: '/mensajes',                             profe: false },
             ].filter(b => !esProfesor || b.profe).map(({ label, href }) => (
               <button key={label} onClick={() => router.push(href)}
                 className="bg-white/10 hover:bg-white/20 border border-white/20 active:bg-white/30 transition rounded-xl py-2.5 text-white font-black text-[10px] tracking-wide">

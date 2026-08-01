@@ -240,7 +240,27 @@ export default function ProductosPage() {
       // Mapa código (string, sin ceros iniciales) → deportista
       const porCodigo = new Map(deportistas.filter(d => d.codigo).map(d => [d.codigo, d]));
 
-      let ok = 0; let err = 0;
+      // ⛔ ANTI-DUPLICADOS: traer las cargas que YA existen en otros_pagos.
+      // Nunca se le carga a un deportista un torneo/producto que ya tiene.
+      const yaExiste = new Set<string>();
+      const claveCarga = (depId: string, descripcion: string, tipoP: string) =>
+        `${depId}||${String(descripcion ?? '').trim().toLowerCase()}||${tipoP}`;
+      let fromOP = 0;
+      while (true) {
+        const resOP = await fetch(
+          `${SUPABASE_URL}/rest/v1/otros_pagos?select=deportista_id,descripcion,tipo`,
+          { headers: { ...HEADERS, 'Range-Unit': 'items', 'Range': `${fromOP}-${fromOP + PAGE - 1}` } }
+        );
+        const pageOP = await resOP.json();
+        if (!Array.isArray(pageOP)) break;
+        for (const row of pageOP as any[]) {
+          yaExiste.add(claveCarga(row.deportista_id, row.descripcion, row.tipo));
+        }
+        if (pageOP.length < PAGE) break;
+        fromOP += PAGE;
+      }
+
+      let ok = 0; let err = 0; let omitidos = 0;
       const filasActualizadas = [...masivaFilas];
 
       for (let i = 0; i < filasActualizadas.length; i++) {
@@ -259,24 +279,60 @@ export default function ProductosPage() {
           ? { deportista_id: dep.id, producto_id: null, descripcion: fila.torneo || 'Torneo', tipo: 'torneo', valor: fila.valorPropio ?? 0, estado: 'PEND' }
           : { deportista_id: dep.id, producto_id: prod!.id, descripcion: prod!.descripcion, tipo: prod!.tipo, valor: prod!.valor, estado: 'PEND' };
 
+        // Si el deportista YA tiene este torneo/producto, se omite (jamás se duplica)
+        const clave = claveCarga(dep.id, body.descripcion, body.tipo);
+        if (yaExiste.has(clave)) {
+          filasActualizadas[i] = { ...fila, ok: true, msg: `${dep.nombre || ''} · ya lo tenía` };
+          omitidos++;
+          continue;
+        }
+
         const r = await fetch(`${SUPABASE_URL}/rest/v1/otros_pagos`, {
           method: 'POST', headers: HEADERS, body: JSON.stringify(body),
         });
 
         if (r.ok || r.status === 201) {
+          yaExiste.add(clave);
           filasActualizadas[i] = { ...fila, ok: true, msg: dep.nombre || '✓' };
           ok++;
+        } else if (r.status === 409) {
+          // La base de datos bloqueó un duplicado → se cuenta como omitido
+          yaExiste.add(clave);
+          filasActualizadas[i] = { ...fila, ok: true, msg: `${dep.nombre || ''} · ya lo tenía` };
+          omitidos++;
         } else {
-          const txt = await r.text().catch(() => r.status.toString());
           filasActualizadas[i] = { ...fila, ok: false, msg: `Error ${r.status}` };
           err++;
         }
       }
 
       setMasivaFilas(filasActualizadas);
-      setMasivaResumen(`✅ ${ok} cargados · ❌ ${err} errores`);
+      setMasivaResumen(`✅ ${ok} cargados · ⏭ ${omitidos} ya existían · ❌ ${err} errores`);
     } catch (e: any) {
       setMasivaResumen('❌ ' + (e.message || 'Error desconocido'));
+    } finally {
+      setMasivaSubiendo(false);
+    }
+  }
+
+  // ── Eliminar todas las cargas de un producto (para volver a subir limpio) ──
+  async function eliminarCargasProducto() {
+    const prod = productos.find(p => p.id === masivaProd);
+    if (!prod) return;
+    if (!confirm(`¿Eliminar TODAS las cargas de "${prod.descripcion}" de los estados de cuenta de los deportistas?\n\nNO borra el producto del catálogo. Luego podrás volver a subir el Excel.`)) return;
+    setMasivaSubiendo(true); setMasivaResumen('');
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/otros_pagos?producto_id=eq.${prod.id}`, {
+        method: 'DELETE', headers: HEADERS,
+      });
+      if (r.ok || r.status === 204 || r.status === 200) {
+        setMasivaFilas([]);
+        setMasivaResumen(`🗑 Cargas de "${prod.descripcion}" eliminadas. Ya puedes volver a subir el Excel.`);
+      } else {
+        setMasivaResumen(`❌ No se pudieron eliminar (Error ${r.status}).`);
+      }
+    } catch (e: any) {
+      setMasivaResumen('❌ ' + (e.message || 'Error'));
     } finally {
       setMasivaSubiendo(false);
     }
@@ -522,6 +578,17 @@ export default function ProductosPage() {
                       </option>
                     ))}
                   </select>
+
+                  {/* Eliminar cargas ya asignadas de este producto (para volver a subir limpio) */}
+                  {masivaProd && (
+                    <button
+                      type="button"
+                      onClick={eliminarCargasProducto}
+                      disabled={masivaSubiendo}
+                      className="mt-2 w-full py-2.5 rounded-xl border-2 border-red-200 text-red-600 font-black text-[11px] uppercase tracking-wide hover:bg-red-50 transition disabled:opacity-40 flex items-center justify-center gap-1.5">
+                      🗑 Eliminar cargas de este producto y volver a subir
+                    </button>
+                  )}
                 </div>
               )}
 
