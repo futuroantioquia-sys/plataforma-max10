@@ -543,7 +543,7 @@ export default function PerfilDeportista() {
                 letterSpacing: '0.1em', textTransform: 'uppercase',
                 textAlign: 'center', margin: 0, lineHeight: 1.6,
               }}>
-                SUBE TU FOTO CON UNIFORME Y FONDO BLANCO
+                SUBE TU FOTO CON UNIFORME
               </p>
             </button>
           ))}
