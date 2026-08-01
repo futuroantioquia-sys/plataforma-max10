@@ -605,6 +605,7 @@ function DashboardProyecto({
     {                  key:'estado',     label:'ESTADO',        minW:W_ESTADO      },
     ...(hayAfil   ? [{ key:'afiliacion', label:'AFILIACIÓN',   minW:W_AFIL        }] : []),
     ...(hasCodigo ? [{ key:'codigo',     label:'CÓDIGO',        minW:W_COD         }] : []),
+    {                  key:'foto',       label:'FOTO',          minW:52, center:true },
     {                  key:'nombre',     label:'DEPORTISTA',    minW:200           },
     ...(hayAnio   ? [{ key:'anio',       label:'AÑO',           minW:60, center:true }] : []),
     ...(hasMes    ? [{ key:'mes',        label:'MES',           minW:90            }] : []),
@@ -660,6 +661,14 @@ function DashboardProyecto({
           <button onClick={() => setBusqueda('')} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
         )}
         <span className="text-xs text-gray-400 font-bold flex-shrink-0">{filtrada.length}/{lista.length}</span>
+        {/* Descargar PDF — solo administración */}
+        {!esProfe && (
+          <button onClick={descargar} disabled={descargando}
+            title="Descargar este cuadro en PDF"
+            className="flex items-center gap-1.5 bg-[#dc2626] text-white px-3 py-1.5 rounded-lg text-xs font-black hover:bg-red-700 transition disabled:opacity-50 flex-shrink-0 whitespace-nowrap">
+            {descargando ? 'Generando…' : '⬇ Descargar PDF'}
+          </button>
+        )}
       </div>
 
       {/* ── Vista tarjetas ── */}
@@ -759,6 +768,16 @@ function DashboardProyecto({
 
                       {cols.map(c => {
                         const v = val(dep, c.key);
+                        // FOTO — miniatura para ver quién ya subió su foto
+                        if (c.key === 'foto') return (
+                          <td key={c.key} className="border border-white px-1 py-1 text-center" style={{ verticalAlign: 'middle' }}>
+                            <div style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden', margin: '0 auto', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {fotos[dep.id]
+                                ? <img src={fotos[dep.id]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                : <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 700 }}>—</span>}
+                            </div>
+                          </td>
+                        );
                         // CÓDIGO — sticky + fondo por tipo de afiliación
                         if (c.key === 'codigo') return (
                           <td key={c.key}
@@ -1002,24 +1021,6 @@ function AlumnosPageContent() {
     if (!confirm('¿Eliminar todos los deportistas?')) return;
     ['futuro_deportistas','futuro_fotos_deportistas'].forEach(k => localStorage.removeItem(k));
     setDeportistas([]); setFotos({}); setPrograma(null); setProy(null);
-  }
-
-  // ── Exportar todos los deportistas a Excel (CSV con BOM) ──
-  function exportarExcel() {
-    if (!deportistas.length) return;
-    const colSet = new Set<string>();
-    deportistas.forEach(d => Object.keys(d._columnas ?? {}).forEach(k => colSet.add(k)));
-    const cols = Array.from(colSet);
-    const esc = (v: unknown) => { const s = String(v ?? ''); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const headers = ['ID', 'NOMBRE', ...cols];
-    const rows = deportistas.map(d => [esc(d.id), esc(d._nombre ?? ''), ...cols.map(c => esc(d._columnas?.[c] ?? ''))].join(','));
-    const csv = [headers.join(','), ...rows].join('\r\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    a.href = url; a.download = `BACKUP_AFILIADOS_${fecha}.csv`; a.click();
-    URL.revokeObjectURL(url);
   }
 
   function handlePosicion(depId: string, val: string) {

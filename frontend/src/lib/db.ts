@@ -1087,9 +1087,9 @@ export async function deleteAsistenciaFecha(
 
 // ── DOCUMENTOS DEPORTISTA ────────────────────────────────────
 // Tabla: documentos_deportista (deportista_id, tipo, nombre, datos, fecha)
-// PK: (deportista_id, tipo) — tipos: 'ti' | 'rc' | 'eps'
+// PK: (deportista_id, tipo) — tipos: 'ti' | 'rc' | 'eps' | 'notas'
 
-export type DocTipo = 'ti' | 'rc' | 'eps';
+export type DocTipo = 'ti' | 'rc' | 'eps' | 'notas';
 export interface DocFile { nombre: string; datos: string; fecha: string; }
 export type DocsDeportista = Partial<Record<DocTipo, DocFile>>;
 

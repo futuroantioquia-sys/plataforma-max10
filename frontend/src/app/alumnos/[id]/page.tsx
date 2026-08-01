@@ -138,10 +138,12 @@ export default function PerfilDeportista() {
   const [docTI,  setDocTI]  = useState<DocFile>(null);
   const [docRC,  setDocRC]  = useState<DocFile>(null);
   const [docEPS, setDocEPS] = useState<DocFile>(null);
+  const [docNotas, setDocNotas] = useState<DocFile>(null);
   const [docPreview, setDocPreview] = useState<{ name: string; data: string } | null>(null);
   const inputTIRef  = useRef<HTMLInputElement>(null);
   const inputRCRef  = useRef<HTMLInputElement>(null);
   const inputEPSRef = useRef<HTMLInputElement>(null);
+  const inputNotasRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getDeportistas().then(lista => {
@@ -176,6 +178,7 @@ export default function PerfilDeportista() {
         if (docs.ti)  setDocTI(docs.ti);
         if (docs.rc)  setDocRC(docs.rc);
         if (docs.eps) setDocEPS(docs.eps);
+        if (docs.notas) setDocNotas(docs.notas);
       }
     } catch {}
     getDocumentos(id).then(docs => {
@@ -183,16 +186,17 @@ export default function PerfilDeportista() {
       if (docs.ti)  setDocTI(conv(docs.ti));
       if (docs.rc)  setDocRC(conv(docs.rc));
       if (docs.eps) setDocEPS(conv(docs.eps));
+      if (docs.notas) setDocNotas(conv(docs.notas));
     }).catch(() => {});
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function subirDoc(e: React.ChangeEvent<HTMLInputElement>, tipo: 'ti' | 'rc' | 'eps') {
+  function subirDoc(e: React.ChangeEvent<HTMLInputElement>, tipo: 'ti' | 'rc' | 'eps' | 'notas') {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
       const doc = { name: file.name.replace(/\.[^.]+$/, ''), data: ev.target?.result as string, date: new Date().toLocaleDateString('es-CO') };
-      const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : setDocEPS;
+      const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : tipo === 'eps' ? setDocEPS : setDocNotas;
       setter(doc);
       try {
         const prev = JSON.parse(localStorage.getItem(`futuro_docs_${id}`) ?? '{}');
@@ -206,8 +210,8 @@ export default function PerfilDeportista() {
     e.target.value = '';
   }
 
-  function eliminarDoc(tipo: 'ti' | 'rc' | 'eps') {
-    const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : setDocEPS;
+  function eliminarDoc(tipo: 'ti' | 'rc' | 'eps' | 'notas') {
+    const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : tipo === 'eps' ? setDocEPS : setDocNotas;
     setter(null);
     try {
       const prev = JSON.parse(localStorage.getItem(`futuro_docs_${id}`) ?? '{}');
@@ -436,6 +440,7 @@ export default function PerfilDeportista() {
         <input ref={inputTIRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'ti')}/>
         <input ref={inputRCRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'rc')}/>
         <input ref={inputEPSRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'eps')}/>
+        <input ref={inputNotasRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'notas')}/>
 
         {/* ── TARJETA FOTO ── */}
         <input ref={inputFotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={subirFoto}/>
@@ -631,6 +636,43 @@ export default function PerfilDeportista() {
                     <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0, opacity: 0.4 }}>🏥</span>
                     <p style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700, fontSize: 11, margin: 0, flex: 1 }}>🏥 Certificado de EPS</p>
                     <button onClick={() => inputEPSRef.current?.click()} style={{ background: '#16a34a', border: 'none', borderRadius: 10, padding: '7px 12px', color: '#fff', fontSize: 10, fontWeight: 900, cursor: 'pointer', flexShrink: 0, letterSpacing: '0.03em' }}>
+                      Subir
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Calificaciones escolares */}
+          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 8.5, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '14px 0 8px' }}>
+            Calificaciones escolares
+          </p>
+          {(() => {
+            const doc = docNotas;
+            return (
+              <div style={{
+                background: doc ? 'rgba(22,163,74,0.12)' : 'rgba(255,255,255,0.05)',
+                border: doc ? '1.5px solid rgba(22,163,74,0.4)' : '1.5px dashed rgba(255,255,255,0.15)',
+                borderRadius: 14, padding: '10px 12px',
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                {doc ? (
+                  <>
+                    <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✅</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ color: '#fff', fontWeight: 900, fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</p>
+                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '2px 0 0', fontWeight: 600 }}>{doc.date}</p>
+                    </div>
+                    <button onClick={() => eliminarDoc('notas')} style={{ background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 8, padding: '4px 8px', color: '#f87171', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
+                      Eliminar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0, opacity: 0.4 }}>📚</span>
+                    <p style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700, fontSize: 11, margin: 0, flex: 1 }}>📚 Tus calificaciones escolares</p>
+                    <button onClick={() => inputNotasRef.current?.click()} style={{ background: '#16a34a', border: 'none', borderRadius: 10, padding: '7px 12px', color: '#fff', fontSize: 10, fontWeight: 900, cursor: 'pointer', flexShrink: 0, letterSpacing: '0.03em' }}>
                       Subir
                     </button>
                   </>
