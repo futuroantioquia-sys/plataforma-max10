@@ -608,6 +608,9 @@ function DashboardProyecto({
     ...(hasCodigo ? [{ key:'codigo',     label:'CÓDIGO',        minW:W_COD         }] : []),
     {                  key:'foto',       label:'FOTO',          minW:52, center:true },
     {                  key:'nombre',     label:'DEPORTISTA',    minW:200           },
+    {                  key:'doc',        label:'DOC',           minW:50, center:true },
+    {                  key:'eps',        label:'EPS',           minW:50, center:true },
+    {                  key:'esc',        label:'ESC',           minW:50, center:true },
     ...(hayAnio   ? [{ key:'anio',       label:'AÑO',           minW:60, center:true }] : []),
     ...(hasMes    ? [{ key:'mes',        label:'MES',           minW:90            }] : []),
     ...(hasDia    ? [{ key:'dia',        label:'DÍA',           minW:50, center:true }] : []),
@@ -752,12 +755,6 @@ function DashboardProyecto({
                     title="Competencia en torneo">
                     COM
                   </th>
-                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide whitespace-nowrap text-center"
-                    style={{ minWidth: 52, background: '#0f766e' }} title="Documento de identidad subido">DOC</th>
-                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide whitespace-nowrap text-center"
-                    style={{ minWidth: 52, background: '#0f766e' }} title="Certificado de EPS subido">EPS</th>
-                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide whitespace-nowrap text-center"
-                    style={{ minWidth: 52, background: '#0f766e' }} title="Calificaciones escolares subidas">ESC</th>
                 </tr>
               </thead>
               <tbody>
@@ -775,6 +772,19 @@ function DashboardProyecto({
 
                       {cols.map(c => {
                         const v = val(dep, c.key);
+                        // DOC / EPS / ESC — OK si el calidoso ya subió
+                        if (c.key === 'doc' || c.key === 'eps' || c.key === 'esc') {
+                          const ok = c.key === 'doc' ? docResumen.conDoc.has(dep.id)
+                                   : c.key === 'eps' ? docResumen.conEps.has(dep.id)
+                                   : docResumen.conEsc.has(dep.id);
+                          return (
+                            <td key={c.key} className="border border-white px-1 py-1 text-center" style={{ background: ok ? '#ecfdf5' : '#f8fafc' }}>
+                              {ok
+                                ? <span style={{ color: '#16a34a', fontWeight: 900, fontSize: 11 }}>✓ OK</span>
+                                : <span style={{ color: '#cbd5e1', fontWeight: 700, fontSize: 12 }}>—</span>}
+                            </td>
+                          );
+                        }
                         // FOTO — miniatura para ver quién ya subió su foto
                         if (c.key === 'foto') return (
                           <td key={c.key} className="border border-white px-1 py-1 text-center" style={{ verticalAlign: 'middle' }}>
@@ -856,23 +866,11 @@ function DashboardProyecto({
                           <option value="INV">INV</option>
                         </select>
                       </td>
-                      {/* ── DOC / EPS / ESC (OK si subió) ── */}
-                      {([
-                        docResumen.conDoc.has(dep.id),
-                        docResumen.conEps.has(dep.id),
-                        docResumen.conEsc.has(dep.id),
-                      ]).map((ok, k) => (
-                        <td key={k} className="border border-white px-1 py-1 text-center" style={{ background: ok ? '#ecfdf5' : '#f8fafc' }}>
-                          {ok
-                            ? <span style={{ color: '#16a34a', fontWeight: 900, fontSize: 12 }}>✓ OK</span>
-                            : <span style={{ color: '#cbd5e1', fontWeight: 700, fontSize: 12 }}>—</span>}
-                        </td>
-                      ))}
                     </tr>
                   );
                 })}
                 {filtrada.length === 0 && (
-                  <tr><td colSpan={cols.length + 7} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
+                  <tr><td colSpan={cols.length + 4} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
                 )}
               </tbody>
             </table>

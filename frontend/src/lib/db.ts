@@ -746,18 +746,18 @@ export async function saveAllPagos(all: AllPagos): Promise<void> {
 export async function getFoto(depId: string): Promise<string | null> {
   try {
     const { data, error } = await supabase()
-      .from('deportistas_fotos')
-      .select('foto_base64')
+      .from('fotos_deportistas')
+      .select('base64')
       .eq('deportista_id', depId)
       .maybeSingle();
 
     if (error) throw error;
-    if (data?.foto_base64) {
+    if (data?.base64) {
       // Guardar en localStorage también
       const fotos = lsGet<Record<string, string>>(LS_FOTOS, {});
-      fotos[depId] = data.foto_base64;
+      fotos[depId] = data.base64;
       lsSet(LS_FOTOS, fotos);
-      return data.foto_base64;
+      return data.base64;
     }
   } catch {}
 
@@ -774,8 +774,8 @@ export async function saveFoto(depId: string, base64: string): Promise<void> {
 
   try {
     const { error } = await supabase()
-      .from('deportistas_fotos')
-      .upsert({ deportista_id: depId, foto_base64: base64 }, { onConflict: 'deportista_id' });
+      .from('fotos_deportistas')
+      .upsert({ deportista_id: depId, base64: base64 }, { onConflict: 'deportista_id' });
 
     if (error) console.error('[db] saveFoto:', error.message);
   } catch (e) {
@@ -1318,6 +1318,27 @@ export async function saveSoportePago(
       });
     if (error) console.error('[db] saveSoportePago:', error.message);
   } catch (e) { console.error('[db] saveSoportePago:', e); }
+}
+
+/** Carga los soportes NO confirmados de UN deportista desde Supabase.
+ *  Se usa en la vista del calidoso para que sus soportes no dependan de
+ *  localStorage (que se llena con los base64 y pierde datos). */
+export async function getSoportesDeDeportista(deportistaIds: string | string[]): Promise<SoportePago[]> {
+  const ids = (Array.isArray(deportistaIds) ? deportistaIds : [deportistaIds])
+    .map(s => String(s ?? '').trim()).filter(Boolean);
+  if (!ids.length) return [];
+  const inList = ids.map(v => `"${v.replace(/"/g, '')}"`).join(',');
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/soportes_pago?select=id,deportista_id,nombre,datos,fecha,meses,confirmado,fecha_confirmacion,created_at&deportista_id=in.(${encodeURIComponent(inList)})&confirmado=eq.false&order=created_at.desc`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (res.ok) { const data = await res.json(); if (Array.isArray(data)) return data as SoportePago[]; }
+  } catch {}
+  try {
+    const { data } = await supabase().from('soportes_pago').select('*').in('deportista_id', ids).eq('confirmado', false);
+    return (data ?? []) as SoportePago[];
+  } catch { return []; }
 }
 
 /** Carga todos los soportes pendientes (no confirmados) para el admin. */

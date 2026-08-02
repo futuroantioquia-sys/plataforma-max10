@@ -517,12 +517,13 @@ export default function PerfilDeportista() {
                 onClick={() => inputFotoRef.current?.click()}
                 style={{
                   width: '100%',
+                  aspectRatio: '1 / 1',
+                  height: 'auto',
                   borderRadius: 14,
-                  objectFit: 'cover', objectPosition: 'top',
+                  objectFit: 'cover', objectPosition: 'center top',
                   cursor: 'pointer',
                   boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
                   display: 'block',
-                  maxHeight: '62vh',
                 }}
               />
               {/* Pie de foto — cambiar + eliminar */}

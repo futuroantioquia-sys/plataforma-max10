@@ -8,7 +8,7 @@ import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
-import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre } from '@/lib/db';
+import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre, getSoportesDeDeportista } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
@@ -214,7 +214,7 @@ function EstadoCuentaInner() {
   const [pagoModalIdx,  setPagoModalIdx]  = useState<number | null>(null);
   const fotoInputRef    = useRef<HTMLInputElement>(null);
   const soporteInputRef = useRef<HTMLInputElement>(null);
-  const [soportes,    setSoportes]    = useState<{ name: string; data: string; date: string }[]>([]);
+  const [soportes,    setSoportes]    = useState<{ name: string; data: string; date: string; meses?: string[] }[]>([]);
   const [verSoportes, setVerSoportes] = useState(false);
   const [pendingFiles,     setPendingFiles]     = useState<{ name: string; data: string; date: string }[]>([]);
   const [nombreSoporte,    setNombreSoporte]    = useState('');
@@ -311,12 +311,25 @@ function EstadoCuentaInner() {
     reader.readAsDataURL(file);
   }
 
-  /* ─── Cargar soportes de pago desde localStorage ─── */
+  /* ─── Cargar soportes: localStorage (rápido) + Supabase (fuente de verdad) ─── */
   useEffect(() => {
     try {
       const raw = localStorage.getItem(`futuro_soportes_${id}`);
       if (raw) setSoportes(JSON.parse(raw));
     } catch {}
+    // Supabase es la fuente real: localStorage se llena con los base64 y pierde datos,
+    // así el calidoso siempre ve los soportes que subió.
+    getSoportesDeDeportista(id as string).then(filas => {
+      if (!filas.length) return;
+      const mapped = filas.map(f => ({ name: f.nombre, data: f.datos, date: f.fecha, meses: f.meses ?? [] }));
+      setSoportes(prev => {
+        const nombresSupa = new Set(mapped.map(m => m.name));
+        const extraLocales = prev.filter(p => !nombresSupa.has(p.name));
+        const merged = [...mapped, ...extraLocales];
+        try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(merged)); } catch {}
+        return merged;
+      });
+    }).catch(() => {});
   }, [id]);
 
   function subirSoporte(e: React.ChangeEvent<HTMLInputElement>) {
