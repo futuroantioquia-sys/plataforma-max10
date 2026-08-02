@@ -1149,6 +1149,72 @@ export async function deleteDocumento(deportistaId: string, tipo: DocTipo): Prom
   } catch (e) { console.error('[db] deleteDocumento:', e); }
 }
 
+// ── CALIFICACIONES ESCOLARES (varias por deportista, renombrables) ──
+// Tabla: calificaciones_escolares (id, deportista_id, nombre, datos, created_at)
+
+export interface CalificacionEscolar { id: string; deportistaId: string; nombre: string; datos: string; createdAt: string; }
+
+/** Lee las calificaciones escolares de un deportista (varias). */
+export async function getCalificacionesEscolares(deportistaId: string): Promise<CalificacionEscolar[]> {
+  try {
+    const { data, error } = await supabase()
+      .from('calificaciones_escolares')
+      .select('id, deportista_id, nombre, datos, created_at')
+      .eq('deportista_id', deportistaId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((r: any) => ({
+      id: r.id, deportistaId: r.deportista_id ?? '', nombre: r.nombre ?? '', datos: r.datos ?? '', createdAt: r.created_at ?? '',
+    }));
+  } catch (e) { console.error('[db] getCalificacionesEscolares:', e); return []; }
+}
+
+/** Agrega una calificación escolar nueva. Devuelve la fila creada o null. */
+export async function addCalificacionEscolar(deportistaId: string, nombre: string, datos: string): Promise<CalificacionEscolar | null> {
+  try {
+    const { data, error } = await supabase()
+      .from('calificaciones_escolares')
+      .insert({ deportista_id: deportistaId, nombre: (nombre ?? '').trim() || 'Calificación', datos })
+      .select('id, deportista_id, nombre, datos, created_at')
+      .single();
+    if (error) { console.error('[db] addCalificacionEscolar:', error.message); return null; }
+    return { id: data.id, deportistaId: data.deportista_id ?? '', nombre: data.nombre ?? '', datos: data.datos ?? '', createdAt: data.created_at ?? '' };
+  } catch (e) { console.error('[db] addCalificacionEscolar:', e); return null; }
+}
+
+/** Renombra una calificación escolar. */
+export async function renameCalificacionEscolar(id: string, nombre: string): Promise<void> {
+  try {
+    const { error } = await supabase().from('calificaciones_escolares').update({ nombre: (nombre ?? '').trim() || 'Calificación' }).eq('id', id);
+    if (error) console.error('[db] renameCalificacionEscolar:', error.message);
+  } catch (e) { console.error('[db] renameCalificacionEscolar:', e); }
+}
+
+/** Elimina una calificación escolar. */
+export async function deleteCalificacionEscolar(id: string): Promise<void> {
+  try {
+    const { error } = await supabase().from('calificaciones_escolares').delete().eq('id', id);
+    if (error) console.error('[db] deleteCalificacionEscolar:', error.message);
+  } catch (e) { console.error('[db] deleteCalificacionEscolar:', e); }
+}
+
+/** Resumen para el cuadro de proyecto: qué deportistas tienen documento, EPS y calificaciones. */
+export async function getResumenDocumentos(): Promise<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> }> {
+  const conDoc = new Set<string>(), conEps = new Set<string>(), conEsc = new Set<string>();
+  try {
+    const [docsRes, escRes] = await Promise.all([
+      supabase().from('documentos_deportista').select('deportista_id, tipo'),
+      supabase().from('calificaciones_escolares').select('deportista_id'),
+    ]);
+    for (const r of (docsRes.data ?? []) as any[]) {
+      if (r.tipo === 'eps') conEps.add(r.deportista_id);
+      else if (r.tipo === 'ti' || r.tipo === 'rc') conDoc.add(r.deportista_id);
+    }
+    for (const r of (escRes.data ?? []) as any[]) conEsc.add(r.deportista_id);
+  } catch (e) { console.error('[db] getResumenDocumentos:', e); }
+  return { conDoc, conEps, conEsc };
+}
+
 // ── CALIFICACIONES ───────────────────────────────────────────
 // Tabla: calificaciones (deportista_id TEXT, anio_mes TEXT, valor TEXT)
 // PK: (deportista_id, anio_mes) — sigue al deportista aunque cambie de proyecto
@@ -1336,15 +1402,21 @@ export async function eliminarSoportePago(soporteId: string): Promise<void> {
   } catch (e) { console.error('[db] eliminarSoportePago:', e); }
 }
 
-/** Elimina soportes NO confirmados por deportista_id + nombre de archivo.
- *  Usado cuando el calidoso borra un soporte local → también lo elimina de Supabase. */
+/** Elimina soportes NO confirmados por nombre de archivo, cubriendo TODOS los
+ *  posibles IDs del deportista (id de página, id real, código…), para que al
+ *  borrar el calidoso su soporte también desaparezca de "Confirmar Pagos"
+ *  aunque se haya guardado bajo otro identificador. */
 export async function eliminarSoportePorNombre(
-  deportistaId: string,
+  deportistaIds: string | string[],
   nombre: string,
 ): Promise<void> {
+  const ids = (Array.isArray(deportistaIds) ? deportistaIds : [deportistaIds])
+    .map(s => String(s ?? '').trim()).filter(Boolean);
+  if (!ids.length || !nombre) return;
+  const inList = ids.map(v => `"${v.replace(/"/g, '')}"`).join(',');
   try {
     await fetch(
-      `${SUPABASE_URL}/rest/v1/soportes_pago?deportista_id=eq.${encodeURIComponent(deportistaId)}&nombre=eq.${encodeURIComponent(nombre)}&confirmado=eq.false`,
+      `${SUPABASE_URL}/rest/v1/soportes_pago?deportista_id=in.(${encodeURIComponent(inList)})&nombre=eq.${encodeURIComponent(nombre)}&confirmado=eq.false`,
       {
         method: 'DELETE',
         headers: {

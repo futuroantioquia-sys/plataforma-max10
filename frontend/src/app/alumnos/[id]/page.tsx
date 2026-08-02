@@ -4,7 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento } from '@/lib/db';
+import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento,
+  getCalificacionesEscolares, addCalificacionEscolar, renameCalificacionEscolar, deleteCalificacionEscolar } from '@/lib/db';
+import type { CalificacionEscolar } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
 import { BalonCargando } from '@/components/BalonCargando';
@@ -138,7 +140,9 @@ export default function PerfilDeportista() {
   const [docTI,  setDocTI]  = useState<DocFile>(null);
   const [docRC,  setDocRC]  = useState<DocFile>(null);
   const [docEPS, setDocEPS] = useState<DocFile>(null);
-  const [docNotas, setDocNotas] = useState<DocFile>(null);
+  const [califs, setCalifs] = useState<CalificacionEscolar[]>([]);
+  const [renomId, setRenomId] = useState<string | null>(null);
+  const [renomTmp, setRenomTmp] = useState('');
   const [docPreview, setDocPreview] = useState<{ name: string; data: string } | null>(null);
   const inputTIRef  = useRef<HTMLInputElement>(null);
   const inputRCRef  = useRef<HTMLInputElement>(null);
@@ -178,25 +182,24 @@ export default function PerfilDeportista() {
         if (docs.ti)  setDocTI(docs.ti);
         if (docs.rc)  setDocRC(docs.rc);
         if (docs.eps) setDocEPS(docs.eps);
-        if (docs.notas) setDocNotas(docs.notas);
       }
     } catch {}
+    getCalificacionesEscolares(id).then(setCalifs).catch(() => {});
     getDocumentos(id).then(docs => {
       const conv = (d: { nombre: string; datos: string; fecha: string }) => ({ name: d.nombre, data: d.datos, date: d.fecha });
       if (docs.ti)  setDocTI(conv(docs.ti));
       if (docs.rc)  setDocRC(conv(docs.rc));
       if (docs.eps) setDocEPS(conv(docs.eps));
-      if (docs.notas) setDocNotas(conv(docs.notas));
     }).catch(() => {});
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function subirDoc(e: React.ChangeEvent<HTMLInputElement>, tipo: 'ti' | 'rc' | 'eps' | 'notas') {
+  function subirDoc(e: React.ChangeEvent<HTMLInputElement>, tipo: 'ti' | 'rc' | 'eps') {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
       const doc = { name: file.name.replace(/\.[^.]+$/, ''), data: ev.target?.result as string, date: new Date().toLocaleDateString('es-CO') };
-      const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : tipo === 'eps' ? setDocEPS : setDocNotas;
+      const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : setDocEPS;
       setter(doc);
       try {
         const prev = JSON.parse(localStorage.getItem(`futuro_docs_${id}`) ?? '{}');
@@ -210,8 +213,8 @@ export default function PerfilDeportista() {
     e.target.value = '';
   }
 
-  function eliminarDoc(tipo: 'ti' | 'rc' | 'eps' | 'notas') {
-    const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : tipo === 'eps' ? setDocEPS : setDocNotas;
+  function eliminarDoc(tipo: 'ti' | 'rc' | 'eps') {
+    const setter = tipo === 'ti' ? setDocTI : tipo === 'rc' ? setDocRC : setDocEPS;
     setter(null);
     try {
       const prev = JSON.parse(localStorage.getItem(`futuro_docs_${id}`) ?? '{}');
@@ -219,6 +222,33 @@ export default function PerfilDeportista() {
       localStorage.setItem(`futuro_docs_${id}`, JSON.stringify(prev));
     } catch {}
     deleteDocumento(id, tipo).catch(err => console.error('[perfil] deleteDocumento:', err));
+  }
+
+  // ── Calificaciones escolares (varias, renombrables) ──
+  function subirCalificacion(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      const nombre = file.name.replace(/\.[^.]+$/, '');
+      const datos = ev.target?.result as string;
+      const nueva = await addCalificacionEscolar(id, nombre, datos);
+      if (nueva) setCalifs(prev => [nueva, ...prev]);
+      else alert('No se pudo subir la calificación. Inténtalo de nuevo.');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+  async function guardarRenombre(calId: string) {
+    const nombre = renomTmp.trim();
+    setRenomId(null);
+    if (!nombre) return;
+    setCalifs(prev => prev.map(c => c.id === calId ? { ...c, nombre } : c));
+    await renameCalificacionEscolar(calId, nombre);
+  }
+  async function eliminarCalificacion(calId: string) {
+    setCalifs(prev => prev.filter(c => c.id !== calId));
+    await deleteCalificacionEscolar(calId);
   }
 
   async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -440,7 +470,7 @@ export default function PerfilDeportista() {
         <input ref={inputTIRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'ti')}/>
         <input ref={inputRCRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'rc')}/>
         <input ref={inputEPSRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'eps')}/>
-        <input ref={inputNotasRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'notas')}/>
+        <input ref={inputNotasRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={subirCalificacion}/>
 
         {/* ── TARJETA FOTO ── */}
         <input ref={inputFotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={subirFoto}/>
@@ -644,42 +674,52 @@ export default function PerfilDeportista() {
             );
           })()}
 
-          {/* Calificaciones escolares */}
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 8.5, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '14px 0 8px' }}>
-            Calificaciones escolares
-          </p>
-          {(() => {
-            const doc = docNotas;
-            return (
-              <div style={{
-                background: doc ? 'rgba(22,163,74,0.12)' : 'rgba(255,255,255,0.05)',
-                border: doc ? '1.5px solid rgba(22,163,74,0.4)' : '1.5px dashed rgba(255,255,255,0.15)',
-                borderRadius: 14, padding: '10px 12px',
-                display: 'flex', alignItems: 'center', gap: 10,
-              }}>
-                {doc ? (
-                  <>
-                    <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✅</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ color: '#fff', fontWeight: 900, fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</p>
-                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '2px 0 0', fontWeight: 600 }}>{doc.date}</p>
-                    </div>
-                    <button onClick={() => eliminarDoc('notas')} style={{ background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 8, padding: '4px 8px', color: '#f87171', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
-                      Eliminar
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0, opacity: 0.4 }}>📚</span>
-                    <p style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700, fontSize: 11, margin: 0, flex: 1 }}>📚 Tus calificaciones escolares</p>
-                    <button onClick={() => inputNotasRef.current?.click()} style={{ background: '#16a34a', border: 'none', borderRadius: 10, padding: '7px 12px', color: '#fff', fontSize: 10, fontWeight: 900, cursor: 'pointer', flexShrink: 0, letterSpacing: '0.03em' }}>
-                      Subir
-                    </button>
-                  </>
-                )}
+          {/* Calificaciones escolares — varias, renombrables */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '14px 0 8px' }}>
+            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 8.5, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0 }}>
+              Calificaciones escolares
+            </p>
+            <button onClick={() => inputNotasRef.current?.click()} style={{ background: '#16a34a', border: 'none', borderRadius: 10, padding: '5px 12px', color: '#fff', fontSize: 10, fontWeight: 900, cursor: 'pointer', letterSpacing: '0.03em' }}>
+              + Subir
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {califs.length === 0 && (
+              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1.5px dashed rgba(255,255,255,0.15)', borderRadius: 14, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0, opacity: 0.4 }}>📚</span>
+                <p style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700, fontSize: 11, margin: 0, flex: 1 }}>Sube tus boletines del año (puedes subir varios)</p>
               </div>
-            );
-          })()}
+            )}
+            {califs.map(c => (
+              <div key={c.id} style={{
+                background: 'rgba(22,163,74,0.12)', border: '1.5px solid rgba(22,163,74,0.4)',
+                borderRadius: 14, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>📚</span>
+                {renomId === c.id ? (
+                  <input
+                    autoFocus
+                    value={renomTmp}
+                    onChange={e => setRenomTmp(e.target.value)}
+                    onBlur={() => guardarRenombre(c.id)}
+                    onKeyDown={e => { if (e.key === 'Enter') guardarRenombre(c.id); if (e.key === 'Escape') setRenomId(null); }}
+                    style={{ flex: 1, minWidth: 0, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '4px 8px', color: '#fff', fontSize: 11, fontWeight: 800, outline: 'none' }}
+                  />
+                ) : (
+                  <div style={{ flex: 1, minWidth: 0 }} onClick={() => setDocPreview({ name: c.nombre, data: c.datos })}>
+                    <p style={{ color: '#fff', fontWeight: 900, fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>{c.nombre}</p>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '2px 0 0', fontWeight: 600 }}>{(c.createdAt || '').slice(0, 10)}</p>
+                  </div>
+                )}
+                <button onClick={() => { setRenomId(c.id); setRenomTmp(c.nombre); }} title="Renombrar" style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8, padding: '4px 8px', color: '#fff', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
+                  Renombrar
+                </button>
+                <button onClick={() => eliminarCalificacion(c.id)} title="Eliminar" style={{ background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 8, padding: '4px 8px', color: '#f87171', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
+                  Eliminar
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
       </div>

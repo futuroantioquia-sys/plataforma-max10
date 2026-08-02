@@ -365,7 +365,13 @@ function EstadoCuentaInner() {
 
   function eliminarSoporte(idx: number) {
     const nombre = soportes[idx]?.name;
-    if (nombre && id) eliminarSoportePorNombre(id as string, nombre);
+    if (nombre) {
+      const cod = dep ? getCol(dep, /^c[oó]d/i) : '';
+      const codDigits = cod.replace(/\D/g, '');
+      const candidatos = [id as string, cod, codDigits, codDigits ? String(parseInt(codDigits, 10)) : '']
+        .filter(Boolean);
+      eliminarSoportePorNombre(candidatos, nombre);
+    }
     setSoportes(prev => {
       const updated = prev.filter((_, i) => i !== idx);
       try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(updated)); } catch {}
@@ -713,33 +719,33 @@ function EstadoCuentaInner() {
                 <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
                   {codVal}
                 </div>
-                {/* Navegación: el calidoso vuelve a su Inicio (perfil con los botones grandes);
+                {/* Navegación: el calidoso ve los 4 botones en cada sección (PAGOS activo aquí);
                     admin/profe conservan Pagos + Asistencia */}
-                {esDeportista ? (
-                  <button
-                    onClick={() => router.push(`/alumnos/${id}`)}
-                    className="transition rounded-lg py-2 px-3 text-[11px] font-black tracking-wide text-center w-full bg-white/15 hover:bg-white/25 border border-white/25 text-white flex items-center justify-center gap-1.5">
-                    🏠 Inicio
-                  </button>
-                ) : (
-                  <div className="grid grid-cols-2 gap-1 w-full">
-                    {[
-                      { label: 'PAGOS',  href: null as string | null,        active: true  },
-                      { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,  active: false },
-                    ].map(({ label, href, active }) => (
-                      <button key={label}
-                        onClick={() => href && router.push(href)}
-                        className={cn(
-                          'transition rounded-lg py-1.5 px-1 text-[9px] font-black tracking-wide text-center w-full',
-                          active
-                            ? 'bg-[#16a34a] text-white'
-                            : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
-                        )}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="grid grid-cols-2 gap-1 w-full">
+                  {(esDeportista
+                    ? [
+                        { label: 'PAGOS',  href: null as string | null,        active: true  },
+                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,  active: false },
+                        { label: 'VAL.',   href: '/mantenimiento',             active: false },
+                        { label: 'MENS.',  href: `/alumnos/${id}/mensajes`,    active: false },
+                      ]
+                    : [
+                        { label: 'PAGOS',  href: null as string | null,        active: true  },
+                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,  active: false },
+                      ]
+                  ).map(({ label, href, active }) => (
+                    <button key={label}
+                      onClick={() => href && router.push(href)}
+                      className={cn(
+                        'transition rounded-lg py-1.5 px-1 text-[9px] font-black tracking-wide text-center w-full',
+                        active
+                          ? 'bg-[#16a34a] text-white'
+                          : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
+                      )}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -1149,9 +1155,10 @@ function EstadoCuentaInner() {
         const cuentaNit   = esMax10 ? null             : '811036997';
         return (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
-             onClick={() => { setShowPagoModal(false); setPagoModalIdx(null); }}>
+             onMouseDown={e => { if (e.target === e.currentTarget) { setShowPagoModal(false); setPagoModalIdx(null); } }}>
           <div className="relative rounded-3xl overflow-hidden w-full max-w-xs shadow-2xl"
                style={{ background: '#1a2d40' }}
+               onMouseDown={e => e.stopPropagation()}
                onClick={e => e.stopPropagation()}>
 
             {/* Cerrar */}
@@ -1410,9 +1417,10 @@ function EstadoCuentaInner() {
         return (
           <div
             className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center p-4 pb-6"
-            onClick={() => { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); }}>
+            onMouseDown={e => { if (e.target === e.currentTarget) { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); } }}>
             <div
               className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+              onMouseDown={e => e.stopPropagation()}
               onClick={e => e.stopPropagation()}>
 
               {/* Encabezado */}

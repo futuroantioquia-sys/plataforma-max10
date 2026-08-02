@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getDeportistasPorProyecto, saveDeportistas } from '@/lib/db';
+import { getDeportistas, getDeportistasPorProyecto, saveDeportistas, getResumenDocumentos } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 
 const FOTOS_PROFE_KEY = 'futuro_fotos_profes';
@@ -297,13 +297,14 @@ function TarjetaProyecto({
 
 // ── Dashboard del Proyecto (tabla horizontal) ─────────────────
 function DashboardProyecto({
-  proy, lista, programa, pal, fotos, fotosProfe, esProfe,
+  proy, lista, programa, pal, fotos, fotosProfe, esProfe, docResumen,
   onFotoProfe, onVerPerfil, onPosicion, onCal, onCom,
 }: {
   proy: string; lista: Deportista[]; programa: string;
   pal: typeof PALETA[0]; fotos: Record<string, string>;
   fotosProfe: Record<string, string>;
   esProfe: boolean;
+  docResumen: { conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> };
   onFotoProfe: (profe: string, b64: string) => void;
   onVerPerfil: (id: string) => void;
   onPosicion: (depId: string, val: string) => void;
@@ -751,6 +752,12 @@ function DashboardProyecto({
                     title="Competencia en torneo">
                     COM
                   </th>
+                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide whitespace-nowrap text-center"
+                    style={{ minWidth: 52, background: '#0f766e' }} title="Documento de identidad subido">DOC</th>
+                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide whitespace-nowrap text-center"
+                    style={{ minWidth: 52, background: '#0f766e' }} title="Certificado de EPS subido">EPS</th>
+                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide whitespace-nowrap text-center"
+                    style={{ minWidth: 52, background: '#0f766e' }} title="Calificaciones escolares subidas">ESC</th>
                 </tr>
               </thead>
               <tbody>
@@ -849,11 +856,23 @@ function DashboardProyecto({
                           <option value="INV">INV</option>
                         </select>
                       </td>
+                      {/* ── DOC / EPS / ESC (OK si subió) ── */}
+                      {([
+                        docResumen.conDoc.has(dep.id),
+                        docResumen.conEps.has(dep.id),
+                        docResumen.conEsc.has(dep.id),
+                      ]).map((ok, k) => (
+                        <td key={k} className="border border-white px-1 py-1 text-center" style={{ background: ok ? '#ecfdf5' : '#f8fafc' }}>
+                          {ok
+                            ? <span style={{ color: '#16a34a', fontWeight: 900, fontSize: 12 }}>✓ OK</span>
+                            : <span style={{ color: '#cbd5e1', fontWeight: 700, fontSize: 12 }}>—</span>}
+                        </td>
+                      ))}
                     </tr>
                   );
                 })}
                 {filtrada.length === 0 && (
-                  <tr><td colSpan={cols.length + 3} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
+                  <tr><td colSpan={cols.length + 7} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
                 )}
               </tbody>
             </table>
@@ -878,6 +897,7 @@ function AlumnosPageContent() {
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const [fotos,       setFotos]       = useState<Record<string, string>>({});
   const [fotosProfe,  setFotosProfe]  = useState<Record<string, string>>({});
+  const [docResumen,  setDocResumen]  = useState<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> }>({ conDoc: new Set(), conEps: new Set(), conEsc: new Set() });
   const [programa,    setPrograma]    = useState<string | null>(null);
   const [proy,        setProy]        = useState<string | null>(null);
   const [busqueda,    setBusqueda]    = useState('');
@@ -898,6 +918,11 @@ function AlumnosPageContent() {
     } catch {}
   }, []);
   const autoNavRef = useRef(false);
+
+  // Resumen de documentos subidos (para las columnas OK del cuadro)
+  useEffect(() => {
+    getResumenDocumentos().then(setDocResumen).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const proyParam = searchParams.get('proyecto');
@@ -1607,6 +1632,7 @@ function AlumnosPageContent() {
           fotos={fotos}
           fotosProfe={fotosProfe}
           esProfe={esProfe}
+          docResumen={docResumen}
           onFotoProfe={guardarFotoProfe}
           onVerPerfil={id => router.push(`/alumnos/${id}`)}
           onPosicion={handlePosicion}
