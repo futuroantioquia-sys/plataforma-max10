@@ -22,7 +22,8 @@ function nivelLabel(n: number): string {
   return ['Por evaluar', 'Iniciación', 'En Desarrollo', 'Competente', 'Avanzado', 'Dominante'][n] ?? 'Por evaluar';
 }
 function nivelColor(n: number): string {
-  return ['#6b7280', '#ef4444', '#f97316', '#eab308', '#3b82f6', '#16a34a'][n] ?? '#6b7280';
+  // Rampa: gris → rojo → naranja → amarillo → verde claro → verde (verde = mejor)
+  return ['#6b7280', '#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a'][n] ?? '#6b7280';
 }
 function codigoDe(dep: Deportista): string {
   const k = Object.keys(dep._columnas ?? {}).find(c => /^c[oó]d/i.test(c.trim()));
@@ -140,7 +141,7 @@ function ValoracionDinamicaInner() {
   const sinEval = !!sel && buscada && !row;
 
   return (
-    <div className="min-h-screen bg-[#f1f5f9]">
+    <div className="min-h-screen bg-black">
       <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => router.push('/dashboard')} className="text-white/70 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <div className="flex-1 min-w-0">
@@ -155,19 +156,19 @@ function ValoracionDinamicaInner() {
 
       <main className="max-w-xl mx-auto px-3 py-4 space-y-4">
         {/* Buscador */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+        <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Buscar deportista</label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Código o nombre (ej: 23106 o Cristóbal)"
-              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]" />
+              className="w-full pl-9 pr-4 py-2.5 border border-white/15 bg-black/40 text-white placeholder-gray-500 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]" />
           </div>
           {matches.length > 0 && (
-            <div className="mt-2 border border-gray-100 rounded-xl divide-y divide-gray-50 overflow-hidden">
+            <div className="mt-2 border border-white/10 rounded-xl divide-y divide-white/5 overflow-hidden">
               {matches.map(d => (
-                <button key={d.id} onClick={() => elegir(d)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 transition">
+                <button key={d.id} onClick={() => elegir(d)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-white/5 transition">
                   <span className="bg-[#16a34a] text-white text-[11px] font-black px-2 py-0.5 rounded-md flex-shrink-0">{codigoDe(d) || '—'}</span>
-                  <span className="text-sm font-bold text-gray-700 truncate">{d._nombre}</span>
+                  <span className="text-sm font-bold text-gray-200 truncate">{d._nombre}</span>
                 </button>
               ))}
             </div>
@@ -176,17 +177,17 @@ function ValoracionDinamicaInner() {
         </div>
 
         {!sel && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-green-50 flex items-center justify-center mx-auto mb-3 text-2xl">⚡</div>
-            <p className="font-black text-[#111827] text-base mb-1">Busca un deportista</p>
+          <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto mb-3 text-2xl">⚡</div>
+            <p className="font-black text-white text-base mb-1">Busca un deportista</p>
             <p className="text-gray-400 text-sm">Escribe su código o nombre arriba para ver su valoración con el diseño dinámico.</p>
           </div>
         )}
 
         {sinEval && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-3 text-2xl">📝</div>
-            <p className="font-black text-[#111827] text-base mb-1">Aún sin valoración</p>
+          <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-3 text-2xl">📝</div>
+            <p className="font-black text-white text-base mb-1">Aún sin valoración</p>
             <p className="text-gray-400 text-sm">Este deportista todavía no tiene una Valoración Deportiva registrada.</p>
           </div>
         )}
@@ -220,13 +221,13 @@ function ValoracionDinamicaInner() {
               const nums = cat.funds.map(f => nivelPct(nivelNum(val(f.nivelCol)))).filter(p => p > 0);
               const prom = nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0;
               return (
-                <div key={cat.titulo} className="rounded-2xl overflow-hidden shadow-sm border border-gray-200 bg-white">
+                <div key={cat.titulo} className="rounded-2xl overflow-hidden shadow-sm border border-white/10 bg-[#0f172a]">
                   <div className="flex items-center gap-2 px-4 py-3" style={{ background: cat.color }}>
                     <span className="text-lg">{cat.emoji}</span>
                     <span className="text-white font-black text-sm uppercase tracking-wide flex-1">{cat.titulo}</span>
                     <span className="bg-white/25 text-white text-xs font-black px-2.5 py-0.5 rounded-full">{prom > 0 ? prom + '%' : '—'}</span>
                   </div>
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-white/5">
                     {cat.funds.map((f, i) => {
                       const n = nivelNum(val(f.nivelCol));
                       const pct = nivelPct(n);
@@ -235,15 +236,21 @@ function ValoracionDinamicaInner() {
                       return (
                         <div key={f.label} className="px-4 py-3">
                           <div className="flex items-center justify-between gap-2 mb-1.5">
-                            <span className="font-black text-[#111827] text-[13px]">{f.label}</span>
-                            <span className="text-[11px] font-black px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: `${col}22`, color: col }}>
+                            <span className="font-black text-white text-[13px]">{f.label}</span>
+                            <span className="text-[11px] font-black px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: `${col}33`, color: col }}>
                               {n > 0 ? nivelLabel(n) : 'Por evaluar'}
                             </span>
                           </div>
-                          <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${mostrar ? pct : 0}%`, background: col, transition: `width 0.8s ease-out ${i * 0.05}s` }} />
+                          <div className="h-2.5 rounded-full bg-white/10 overflow-hidden">
+                            <div className="h-full rounded-full" style={{
+                              width: `${mostrar ? pct : 0}%`,
+                              background: 'linear-gradient(90deg,#ef4444 0%,#f97316 33%,#eab308 66%,#16a34a 100%)',
+                              backgroundSize: `${pct > 0 ? Math.round(10000 / pct) : 100}% 100%`,
+                              backgroundPosition: 'left center',
+                              transition: `width 0.8s ease-out ${i * 0.05}s`,
+                            }} />
                           </div>
-                          {desc && <p className="text-[12px] text-gray-500 leading-snug mt-1.5">{desc}</p>}
+                          {desc && <p className="text-[12px] text-gray-400 leading-snug mt-1.5">{desc}</p>}
                         </div>
                       );
                     })}
@@ -254,21 +261,21 @@ function ValoracionDinamicaInner() {
 
             {/* Logros / Objetivos / Observaciones */}
             {val('logros_trimestre') && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+              <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
                 <p className="text-[11px] font-black uppercase tracking-widest mb-1.5" style={{ color: '#16a34a' }}>🏆 Logros del Trimestre</p>
-                <p className="text-sm text-gray-600 leading-relaxed">{val('logros_trimestre')}</p>
+                <p className="text-sm text-gray-300 leading-relaxed">{val('logros_trimestre')}</p>
               </div>
             )}
             {val('objetivos_trimestre') && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-                <p className="text-[11px] font-black uppercase tracking-widest mb-1.5" style={{ color: '#2563eb' }}>🎯 Objetivos Próximo Trimestre</p>
-                <p className="text-sm text-gray-600 leading-relaxed">{val('objetivos_trimestre')}</p>
+              <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
+                <p className="text-[11px] font-black uppercase tracking-widest mb-1.5" style={{ color: '#60a5fa' }}>🎯 Objetivos Próximo Trimestre</p>
+                <p className="text-sm text-gray-300 leading-relaxed">{val('objetivos_trimestre')}</p>
               </div>
             )}
             {val('observaciones') && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-                <p className="text-[11px] font-black uppercase tracking-widest mb-1.5 text-gray-500">📋 Observaciones del Entrenador</p>
-                <p className="text-sm text-gray-600 leading-relaxed">{val('observaciones')}</p>
+              <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
+                <p className="text-[11px] font-black uppercase tracking-widest mb-1.5 text-gray-400">📋 Observaciones del Entrenador</p>
+                <p className="text-sm text-gray-300 leading-relaxed">{val('observaciones')}</p>
               </div>
             )}
           </>
@@ -282,7 +289,7 @@ function ValoracionDinamicaInner() {
 
 export default function ValoracionDinamicaPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#f1f5f9]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
       <ValoracionDinamicaInner />
     </Suspense>
   );
