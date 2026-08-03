@@ -49,6 +49,25 @@ const AZUL = '#4b5563';
 const ROW1 = '#f1f5f9';
 const BW   = '2px solid white';
 
+// Columnas fijas CÓD/NOMBRE: al deslizar horizontalmente, CÓD se colapsa suavemente
+// y NOMBRE se pega al borde izquierdo, para tener mayor visual al gestionar fechas.
+const T_COD = 'width .28s ease, min-width .28s ease, max-width .28s ease, padding .28s ease, opacity .2s ease, border-width .28s ease';
+function styleCod(bg: string, zIndex: number, scrolled: boolean) {
+  return {
+    background: bg, border: BW, position: 'sticky' as const, left: 0, zIndex, overflow: 'hidden', transition: T_COD,
+    width: scrolled ? 0 : 58, minWidth: scrolled ? 0 : 58, maxWidth: scrolled ? 0 : 58,
+    paddingLeft: scrolled ? 0 : undefined, paddingRight: scrolled ? 0 : undefined,
+    opacity: scrolled ? 0 : 1,
+    borderLeftWidth: scrolled ? 0 : undefined, borderRightWidth: scrolled ? 0 : undefined,
+  };
+}
+function styleNom(bg: string, zIndex: number, scrolled: boolean) {
+  return {
+    background: bg, border: BW, position: 'sticky' as const, left: scrolled ? 0 : 58, zIndex, minWidth: 100,
+    transition: 'left .28s ease',
+  };
+}
+
 function getCol(dep: Deportista, rx: RegExp) {
   const cols = dep._columnas ?? {};
   const k = Object.keys(cols).find(k => rx.test(k));
@@ -143,6 +162,7 @@ function AsistenciaInner() {
   const [errorGuardar, setErrorGuardar] = useState(false);
   const [controlesAbiertos, setControlesAbiertos] = useState(true);
   const [calMap,           setCalMap]           = useState<Record<string, string>>({});
+  const [scrolledX,        setScrolledX]        = useState(false); // CÓD oculto al deslizar
   const [errorMsg,         setErrorMsg]         = useState<string | null>(null);
 
   // Botones laterales flotantes — se ocultan cuando llegan los inline del fondo
@@ -738,7 +758,7 @@ function AsistenciaInner() {
 
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 z-20">
-        <button onClick={() => router.push(esProfe ? '/mis-proyectos' : '/dashboard')} className="text-white/70 hover:text-white transition flex-shrink-0">
+        <button onClick={() => { if (typeof window !== 'undefined' && window.history.length > 1) router.back(); else router.push(esProfe ? '/mis-proyectos' : '/dashboard'); }} className="text-white/70 hover:text-white transition flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
@@ -942,7 +962,8 @@ function AsistenciaInner() {
           </div>
         ) : (
           <div className="rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 220px)' }}>
+            <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 220px)' }}
+              onScroll={e => { const l = e.currentTarget.scrollLeft > 8; setScrolledX(prev => prev === l ? prev : l); }}>
               <table className="border-collapse" style={{ width: 'max-content', minWidth: '100%' }}>
                 <thead className="sticky top-0 z-20">
                   {/* Fila 1: Título + Semanas */}
@@ -965,20 +986,14 @@ function AsistenciaInner() {
                       className="px-2 sm:px-3 text-center text-white font-black text-xs sm:text-sm uppercase whitespace-nowrap align-middle">
                       %
                     </th>
-                    {esProfe && (
-                      <th rowSpan={2} style={{ background: '#1e3a8a', border: BW }}
-                        className="px-2 sm:px-3 text-center text-white font-black text-xs sm:text-sm uppercase whitespace-nowrap align-middle">
-                        CAL
-                      </th>
-                    )}
                   </tr>
                   {/* Fila 2: Columnas */}
                   <tr>
-                    <th style={{ background: G, border: BW, width: 58, minWidth: 58, position: 'sticky', left: 0, zIndex: 15 }}
+                    <th style={styleCod(G, 15, scrolledX)}
                       className="px-1 py-2 text-center text-white font-black text-[10px] uppercase whitespace-nowrap">
                       CÓD
                     </th>
-                    <th style={{ background: G, border: BW, minWidth: 100, position: 'sticky', left: 58, zIndex: 15 }}
+                    <th style={styleNom(G, 15, scrolledX)}
                       className="px-1 py-2 text-left text-white font-black text-[10px] uppercase whitespace-nowrap">
                       NOMBRE
                     </th>
@@ -1015,11 +1030,11 @@ function AsistenciaInner() {
                     const tot = totalesMap[dep.id];
                     return (
                       <tr key={dep.id}>
-                        <td style={{ background: G, border: BW, width: 58, minWidth: 58, position: 'sticky', left: 0, zIndex: 10 }}
+                        <td style={styleCod(G, 10, scrolledX)}
                           className="px-1 py-1.5 text-center text-white font-black text-xs whitespace-nowrap">
                           {cod || '—'}
                         </td>
-                        <td style={{ background: ROW1, border: BW, minWidth: 100, position: 'sticky', left: 58, zIndex: 10 }}
+                        <td style={styleNom(ROW1, 10, scrolledX)}
                           className="px-1 py-1.5 text-left text-[#111827] font-semibold text-xs whitespace-nowrap">
                           {dep._nombre}
                         </td>
@@ -1048,17 +1063,6 @@ function AsistenciaInner() {
                           className="px-2 sm:px-3 py-1.5 text-center text-white font-black text-sm whitespace-nowrap">
                           {tot > 0 ? porcentaje(dep.id) : ''}
                         </td>
-                        {esProfe && (
-                          <td style={{ background: '#f8fafc', border: BW, minWidth: 68 }}
-                            className="px-1 py-1 text-center">
-                            <select
-                              value={calMap[dep.id] ?? ''}
-                              onChange={e => setCal(dep.id, e.target.value)}
-                              className="w-full text-xs font-bold text-center bg-transparent border border-blue-200 rounded focus:outline-none cursor-pointer py-0.5 text-[#1e3a8a]">
-                              {CAL_OPTIONS.map(o => <option key={o} value={o}>{o || '—'}</option>)}
-                            </select>
-                          </td>
-                        )}
                       </tr>
                     );
                   })}
@@ -1090,10 +1094,6 @@ function AsistenciaInner() {
                       className="px-2 sm:px-3 py-2.5 text-center text-white font-bold text-[10px] whitespace-nowrap">
                       de {diasDelMes.length}
                     </td>
-                    {esProfe && (
-                      <td style={{ background: '#1e3a8a', border: BW }}
-                        className="px-2 py-2.5" />
-                    )}
                   </tr>
                 </tbody>
               </table>

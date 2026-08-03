@@ -783,6 +783,26 @@ export async function saveFoto(depId: string, base64: string): Promise<void> {
   }
 }
 
+/** Trae TODAS las fotos guardadas en la nube (deportista_id → base64).
+ *  Sirve para que el admin/profe vea las fotos de todos los deportistas,
+ *  no solo las que tenga en la memoria local de su dispositivo. */
+export async function getFotosDeportistas(): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/fotos_deportistas?select=deportista_id,base64`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (res.ok) {
+      const rows = await res.json();
+      if (Array.isArray(rows)) {
+        for (const r of rows) if (r.deportista_id && r.base64) map[r.deportista_id] = r.base64;
+      }
+    }
+  } catch { /* noop */ }
+  return map;
+}
+
 /** Devuelve el conjunto de deportista_id que tienen un TORNEO sin pagar (estado PEND). */
 export async function getDeportistasDebenTorneo(): Promise<Set<string>> {
   try {
@@ -2075,4 +2095,70 @@ export async function savePostpartido(data: Omit<Postpartido, 'id'>): Promise<vo
   } catch (e) {
     console.error('[db] savePostpartido:', e);
   }
+}
+
+/* ─────────── Visitas / Accesos (indicador verde-rojo + analíticas) ─────────── */
+
+const VISITAS_HDR = {
+  'apikey':        SUPABASE_ANON_KEY,
+  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+};
+
+/** Registra una visita/acceso a la app (contador general).
+ *  El acceso del calidoso también se registra en el servidor (/api/calidoso-login). */
+export async function registrarVisita(codigo?: string, tipo: string = 'app'): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/visitas`, {
+      method:  'POST',
+      headers: { ...VISITAS_HDR, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body:    JSON.stringify({ codigo: (codigo ?? '').trim() || null, tipo }),
+    });
+  } catch { /* noop */ }
+}
+
+/** Conjunto de códigos que YA entraron alguna vez (para el punto verde/rojo). */
+export async function getCodigosConAcceso(): Promise<Set<string>> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/codigos_con_acceso?select=codigo`, { headers: VISITAS_HDR });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return new Set(data.map((r: any) => String(r.codigo ?? '').trim().toUpperCase()).filter(Boolean));
+      }
+    }
+  } catch { /* noop */ }
+  return new Set();
+}
+
+export interface VisitaDia { dia: string; visitas: number; visitantes: number; }
+
+/** Analíticas: visitas por día (para la gráfica del dashboard). Devuelve del más viejo al más nuevo. */
+export async function getVisitasPorDia(dias: number = 30): Promise<VisitaDia[]> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/visitas_por_dia?select=dia,visitas,visitantes&order=dia.desc&limit=${dias}`,
+      { headers: VISITAS_HDR },
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return (data as VisitaDia[]).reverse();
+    }
+  } catch { /* noop */ }
+  return [];
+}
+
+/** Totales rápidos: total de visitas y visitantes únicos (deportistas distintos que entraron). */
+export async function getResumenVisitas(): Promise<{ total: number; unicos: number }> {
+  try {
+    const [rTotal, rUnicos] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/visitas?select=id`, { headers: { ...VISITAS_HDR, 'Prefer': 'count=exact', 'Range': '0-0' } }),
+      fetch(`${SUPABASE_URL}/rest/v1/codigos_con_acceso?select=codigo`, { headers: VISITAS_HDR }),
+    ]);
+    let total = 0;
+    const cr = rTotal.headers.get('content-range'); // "0-0/123"
+    if (cr && cr.includes('/')) total = parseInt(cr.split('/')[1]) || 0;
+    let unicos = 0;
+    if (rUnicos.ok) { const d = await rUnicos.json(); if (Array.isArray(d)) unicos = d.length; }
+    return { total, unicos };
+  } catch { return { total: 0, unicos: 0 }; }
 }

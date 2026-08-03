@@ -72,6 +72,19 @@ export async function GET(request: NextRequest) {
       console.log('[calidoso-login] RPC OK → 0 filas para código:', codigo);
     }
 
+    // Registrar el acceso del calidoso (alimenta el indicador verde/rojo y las analíticas).
+    // Nunca debe romper el login: si falla, se ignora.
+    if (Array.isArray(data) && data.length > 0) {
+      try {
+        await fetch(`${SB_URL}/rest/v1/visitas`, {
+          method:  'POST',
+          headers: { ...HDRS, 'Prefer': 'return=minimal' },
+          body:    JSON.stringify({ codigo, tipo: 'calidoso' }),
+          cache:   'no-store',
+        });
+      } catch { /* noop */ }
+    }
+
     return NextResponse.json(Array.isArray(data) ? data : []);
   } catch (e: any) {
     clearTimeout(timer);

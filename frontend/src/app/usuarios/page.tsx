@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, CheckCircle, Plus, Eye, EyeOff } from 'lucide-react';
 import { getProfes, saveProfes, getDeportistas } from '@/lib/db';
 import type { Profe } from '@/lib/db';
+import { useSoloLectura } from '@/lib/permisos';
 
 const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
 const SEDES = ['Santa Mónica', 'La 80', 'Centro', 'Sabaneta', 'Bello Niquía', 'Rionegro', 'Institucional'];
@@ -72,6 +73,7 @@ export default function UsuariosPage() {
   const [claveVis,    setClaveVis]    = useState<Record<string, boolean>>({});
   const [agregando,   setAgregando]   = useState(false);
   const [nuevo,       setNuevo]       = useState({ usuario: '', clave: '' });
+  const soloLectura = useSoloLectura(); // contabilidad: solo puede ver, no editar
 
   useEffect(() => {
     Promise.all([getProfes(), getDeportistas()]).then(([listaProfes, deps]) => {
@@ -276,6 +278,7 @@ export default function UsuariosPage() {
           <h1 className="text-white font-black text-base sm:text-lg leading-tight">Información de Proyectos y Formadores</h1>
           <p className="text-white/60 text-xs">{proyRows.length} proyectos · {profes.length} formadores</p>
         </div>
+        {!soloLectura && (
         <div className="relative flex items-center gap-2 flex-shrink-0">
           <button onClick={() => setAgregando(true)}
             className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition">
@@ -293,6 +296,7 @@ export default function UsuariosPage() {
             {errorGuard && <span className="text-red-200 text-[9px] max-w-[180px] text-right leading-tight">{errorGuard}</span>}
           </div>
         </div>
+        )}
       </header>
 
       {/* Modal nuevo formador */}

@@ -13,6 +13,7 @@ import { ArrowLeft, CheckCircle, UserPlus, AlertCircle, Search } from 'lucide-re
 import { getDeportistas, saveDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { cn } from '@/lib/utils';
+import { useSoloLectura } from '@/lib/permisos';
 
 function getCol(dep: Deportista, rx: RegExp): string {
   const k = Object.keys(dep._columnas ?? {}).find(c => rx.test(c));
@@ -33,8 +34,7 @@ function colorCodigo(afil: string): string {
   return '#16a34a'; // default verde
 }
 function colSede(d: Deportista)     { return getCol(d, /^sede/i); }
-// Jornada de ENTRENAMIENTO (cercana a la sede), nunca la jornada de estudio
-function colJornada(d: Deportista)  { return getCol(d, /jornada_ent|jorn.*entren|entren.*jorn/i) || getCol(d, /^jorn(?!.*estudi)/i); }
+function colJornada(d: Deportista)  { return getCol(d, /^jorn/i); }
 function colAno(d: Deportista)      { return getCol(d, /^a[ñn]o$/i); }
 function colMes(d: Deportista)      { return getCol(d, /^mes$/i); }
 function colDia(d: Deportista)      { return getCol(d, /^d[ií]a$/i) || getCol(d, /^dia_nac/i); }
@@ -79,6 +79,7 @@ export default function AsignacionPage() {
   const [selected,   setSelected]   = useState<Deportista | null>(null);
   const [form,       setForm]       = useState<AsignForm>({ programa: '', proyecto: '', proyNuevo: '' });
   const [guardando,  setGuardando]  = useState(false);
+  const soloLectura = useSoloLectura(); // contabilidad: solo ver
   const [exito,      setExito]      = useState(false);
   const [error,      setError]      = useState('');
 
@@ -220,10 +221,11 @@ export default function AsignacionPage() {
                         const isSel = selected?.id === dep.id;
                         return (
                           <tr key={dep.id}
-                            onClick={() => seleccionar(dep)}
+                            onClick={() => { if (!soloLectura) seleccionar(dep); }}
                             className={cn(
-                              'cursor-pointer transition-all',
-                              isSel ? 'outline outline-2 outline-[#16a34a]' : 'hover:brightness-95'
+                              'transition-all',
+                              soloLectura ? 'cursor-default' : 'cursor-pointer',
+                              isSel ? 'outline outline-2 outline-[#16a34a]' : (!soloLectura ? 'hover:brightness-95' : '')
                             )}>
                             <td style={{ ...R_STYLE, background: colorCodigo(colAfil(dep)), color: 'white', fontWeight: 900, textAlign: 'center' }}>
                               {colCodigo(dep) || '—'}
@@ -345,6 +347,7 @@ export default function AsignacionPage() {
                         className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-bold py-3 rounded-xl transition text-sm">
                         Cancelar
                       </button>
+                      {!soloLectura && (
                       <button onClick={guardar} disabled={guardando}
                         className="flex-1 bg-[#16a34a] hover:bg-[#064e1e] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 text-sm">
                         {guardando
@@ -352,6 +355,7 @@ export default function AsignacionPage() {
                           : <CheckCircle className="w-4 h-4" />}
                         {guardando ? 'Guardando…' : 'Asignar Proyecto'}
                       </button>
+                      )}
                     </div>
                   </div>
                 </div>

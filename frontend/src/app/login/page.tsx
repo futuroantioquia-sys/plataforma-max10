@@ -54,6 +54,25 @@ export default function LoginPage() {
             cargando: false, error: null,
           });
           document.cookie = 'futuro-session=1; path=/; max-age=86400; SameSite=Lax';
+          try { localStorage.setItem('futuro-rol', 'administracion'); } catch {}
+          router.push('/dashboard');
+        } else if (u === 'DIANA' && c === '32183658') {
+          /* ── CONTABILIDAD (DIANA): edita solo Finanzas, ve el resto ── */
+          try {
+            localStorage.removeItem('futuro-profe-proyectos');
+            localStorage.removeItem('futuro-profe-nombre');
+          } catch {}
+          useAuthStore.setState({
+            usuario: {
+              id: 'contab-diana', email: 'diana@futuroantioquia.com',
+              nombre: 'Diana', apellido: 'Contabilidad',
+              rol: 'contabilidad' as any, activo: true,
+              academia: { id: '1', nombre: 'Futuro Antioquia' },
+            },
+            cargando: false, error: null,
+          });
+          document.cookie = 'futuro-session=contabilidad; path=/; max-age=86400; SameSite=Lax';
+          try { localStorage.setItem('futuro-rol', 'contabilidad'); } catch {}
           router.push('/dashboard');
         } else {
           setErrLocal('Usuario o contraseña incorrectos');

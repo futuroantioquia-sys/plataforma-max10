@@ -4,14 +4,47 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento,
-  getCalificacionesEscolares, addCalificacionEscolar, renameCalificacionEscolar, deleteCalificacionEscolar } from '@/lib/db';
-import type { CalificacionEscolar } from '@/lib/db';
-import type { Deportista } from '@/lib/db';
+import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares } from '@/lib/db';
+import type { Deportista, CalificacionEscolar } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
 import { BalonCargando } from '@/components/BalonCargando';
 
 const FOTOS_KEY = 'futuro_fotos_deportistas';
+
+/** Lee un archivo como dataURL (base64). */
+function leerArchivoComoDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+/** Comprime una imagen: la reduce a `maxLado` px por el lado mayor y la re-codifica
+ *  como JPEG. Devuelve un base64 pequeño (~100 KB) que SÍ se guarda en Supabase
+ *  y se ve desde cualquier dispositivo (calidoso, profe, admin). */
+function comprimirImagen(file: File, maxLado = 800, calidad = 0.85): Promise<string> {
+  return new Promise((resolve, reject) => {
+    leerArchivoComoDataURL(file).then(dataUrl => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if (w >= h && w > maxLado)      { h = Math.round(h * maxLado / w); w = maxLado; }
+        else if (h > w && h > maxLado)  { w = Math.round(w * maxLado / h); h = maxLado; }
+        else if (w === h && w > maxLado){ w = maxLado; h = maxLado; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('sin contexto de canvas')); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', calidad));
+      };
+      img.onerror = () => reject(new Error('no se pudo cargar la imagen'));
+      img.src = dataUrl;
+    }).catch(reject);
+  });
+}
 
 const MESES: Record<string, string> = {
   '1':'Enero','2':'Febrero','3':'Marzo','4':'Abril','5':'Mayo','6':'Junio',
@@ -140,14 +173,11 @@ export default function PerfilDeportista() {
   const [docTI,  setDocTI]  = useState<DocFile>(null);
   const [docRC,  setDocRC]  = useState<DocFile>(null);
   const [docEPS, setDocEPS] = useState<DocFile>(null);
-  const [califs, setCalifs] = useState<CalificacionEscolar[]>([]);
-  const [renomId, setRenomId] = useState<string | null>(null);
-  const [renomTmp, setRenomTmp] = useState('');
   const [docPreview, setDocPreview] = useState<{ name: string; data: string } | null>(null);
+  const [califs, setCalifs] = useState<CalificacionEscolar[]>([]);
   const inputTIRef  = useRef<HTMLInputElement>(null);
   const inputRCRef  = useRef<HTMLInputElement>(null);
   const inputEPSRef = useRef<HTMLInputElement>(null);
-  const inputNotasRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getDeportistas().then(lista => {
@@ -184,13 +214,14 @@ export default function PerfilDeportista() {
         if (docs.eps) setDocEPS(docs.eps);
       }
     } catch {}
-    getCalificacionesEscolares(id).then(setCalifs).catch(() => {});
     getDocumentos(id).then(docs => {
       const conv = (d: { nombre: string; datos: string; fecha: string }) => ({ name: d.nombre, data: d.datos, date: d.fecha });
       if (docs.ti)  setDocTI(conv(docs.ti));
       if (docs.rc)  setDocRC(conv(docs.rc));
       if (docs.eps) setDocEPS(conv(docs.eps));
     }).catch(() => {});
+    // Calificaciones escolares (boletines) que sube el acudiente
+    getCalificacionesEscolares(id).then(setCalifs).catch(() => {});
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function subirDoc(e: React.ChangeEvent<HTMLInputElement>, tipo: 'ti' | 'rc' | 'eps') {
@@ -224,33 +255,6 @@ export default function PerfilDeportista() {
     deleteDocumento(id, tipo).catch(err => console.error('[perfil] deleteDocumento:', err));
   }
 
-  // ── Calificaciones escolares (varias, renombrables) ──
-  function subirCalificacion(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      const nombre = file.name.replace(/\.[^.]+$/, '');
-      const datos = ev.target?.result as string;
-      const nueva = await addCalificacionEscolar(id, nombre, datos);
-      if (nueva) setCalifs(prev => [nueva, ...prev]);
-      else alert('No se pudo subir la calificación. Inténtalo de nuevo.');
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  }
-  async function guardarRenombre(calId: string) {
-    const nombre = renomTmp.trim();
-    setRenomId(null);
-    if (!nombre) return;
-    setCalifs(prev => prev.map(c => c.id === calId ? { ...c, nombre } : c));
-    await renameCalificacionEscolar(calId, nombre);
-  }
-  async function eliminarCalificacion(calId: string) {
-    setCalifs(prev => prev.filter(c => c.id !== calId));
-    await deleteCalificacionEscolar(calId);
-  }
-
   async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -269,16 +273,22 @@ export default function PerfilDeportista() {
       // ctx.drawImage(img, 0, 0); URL.revokeObjectURL(img.src);
       // const b64 = canvas.toDataURL('image/jpeg', 0.92);
 
-      // Por ahora: guardar foto original
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const b64 = ev.target?.result as string;
-        setFoto(b64);
-        saveFoto(id, b64).catch(console.error);
-      };
-      reader.readAsDataURL(file);
+      // Comprimir a ~800px/JPEG (pesa ~100 KB) y ESPERAR el guardado para que
+      // la foto llegue siempre a Supabase → se ve desde profe y admin también.
+      let b64: string;
+      try {
+        b64 = await comprimirImagen(file, 800, 0.85);
+      } catch {
+        // Si por algún motivo no se puede comprimir, usar el original.
+        b64 = await leerArchivoComoDataURL(file);
+      }
+      setFoto(b64);
+      await saveFoto(id, b64);
+    } catch (err) {
+      console.error('[perfil] subirFoto:', err);
     } finally {
       setProcesandoFoto(false);
+      if (e.target) e.target.value = '';
     }
   }
 
@@ -447,8 +457,8 @@ export default function PerfilDeportista() {
             {[
               { label: 'PAGOS',       href: `/alumnos/${id}/estado-cuenta`,   mant: false },
               { label: 'ASISTENCIA',  href: `/alumnos/${id}/asistencia`,      mant: false },
-              { label: 'VALORACIÓN',  href: '/mantenimiento',                 mant: true  },
-              { label: 'MENSAJES',    href: `/alumnos/${id}/mensajes`,        mant: false },
+              { label: 'VALORACIÓN',  href: '/mantenimiento',                  mant: true  },
+              { label: 'MENSAJES',    href: '/mantenimiento',                 mant: true  },
             ].filter(b => !esProfesor || !b.mant).map(({ label, href, mant }) => (
               <button key={label} onClick={() => router.push(href)} style={{
                 background: mant ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.11)',
@@ -470,7 +480,6 @@ export default function PerfilDeportista() {
         <input ref={inputTIRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'ti')}/>
         <input ref={inputRCRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'rc')}/>
         <input ref={inputEPSRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'eps')}/>
-        <input ref={inputNotasRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={subirCalificacion}/>
 
         {/* ── TARJETA FOTO ── */}
         <input ref={inputFotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={subirFoto}/>
@@ -517,13 +526,12 @@ export default function PerfilDeportista() {
                 onClick={() => inputFotoRef.current?.click()}
                 style={{
                   width: '100%',
-                  aspectRatio: '1 / 1',
-                  height: 'auto',
                   borderRadius: 14,
-                  objectFit: 'cover', objectPosition: 'center top',
+                  objectFit: 'cover', objectPosition: 'top',
                   cursor: 'pointer',
                   boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
                   display: 'block',
+                  maxHeight: '62vh',
                 }}
               />
               {/* Pie de foto — cambiar + eliminar */}
@@ -579,7 +587,7 @@ export default function PerfilDeportista() {
                 letterSpacing: '0.1em', textTransform: 'uppercase',
                 textAlign: 'center', margin: 0, lineHeight: 1.6,
               }}>
-                SUBE TU FOTO CON UNIFORME
+                SUBE TU FOTO CON UNIFORME Y FONDO BLANCO
               </p>
             </button>
           ))}
@@ -674,53 +682,6 @@ export default function PerfilDeportista() {
               </div>
             );
           })()}
-
-          {/* Calificaciones escolares — varias, renombrables */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '14px 0 8px' }}>
-            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 8.5, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0 }}>
-              Calificaciones escolares
-            </p>
-            <button onClick={() => inputNotasRef.current?.click()} style={{ background: '#16a34a', border: 'none', borderRadius: 10, padding: '5px 12px', color: '#fff', fontSize: 10, fontWeight: 900, cursor: 'pointer', letterSpacing: '0.03em' }}>
-              + Subir
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {califs.length === 0 && (
-              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1.5px dashed rgba(255,255,255,0.15)', borderRadius: 14, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0, opacity: 0.4 }}>📚</span>
-                <p style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700, fontSize: 11, margin: 0, flex: 1 }}>Sube tus boletines del año (puedes subir varios)</p>
-              </div>
-            )}
-            {califs.map(c => (
-              <div key={c.id} style={{
-                background: 'rgba(22,163,74,0.12)', border: '1.5px solid rgba(22,163,74,0.4)',
-                borderRadius: 14, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10,
-              }}>
-                <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>📚</span>
-                {renomId === c.id ? (
-                  <input
-                    autoFocus
-                    value={renomTmp}
-                    onChange={e => setRenomTmp(e.target.value)}
-                    onBlur={() => guardarRenombre(c.id)}
-                    onKeyDown={e => { if (e.key === 'Enter') guardarRenombre(c.id); if (e.key === 'Escape') setRenomId(null); }}
-                    style={{ flex: 1, minWidth: 0, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '4px 8px', color: '#fff', fontSize: 11, fontWeight: 800, outline: 'none' }}
-                  />
-                ) : (
-                  <div style={{ flex: 1, minWidth: 0 }} onClick={() => setDocPreview({ name: c.nombre, data: c.datos })}>
-                    <p style={{ color: '#fff', fontWeight: 900, fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>{c.nombre}</p>
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '2px 0 0', fontWeight: 600 }}>{(c.createdAt || '').slice(0, 10)}</p>
-                  </div>
-                )}
-                <button onClick={() => { setRenomId(c.id); setRenomTmp(c.nombre); }} title="Renombrar" style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8, padding: '4px 8px', color: '#fff', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
-                  Renombrar
-                </button>
-                <button onClick={() => eliminarCalificacion(c.id)} title="Eliminar" style={{ background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 8, padding: '4px 8px', color: '#f87171', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
-                  Eliminar
-                </button>
-              </div>
-            ))}
-          </div>
         </div>
 
       </div>
@@ -824,13 +785,12 @@ export default function PerfilDeportista() {
           </div>
 
           {/* Botones de acceso */}
-          <div className="grid gap-2 mt-4 grid-cols-2">
+          <div className={`grid gap-2 mt-4 ${esProfesor ? 'grid-cols-2' : 'grid-cols-4'}`}>
             {[
-              { label: 'PAGOS',          href: `/alumnos/${id}/estado-cuenta`,          profe: true  },
-              { label: 'ASISTENCIA',     href: `/alumnos/${id}/asistencia`,             profe: true  },
-              { label: 'VAL. DEPORTIVA', href: `/evaluaciones?cod=${codigoVal}`,        profe: true  },
-              { label: 'VAL. DINÁMICA',  href: `/valoracion-dinamica?cod=${codigoVal}`, profe: true  },
-              { label: 'MENSAJES',       href: '/mensajes',                             profe: false },
+              { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta`, profe: true  },
+              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`,    profe: true  },
+              { label: 'INFORMES',   href: '/evaluaciones',                 profe: false },
+              { label: 'MENSAJES',   href: '/mensajes',                     profe: false },
             ].filter(b => !esProfesor || b.profe).map(({ label, href }) => (
               <button key={label} onClick={() => router.push(href)}
                 className="bg-white/10 hover:bg-white/20 border border-white/20 active:bg-white/30 transition rounded-xl py-2.5 text-white font-black text-[10px] tracking-wide">
@@ -923,7 +883,7 @@ export default function PerfilDeportista() {
         </div>
 
         {/* ── SECCIÓN FOTO + DOCUMENTOS (admin/profe) ── */}
-        {(foto || docTI || docRC || docEPS) && (
+        {(foto || docTI || docRC || docEPS || califs.length > 0) && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100">
               <p className="text-xs font-black text-gray-500 uppercase tracking-widest">📋 Foto y Documentos</p>
@@ -987,7 +947,48 @@ export default function PerfilDeportista() {
                 );
               })}
 
-              {(!foto && !docTI && !docRC && !docEPS) && (
+              {/* Calificaciones escolares (boletines) — el acudiente puede subir varias */}
+              {califs.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">📚 Calificaciones escolares ({califs.length})</p>
+                  <div className="space-y-2">
+                    {califs.map(cal => {
+                      const isImage = (cal.datos ?? '').startsWith('data:image');
+                      return (
+                        <div key={cal.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                          {isImage
+                            ? <img src={cal.datos} alt={cal.nombre} className="w-14 h-[72px] object-cover rounded-lg border border-gray-200 flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: cal.nombre || 'Calificación', data: cal.datos })}/>
+                            : <div className="w-14 h-[72px] rounded-lg bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: cal.nombre || 'Calificación', data: cal.datos })}>
+                                <span className="text-2xl">📄</span>
+                              </div>
+                          }
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black text-gray-800 uppercase tracking-wide">📚 Calificación escolar</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5 truncate">{cal.nombre || 'Calificación'}</p>
+                          </div>
+                          <div className="flex flex-col gap-1.5 flex-shrink-0">
+                            <button
+                              onClick={() => setDocPreview({ name: cal.nombre || 'Calificación', data: cal.datos })}
+                              className="text-[10px] font-black px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 transition"
+                            >
+                              👁 Ver
+                            </button>
+                            <a
+                              href={cal.datos}
+                              download={`Calificacion_${(cal.nombre || 'boletin').replace(/[^a-zA-Z0-9]/g,'_')}_${dep._nombre.replace(/\s+/g,'_')}`}
+                              className="text-[10px] font-black px-3 py-1.5 rounded-lg bg-[#16a34a] text-white hover:bg-green-700 transition text-center"
+                            >
+                              ⬇ Bajar
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(!foto && !docTI && !docRC && !docEPS && califs.length === 0) && (
                 <p className="text-xs text-gray-400 text-center py-4">El acudiente aún no ha subido documentos.</p>
               )}
             </div>

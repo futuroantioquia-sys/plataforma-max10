@@ -11,7 +11,8 @@ import {
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getDeportistasPorProyecto, saveDeportistas, getResumenDocumentos } from '@/lib/db';
+import { getDeportistas, getDeportistasPorProyecto, saveDeportistas, getCodigosConAcceso, getFotosDeportistas, getResumenDocumentos } from '@/lib/db';
+import { useSoloLectura } from '@/lib/permisos';
 import type { Deportista } from '@/lib/db';
 
 const FOTOS_PROFE_KEY = 'futuro_fotos_profes';
@@ -296,15 +297,30 @@ function TarjetaProyecto({
 }
 
 // ── Dashboard del Proyecto (tabla horizontal) ─────────────────
+/** Puntico verde (ya entró alguna vez a la plataforma) / rojo (todavía no ha entrado). */
+function PuntoAcceso({ cod, accesos }: { cod: string; accesos: Set<string> }) {
+  const c = (cod ?? '').trim().toUpperCase();
+  if (!c) return null;
+  const entro = accesos.has(c);
+  return (
+    <span
+      title={entro ? 'Ya entró a la plataforma' : 'Aún no ha entrado'}
+      className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 align-middle"
+      style={{ background: entro ? '#22c55e' : '#ef4444', boxShadow: `0 0 0 2px ${entro ? '#22c55e44' : '#ef444444'}` }}
+    />
+  );
+}
+
 function DashboardProyecto({
-  proy, lista, programa, pal, fotos, fotosProfe, esProfe, docResumen,
+  proy, lista, programa, pal, fotos, fotosProfe, esProfe, accesos, resumen,
   onFotoProfe, onVerPerfil, onPosicion, onCal, onCom,
 }: {
   proy: string; lista: Deportista[]; programa: string;
   pal: typeof PALETA[0]; fotos: Record<string, string>;
   fotosProfe: Record<string, string>;
   esProfe: boolean;
-  docResumen: { conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> };
+  accesos: Set<string>;
+  resumen: { conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> };
   onFotoProfe: (profe: string, b64: string) => void;
   onVerPerfil: (id: string) => void;
   onPosicion: (depId: string, val: string) => void;
@@ -455,11 +471,11 @@ function DashboardProyecto({
 
   // ── Exportar todos los deportistas a Excel (CSV con BOM) ─────
   function exportarExcel() {
-    if (!deportistas.length) return;
+    if (!lista.length) return;
 
     // Recolectar todas las columnas presentes en cualquier deportista
     const colSet = new Set<string>();
-    deportistas.forEach(d => Object.keys(d._columnas ?? {}).forEach(k => colSet.add(k)));
+    lista.forEach(d => Object.keys(d._columnas ?? {}).forEach(k => colSet.add(k)));
     const cols = Array.from(colSet);
 
     // Escapar celda para CSV
@@ -469,7 +485,7 @@ function DashboardProyecto({
     };
 
     const headers = ['ID', 'NOMBRE', ...cols];
-    const rows = deportistas.map(d => [
+    const rows = lista.map(d => [
       esc(d.id),
       esc(d._nombre ?? ''),
       ...cols.map(c => esc(d._columnas?.[c] ?? '')),
@@ -606,11 +622,7 @@ function DashboardProyecto({
     {                  key:'estado',     label:'ESTADO',        minW:W_ESTADO      },
     ...(hayAfil   ? [{ key:'afiliacion', label:'AFILIACIÓN',   minW:W_AFIL        }] : []),
     ...(hasCodigo ? [{ key:'codigo',     label:'CÓDIGO',        minW:W_COD         }] : []),
-    {                  key:'foto',       label:'FOTO',          minW:52, center:true },
     {                  key:'nombre',     label:'DEPORTISTA',    minW:200           },
-    {                  key:'doc',        label:'DOC',           minW:50, center:true },
-    {                  key:'eps',        label:'EPS',           minW:50, center:true },
-    {                  key:'esc',        label:'ESC',           minW:50, center:true },
     ...(hayAnio   ? [{ key:'anio',       label:'AÑO',           minW:60, center:true }] : []),
     ...(hasMes    ? [{ key:'mes',        label:'MES',           minW:90            }] : []),
     ...(hasDia    ? [{ key:'dia',        label:'DÍA',           minW:50, center:true }] : []),
@@ -665,14 +677,6 @@ function DashboardProyecto({
           <button onClick={() => setBusqueda('')} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
         )}
         <span className="text-xs text-gray-400 font-bold flex-shrink-0">{filtrada.length}/{lista.length}</span>
-        {/* Descargar PDF — solo administración */}
-        {!esProfe && (
-          <button onClick={descargar} disabled={descargando}
-            title="Descargar este cuadro en PDF"
-            className="flex items-center gap-1.5 bg-[#dc2626] text-white px-3 py-1.5 rounded-lg text-xs font-black hover:bg-red-700 transition disabled:opacity-50 flex-shrink-0 whitespace-nowrap">
-            {descargando ? 'Generando…' : '⬇ Descargar PDF'}
-          </button>
-        )}
       </div>
 
       {/* ── Vista tarjetas ── */}
@@ -742,6 +746,11 @@ function DashboardProyecto({
                       {c.label}
                     </th>
                   ))}
+                  {/* Estado de cargue: FOTO / DOCUMENTO / EPS / CALIFICACIONES */}
+                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center" style={{ minWidth: 52, background: '#0f766e' }} title="¿Subió la foto?">FOTO</th>
+                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center" style={{ minWidth: 52, background: '#0f766e' }} title="¿Subió el documento de identidad (TI/RC)?">DOC</th>
+                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center" style={{ minWidth: 52, background: '#0f766e' }} title="¿Subió el certificado de EPS?">EPS</th>
+                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center" style={{ minWidth: 60, background: '#0f766e' }} title="¿Subió las calificaciones escolares?">CALIF</th>
                   <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left" style={{ minWidth: 130 }}>
                     POSICIÓN <span className="text-white/40 font-normal normal-case">(máx. 3)</span>
                   </th>
@@ -772,35 +781,15 @@ function DashboardProyecto({
 
                       {cols.map(c => {
                         const v = val(dep, c.key);
-                        // DOC / EPS / ESC — OK si el calidoso ya subió
-                        if (c.key === 'doc' || c.key === 'eps' || c.key === 'esc') {
-                          const ok = c.key === 'doc' ? docResumen.conDoc.has(dep.id)
-                                   : c.key === 'eps' ? docResumen.conEps.has(dep.id)
-                                   : docResumen.conEsc.has(dep.id);
-                          return (
-                            <td key={c.key} className="border border-white px-1 py-1 text-center" style={{ background: ok ? '#ecfdf5' : '#f8fafc' }}>
-                              {ok
-                                ? <span style={{ color: '#16a34a', fontWeight: 900, fontSize: 11 }}>✓ OK</span>
-                                : <span style={{ color: '#cbd5e1', fontWeight: 700, fontSize: 12 }}>—</span>}
-                            </td>
-                          );
-                        }
-                        // FOTO — miniatura para ver quién ya subió su foto
-                        if (c.key === 'foto') return (
-                          <td key={c.key} className="border border-white px-1 py-1 text-center" style={{ verticalAlign: 'middle' }}>
-                            <div style={{ width: 34, height: 34, borderRadius: 8, overflow: 'hidden', margin: '0 auto', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {fotos[dep.id]
-                                ? <img src={fotos[dep.id]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                : <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 700 }}>—</span>}
-                            </div>
-                          </td>
-                        );
                         // CÓDIGO — sticky + fondo por tipo de afiliación
                         if (c.key === 'codigo') return (
                           <td key={c.key}
                             className="border border-white px-2 py-1.5 text-center whitespace-nowrap font-black text-white text-sm"
                             style={{ background: colorCodigo(val(dep, 'afiliacion')) }}>
-                            {v || '—'}
+                            <span className="inline-flex items-center justify-center gap-1.5">
+                              <PuntoAcceso cod={v} accesos={accesos} />
+                              {v || '—'}
+                            </span>
                           </td>
                         );
                         return (
@@ -828,6 +817,20 @@ function DashboardProyecto({
                           </td>
                         );
                       })}
+                      {/* ── Estado de cargue: FOTO / DOC / EPS / CALIF ── */}
+                      {(() => {
+                        const chk = (ok: boolean) => ok
+                          ? <span className="text-green-600 font-black text-sm">✓</span>
+                          : <span className="text-gray-300 font-black text-sm">—</span>;
+                        return (
+                          <>
+                            <td className="border border-white px-1 py-1.5 text-center" style={{ background: '#f0fdfa' }}>{chk(!!fotos[dep.id])}</td>
+                            <td className="border border-white px-1 py-1.5 text-center" style={{ background: '#f0fdfa' }}>{chk(resumen.conDoc.has(dep.id))}</td>
+                            <td className="border border-white px-1 py-1.5 text-center" style={{ background: '#f0fdfa' }}>{chk(resumen.conEps.has(dep.id))}</td>
+                            <td className="border border-white px-1 py-1.5 text-center" style={{ background: '#f0fdfa' }}>{chk(resumen.conEsc.has(dep.id))}</td>
+                          </>
+                        );
+                      })()}
                       {/* ── POSICIÓN ── */}
                       <td className="border border-white px-2 py-1.5" style={{ overflow: 'visible', position: 'relative', verticalAlign: 'middle' }}>
                         <CeldaPosicion
@@ -870,7 +873,7 @@ function DashboardProyecto({
                   );
                 })}
                 {filtrada.length === 0 && (
-                  <tr><td colSpan={cols.length + 4} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
+                  <tr><td colSpan={cols.length + 7} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
                 )}
               </tbody>
             </table>
@@ -895,13 +898,53 @@ function AlumnosPageContent() {
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const [fotos,       setFotos]       = useState<Record<string, string>>({});
   const [fotosProfe,  setFotosProfe]  = useState<Record<string, string>>({});
-  const [docResumen,  setDocResumen]  = useState<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> }>({ conDoc: new Set(), conEps: new Set(), conEsc: new Set() });
   const [programa,    setPrograma]    = useState<string | null>(null);
   const [proy,        setProy]        = useState<string | null>(null);
   const [busqueda,    setBusqueda]    = useState('');
   const [proyEdits,   setProyEdits]   = useState<Record<string, string>>({});
   const [cargando,    setCargando]    = useState(true);
   const [errorCarga,  setErrorCarga]  = useState<string | null>(null);
+  // Códigos que ya entraron a la plataforma (para el puntico verde/rojo)
+  const [accesos,     setAccesos]     = useState<Set<string>>(new Set());
+  useEffect(() => { getCodigosConAcceso().then(setAccesos).catch(() => {}); }, []);
+  // Resumen de cargue: qué deportistas tienen documento (TI/RC), EPS y calificaciones escolares
+  const [resumen, setResumen] = useState<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> }>({ conDoc: new Set(), conEps: new Set(), conEsc: new Set() });
+  useEffect(() => { getResumenDocumentos().then(setResumen).catch(() => {}); }, []);
+  const soloLectura = useSoloLectura(); // contabilidad: solo ver
+  // Fotos desde la nube: para que el admin/profe vea TODAS las fotos subidas,
+  // no solo las que estén en la memoria local de este dispositivo.
+  useEffect(() => {
+    getFotosDeportistas().then(cloud => {
+      if (cloud && Object.keys(cloud).length) setFotos(prev => ({ ...prev, ...cloud }));
+    }).catch(() => {});
+  }, []);
+
+  // Backup a Excel/CSV de TODOS los deportistas (botón "Backup Excel").
+  function exportarExcel() {
+    if (!deportistas.length) return;
+    const colSet = new Set<string>();
+    deportistas.forEach(d => Object.keys(d._columnas ?? {}).forEach(k => colSet.add(k)));
+    const cols = Array.from(colSet);
+    const esc = (v: unknown) => {
+      const s = String(v ?? '');
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = ['ID', 'NOMBRE', ...cols];
+    const rows = deportistas.map(d => [
+      esc(d.id),
+      esc(d._nombre ?? ''),
+      ...cols.map(c => esc(d._columnas?.[c] ?? '')),
+    ].join(','));
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    a.href     = url;
+    a.download = `BACKUP_AFILIADOS_${fecha}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
   // Detección de profesor — se hace en useEffect (cliente) para evitar mismatch de SSR
   const [esProfe, setEsProfe] = useState(false);
   useEffect(() => {
@@ -916,11 +959,6 @@ function AlumnosPageContent() {
     } catch {}
   }, []);
   const autoNavRef = useRef(false);
-
-  // Resumen de documentos subidos (para las columnas OK del cuadro)
-  useEffect(() => {
-    getResumenDocumentos().then(setDocResumen).catch(() => {});
-  }, []);
 
   useEffect(() => {
     const proyParam = searchParams.get('proyecto');
@@ -1044,30 +1082,6 @@ function AlumnosPageContent() {
     if (!confirm('¿Eliminar todos los deportistas?')) return;
     ['futuro_deportistas','futuro_fotos_deportistas'].forEach(k => localStorage.removeItem(k));
     setDeportistas([]); setFotos({}); setPrograma(null); setProy(null);
-  }
-
-  // Copia de seguridad de todos los afiliados en CSV (Excel)
-  function exportarExcel() {
-    if (!deportistas.length) return;
-    const colSet = new Set<string>();
-    deportistas.forEach(d => Object.keys(d._columnas ?? {}).forEach(k => colSet.add(k)));
-    const cols = Array.from(colSet);
-    const esc = (v: unknown) => {
-      const s = String(v ?? '');
-      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const headers = ['ID', 'NOMBRE', ...cols];
-    const rows = deportistas.map(d => [
-      esc(d.id), esc(d._nombre ?? ''),
-      ...cols.map(c => esc(d._columnas?.[c] ?? '')),
-    ].join(','));
-    const csv = [headers.join(','), ...rows].join('\r\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    a.href = url; a.download = `BACKUP_AFILIADOS_${fecha}.csv`; a.click();
-    URL.revokeObjectURL(url);
   }
 
   function handlePosicion(depId: string, val: string) {
@@ -1373,7 +1387,9 @@ function AlumnosPageContent() {
                     return (
                       <tr key={dep.id} style={{ background: bg }} className="hover:brightness-95 transition-all">
                         <td className="border border-white px-2 py-1.5 text-center text-[10px] font-bold text-[#111827] select-none">{i + 1}</td>
-                        <td className="border border-white px-2 py-1.5 font-black text-white text-center" style={{ background: colorCodigo(afilDep) }}>{cod || '—'}</td>
+                        <td className="border border-white px-2 py-1.5 font-black text-white text-center" style={{ background: colorCodigo(afilDep) }}>
+                          <span className="inline-flex items-center justify-center gap-1.5"><PuntoAcceso cod={cod} accesos={accesos} />{cod || '—'}</span>
+                        </td>
                         <td className="border border-white px-2 py-1.5">
                           <span className="font-bold text-[#111827] cursor-pointer hover:underline"
                             onClick={() => router.push(`/alumnos/${dep.id}`)}>{dep._nombre}</span>
@@ -1387,6 +1403,9 @@ function AlumnosPageContent() {
                                   : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="border border-white px-2 py-1.5 min-w-[200px]">
+                          {soloLectura ? (
+                            <span className="text-gray-400 text-[11px]">—</span>
+                          ) : (
                           <div className="flex items-center gap-1.5">
                             <input
                               type="text"
@@ -1403,6 +1422,7 @@ function AlumnosPageContent() {
                               ACTUALIZAR
                             </button>
                           </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -1474,7 +1494,9 @@ function AlumnosPageContent() {
                     return (
                       <tr key={dep.id} style={{ background: bg }} className="hover:brightness-95 transition-all">
                         <td className="border border-gray-300 px-2 py-1.5 text-center text-[10px] font-bold text-gray-400 select-none">{i + 1}</td>
-                        <td className="border border-gray-300 px-2 py-1.5 text-gray-700">{cod || '—'}</td>
+                        <td className="border border-gray-300 px-2 py-1.5 text-gray-700">
+                          <span className="inline-flex items-center gap-1.5"><PuntoAcceso cod={cod} accesos={accesos} />{cod || '—'}</span>
+                        </td>
                         <td className="border border-gray-300 px-2 py-1.5">
                           <span className="font-bold text-gray-700 cursor-pointer hover:underline"
                             onClick={() => router.push(`/alumnos/${dep.id}`)}>{dep._nombre}</span>
@@ -1630,7 +1652,8 @@ function AlumnosPageContent() {
           fotos={fotos}
           fotosProfe={fotosProfe}
           esProfe={esProfe}
-          docResumen={docResumen}
+          accesos={accesos}
+          resumen={resumen}
           onFotoProfe={guardarFotoProfe}
           onVerPerfil={id => router.push(`/alumnos/${id}`)}
           onPosicion={handlePosicion}

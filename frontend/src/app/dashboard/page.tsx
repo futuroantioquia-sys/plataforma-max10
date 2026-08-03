@@ -11,7 +11,7 @@ import {
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
-import { getDeportistas, countSoportesPendientes, countMensajesNoLeidos } from '@/lib/db';
+import { getDeportistas, countSoportesPendientes, getResumenVisitas, getVisitasPorDia } from '@/lib/db';
 
 // ── CARD DE ACCESO RÁPIDO ────────────────────────────────────────
 function AccesoCard({
@@ -198,11 +198,60 @@ function LinkInscripcionCard() {
 }
 
 // ── DASHBOARD ADMINISTRADOR ──────────────────────────────────────
+/** Panel de analíticas: cuántos entran a la app y accesos por día. */
+function AnaliticasVisitantes() {
+  const [resumen, setResumen] = useState<{ total: number; unicos: number }>({ total: 0, unicos: 0 });
+  const [dias,    setDias]    = useState<{ dia: string; visitas: number; visitantes: number }[]>([]);
+  useEffect(() => {
+    getResumenVisitas().then(setResumen).catch(() => {});
+    getVisitasPorDia(30).then(setDias).catch(() => {});
+  }, []);
+  const maxV = Math.max(1, ...dias.map(d => d.visitas));
+  const fmtDia = (s: string) => { const p = (s || '').split('-'); return p.length === 3 ? `${p[2]}/${p[1]}` : s; };
+  return (
+    <div className="rounded-2xl border border-gray-200 shadow-sm bg-white overflow-hidden">
+      <div className="px-4 py-3 flex items-center gap-2 bg-gradient-to-r from-[#064e1e] to-[#16a34a]">
+        <span className="text-lg">📈</span>
+        <span className="text-white font-black text-sm uppercase tracking-wide flex-1">Visitantes de la plataforma</span>
+      </div>
+      <div className="p-4">
+        <div className="flex gap-3 mb-4">
+          <div className="flex-1 rounded-xl bg-green-50 border border-green-100 p-3 text-center">
+            <p className="text-2xl font-black text-[#064e1e]">{resumen.total}</p>
+            <p className="text-[11px] font-bold text-green-700 uppercase tracking-wide">Accesos totales</p>
+          </div>
+          <div className="flex-1 rounded-xl bg-blue-50 border border-blue-100 p-3 text-center">
+            <p className="text-2xl font-black text-blue-800">{resumen.unicos}</p>
+            <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">Deportistas únicos</p>
+          </div>
+        </div>
+        {dias.length > 0 ? (
+          <>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Accesos por día (últimos {dias.length})</p>
+            <div className="flex items-end gap-1 h-28">
+              {dias.map(d => (
+                <div key={d.dia} className="flex-1 flex flex-col items-center justify-end gap-1 group"
+                  title={`${fmtDia(d.dia)}: ${d.visitas} accesos · ${d.visitantes} deportistas`}>
+                  <span className="text-[9px] font-bold text-gray-500 opacity-0 group-hover:opacity-100 transition">{d.visitas}</span>
+                  <div className="w-full rounded-t bg-gradient-to-t from-[#16a34a] to-[#22c55e]"
+                    style={{ height: `${Math.max(4, (d.visitas / maxV) * 100)}%` }} />
+                  <span className="text-[8px] text-gray-400 whitespace-nowrap">{fmtDia(d.dia)}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-center text-sm text-gray-400 py-4">Aún no hay accesos registrados. Aparecerán aquí cuando los calidosos empiecen a entrar con su código.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DashboardAdmin() {
   const [pendientesAsign,    setPendientesAsign]    = useState(0);
   const [pendientesSoportes, setPendientesSoportes] = useState(0);
   const [pagosCargados,      setPagosCargados]      = useState(0);
-  const [mensajesNoLeidos,   setMensajesNoLeidos]   = useState(0);
 
   useEffect(() => {
     getDeportistas().then(lista => {
@@ -215,8 +264,6 @@ function DashboardAdmin() {
 
     countSoportesPendientes().then(n => setPendientesSoportes(n)).catch(() => {});
 
-    countMensajesNoLeidos().then(n => setMensajesNoLeidos(n)).catch(() => {});
-
     // Contar deportistas con pagos cargados en el Libro Contable (localStorage)
     try {
       const raw = localStorage.getItem('futuro_libro_pagos');
@@ -228,6 +275,9 @@ function DashboardAdmin() {
 
   return (
     <div className="space-y-5 sm:space-y-8">
+      {/* Analíticas de visitantes */}
+      <AnaliticasVisitantes />
+
       {/* Categoría: Deportistas */}
       <CategoriaSection emoji="🏃" titulo="Deportistas" color="verde" delay={100}>
         <AccesoCard titulo="Consolidado Afiliados"   icono={LayoutList}    href="/general"      descripcion="Todos los deportistas"       color="verde" />
@@ -263,7 +313,7 @@ function DashboardAdmin() {
       {/* Categoría: Gestión */}
       <CategoriaSection emoji="⚙️" titulo="Gestión" color="teal" delay={400}>
         <AccesoCard titulo="Info Proyectos y Formadores" icono={Shield} href="/usuarios" descripcion="Profes, sedes y proyectos" color="teal" />
-        <AccesoCard titulo="Mensajes Pendientes"  icono={MessageCircle} href="/mensajes"  descripcion="Mensajes de los calidosos sin leer" color="teal" badge={mensajesNoLeidos} />
+        <AccesoCard titulo="Mensajes"            icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"    color="teal" />
       </CategoriaSection>
 
       <div className="divider-fade" />

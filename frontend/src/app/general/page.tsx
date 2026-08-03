@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSoloLectura } from '@/lib/permisos';
 import { ArrowLeft, Search, Users, Save, CheckCircle, Columns3, Upload, X, Trophy, AlertCircle, Trash2 } from 'lucide-react';
 import { getDeportistas, saveDeportistas, deleteAllDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
@@ -169,6 +170,7 @@ export default function GeneralPage() {
   const [torneoArrastr, setTorneoArrastr] = useState(false);
   const [borrando,      setBorrando]      = useState(false);
   const [cargando,      setCargando]      = useState(true);
+  const soloLectura = useSoloLectura(); // contabilidad: solo ver
 
   // ── Subir Nuevos Deportistas ─────────────────────────────────
   type NuevoReg = { _nombre: string; _columnas: Record<string,string>; duplicado: boolean };
@@ -755,7 +757,7 @@ export default function GeneralPage() {
         )}
 
         {/* Botón deshacer último lote — solo visible si hay lote */}
-        {ultimoLote.length > 0 && (
+        {!soloLectura && ultimoLote.length > 0 && (
           <button
             onClick={eliminarUltimoLote}
             className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-500/90 hover:bg-amber-600 text-white transition flex-shrink-0"
@@ -766,24 +768,28 @@ export default function GeneralPage() {
         )}
 
         {/* Botón SUBIR NUEVOS DEPORTISTAS */}
+        {!soloLectura && (
         <button
           onClick={() => { setModalNuevos(true); setNuevosPaso('subir'); setNuevosFilas([]); }}
           className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#16a34a] text-white hover:bg-[#064e1e] transition flex-shrink-0 shadow-sm">
           <Upload className="w-3.5 h-3.5" />
           Subir nuevos
         </button>
+        )}
 
         {/* Input oculto para nuevos deportistas */}
         <input ref={nuevosInputRef} type="file" accept=".xlsx,.xls" className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) procesarExcelNuevos(f); e.target.value = ''; }} />
 
         {/* Botón importar torneos — oculto en móvil */}
+        {!soloLectura && (
         <button
           onClick={() => { setModalTorneo(true); setTorneoPaso('subir'); setTorneoFilas([]); }}
           className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-white/15 text-white hover:bg-white/25 transition flex-shrink-0">
           <Trophy className="w-3.5 h-3.5" />
           Torneos
         </button>
+        )}
 
         {/* Botón columnas visibles */}
         <div className="relative flex-shrink-0" ref={panelRef}>
@@ -847,6 +853,7 @@ export default function GeneralPage() {
         </div>
 
         {/* Botón ACTUALIZAR */}
+        {!soloLectura && (
         <button
           onClick={actualizarTodo}
           disabled={pendingCount === 0 && !guardado}
@@ -868,6 +875,7 @@ export default function GeneralPage() {
             </>
           }
         </button>
+        )}
 
         <div className="hidden sm:block relative text-right leading-tight ml-2 flex-shrink-0">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
@@ -1107,7 +1115,13 @@ export default function GeneralPage() {
                               }
 
                               // SELECT (Programa / Estado)
-                              if (opciones) return (
+                              if (opciones) {
+                                if (soloLectura) return (
+                                  <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-1.5 py-[7px]">
+                                    <span className="block w-full text-[11px] font-semibold text-[#111827] truncate">{rawVal || '—'}</span>
+                                  </td>
+                                );
+                                return (
                                 <td key={col}
                                   style={{ background: '#f1f5f9', border: '2px solid white' }}
                                   className="px-0 py-0">
@@ -1119,7 +1133,8 @@ export default function GeneralPage() {
                                     {opciones.map(o => <option key={o} value={o}>{o}</option>)}
                                   </select>
                                 </td>
-                              );
+                                );
+                              }
 
                               // PROYECTO — select verde filtrado por programa
                               const esProyecto = RX_PROY.test(col.trim());
@@ -1128,6 +1143,11 @@ export default function GeneralPage() {
                                 const opsProy    = (proyectosPorPrograma[progActual] && proyectosPorPrograma[progActual].length > 0)
                                   ? proyectosPorPrograma[progActual]
                                   : Object.entries(proyectosPorPrograma).filter(([k]) => k !== '__RETIRADO__').flatMap(([,v]) => v).filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>{ const na=parseInt(a,10),nb=parseInt(b,10); return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b,'es'); });
+                                if (soloLectura) return (
+                                  <td key={col} style={{ border: '2px solid white', backgroundColor: '#16a34a' }} className="px-2 py-[6px]">
+                                    <span className="block w-full text-[13px] font-semibold text-white truncate">{rawVal && rawVal !== '—' ? rawVal : '—'}</span>
+                                  </td>
+                                );
                                 return (
                                   <td key={col}
                                     style={{ border: '2px solid white', backgroundColor: '#16a34a' }}
@@ -1145,7 +1165,13 @@ export default function GeneralPage() {
 
                               // PROFE — input, letra más grande
                               const esProfe = /^prof/i.test(col.trim());
-                              if (esProfe) return (
+                              if (esProfe) {
+                                if (soloLectura) return (
+                                  <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-2 py-[6px]">
+                                    <span className="block w-full text-[13px] font-semibold text-[#111827] truncate">{rawVal && rawVal !== '—' ? rawVal : '—'}</span>
+                                  </td>
+                                );
+                                return (
                                 <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-0 py-0">
                                   <input
                                     value={rawVal === '—' ? '' : rawVal}
@@ -1154,9 +1180,15 @@ export default function GeneralPage() {
                                     className="w-full text-[13px] font-semibold text-[#111827] py-[6px] px-2 outline-none bg-transparent truncate"
                                   />
                                 </td>
-                              );
+                                );
+                              }
 
                               // TEXTO genérico
+                              if (soloLectura) return (
+                                <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-2 py-[7px]">
+                                  <span className="block w-full text-[11px] text-[#111827] truncate">{rawVal && rawVal !== '—' ? rawVal : '—'}</span>
+                                </td>
+                              );
                               return (
                                 <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-0 py-0">
                                   <input
@@ -1177,7 +1209,7 @@ export default function GeneralPage() {
             </div>
 
             {/* Footer con botón ACTUALIZAR */}
-            {pendingCount > 0 && (
+            {!soloLectura && pendingCount > 0 && (
               <div className="sticky bottom-0 bg-[#f1f5f9] border-t-2 border-white px-5 py-3 flex items-center justify-between">
                 <p className="text-[#111827] font-semibold text-sm">
                   Tienes <strong>{pendingCount}</strong> cambio{pendingCount !== 1 ? 's' : ''} sin guardar.
