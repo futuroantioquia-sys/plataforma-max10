@@ -50,6 +50,8 @@ export const useAuthStore = create<AuthState>()(
   logout: async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    // Borra la cookie firmada (HttpOnly) desde el servidor + la cookie legible.
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch {}
     if (typeof document !== 'undefined') {
       document.cookie = 'futuro-session=; path=/; max-age=0';
     }

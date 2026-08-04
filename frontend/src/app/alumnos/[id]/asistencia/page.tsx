@@ -410,19 +410,19 @@ export default function AsistenciaAtletaPage() {
                 <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
                   {codVal}
                 </div>
-                {/* Navegación: el calidoso ve los 4 botones en cada sección (ASIST. activo aquí);
-                    admin/profe conservan Pagos + Asistencia */}
+                {/* Botones nav: siempre 4 secciones accesibles */}
                 <div className="grid grid-cols-2 gap-1 w-full">
                   {(esDeportista
                     ? [
-                        { label: 'PAGOS',  href: `/alumnos/${id}/estado-cuenta`, active: false },
-                        { label: 'ASIST.', href: null as string | null,          active: true  },
-                        { label: 'VAL.',   href: '/mantenimiento',               active: false },
-                        { label: 'MENS.',  href: `/alumnos/${id}/mensajes`,      active: false },
+                        { label: 'PAGOS',  href: `/alumnos/${id}/estado-cuenta`,  active: false },
+                        { label: 'ASIST.', href: null,                             active: true  },
+                        { label: 'MENS.',  href: '/mensajes',                      active: false },
                       ]
                     : [
-                        { label: 'PAGOS',  href: `/alumnos/${id}/estado-cuenta`, active: false },
-                        { label: 'ASIST.', href: null as string | null,          active: true  },
+                        { label: 'PAGOS',  href: `/alumnos/${id}/estado-cuenta`,  active: false },
+                        { label: 'ASIST.', href: null,                             active: true  },
+                        { label: 'INF.',   href: codVal ? `/evaluaciones?cod=${encodeURIComponent(codVal)}` : '/evaluaciones', active: false },
+                        { label: 'MENS.',  href: '/mensajes',                      active: false },
                       ]
                   ).map(({ label, href, active }) => (
                     <button key={label}

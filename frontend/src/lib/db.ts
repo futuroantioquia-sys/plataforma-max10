@@ -740,6 +740,33 @@ export async function saveAllPagos(all: AllPagos): Promise<void> {
   }
 }
 
+/** Cuenta las filas del Libro Contable en Supabase (código numérico) — compartido admin/contable. */
+export async function countLibroPagos(): Promise<number> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/rpc/count_libro_pagos`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+        },
+        body: '{}',
+      }
+    );
+    if (res.ok) {
+      const n = await res.json();
+      if (typeof n === 'number') return n;
+    }
+  } catch {}
+  // Respaldo local (solo si falla la red)
+  try {
+    const raw = lsGet<Record<string, unknown[]>>(LS_LIBRO, {});
+    return Object.values(raw).reduce((a, v) => a + (Array.isArray(v) ? v.length : 0), 0);
+  } catch { return 0; }
+}
+
 // ── FOTOS ────────────────────────────────────────────────────
 
 /** Lee foto de un deportista: Supabase primero, localStorage como fallback. */
@@ -1361,12 +1388,21 @@ export async function getSoportesDeDeportista(deportistaIds: string | string[]):
   } catch { return []; }
 }
 
-/** Carga todos los soportes pendientes (no confirmados) para el admin. */
+/** Carga todos los soportes pendientes (no confirmados) para el admin.
+ *  IMPORTANTE: NO trae la imagen base64 (`datos`) para que la lista sea liviana y NUNCA falle
+ *  por tamaño. La imagen de cada soporte se carga aparte con getSoporteDatos(id). */
 export async function getSoportesPendientes(): Promise<SoportePago[]> {
-  // Intento 1: fetch() directo (más portable en mobile)
+  const mapear = (arr: any[]): SoportePago[] => arr.map((r: any) => ({
+    id: r.id, deportista_id: r.deportista_id ?? '', nombre: r.nombre ?? '', datos: '',
+    fecha: r.fecha ?? '', meses: Array.isArray(r.meses) ? r.meses : [],
+    confirmado: !!r.confirmado, fecha_confirmacion: r.fecha_confirmacion ?? null,
+    created_at: r.created_at ?? '',
+  }));
+
+  // Intento 1: fetch() directo — SIN datos (liviano)
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/soportes_pago?select=id,deportista_id,nombre,datos,fecha,meses,confirmado,fecha_confirmacion,created_at&confirmado=eq.false&order=created_at.desc`,
+      `${SUPABASE_URL}/rest/v1/soportes_pago?select=id,deportista_id,nombre,fecha,meses,confirmado,fecha_confirmacion,created_at&confirmado=eq.false&order=created_at.desc`,
       {
         headers: {
           'apikey':        SUPABASE_ANON_KEY,
@@ -1377,21 +1413,37 @@ export async function getSoportesPendientes(): Promise<SoportePago[]> {
     );
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data)) return data as SoportePago[];
+      if (Array.isArray(data)) return mapear(data);
     }
   } catch { /* fallback */ }
 
-  // Intento 2: SDK Supabase
+  // Intento 2: SDK Supabase (también sin datos)
   try {
     const { data, error } = await supabase()
       .from('soportes_pago')
-      .select('id,deportista_id,nombre,datos,fecha,meses,confirmado,fecha_confirmacion,created_at')
+      .select('id,deportista_id,nombre,fecha,meses,confirmado,fecha_confirmacion,created_at')
       .eq('confirmado', false)
       .order('created_at', { ascending: false });
-    if (!error && data) return data as SoportePago[];
+    if (!error && data) return mapear(data);
   } catch {}
 
   return [];
+}
+
+/** Carga la imagen/base64 (`datos`) de UN soporte por su id. Se usa perezosamente en la lista. */
+export async function getSoporteDatos(soporteId: string): Promise<string> {
+  if (!soporteId) return '';
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/soportes_pago?select=datos&id=eq.${encodeURIComponent(soporteId)}`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]?.datos) return String(data[0].datos);
+    }
+  } catch {}
+  return '';
 }
 
 /** Cuenta soportes pendientes (para badge del dashboard). */
@@ -1418,8 +1470,8 @@ export async function countSoportesPendientes(): Promise<number> {
   return 0;
 }
 
-/** Marca un soporte como confirmado. */
-export async function confirmarSoportePago(soporteId: string): Promise<void> {
+/** Marca un soporte como confirmado. Devuelve true solo si REALMENTE se guardó. */
+export async function confirmarSoportePago(soporteId: string): Promise<boolean> {
   try {
     const { error } = await supabase()
       .from('soportes_pago')
@@ -1428,19 +1480,21 @@ export async function confirmarSoportePago(soporteId: string): Promise<void> {
         fecha_confirmacion: new Date().toLocaleDateString('es-CO'),
       })
       .eq('id', soporteId);
-    if (error) console.error('[db] confirmarSoportePago:', error.message);
-  } catch (e) { console.error('[db] confirmarSoportePago:', e); }
+    if (error) { console.error('[db] confirmarSoportePago:', error.message); return false; }
+    return true;
+  } catch (e) { console.error('[db] confirmarSoportePago:', e); return false; }
 }
 
-/** Elimina un soporte (cuando el admin rechaza). */
-export async function eliminarSoportePago(soporteId: string): Promise<void> {
+/** Elimina un soporte (cuando el admin rechaza). Devuelve true solo si REALMENTE se borró. */
+export async function eliminarSoportePago(soporteId: string): Promise<boolean> {
   try {
     const { error } = await supabase()
       .from('soportes_pago')
       .delete()
       .eq('id', soporteId);
-    if (error) console.error('[db] eliminarSoportePago:', error.message);
-  } catch (e) { console.error('[db] eliminarSoportePago:', e); }
+    if (error) { console.error('[db] eliminarSoportePago:', error.message); return false; }
+    return true;
+  } catch (e) { console.error('[db] eliminarSoportePago:', e); return false; }
 }
 
 /** Elimina soportes NO confirmados por nombre de archivo, cubriendo TODOS los
@@ -1589,6 +1643,7 @@ export interface Profe {
   id:        string;   // uuid generado en cliente
   usuario:   string;   // apellido en mayúsculas (login)
   clave:     string;   // cédula
+  nombre?:   string;   // nombre completo del formador
   proyectos: string[]; // proyectos a los que puede acceder
   foto?:     string;   // base64 foto de perfil (sync cross-device)
 }
@@ -1628,6 +1683,7 @@ function rowToProfe(r: any): Profe {
     id:        r.id        ?? '',
     usuario:   r.usuario   ?? '',
     clave:     r.clave     ?? '',
+    nombre:    r.nombre    ?? '',
     proyectos: Array.isArray(r.proyectos) ? r.proyectos : [],
     foto:      r.foto      ?? '',
   };
@@ -1702,6 +1758,7 @@ export async function saveProfes(lista: Profe[]): Promise<{ ok: boolean; msg?: s
     id:        p.id,
     usuario:   p.usuario,
     clave:     p.clave,
+    nombre:    p.nombre ?? '',
     proyectos: p.proyectos,
     foto:      p.foto ?? '',
   }));
@@ -1723,7 +1780,7 @@ export async function saveProfes(lista: Profe[]): Promise<{ ok: boolean; msg?: s
       // Intentar UPDATE por usuario
       const { data, error: updErr } = await supabase()
         .from('profes')
-        .update({ clave: row.clave, proyectos: row.proyectos, foto: row.foto })
+        .update({ clave: row.clave, nombre: row.nombre, proyectos: row.proyectos, foto: row.foto })
         .eq('usuario', row.usuario)
         .select('id');
       if (updErr) {
@@ -1739,6 +1796,22 @@ export async function saveProfes(lista: Profe[]): Promise<{ ok: boolean; msg?: s
     return { ok: true };
   } catch (e: any) {
     console.error('[db] saveProfes fallback:', e);
+    return { ok: false, msg: String(e?.message ?? e) };
+  }
+}
+
+/** Elimina un formador (por id) de Supabase y de la caché local. */
+export async function deleteProfe(id: string): Promise<{ ok: boolean; msg?: string }> {
+  try {
+    const cache = lsGet<Profe[]>(LS_PROFES, []);
+    lsSet(LS_PROFES, cache.filter(p => p.id !== id));
+  } catch { /* noop */ }
+  try {
+    const { error } = await supabase().from('profes').delete().eq('id', id);
+    if (error) { console.error('[db] deleteProfe:', error.message); return { ok: false, msg: error.message }; }
+    return { ok: true };
+  } catch (e: any) {
+    console.error('[db] deleteProfe:', e);
     return { ok: false, msg: String(e?.message ?? e) };
   }
 }
@@ -1897,7 +1970,8 @@ export async function saveEvaluacion(data: Omit<Evaluacion, 'id'>): Promise<void
 
 // ── MENSAJES (calidoso ⇄ administración) ─────────────────────
 
-export type EmisorMensaje = 'calidoso' | 'admin';
+export type EmisorMensaje = 'calidoso' | 'admin' | 'profesor';
+export type DestinoMensaje = 'profesor' | 'institucion';
 
 export interface Mensaje {
   id: string;
@@ -1906,27 +1980,33 @@ export interface Mensaje {
   nombre: string;
   texto: string;
   de: EmisorMensaje;      // quién lo envió
-  leido: boolean;         // para mensajes del calidoso: si la admin ya lo leyó
+  para: DestinoMensaje;   // a quién va dirigido (profesor o institución)
+  proyecto: string;       // proyecto del deportista (para enrutar al profe)
+  leido: boolean;         // para mensajes del calidoso: si el destinatario ya lo leyó
   createdAt: string;
 }
 
 const LS_MENSAJES = 'futuro_mensajes_db';
 
-/** Envía un mensaje. `de` = 'calidoso' (por defecto) o 'admin' (respuesta). */
+/** Envía un mensaje. `de` = quién lo envía; `para` = destinatario (profesor | institucion). */
 export async function enviarMensaje(data: {
-  deportistaId: string; codigo: string; nombre: string; texto: string; de?: EmisorMensaje;
+  deportistaId: string; codigo: string; nombre: string; texto: string;
+  de?: EmisorMensaje; para?: DestinoMensaje; proyecto?: string;
 }): Promise<boolean> {
   const texto = (data.texto ?? '').trim();
   if (!texto) return false;
+  const de = data.de ?? 'calidoso';
   try {
     const { error } = await supabase().from('mensajes').insert({
       deportista_id: data.deportistaId ?? '',
       codigo: (data.codigo ?? '').trim(),
       nombre: (data.nombre ?? '').trim(),
       texto,
-      de: data.de ?? 'calidoso',
-      // Los mensajes de la admin nacen "leídos" (no cuentan como pendientes de ella)
-      leido: (data.de ?? 'calidoso') === 'admin',
+      de,
+      para: data.para ?? 'institucion',
+      proyecto: (data.proyecto ?? '').trim() || null,
+      // Solo los mensajes del calidoso nacen "no leídos" (pendientes para el destinatario)
+      leido: de !== 'calidoso',
     });
     if (error) { console.error('[db] enviarMensaje:', error.message); return false; }
     return true;
@@ -1949,7 +2029,9 @@ export async function getMensajes(codigo?: string): Promise<Mensaje[]> {
       codigo: r.codigo ?? '',
       nombre: r.nombre ?? '',
       texto: r.texto ?? '',
-      de: (r.de === 'admin' ? 'admin' : 'calidoso') as EmisorMensaje,
+      de: (r.de === 'admin' ? 'admin' : r.de === 'profesor' ? 'profesor' : 'calidoso') as EmisorMensaje,
+      para: (r.para === 'profesor' ? 'profesor' : 'institucion') as DestinoMensaje,
+      proyecto: r.proyecto ?? '',
       leido: !!r.leido,
       createdAt: r.created_at ?? '',
     }));
@@ -1961,18 +2043,20 @@ export async function getMensajes(codigo?: string): Promise<Mensaje[]> {
   }
 }
 
-/** Cuenta los mensajes de calidosos sin leer (para el tablero de la admin). */
-export async function countMensajesNoLeidos(): Promise<number> {
+/** Cuenta los mensajes de calidosos sin leer. `para` filtra por destinatario (institucion | profesor). */
+export async function countMensajesNoLeidos(para?: DestinoMensaje): Promise<number> {
   try {
-    const { count, error } = await supabase()
+    let q = supabase()
       .from('mensajes')
       .select('*', { count: 'exact', head: true })
       .eq('leido', false)
       .eq('de', 'calidoso');
+    if (para) q = q.eq('para', para);
+    const { count, error } = await q;
     if (error) throw error;
     return count ?? 0;
   } catch {
-    return lsGet<Mensaje[]>(LS_MENSAJES, []).filter(m => !m.leido && m.de !== 'admin').length;
+    return lsGet<Mensaje[]>(LS_MENSAJES, []).filter(m => !m.leido && m.de === 'calidoso' && (!para || m.para === para)).length;
   }
 }
 
@@ -1986,20 +2070,58 @@ export async function marcarMensajeLeido(id: string): Promise<void> {
   }
 }
 
-/** Marca como leídos TODOS los mensajes del calidoso de una conversación (por código). */
-export async function marcarConversacionLeida(codigo: string): Promise<void> {
+/** Marca como leídos los mensajes del calidoso de una conversación. `para` limita al hilo profesor|institucion. */
+export async function marcarConversacionLeida(codigo: string, para?: DestinoMensaje): Promise<void> {
   const cod = (codigo ?? '').trim();
   if (!cod) return;
   try {
-    const { error } = await supabase().from('mensajes')
+    let q = supabase().from('mensajes')
       .update({ leido: true })
       .eq('codigo', cod)
       .eq('de', 'calidoso')
       .eq('leido', false);
+    if (para) q = q.eq('para', para);
+    const { error } = await q;
     if (error) console.error('[db] marcarConversacionLeida:', error.message);
   } catch (e) {
     console.error('[db] marcarConversacionLeida:', e);
   }
+}
+
+// ── JORNADA POR MES (días de entreno que el profe ajusta solo para un mes) ──
+
+/** Lee TODOS los overrides de días por mes de un proyecto. Devuelve { [mesKey]: number[] }. */
+export async function getJornadaMes(proyecto: string): Promise<Record<string, number[]>> {
+  const p = (proyecto ?? '').trim();
+  if (!p) return {};
+  try {
+    const { data, error } = await supabase()
+      .from('jornada_mes')
+      .select('mes_key, dias')
+      .eq('proyecto', p);
+    if (error) throw error;
+    const out: Record<string, number[]> = {};
+    (data ?? []).forEach((r: any) => {
+      if (Array.isArray(r.dias)) out[r.mes_key] = r.dias as number[];
+    });
+    return out;
+  } catch (e) {
+    console.error('[db] getJornadaMes:', e);
+    return {};
+  }
+}
+
+/** Guarda (upsert) los días de entreno de UN mes específico de un proyecto. */
+export async function saveJornadaMes(proyecto: string, mesKey: string, dias: number[]): Promise<boolean> {
+  const p = (proyecto ?? '').trim();
+  if (!p || !mesKey) return false;
+  try {
+    const { error } = await supabase()
+      .from('jornada_mes')
+      .upsert({ proyecto: p, mes_key: mesKey, dias, updated_at: new Date().toISOString() }, { onConflict: 'proyecto,mes_key' });
+    if (error) { console.error('[db] saveJornadaMes:', error.message); return false; }
+    return true;
+  } catch (e) { console.error('[db] saveJornadaMes:', e); return false; }
 }
 
 // ── SESIONES DE ENTRENAMIENTO ────────────────────────────────

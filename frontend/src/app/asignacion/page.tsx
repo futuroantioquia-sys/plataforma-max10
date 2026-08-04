@@ -34,7 +34,12 @@ function colorCodigo(afil: string): string {
   return '#16a34a'; // default verde
 }
 function colSede(d: Deportista)     { return getCol(d, /^sede/i); }
-function colJornada(d: Deportista)  { return getCol(d, /^jorn/i); }
+// JORNADA de ENTRENAMIENTO (nunca la de estudio)
+function colJornada(d: Deportista) {
+  return getCol(d, /jorn.*entren/i)               // "JORNADA DE ENTRENAMIENTO"
+      || getCol(d, /^jornada_ent/i)               // "JORNADA_ENT"
+      || getCol(d, /^jorn(?!.*estud)/i);          // "JORNADA" genérica, pero NO la de estudio
+}
 function colAno(d: Deportista)      { return getCol(d, /^a[ñn]o$/i); }
 function colMes(d: Deportista)      { return getCol(d, /^mes$/i); }
 function colDia(d: Deportista)      { return getCol(d, /^d[ií]a$/i) || getCol(d, /^dia_nac/i); }

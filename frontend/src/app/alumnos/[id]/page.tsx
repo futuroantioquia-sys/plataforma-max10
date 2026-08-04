@@ -785,19 +785,28 @@ export default function PerfilDeportista() {
           </div>
 
           {/* Botones de acceso */}
-          <div className={`grid gap-2 mt-4 ${esProfesor ? 'grid-cols-2' : 'grid-cols-4'}`}>
+          <div className="grid gap-2 mt-4 grid-cols-4">
             {[
-              { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta`, profe: true  },
-              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`,    profe: true  },
-              { label: 'INFORMES',   href: '/evaluaciones',                 profe: false },
-              { label: 'MENSAJES',   href: '/mensajes',                     profe: false },
-            ].filter(b => !esProfesor || b.profe).map(({ label, href }) => (
+              { label: 'PAGOS',      href: `/alumnos/${id}/estado-cuenta`, profe: true,  padre: true  },
+              { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`,    profe: true,  padre: true  },
+              { label: 'INFORMES',   href: codigoVal ? `/evaluaciones?cod=${encodeURIComponent(codigoVal)}` : '/evaluaciones', profe: true, padre: false },
+              { label: 'MENSAJES',   href: '/mensajes',                     profe: true,  padre: true  },
+            ].filter(b => esPadre ? b.padre : (!esProfesor || b.profe)).map(({ label, href }) => (
               <button key={label} onClick={() => router.push(href)}
                 className="bg-white/10 hover:bg-white/20 border border-white/20 active:bg-white/30 transition rounded-xl py-2.5 text-white font-black text-[10px] tracking-wide">
                 {label}
               </button>
             ))}
           </div>
+
+          {/* VISTA PADRES — vista dinámica bonita (admin y profe) */}
+          {codigoVal && (esAdmin || esProfesor) && (
+            <button
+              onClick={() => router.push(`/valoracion-dinamica?cod=${encodeURIComponent(codigoVal)}`)}
+              className="w-full mt-2 bg-gradient-to-r from-[#16a34a] to-[#064e1e] hover:opacity-90 border border-white/20 active:opacity-80 transition rounded-xl py-2.5 text-white font-black text-[11px] tracking-wide flex items-center justify-center gap-2">
+              👨‍👩‍👦 VISTA PADRES
+            </button>
+          )}
         </div>
 
         {/* ── PESTAÑAS DE SECCIONES ── */}

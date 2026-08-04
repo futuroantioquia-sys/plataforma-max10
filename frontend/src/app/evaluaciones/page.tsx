@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Download, Save, RefreshCw, Camera, CheckCircle, History } from 'lucide-react';
 import { getDeportistas, getEvaluaciones, saveEvaluacion, getProfes } from '@/lib/db';
 import type { Deportista, Evaluacion, Profe } from '@/lib/db';
+import { getDescripcionesValoracion, getMetaValoracion, type FundMetaEdit } from '@/lib/valoracion-textos';
 
 const NIVELES = ['', 'Nivel 1 (Iniciación)', 'Nivel 2 (En Desarrollo)', 'Nivel 3 (Competente)', 'Nivel 4 (Avanzado)', 'Nivel 5 (Dominante)'];
 
@@ -578,15 +579,17 @@ interface BloqueProps {
   nivel: string; onNivel: (v: string) => void;
   desc: string; onDesc: (v: string) => void;
   descripciones?: Record<string, string>;
+  definicion?: string;
   showError?: boolean;
 }
-function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descripciones, showError }: BloqueProps) {
+function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descripciones, definicion, showError }: BloqueProps) {
   const hayError = showError && !nivel;
   return (
     <tbody style={{ breakInside: 'avoid', pageBreakInside: 'avoid' } as React.CSSProperties}>
       <tr>
         <td colSpan={4} style={{ background: hayError ? '#fff5f5' : '#fff', color: hayError ? '#ef4444' : '#16a34a', textAlign: 'center', fontWeight: 900, fontSize: 13, padding: '5px 8px', letterSpacing: 1, borderLeft: hayError ? '3px solid #ef4444' : 'none' }}>
           {titulo}{hayError && ' ⚠'}
+          {definicion ? <div style={{ color: '#6b7280', fontWeight: 500, fontSize: 10, letterSpacing: 0, marginTop: 2, textTransform: 'none' }}>{definicion}</div> : null}
         </td>
       </tr>
       <tr>
@@ -597,10 +600,12 @@ function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descri
           <select value={nivel} onChange={e => {
             const v = e.target.value;
             onNivel(v);
-            if (descripciones && v && descripciones[v]) onDesc(descripciones[v]);
+            if (v === 'No Aplica') onDesc('No aplica — no evaluado en este periodo.');
+            else if (descripciones && v && descripciones[v]) onDesc(descripciones[v]);
           }}
             style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
             {NIVELES.map(o => <option key={o} value={o} style={{ color: '#000', background: '#fff' }}>{o || '— Seleccionar —'}</option>)}
+            <option value="No Aplica" style={{ color: '#000', background: '#fff' }}>No Aplica</option>
           </select>
         </td>
       </tr>
@@ -650,8 +655,10 @@ function construirFechaNac(dep: Deportista): string {
 }
 
 /* ════════════════════════════════════════════════════════════════ */
-export default function ValoracionPage() {
+function ValoracionPageInner() {
   const router  = useRouter();
+  const searchParams = useSearchParams();
+  const codParam = searchParams.get('cod');
   const fotoRef = useRef<HTMLInputElement>(null);
   const [data,        setData]        = useState<Valoracion>(INICIAL);
   const [guardando,   setGuardando]   = useState(false);
@@ -664,7 +671,19 @@ export default function ValoracionPage() {
   const [profes, setProfes] = useState<Profe[]>([]);
   const [intentoDescarga,  setIntentoDescarga]  = useState(false);
   const [vistaGamificada, setVistaGamificada] = useState(false);
+  const [textosVal, setTextosVal] = useState<Record<string, Record<string, string>>>({});
+  const [metaVal, setMetaVal] = useState<Record<string, FundMetaEdit>>({});
   const err = (campo: keyof Valoracion) => intentoDescarga && !data[campo]?.trim();
+  // Los calidosos (padres) aún NO tienen acceso a valoraciones
+  useEffect(() => {
+    if (typeof document !== 'undefined' && /futuro-session=deportista/.test(document.cookie)) {
+      router.replace('/alumnos');
+    }
+  }, [router]);
+
+  const codParamAplicado = useRef(false);   // aplicar ?cod= una sola vez
+  const autoCargadoCod   = useRef('');       // código cuya última evaluación ya se auto-cargó
+  const textosManual     = useRef(false);    // el profe editó a mano logros/objetivos → no auto-generar
   useEffect(() => {
     try {
       const raw = localStorage.getItem('futuro-profe-nombre');
@@ -675,6 +694,8 @@ export default function ValoracionPage() {
   useEffect(() => {
     getDeportistas().then(setDeportistas);
     getProfes().then(setProfes);
+    getDescripcionesValoracion().then(setTextosVal).catch(() => {});
+    getMetaValoracion().then(setMetaVal).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -685,6 +706,33 @@ export default function ValoracionPage() {
       setHistorial([]);
     }
   }, [data.codigo]);
+
+  // Si se llega con ?cod= desde la ficha del deportista, precargar el código (una sola vez)
+  useEffect(() => {
+    if (codParamAplicado.current) return;
+    const cod = (codParam ?? '').trim().toUpperCase();
+    if (!cod) return;
+    codParamAplicado.current = true;
+    setData(p => ({ ...p, codigo: cod }));
+  }, [codParam]);
+
+  // Auto-cargar la ÚLTIMA evaluación guardada del deportista para que NO aparezca en blanco.
+  // saveEvaluacion siempre inserta, así que editar y guardar crea un nuevo informe (el historial se conserva).
+  // La numeración de la valoración es automática: = cantidad de valoraciones ya guardadas del deportista.
+  useEffect(() => {
+    const cod = data.codigo.trim().toUpperCase();
+    if (cod.length < 2) return;
+    if (autoCargadoCod.current === cod) return;   // ya cargamos este código; no pisar ediciones
+    if (historial.length > 0) {
+      autoCargadoCod.current = cod;
+      textosManual.current = true;   // respetar los logros/objetivos ya guardados
+      const { id, ...resto } = historial[0];
+      setData(prev => ({ ...prev, ...resto, numeroInforme: String(historial.length) }));
+    } else {
+      // Sin valoraciones previas → la próxima será la #1
+      setData(prev => ({ ...prev, numeroInforme: prev.numeroInforme || '1' }));
+    }
+  }, [historial, data.codigo]);
 
   // Buscar deportista cuando cambia el código O cuando cargan los deportistas
   useEffect(() => {
@@ -757,8 +805,63 @@ export default function ValoracionPage() {
     setData(p => ({ ...p, [k]: v, ...extra }));
   };
 
+  // Lista de campos que faltan por llenar. Como existe "No Aplica", todo se puede completar.
+  const camposFaltantes = (): string[] => {
+    const f: string[] = [];
+    if (!data.codigo.trim())        f.push('Código');
+    if (!data.nombre.trim())        f.push('Nombre');
+    if (!data.programa.trim())      f.push('Programa');
+    if (!data.proyecto.trim())      f.push('Proyecto');
+    if (!data.fecha.trim())         f.push('Fecha Informe');
+    if (!data.posicion.trim())      f.push('Posición');
+    if (!data.perfil.trim())        f.push('Perfil');
+    if (!data.fuerzaNivel)      f.push('Fuerza');
+    if (!data.velocidadNivel)   f.push('Velocidad');
+    if (!data.resistenciaNivel) f.push('Resistencia');
+    if (!data.controlNivel)    f.push('Control');
+    if (!data.paseNivel)       f.push('Pase');
+    if (!data.conductaNivel)   f.push('Conducción');
+    if (!data.driblingNivel)   f.push('Dribling');
+    if (!data.remataNivel)     f.push('Remate');
+    if (!data.cabeceoNivel)    f.push('Cabeceo');
+    if (!data.quiteNivel)      f.push('Quite del Balón');
+    if (!data.proteccionNivel) f.push('Protección del Balón');
+    if (!data.posicionNivel)    f.push('Ubicación Espacial');
+    if (!data.visionNivel)      f.push('Velocidad de Procesamiento');
+    if (!data.defensaNivel)     f.push('Lectura de Alturas');
+    if (!data.amplitudNivel)    f.push('Amplitud y Profundidad');
+    if (!data.transicionNivel)  f.push('Transiciones');
+    if (!data.superioridadNivel)f.push('Superioridad Numérica');
+    if (!data.basculacionNivel) f.push('Basculación y Coberturas');
+    if (!data.trabajoNivel)    f.push('Trabajo en Equipo (Mental)');
+    if (!data.disciplinaNivel) f.push('Gestión de la Frustración');
+    if (!data.actitudNivel)    f.push('Comunicación Asertiva');
+    if (!data.identidadNivel)   f.push('Identidad y Estilo');
+    if (!data.bloqueNivel)      f.push('Bloque y Cohesión');
+    if (!data.climaNivel)       f.push('Clima Interno');
+    if (!data.gestionCompNivel) f.push('Gestión de Competición');
+    if (!data.responsabilidad)    f.push('Responsabilidad');
+    if (!data.puntualidad)        f.push('Puntualidad');
+    if (!data.disciplinaComp)     f.push('Disciplina');
+    if (!data.respeto)            f.push('Respeto');
+    if (!data.tolerancia)         f.push('Tolerancia');
+    if (!data.companerismo)       f.push('Compañerismo');
+    if (!data.liderazgo)          f.push('Liderazgo');
+    if (!data.trabajoEquipoComp)  f.push('Trabajo en Equipo (Comport.)');
+    if (!data.sentidoPertenencia) f.push('Sentido de Pertenencia');
+    if (!data.logrosTrimestre.trim())    f.push('Logros del Trimestre');
+    if (!data.objetivosTrimestre.trim()) f.push('Objetivos del Trimestre');
+    return f;
+  };
+
   const guardar = async () => {
     if (!data.codigo.trim()) { alert('Ingresa el código del deportista antes de guardar.'); return; }
+    setIntentoDescarga(true);   // resalta en rojo los campos vacíos
+    const faltan = camposFaltantes();
+    if (faltan.length > 0) {
+      alert(`No se puede guardar: faltan campos por completar.\nUsa "No Aplica" en los que no evaluaste.\n\n• ${faltan.join('\n• ')}`);
+      return;
+    }
     setGuardando(true);
     try {
       await saveEvaluacion(data);
@@ -776,11 +879,119 @@ export default function ValoracionPage() {
     }
   };
 
+  // Volver a la FICHA del deportista (no al listado de proyectos), para poder ver sus otras secciones.
+  const volverAlDeportista = () => {
+    const cod = data.codigo.trim().toUpperCase();
+    const dep = deportistas.find(d =>
+      Object.entries(d._columnas ?? {}).some(([k, v]) =>
+        /^c[oó]d/i.test(k.trim()) && String(v).trim().toUpperCase() === cod
+      )
+    );
+    if (dep?.id) router.push(`/alumnos/${dep.id}`);
+    else router.back();
+  };
+
+  // Inicia una NUEVA valoración conservando la identidad del deportista y numerándola automáticamente.
+  const nuevaValoracion = () => {
+    if (historial.length > 0 && !confirm('¿Crear una NUEVA valoración en blanco para este deportista? Las anteriores quedan guardadas en el historial.')) return;
+    textosManual.current = false;   // permitir auto-generar en la nueva
+    setData(p => ({
+      ...INICIAL,
+      fecha: new Date().toLocaleDateString('es-CO'),
+      codigo: p.codigo, nombre: p.nombre, fechaNac: p.fechaNac,
+      programa: p.programa, proyecto: p.proyecto, perfil: p.perfil, posicion: p.posicion,
+      foto: p.foto,
+      numeroInforme: String(historial.length + 1),
+    }));
+  };
+
+  // Genera automáticamente Logros (lo bueno) y Objetivos (motivar a mejorar lo bajo) según los niveles.
+  const generarTextos = () => {
+    const esNA = (s: string) => (s ?? '').trim().toUpperCase() === 'NO APLICA';
+    const nvl = (s: string) => { if (esNA(s)) return -1; const i = NIVELES.indexOf(s); return i > 0 ? i : 0; };
+    const cmp = (s: string) => { if (esNA(s)) return -1; return ({ 'SIEMPRE': 5, 'CASI SIEMPRE': 4, 'ALGUNAS VECES': 3, 'CASI NUNCA': 2, 'NUNCA': 1 } as Record<string, number>)[s] ?? 0; };
+    const items: { label: string; n: number }[] = [
+      { label: 'la fuerza',                 n: nvl(data.fuerzaNivel) },
+      { label: 'la velocidad',              n: nvl(data.velocidadNivel) },
+      { label: 'la resistencia',            n: nvl(data.resistenciaNivel) },
+      { label: 'el control del balón',      n: nvl(data.controlNivel) },
+      { label: 'el pase',                   n: nvl(data.paseNivel) },
+      { label: 'la conducción',             n: nvl(data.conductaNivel) },
+      { label: 'el dribling',               n: nvl(data.driblingNivel) },
+      { label: 'el remate',                 n: nvl(data.remataNivel) },
+      { label: 'el cabeceo',                n: nvl(data.cabeceoNivel) },
+      { label: 'el quite del balón',        n: nvl(data.quiteNivel) },
+      { label: 'la protección del balón',   n: nvl(data.proteccionNivel) },
+      { label: 'la ubicación en el campo',  n: nvl(data.posicionNivel) },
+      { label: 'la toma de decisiones',     n: nvl(data.visionNivel) },
+      { label: 'la lectura de espacios',    n: nvl(data.defensaNivel) },
+      { label: 'la amplitud y profundidad', n: nvl(data.amplitudNivel) },
+      { label: 'las transiciones',          n: nvl(data.transicionNivel) },
+      { label: 'el juego en superioridad',  n: nvl(data.superioridadNivel) },
+      { label: 'las coberturas',            n: nvl(data.basculacionNivel) },
+      { label: 'el trabajo en equipo',      n: nvl(data.trabajoNivel) },
+      { label: 'el manejo de la frustración', n: nvl(data.disciplinaNivel) },
+      { label: 'la comunicación',           n: nvl(data.actitudNivel) },
+      { label: 'la identidad de juego',     n: nvl(data.identidadNivel) },
+      { label: 'la cohesión con el equipo', n: nvl(data.bloqueNivel) },
+      { label: 'el buen ambiente en el grupo', n: nvl(data.climaNivel) },
+      { label: 'la actitud en competencia', n: nvl(data.gestionCompNivel) },
+      { label: 'la responsabilidad',        n: cmp(data.responsabilidad) },
+      { label: 'la puntualidad',            n: cmp(data.puntualidad) },
+      { label: 'la disciplina',             n: cmp(data.disciplinaComp) },
+      { label: 'el respeto',                n: cmp(data.respeto) },
+      { label: 'la tolerancia',             n: cmp(data.tolerancia) },
+      { label: 'el compañerismo',           n: cmp(data.companerismo) },
+      { label: 'el liderazgo',              n: cmp(data.liderazgo) },
+      { label: 'el sentido de pertenencia', n: cmp(data.sentidoPertenencia) },
+    ];
+    const dedup = (arr: string[]) => Array.from(new Set(arr));
+    const fuertes = dedup(items.filter(i => i.n >= 4).map(i => i.label));
+    const debiles = dedup(items.filter(i => i.n >= 1 && i.n <= 2).map(i => i.label));
+    const nom = (data.nombre.trim().split(/\s+/)[0] || 'El deportista');
+    const nombre = nom.charAt(0).toUpperCase() + nom.slice(1).toLowerCase();
+    const listar = (arr: string[], max: number) => {
+      const a = arr.slice(0, max);
+      if (a.length === 0) return '';
+      if (a.length === 1) return a[0];
+      return a.slice(0, -1).join(', ') + ' y ' + a[a.length - 1];
+    };
+
+    const logros = fuertes.length
+      ? `Durante este trimestre, ${nombre} mostró un buen nivel en ${listar(fuertes, 6)}. Se destacó por su esfuerzo, compromiso y actitud dentro y fuera de la cancha. ¡Felicitaciones por el trabajo realizado y a seguir creciendo!`
+      : `Durante este trimestre, ${nombre} mostró compromiso, disposición para aprender y buena actitud en los entrenamientos. Con trabajo constante seguirá mejorando. ¡Felicitaciones por el esfuerzo!`;
+
+    const objetivos = debiles.length
+      ? `Para el próximo trimestre: mejorar ${listar(debiles, 4)}. ¡Con práctica y ganas lo vas a lograr, ${nombre}! Paso a paso. ¡Tú puedes! 💪`
+      : `¡Gran trimestre, ${nombre}! El reto ahora es mantener el nivel y seguir creciendo cada día. ¡A por más! 💪`;
+
+    set('logrosTrimestre', logros);
+    set('objetivosTrimestre', objetivos);
+  };
+
+  // Cuando se completa el ÚLTIMO campo de evaluación, se generan solos los Logros y Objetivos.
+  const camposEvaluacion = [
+    data.fuerzaNivel, data.velocidadNivel, data.resistenciaNivel,
+    data.controlNivel, data.paseNivel, data.conductaNivel, data.driblingNivel, data.remataNivel,
+    data.cabeceoNivel, data.quiteNivel, data.proteccionNivel,
+    data.posicionNivel, data.visionNivel, data.defensaNivel, data.amplitudNivel, data.transicionNivel,
+    data.superioridadNivel, data.basculacionNivel,
+    data.trabajoNivel, data.disciplinaNivel, data.actitudNivel, data.identidadNivel,
+    data.bloqueNivel, data.climaNivel, data.gestionCompNivel,
+    data.responsabilidad, data.puntualidad, data.disciplinaComp, data.respeto, data.tolerancia,
+    data.companerismo, data.liderazgo, data.trabajoEquipoComp, data.sentidoPertenencia,
+  ];
+  const evaluacionCompleta = camposEvaluacion.every(v => !!v);
+  const evaluacionKey = camposEvaluacion.join('|');
+  useEffect(() => {
+    if (textosManual.current) return;
+    if (evaluacionCompleta) generarTextos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evaluacionKey]);
+
   const cargarDeHistorial = (ev: Evaluacion) => {
     const { id, ...resto } = ev;
-    // Combinar sobre INICIAL para no perder NINGÚN campo: así se recuperan
-    // todos los datos guardados (técnica, táctica, comportamiento, logros…).
-    setData({ ...INICIAL, ...(resto as Partial<Valoracion>) });
+    setData(resto);
     setVerHistorial(false);
   };
 
@@ -818,74 +1029,26 @@ export default function ValoracionPage() {
       )}
 
       {/* Barra herramientas */}
-      <div className="print:hidden" style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={() => router.push('/dashboard')} style={{ color: '#6b7280', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>← Volver</button>
+      <div className="print:hidden" style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>← Volver al deportista</button>
         <span style={{ fontWeight: 800, color: '#111', flex: 1, fontSize: 15 }}>Valoración del Deportista</span>
         {historial.length > 0 && (
           <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
             <History size={13} /> Historial ({historial.length})
           </button>
         )}
+        <button onClick={nuevaValoracion} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+          ＋ Nueva valoración
+        </button>
         <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
           <RefreshCw size={13} /> Limpiar
         </button>
         <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.verde, color: '#fff', cursor: guardando ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, opacity: guardando ? 0.7 : 1 }}>
           <Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}
         </button>
-        <button onClick={() => router.push(`/valoracion-dinamica${data.codigo.trim() ? `?cod=${encodeURIComponent(data.codigo.trim())}` : ''}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: '#7c3aed', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-          🎮 Vista Padres
-        </button>
         <button onClick={() => {
           setIntentoDescarga(true);
-          const camposVacios: string[] = [];
-          // Encabezado
-          if (!data.codigo.trim())        camposVacios.push('Código');
-          if (!data.nombre.trim())        camposVacios.push('Nombre');
-          if (!data.programa.trim())      camposVacios.push('Programa');
-          if (!data.proyecto.trim())      camposVacios.push('Proyecto');
-          if (!data.fecha.trim())         camposVacios.push('Fecha Informe');
-          if (!data.numeroInforme.trim()) camposVacios.push('# Informe');
-          if (!data.posicion.trim())      camposVacios.push('Posición');
-          if (!data.perfil.trim())        camposVacios.push('Perfil');
-          // Aspectos Condicionales
-          if (!data.fuerzaNivel)      camposVacios.push('Nivel — Fuerza');
-          if (!data.velocidadNivel)   camposVacios.push('Nivel — Velocidad');
-          if (!data.resistenciaNivel) camposVacios.push('Nivel — Resistencia');
-          // Aspectos Técnicos
-          if (!data.controlNivel)    camposVacios.push('Nivel — Control y Pase');
-          if (!data.conductaNivel)   camposVacios.push('Nivel — Conducción y Dribbling');
-          if (!data.paseNivel)       camposVacios.push('Nivel — Control Orientado');
-          if (!data.remataNivel)     camposVacios.push('Nivel — Remate a Portería');
-          if (!data.proteccionNivel) camposVacios.push('Nivel — Protección del Balón');
-          // Aspectos Tácticos
-          if (!data.posicionNivel)    camposVacios.push('Nivel — Ubicación Espacial');
-          if (!data.visionNivel)      camposVacios.push('Nivel — Velocidad de Procesamiento');
-          if (!data.defensaNivel)     camposVacios.push('Nivel — Lectura de Alturas');
-          if (!data.amplitudNivel)    camposVacios.push('Nivel — Amplitud y Profundidad');
-          if (!data.transicionNivel)  camposVacios.push('Nivel — Transiciones');
-          if (!data.superioridadNivel)camposVacios.push('Nivel — Lectura de Superioridad');
-          if (!data.basculacionNivel) camposVacios.push('Nivel — Basculación y Coberturas');
-          // Socio-Afectiva
-          if (!data.trabajoNivel)    camposVacios.push('Nivel — Trabajo en Equipo');
-          if (!data.disciplinaNivel) camposVacios.push('Nivel — Gestión de la Frustración');
-          if (!data.actitudNivel)    camposVacios.push('Nivel — Comunicación Asertiva');
-          // Colectivo
-          if (!data.identidadNivel)   camposVacios.push('Nivel — Identidad y Estilo');
-          if (!data.bloqueNivel)      camposVacios.push('Nivel — Bloque y Cohesión');
-          if (!data.climaNivel)       camposVacios.push('Nivel — Clima Interno');
-          if (!data.gestionCompNivel) camposVacios.push('Nivel — Gestión de Competición');
-          // Comportamental
-          if (!data.responsabilidad)    camposVacios.push('Responsabilidad');
-          if (!data.puntualidad)        camposVacios.push('Puntualidad');
-          if (!data.disciplinaComp)     camposVacios.push('Disciplina');
-          if (!data.respeto)            camposVacios.push('Respeto');
-          if (!data.tolerancia)         camposVacios.push('Tolerancia');
-          if (!data.companerismo)       camposVacios.push('Compañerismo');
-          if (!data.liderazgo)          camposVacios.push('Liderazgo');
-          if (!data.trabajoEquipoComp)  camposVacios.push('Trabajo en Equipo');
-          if (!data.sentidoPertenencia)    camposVacios.push('Sentido de Pertenencia');
-          if (!data.logrosTrimestre.trim())   camposVacios.push('Logros del Trimestre');
-          if (!data.objetivosTrimestre.trim()) camposVacios.push('Objetivos del Trimestre');
+          const camposVacios = camposFaltantes();
           if (camposVacios.length > 0) {
             alert(`Completa los siguientes campos antes de descargar:\n\n• ${camposVacios.join('\n• ')}`);
             return;
@@ -994,9 +1157,9 @@ export default function ValoracionPage() {
                       {/* # INFORME + PERFIL */}
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}># INFORME</span>
-                          <input value={data.numeroInforme} onChange={e => set('numeroInforme', e.target.value)} placeholder="000"
-                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('numeroInforme') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 40, padding: 0 }} />
+                          <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>VALORACIÓN N°</span>
+                          <input value={data.numeroInforme} readOnly title="Se numera automáticamente" placeholder="—"
+                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('numeroInforme') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 700, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 40, padding: 0, cursor: 'default' }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>PERFIL</span>
@@ -1026,152 +1189,128 @@ export default function ValoracionPage() {
           <tbody>
             <tr>{celda(VERDE_GRAD, '#fff', 'ASPECTOS CONDICIONALES', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
-          <BloqueAspecto titulo="FUERZA" subtitulo="Potencia y Duelo"
+          <BloqueAspecto titulo={metaVal.fuerza?.titulo ?? "FUERZA"} subtitulo={metaVal.fuerza?.subtitulo ?? "Potencia y Duelo"} definicion={metaVal.fuerza?.definicion}
             nivel={data.fuerzaNivel} onNivel={v => set('fuerzaNivel', v)} showError={intentoDescarga}
             desc={data.fuerzaDesc}   onDesc={v => set('fuerzaDesc', v)}
-            descripciones={DESC_FUERZA} />
-          <BloqueAspecto titulo="VELOCIDAD" subtitulo="Reacción y Desplazamiento"
+            descripciones={textosVal.fuerza ?? DESC_FUERZA} />
+          <BloqueAspecto titulo={metaVal.velocidad?.titulo ?? "VELOCIDAD"} subtitulo={metaVal.velocidad?.subtitulo ?? "Reacción y Desplazamiento"} definicion={metaVal.velocidad?.definicion}
             nivel={data.velocidadNivel} onNivel={v => set('velocidadNivel', v)} showError={intentoDescarga}
             desc={data.velocidadDesc}   onDesc={v => set('velocidadDesc', v)}
-            descripciones={DESC_VELOCIDAD} />
-          <BloqueAspecto titulo="RESISTENCIA" subtitulo="Capacidad Aeróbica y Recuperación"
+            descripciones={textosVal.velocidad ?? DESC_VELOCIDAD} />
+          <BloqueAspecto titulo={metaVal.resistencia?.titulo ?? "RESISTENCIA"} subtitulo={metaVal.resistencia?.subtitulo ?? "Capacidad Aeróbica y Recuperación"} definicion={metaVal.resistencia?.definicion}
             nivel={data.resistenciaNivel} onNivel={v => set('resistenciaNivel', v)} showError={intentoDescarga}
             desc={data.resistenciaDesc}   onDesc={v => set('resistenciaDesc', v)}
-            descripciones={DESC_RESISTENCIA} />
+            descripciones={textosVal.resistencia ?? DESC_RESISTENCIA} />
 
           {/* TÉCNICA */}
           <tbody>
             <tr>{celda(VERDE_GRAD, '#fff', 'TÉCNICA (RELACIONAMIENTO CON EL BALÓN)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Evalúa la ejecución de los fundamentos básicos del juego</td></tr>
           </tbody>
-          <BloqueAspecto titulo="CONTROL" subtitulo="Recepción y Dominio del Balón"
+          <BloqueAspecto titulo={metaVal.control?.titulo ?? "CONTROL"} subtitulo={metaVal.control?.subtitulo ?? "Recepción y Dominio del Balón"} definicion={metaVal.control?.definicion}
             nivel={data.controlNivel} onNivel={v => set('controlNivel', v)} showError={intentoDescarga}
             desc={data.controlDesc}   onDesc={v => set('controlDesc', v)}
-            descripciones={DESC_CONTROL} />
-          <BloqueAspecto titulo="PASE" subtitulo="Precisión e Intención en la Entrega"
+            descripciones={textosVal.control ?? DESC_CONTROL} />
+          <BloqueAspecto titulo={metaVal.pase?.titulo ?? "PASE"} subtitulo={metaVal.pase?.subtitulo ?? "Precisión e Intención en la Entrega"} definicion={metaVal.pase?.definicion}
             nivel={data.paseNivel} onNivel={v => set('paseNivel', v)} showError={intentoDescarga}
             desc={data.paseDesc}   onDesc={v => set('paseDesc', v)}
-            descripciones={DESC_PASE} />
-          <BloqueAspecto titulo="CONDUCCIÓN" subtitulo="Desplazamiento con Balón"
+            descripciones={textosVal.pase ?? DESC_PASE} />
+          <BloqueAspecto titulo={metaVal.conducta?.titulo ?? "CONDUCCIÓN"} subtitulo={metaVal.conducta?.subtitulo ?? "Desplazamiento con Balón"} definicion={metaVal.conducta?.definicion}
             nivel={data.conductaNivel} onNivel={v => set('conductaNivel', v)} showError={intentoDescarga}
             desc={data.conductaDesc}   onDesc={v => set('conductaDesc', v)}
-            descripciones={DESC_CONDUCCION} />
-          <BloqueAspecto titulo="DRIBLING" subtitulo="Superación del Rival en 1vs1"
+            descripciones={textosVal.conducta ?? DESC_CONDUCCION} />
+          <BloqueAspecto titulo={metaVal.dribling?.titulo ?? "DRIBLING"} subtitulo={metaVal.dribling?.subtitulo ?? "Superación del Rival en 1vs1"} definicion={metaVal.dribling?.definicion}
             nivel={data.driblingNivel} onNivel={v => set('driblingNivel', v)} showError={intentoDescarga}
             desc={data.driblingDesc}   onDesc={v => set('driblingDesc', v)}
-            descripciones={DESC_DRIBLING} />
-          <BloqueAspecto titulo="REMATE" subtitulo="Potencia y Definición"
+            descripciones={textosVal.dribling ?? DESC_DRIBLING} />
+          <BloqueAspecto titulo={metaVal.remata?.titulo ?? "REMATE"} subtitulo={metaVal.remata?.subtitulo ?? "Potencia y Definición"} definicion={metaVal.remata?.definicion}
             nivel={data.remataNivel} onNivel={v => set('remataNivel', v)} showError={intentoDescarga}
             desc={data.remataDesc}   onDesc={v => set('remataDesc', v)}
-            descripciones={DESC_REMATE} />
-          <BloqueAspecto titulo="CABECEO" subtitulo="Juego Aéreo"
+            descripciones={textosVal.remata ?? DESC_REMATE} />
+          <BloqueAspecto titulo={metaVal.cabeceo?.titulo ?? "CABECEO"} subtitulo={metaVal.cabeceo?.subtitulo ?? "Juego Aéreo"} definicion={metaVal.cabeceo?.definicion}
             nivel={data.cabeceoNivel} onNivel={v => set('cabeceoNivel', v)} showError={intentoDescarga}
             desc={data.cabeceoDesc}   onDesc={v => set('cabeceoDesc', v)}
-            descripciones={{}} />
-          <BloqueAspecto titulo="QUITE DEL BALÓN" subtitulo="Recuperación Defensiva"
+            descripciones={textosVal.cabeceo ?? {}} />
+          <BloqueAspecto titulo={metaVal.quite?.titulo ?? "QUITE DEL BALÓN"} subtitulo={metaVal.quite?.subtitulo ?? "Recuperación Defensiva"} definicion={metaVal.quite?.definicion}
             nivel={data.quiteNivel} onNivel={v => set('quiteNivel', v)} showError={intentoDescarga}
             desc={data.quiteDesc}   onDesc={v => set('quiteDesc', v)}
-            descripciones={{}} />
-          <BloqueAspecto titulo="PROTECCIÓN DEL BALÓN" subtitulo="Resguardo y Dominio"
+            descripciones={textosVal.quite ?? {}} />
+          <BloqueAspecto titulo={metaVal.proteccion?.titulo ?? "PROTECCIÓN DEL BALÓN"} subtitulo={metaVal.proteccion?.subtitulo ?? "Resguardo y Dominio"} definicion={metaVal.proteccion?.definicion}
             nivel={data.proteccionNivel} onNivel={v => set('proteccionNivel', v)} showError={intentoDescarga}
             desc={data.proteccionDesc}   onDesc={v => set('proteccionDesc', v)}
-            descripciones={{}} />
+            descripciones={textosVal.proteccion ?? DESC_PROTECCION} />
 
           {/* TÁCTICA */}
           <tbody>
             <tr>{celda(VERDE_GRAD, '#fff', 'TÁCTICA', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Comprensión del juego y toma de decisiones</td></tr>
           </tbody>
-          <BloqueAspecto titulo="UBICACIÓN ESPACIAL" subtitulo="Posicionamiento y Orientación"
+          <BloqueAspecto titulo={metaVal.posicion?.titulo ?? "UBICACIÓN ESPACIAL"} subtitulo={metaVal.posicion?.subtitulo ?? "Posicionamiento y Orientación"} definicion={metaVal.posicion?.definicion}
             nivel={data.posicionNivel} onNivel={v => set('posicionNivel', v)} showError={intentoDescarga}
             desc={data.posicionDesc}   onDesc={v => set('posicionDesc', v)}
-            descripciones={DESC_UBICACION} />
-          <BloqueAspecto titulo="VELOCIDAD DE PROCESAMIENTO" subtitulo="Toma de Decisiones Rápida"
+            descripciones={textosVal.posicion ?? DESC_UBICACION} />
+          <BloqueAspecto titulo={metaVal.vision?.titulo ?? "VELOCIDAD DE PROCESAMIENTO"} subtitulo={metaVal.vision?.subtitulo ?? "Toma de Decisiones Rápida"} definicion={metaVal.vision?.definicion}
             nivel={data.visionNivel} onNivel={v => set('visionNivel', v)} showError={intentoDescarga}
             desc={data.visionDesc}   onDesc={v => set('visionDesc', v)}
-            descripciones={DESC_VELOCIDAD_PROC} />
-          <BloqueAspecto titulo="LECTURA DE ALTURAS Y ESPACIOS" subtitulo="Análisis del Terreno"
+            descripciones={textosVal.vision ?? DESC_VELOCIDAD_PROC} />
+          <BloqueAspecto titulo={metaVal.defensa?.titulo ?? "LECTURA DE ALTURAS Y ESPACIOS"} subtitulo={metaVal.defensa?.subtitulo ?? "Análisis del Terreno"} definicion={metaVal.defensa?.definicion}
             nivel={data.defensaNivel} onNivel={v => set('defensaNivel', v)} showError={intentoDescarga}
             desc={data.defensaDesc}   onDesc={v => set('defensaDesc', v)}
-            descripciones={DESC_LECTURA_ALTURAS} />
-          <BloqueAspecto titulo="AMPLITUD Y PROFUNDIDAD" subtitulo="Uso del Espacio"
+            descripciones={textosVal.defensa ?? DESC_LECTURA_ALTURAS} />
+          <BloqueAspecto titulo={metaVal.amplitud?.titulo ?? "AMPLITUD Y PROFUNDIDAD"} subtitulo={metaVal.amplitud?.subtitulo ?? "Uso del Espacio"} definicion={metaVal.amplitud?.definicion}
             nivel={data.amplitudNivel} onNivel={v => set('amplitudNivel', v)} showError={intentoDescarga}
             desc={data.amplitudDesc}   onDesc={v => set('amplitudDesc', v)}
-            descripciones={DESC_AMPLITUD} />
-          <BloqueAspecto titulo="TRANSICIONES (ATAQUE-DEFENSA)" subtitulo="Cambio de Rol Ofensivo/Defensivo"
+            descripciones={textosVal.amplitud ?? DESC_AMPLITUD} />
+          <BloqueAspecto titulo={metaVal.transicion?.titulo ?? "TRANSICIONES (ATAQUE-DEFENSA)"} subtitulo={metaVal.transicion?.subtitulo ?? "Cambio de Rol Ofensivo/Defensivo"} definicion={metaVal.transicion?.definicion}
             nivel={data.transicionNivel} onNivel={v => set('transicionNivel', v)} showError={intentoDescarga}
             desc={data.transicionDesc}   onDesc={v => set('transicionDesc', v)}
-            descripciones={DESC_TRANSICION} />
-          <BloqueAspecto titulo="LECTURA DE SUPERIORIDAD (2vs1)" subtitulo="Situaciones de Ventaja Numérica"
+            descripciones={textosVal.transicion ?? DESC_TRANSICION} />
+          <BloqueAspecto titulo={metaVal.superioridad?.titulo ?? "LECTURA DE SUPERIORIDAD (2vs1)"} subtitulo={metaVal.superioridad?.subtitulo ?? "Situaciones de Ventaja Numérica"} definicion={metaVal.superioridad?.definicion}
             nivel={data.superioridadNivel} onNivel={v => set('superioridadNivel', v)} showError={intentoDescarga}
             desc={data.superioridadDesc}   onDesc={v => set('superioridadDesc', v)}
-            descripciones={DESC_SUPERIORIDAD} />
-          <BloqueAspecto titulo="BASCULACIÓN Y COBERTURAS" subtitulo="Desplazamiento Colectivo"
+            descripciones={textosVal.superioridad ?? DESC_SUPERIORIDAD} />
+          <BloqueAspecto titulo={metaVal.basculacion?.titulo ?? "BASCULACIÓN Y COBERTURAS"} subtitulo={metaVal.basculacion?.subtitulo ?? "Desplazamiento Colectivo"} definicion={metaVal.basculacion?.definicion}
             nivel={data.basculacionNivel} onNivel={v => set('basculacionNivel', v)} showError={intentoDescarga}
             desc={data.basculacionDesc}   onDesc={v => set('basculacionDesc', v)}
-            descripciones={DESC_BASCULACION} />
+            descripciones={textosVal.basculacion ?? DESC_BASCULACION} />
 
           {/* SOCIO-AFECTIVA Y ACTITUDINAL */}
           <tbody>
             <tr>{celda(VERDE_GRAD, '#fff', 'Socio-Afectiva y Actitudinal', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
-          <BloqueAspecto titulo="TRABAJO EN EQUIPO" subtitulo="Compañerismo y Comunicación"
+          <BloqueAspecto titulo={metaVal.trabajo?.titulo ?? "TRABAJO EN EQUIPO"} subtitulo={metaVal.trabajo?.subtitulo ?? "Compañerismo y Comunicación"} definicion={metaVal.trabajo?.definicion}
             nivel={data.trabajoNivel} onNivel={v => set('trabajoNivel', v)} showError={intentoDescarga}
             desc={data.trabajoDesc}   onDesc={v => set('trabajoDesc', v)}
-            descripciones={DESC_TRABAJO_EQUIPO} />
-          <BloqueAspecto titulo="GESTIÓN DE LA FRUSTRACIÓN" subtitulo="Autocontrol y Resiliencia"
+            descripciones={textosVal.trabajo ?? DESC_TRABAJO_EQUIPO} />
+          <BloqueAspecto titulo={metaVal.disciplina?.titulo ?? "GESTIÓN DE LA FRUSTRACIÓN"} subtitulo={metaVal.disciplina?.subtitulo ?? "Autocontrol y Resiliencia"} definicion={metaVal.disciplina?.definicion}
             nivel={data.disciplinaNivel} onNivel={v => set('disciplinaNivel', v)} showError={intentoDescarga}
             desc={data.disciplinaDesc}   onDesc={v => set('disciplinaDesc', v)}
-            descripciones={DESC_GESTION_FRUSTRACION} />
-          <BloqueAspecto titulo="COMUNICACIÓN ACERTIVA" subtitulo="Expresión y Asertividad"
+            descripciones={textosVal.disciplina ?? DESC_GESTION_FRUSTRACION} />
+          <BloqueAspecto titulo={metaVal.actitud?.titulo ?? "COMUNICACIÓN ACERTIVA"} subtitulo={metaVal.actitud?.subtitulo ?? "Expresión y Asertividad"} definicion={metaVal.actitud?.definicion}
             nivel={data.actitudNivel} onNivel={v => set('actitudNivel', v)} showError={intentoDescarga}
             desc={data.actitudDesc}   onDesc={v => set('actitudDesc', v)}
-            descripciones={DESC_COMUNICACION_ASERTIVA} />
+            descripciones={textosVal.actitud ?? DESC_COMUNICACION_ASERTIVA} />
 
           {/* EVALUACIÓN DE DESEMPEÑO COLECTIVO */}
           <tbody>
             <tr>{celda(VERDE_GRAD, '#fff', 'Evaluación de Desempeño Colectivo (El Equipo)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
           </tbody>
-          <BloqueAspecto titulo="IDENTIDAD Y ESTILO DE JUEGO" subtitulo="Coherencia y Modelo de Juego"
+          <BloqueAspecto titulo={metaVal.identidad?.titulo ?? "IDENTIDAD Y ESTILO DE JUEGO"} subtitulo={metaVal.identidad?.subtitulo ?? "Coherencia y Modelo de Juego"} definicion={metaVal.identidad?.definicion}
             nivel={data.identidadNivel} onNivel={v => set('identidadNivel', v)} showError={intentoDescarga}
             desc={data.identidadDesc}   onDesc={v => set('identidadDesc', v)}
-            descripciones={DESC_IDENTIDAD_ESTILO} />
-          <BloqueAspecto titulo="BLOQUE Y COHESIÓN TÁCTICA" subtitulo="Organización Colectiva"
+            descripciones={textosVal.identidad ?? DESC_IDENTIDAD_ESTILO} />
+          <BloqueAspecto titulo={metaVal.bloque?.titulo ?? "BLOQUE Y COHESIÓN TÁCTICA"} subtitulo={metaVal.bloque?.subtitulo ?? "Organización Colectiva"} definicion={metaVal.bloque?.definicion}
             nivel={data.bloqueNivel} onNivel={v => set('bloqueNivel', v)} showError={intentoDescarga}
             desc={data.bloqueDesc}   onDesc={v => set('bloqueDesc', v)}
-            descripciones={DESC_BLOQUE_COHESION} />
-          <BloqueAspecto titulo="CLIMA INTERNO Y COMUNICACIÓN" subtitulo="Ambiente y Vínculos del Grupo"
+            descripciones={textosVal.bloque ?? DESC_BLOQUE_COHESION} />
+          <BloqueAspecto titulo={metaVal.clima?.titulo ?? "CLIMA INTERNO Y COMUNICACIÓN"} subtitulo={metaVal.clima?.subtitulo ?? "Ambiente y Vínculos del Grupo"} definicion={metaVal.clima?.definicion}
             nivel={data.climaNivel} onNivel={v => set('climaNivel', v)} showError={intentoDescarga}
             desc={data.climaDesc}   onDesc={v => set('climaDesc', v)}
-            descripciones={DESC_CLIMA_INTERNO} />
-          <BloqueAspecto titulo="GESTIÓN DE LA COMPETICIÓN" subtitulo="Rendimiento Bajo Presión"
+            descripciones={textosVal.clima ?? DESC_CLIMA_INTERNO} />
+          <BloqueAspecto titulo={metaVal.gestionComp?.titulo ?? "GESTIÓN DE LA COMPETICIÓN"} subtitulo={metaVal.gestionComp?.subtitulo ?? "Rendimiento Bajo Presión"} definicion={metaVal.gestionComp?.definicion}
             nivel={data.gestionCompNivel} onNivel={v => set('gestionCompNivel', v)} showError={intentoDescarga}
             desc={data.gestionCompDesc}   onDesc={v => set('gestionCompDesc', v)}
-            descripciones={DESC_GESTION_COMPETICION} />
-
-          {/* LOGROS DEL TRIMESTRE */}
-          <tbody>
-            <tr>{celda(VERDE_GRAD, '#fff', 'LOGROS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
-            <tr>
-              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
-                <textarea value={data.logrosTrimestre} onChange={e => set('logrosTrimestre', e.target.value)}
-                  rows={2} placeholder="Describe los logros del trimestre..."
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
-              </td>
-            </tr>
-          </tbody>
-
-          {/* OBJETIVOS DEL TRIMESTRE */}
-          <tbody>
-            <tr>{celda(VERDE_GRAD, '#fff', 'OBJETIVOS DEL TRIMESTRE', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
-            <tr>
-              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
-                <textarea value={data.objetivosTrimestre} onChange={e => set('objetivosTrimestre', e.target.value)}
-                  rows={2} placeholder="Describe los objetivos del trimestre..."
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
-              </td>
-            </tr>
-          </tbody>
+            descripciones={textosVal.gestionComp ?? DESC_GESTION_COMPETICION} />
 
           {/* ASPECTO COMPORTAMENTAL */}
           <tbody>
@@ -1198,6 +1337,7 @@ export default function ValoracionPage() {
                     <option value="ALGUNAS VECES">ALGUNAS VECES</option>
                     <option value="CASI NUNCA">CASI NUNCA</option>
                     <option value="NUNCA">NUNCA</option>
+                    <option value="No Aplica">No Aplica</option>
                   </select>
                 </td>
               </tr>
@@ -1206,8 +1346,9 @@ export default function ValoracionPage() {
 
           {/* PERFIL INDIVIDUAL */}
           {(() => {
-            const nv = (s: string) => { const i = NIVELES.indexOf(s); return i > 0 ? i : 0; };
-            const cv = (s: string) => ({'SIEMPRE':5,'CASI SIEMPRE':4,'ALGUNAS VECES':3,'CASI NUNCA':2,'NUNCA':1}[s] ?? 0);
+            const esNA = (s: string) => (s ?? '').trim().toUpperCase() === 'NO APLICA';
+            const nv = (s: string) => { if (esNA(s)) return 5; const i = NIVELES.indexOf(s); return i > 0 ? i : 0; };
+            const cv = (s: string) => { if (esNA(s)) return 5; return ({'SIEMPRE':5,'CASI SIEMPRE':4,'ALGUNAS VECES':3,'CASI NUNCA':2,'NUNCA':1}[s] ?? 0); };
             const avg = (vals: number[]) => {
               const filled = vals.filter(v => v > 0);
               return filled.length ? filled.reduce((a,b) => a+b, 0) / filled.length : 0;
@@ -1243,16 +1384,26 @@ export default function ValoracionPage() {
                     </tr>
                   );
                 })}
-                {/* Promedio general */}
+                {/* Promedio general — PLANO sobre TODOS los fundamentos (igual que la vista de padres); No Aplica = 5 */}
                 {(() => {
-                  const promedioGeneral = avg([condicional, tecnico, tactico, socioAfectiva, comportamental]);
+                  const promedioGeneral = avg([
+                    nv(data.fuerzaNivel), nv(data.velocidadNivel), nv(data.resistenciaNivel),
+                    nv(data.controlNivel), nv(data.paseNivel), nv(data.conductaNivel), nv(data.driblingNivel),
+                    nv(data.remataNivel), nv(data.cabeceoNivel), nv(data.quiteNivel), nv(data.proteccionNivel),
+                    nv(data.posicionNivel), nv(data.visionNivel), nv(data.defensaNivel), nv(data.amplitudNivel),
+                    nv(data.transicionNivel), nv(data.superioridadNivel), nv(data.basculacionNivel),
+                    nv(data.trabajoNivel), nv(data.disciplinaNivel), nv(data.actitudNivel), nv(data.identidadNivel),
+                    nv(data.bloqueNivel), nv(data.climaNivel), nv(data.gestionCompNivel),
+                    cv(data.responsabilidad), cv(data.puntualidad), cv(data.disciplinaComp), cv(data.respeto),
+                    cv(data.tolerancia), cv(data.companerismo), cv(data.liderazgo), cv(data.trabajoEquipoComp), cv(data.sentidoPertenencia),
+                  ]);
                   return (
                     <tr>
                       <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '6px 12px', fontSize: 11, fontWeight: 900, letterSpacing: 1, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
                         VALORACIÓN DEPORTISTA
                       </td>
                       <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '6px 8px', textAlign: 'center', fontSize: 15, fontWeight: 900, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
-                        {promedioGeneral === 0 ? '—' : promedioGeneral.toFixed(2)}
+                        {promedioGeneral === 0 ? '—' : promedioGeneral.toFixed(1)}
                       </td>
                     </tr>
                   );
@@ -1268,6 +1419,30 @@ export default function ValoracionPage() {
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
                 <textarea value={data.observaciones} onChange={e => set('observaciones', e.target.value)}
                   rows={2} placeholder="Observaciones generales del entrenador..."
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+              </td>
+            </tr>
+          </tbody>
+
+          {/* LOGROS DE TU PROYECTO DEPORTIVO */}
+          <tbody>
+            <tr>{celda(VERDE_GRAD, '#fff', 'LOGROS DE TU PROYECTO DEPORTIVO', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>
+              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
+                <textarea value={data.logrosTrimestre} onChange={e => { textosManual.current = true; set('logrosTrimestre', e.target.value); }}
+                  rows={2} placeholder="Se genera automáticamente al completar la valoración (puedes editarlo)…"
+                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+              </td>
+            </tr>
+          </tbody>
+
+          {/* RETOS DE TU PROYECTO DEPORTIVO */}
+          <tbody>
+            <tr>{celda(VERDE_GRAD, '#fff', 'RETOS DE TU PROYECTO DEPORTIVO', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>
+              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
+                <textarea value={data.objetivosTrimestre} onChange={e => { textosManual.current = true; set('objetivosTrimestre', e.target.value); }}
+                  rows={2} placeholder="Se genera automáticamente al completar la valoración (puedes editarlo)…"
                   style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
               </td>
             </tr>
@@ -1312,5 +1487,13 @@ export default function ValoracionPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function ValoracionPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#e5e7eb' }} />}>
+      <ValoracionPageInner />
+    </Suspense>
   );
 }

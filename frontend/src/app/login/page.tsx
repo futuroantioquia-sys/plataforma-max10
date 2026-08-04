@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Shield, AlertCircle, Loader2, Users, Star, UserPlus } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
-import { getProfes, getVistaContable, buscarPorCodigo } from '@/lib/db';
+import { getVistaContable, buscarPorCodigo } from '@/lib/db';
 
 type Tab = 'admin' | 'profe' | 'calidoso' | 'nuevo';
 
@@ -37,42 +37,33 @@ export default function LoginPage() {
     const c = clave.trim();
 
     try {
-      /* ── ADMINISTRADOR ─── */
+      /* ── ADMINISTRADOR / CONTABILIDAD ─── */
       if (tab === 'admin') {
-        if (u === 'ADMON' && c === '34') {
+        // La contraseña se verifica EN EL SERVIDOR; el navegador sólo recibe una cookie firmada.
+        const r = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tab: 'admin', usuario: u, clave: c }),
+        });
+        const data = await r.json().catch(() => ({} as any));
+        if (r.ok && data?.ok) {
+          const esContab = data.rol === 'contabilidad';
           try {
             localStorage.removeItem('futuro-profe-proyectos');
             localStorage.removeItem('futuro-profe-nombre');
           } catch {}
           useAuthStore.setState({
             usuario: {
-              id: 'admin-1', email: 'admin@futuroantioquia.com',
-              nombre: 'Administrador', apellido: '',
-              rol: 'administracion' as any, activo: true,
+              id:       esContab ? 'contab-diana' : 'admin-1',
+              email:    esContab ? 'diana@futuroantioquia.com' : 'admin@futuroantioquia.com',
+              nombre:   esContab ? 'Diana' : 'Administrador',
+              apellido: esContab ? 'Contabilidad' : '',
+              rol:      (esContab ? 'contabilidad' : 'administracion') as any,
+              activo:   true,
               academia: { id: '1', nombre: 'Futuro Antioquia' },
             },
             cargando: false, error: null,
           });
-          document.cookie = 'futuro-session=1; path=/; max-age=86400; SameSite=Lax';
-          try { localStorage.setItem('futuro-rol', 'administracion'); } catch {}
-          router.push('/dashboard');
-        } else if (u === 'DIANA' && c === '32183658') {
-          /* ── CONTABILIDAD (DIANA): edita solo Finanzas, ve el resto ── */
-          try {
-            localStorage.removeItem('futuro-profe-proyectos');
-            localStorage.removeItem('futuro-profe-nombre');
-          } catch {}
-          useAuthStore.setState({
-            usuario: {
-              id: 'contab-diana', email: 'diana@futuroantioquia.com',
-              nombre: 'Diana', apellido: 'Contabilidad',
-              rol: 'contabilidad' as any, activo: true,
-              academia: { id: '1', nombre: 'Futuro Antioquia' },
-            },
-            cargando: false, error: null,
-          });
-          document.cookie = 'futuro-session=contabilidad; path=/; max-age=86400; SameSite=Lax';
-          try { localStorage.setItem('futuro-rol', 'contabilidad'); } catch {}
+          try { localStorage.setItem('futuro-rol', esContab ? 'contabilidad' : 'administracion'); } catch {}
           router.push('/dashboard');
         } else {
           setErrLocal('Usuario o contraseña incorrectos');
@@ -82,20 +73,24 @@ export default function LoginPage() {
 
       /* ── PROFE ─── */
       if (tab === 'profe') {
-        const listaProfes = await getProfes();
-        const profe = listaProfes.find(p => p.usuario.toUpperCase() === u && p.clave === c);
+        // Verificación de la cédula EN EL SERVIDOR (ya no se descarga la lista de claves al navegador).
+        const r = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tab: 'profe', usuario: u, clave: c }),
+        });
+        const data = await r.json().catch(() => ({} as any));
+        const profe = (r.ok && data?.ok) ? data.profe : null;
         if (profe) {
           useAuthStore.setState({
             usuario: {
               id: 'profe-' + profe.usuario,
-              email: profe.usuario.toLowerCase() + '@futuroantioquia.com',
+              email: String(profe.usuario).toLowerCase() + '@futuroantioquia.com',
               nombre: profe.usuario, apellido: '',
               rol: 'profesor' as any, activo: true,
               academia: { id: '1', nombre: 'Futuro Antioquia' },
             },
             cargando: false, error: null,
           });
-          document.cookie = 'futuro-session=profesor; path=/; max-age=86400; SameSite=Lax';
           try {
             localStorage.setItem('futuro-profe-proyectos', JSON.stringify(profe.proyectos));
             localStorage.setItem('futuro-profe-nombre',    JSON.stringify(profe.usuario));
@@ -128,11 +123,18 @@ export default function LoginPage() {
         const cNorm  = normDoc(c);
         const RX_DOC = /num.*doc|^doc|doc|c[eé]dul|c\.c|identif|nit|no.*doc|cc\b/i;
 
-        function sesionDeportista(dep: { id: string; _nombre?: string } | undefined) {
-          document.cookie = 'futuro-session=deportista; path=/; max-age=86400; SameSite=Lax';
+        async function sesionDeportista(dep: { id: string; _nombre?: string } | undefined) {
+          // El servidor emite la cookie de sesión firmada de rol 'deportista'.
+          try {
+            await fetch('/api/auth/calidoso', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ codigo: u }),
+            });
+          } catch {}
           try {
             if (dep?.id)      localStorage.setItem('futuro-calidoso-id',     dep.id);
             if (dep?._nombre) localStorage.setItem('futuro-calidoso-nombre', dep._nombre);
+            localStorage.setItem('futuro-calidoso-codigo', u);
             // Guardar credenciales → próximos ingresos son instantáneos sin red
             const credsRaw = localStorage.getItem('futuro_calidoso_credenciales');
             const creds: Record<string, string> = credsRaw ? JSON.parse(credsRaw) : {};
@@ -164,7 +166,7 @@ export default function LoginPage() {
               // Buscamos solo este deportista (1 fila en Supabase)
               const candidatos = await buscarPorCodigo(u);
               const dep = candidatos[0];
-              sesionDeportista(dep);
+              await sesionDeportista(dep);
               return;
             }
           }
@@ -209,7 +211,7 @@ export default function LoginPage() {
           '| docKey usado:', logDocKey);
 
         if (dep) {
-          sesionDeportista(dep);
+          await sesionDeportista(dep);
           return;
         }
 
@@ -230,7 +232,7 @@ export default function LoginPage() {
         if (vcRow) {
           // Usar candidatos ya cargados (sin re-fetch)
           const depVC = candidatos[0];
-          sesionDeportista(depVC ?? { id: '', _nombre: vcRow.nombre ?? u });
+          await sesionDeportista(depVC ?? { id: '', _nombre: vcRow.nombre ?? u });
           return;
         }
 
@@ -246,7 +248,12 @@ export default function LoginPage() {
 
       /* ── NUEVO DEPORTISTA ─── */
       if (tab === 'nuevo') {
-        if (c === '26') {
+        const r = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tab: 'nuevo', clave: c }),
+        });
+        const data = await r.json().catch(() => ({} as any));
+        if (r.ok && data?.ok) {
           try { sessionStorage.setItem('afiliacion_modo', 'nuevo'); } catch {}
           router.push('/afiliacion');
         } else {

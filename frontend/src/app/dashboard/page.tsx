@@ -11,7 +11,7 @@ import {
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
-import { getDeportistas, countSoportesPendientes, getResumenVisitas, getVisitasPorDia } from '@/lib/db';
+import { getDeportistas, countSoportesPendientes, countLibroPagos, getResumenVisitas, getVisitasPorDia } from '@/lib/db';
 
 // ── CARD DE ACCESO RÁPIDO ────────────────────────────────────────
 function AccesoCard({
@@ -254,23 +254,34 @@ function DashboardAdmin() {
   const [pagosCargados,      setPagosCargados]      = useState(0);
 
   useEffect(() => {
-    getDeportistas().then(lista => {
-      const count = lista.filter(d => {
-        const proy = (Object.entries(d._columnas ?? {}).find(([k]) => /^proy/i.test(k.trim()))?.[1] ?? '').trim().toUpperCase();
-        return !proy || proy === 'UBICAR';
-      }).length;
-      setPendientesAsign(count);
-    }).catch(() => {});
+    // Refresca los contadores (asignación, soportes por confirmar, pagos cargados).
+    const refrescar = () => {
+      getDeportistas().then(lista => {
+        const count = lista.filter(d => {
+          const proy = (Object.entries(d._columnas ?? {}).find(([k]) => /^proy/i.test(k.trim()))?.[1] ?? '').trim().toUpperCase();
+          return !proy || proy === 'UBICAR';
+        }).length;
+        setPendientesAsign(count);
+      }).catch(() => {});
 
-    countSoportesPendientes().then(n => setPendientesSoportes(n)).catch(() => {});
+      countSoportesPendientes().then(n => setPendientesSoportes(n)).catch(() => {});
 
-    // Contar deportistas con pagos cargados en el Libro Contable (localStorage)
-    try {
-      const raw = localStorage.getItem('futuro_libro_pagos');
-      const allPagos: Record<string, unknown[]> = raw ? JSON.parse(raw) : {};
-      const n = Object.values(allPagos).reduce((acc, v) => acc + (Array.isArray(v) ? v.length : 0), 0);
-      setPagosCargados(n);
-    } catch {}
+      // Pagos subidos: contar desde la base (igual para admin y contable, no del localStorage)
+      countLibroPagos().then(n => setPagosCargados(n)).catch(() => {});
+    };
+
+    refrescar();
+    // Mantener el contador al día: al volver a la pestaña o enfocar la ventana, y cada 20 s.
+    const onFocus = () => refrescar();
+    const onVis = () => { if (document.visibilityState === 'visible') refrescar(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    const t = setInterval(refrescar, 20000);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+      clearInterval(t);
+    };
   }, []);
 
   return (
@@ -313,6 +324,7 @@ function DashboardAdmin() {
       {/* Categoría: Gestión */}
       <CategoriaSection emoji="⚙️" titulo="Gestión" color="teal" delay={400}>
         <AccesoCard titulo="Info Proyectos y Formadores" icono={Shield} href="/usuarios" descripcion="Profes, sedes y proyectos" color="teal" />
+        <AccesoCard titulo="Gestión de Valoración" icono={Star} href="/gestion-valoracion" descripcion="Editar textos de los niveles" color="teal" />
         <AccesoCard titulo="Mensajes"            icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"    color="teal" />
       </CategoriaSection>
 

@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import React, { Suspense, useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp, Home, LogOut } from 'lucide-react';
-import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, getAsistenciaDeportistas, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha, getCalificaciones, saveCalificacion } from '@/lib/db';
+import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, getAsistenciaDeportistas, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha, getCalificaciones, saveCalificacion, getJornadaMes, saveJornadaMes } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -154,6 +154,7 @@ function AsistenciaInner() {
   const [mes,          setMes]          = useState(0);
   const [anio,         setAnio]         = useState(2026);
   const [diasSel,      setDiasSel]      = useState<number[]>([]);
+  const [overridesMes, setOverridesMes] = useState<Record<string, number[]>>({}); // días ajustados por mes
   const [cargando,     setCargando]     = useState(false); // cambia a false por defecto — profe no carga todo
   const [cargandoProy, setCargandoProy] = useState(false); // carga del proyecto específico
   const [guardando,    setGuardando]    = useState(false);
@@ -370,6 +371,10 @@ function AsistenciaInner() {
         }
       })
       .catch(() => {/* silencioso */});
+
+    // Cargar los ajustes de días por MES de este proyecto (el profe puede cambiarlos solo para un mes)
+    setOverridesMes({});
+    getJornadaMes(proyecto).then(setOverridesMes).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyecto]);
 
@@ -473,11 +478,15 @@ function AsistenciaInner() {
       .sort((a, b) => a._nombre.localeCompare(b._nombre));
   }, [deportistas, proyecto, esProfe]);
 
+  // Días EFECTIVOS del mes: si el mes tiene un ajuste propio se usa ese; si no, los días base del proyecto.
+  const mesTieneAjuste = mesKey in overridesMes;
+  const diasEfectivos = mesTieneAjuste ? overridesMes[mesKey] : diasSel;
+
   const diasDelMes = useMemo(() => {
     const dias: Date[] = [];
     const d = new Date(anio, mes, 1);
     while (d.getMonth() === mes) {
-      if (diasSel.includes(d.getDay())) dias.push(new Date(d));
+      if (diasEfectivos.includes(d.getDay())) dias.push(new Date(d));
       d.setDate(d.getDate() + 1);
     }
     return dias.sort((a, b) => {
@@ -488,7 +497,7 @@ function AsistenciaInner() {
       const diff = lunA.getTime() - lunB.getTime();
       return diff !== 0 ? diff : isoA - isoB;
     });
-  }, [mes, anio, diasSel]);
+  }, [mes, anio, diasEfectivos]);
 
   // ── Memoizar estado por celda ────────────────────────────────
   // Busca en TODOS los proyectos: si el deportista cambió de proyecto su historial lo sigue
@@ -613,28 +622,22 @@ function AsistenciaInner() {
     return Math.round((totalesMap[depId] / sesionesRealizadas) * 100) + '%';
   }
 
+  // El profe ajusta los días SOLO para el mes visible (no cambia los demás meses).
   function toggleDia(jsDay: number) {
     if (!proyecto) return;
-    setDiasSel(prev => {
-      const newDias = prev.includes(jsDay)
-        ? prev.filter(x => x !== jsDay)
-        : [...prev, jsDay].sort();
-      // Auto-guardar en localStorage para este proyecto
-      try {
-        localStorage.setItem(`futuro_dias_${proyecto}`, JSON.stringify(newDias));
-        // También actualizar la clave compuesta (meta) para que proyectos.tsx la lea
-        const rawMeta = localStorage.getItem(PROYECTOS_META_KEY);
-        const meta = rawMeta ? JSON.parse(rawMeta) : {};
-        const proyLower = proyecto.toLowerCase();
-        const mk = Object.keys(meta).find(k =>
-          k.toLowerCase().endsWith(`::${proyLower}`) ||
-          k.toLowerCase() === proyLower
-        ) ?? `__SIN_PROGRAMA__::${proyecto}`;
-        meta[mk] = { ...(meta[mk] ?? {}), dias: newDias };
-        localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(meta));
-      } catch {}
-      return newDias;
-    });
+    const base = (mesKey in overridesMes) ? overridesMes[mesKey] : diasSel;
+    const newDias = base.includes(jsDay)
+      ? base.filter(x => x !== jsDay)
+      : [...base, jsDay].sort();
+    setOverridesMes(prev => ({ ...prev, [mesKey]: newDias }));
+    saveJornadaMes(proyecto, mesKey, newDias).catch(() => {});
+  }
+
+  // Volver los días de este mes a los del proyecto (quitar el ajuste del mes)
+  function restaurarDiasMes() {
+    if (!proyecto || !(mesKey in overridesMes)) return;
+    setOverridesMes(prev => ({ ...prev, [mesKey]: [...diasSel] }));
+    saveJornadaMes(proyecto, mesKey, diasSel).catch(() => {});
   }
 
   function setCal(depId: string, value: string) {
@@ -887,32 +890,42 @@ function AsistenciaInner() {
                 </div>
               </div>
 
-              {/* Días de entreno — solo visible cuando hay proyecto seleccionado */}
+              {/* Días de entreno — el profe puede ajustarlos SOLO para el mes visible */}
               {proyecto && (
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
                     Días de entreno
-                    {esProfe && <span className="ml-1 text-yellow-600 font-semibold normal-case">· asignados por admin</span>}
+                    {esProfe && (
+                      <span className="ml-1 text-[#16a34a] font-semibold normal-case">
+                        · toca para ajustar solo {MESES[mes]}
+                      </span>
+                    )}
+                    {mesTieneAjuste && (
+                      <button onClick={restaurarDiasMes} type="button"
+                        className="ml-2 text-blue-600 hover:text-blue-800 font-semibold normal-case underline">
+                        volver a los del proyecto
+                      </button>
+                    )}
                   </label>
                   <div className="flex gap-1">
                     {DIAS_ORDEN_JS.map((jsDay, i) => {
-                      const activo = diasSel.includes(jsDay);
-                      // Profesor: span estático (no interactivo)
+                      const activo = diasEfectivos.includes(jsDay);
+                      // Profesor: editable (solo afecta este mes)
                       if (esProfe) {
                         return (
-                          <span key={jsDay}
-                            title="Los días los asigna el administrador"
-                            className={`w-9 h-9 rounded-lg text-[10px] font-black flex items-center justify-center select-none ${
-                              activo ? 'bg-[#16a34a] text-white' : 'bg-gray-100 text-gray-400'
+                          <button key={jsDay} type="button" onClick={() => toggleDia(jsDay)}
+                            title={`Ajustar los días de ${MESES[mes]} (no cambia otros meses)`}
+                            className={`w-9 h-9 rounded-lg text-[10px] font-black flex items-center justify-center transition ${
+                              activo ? 'bg-[#16a34a] text-white shadow-sm' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
                             }`}>
                             {DIAS_SEMANA[i].slice(0, 2)}
-                          </span>
+                          </button>
                         );
                       }
-                      // Admin: solo lectura (los días se gestionan en /usuarios)
+                      // Admin: solo lectura (los días base se gestionan en /usuarios)
                       return (
                         <span key={jsDay}
-                          title="Los días se configuran en Información de Proyectos"
+                          title="Los días base se configuran en Información de Proyectos"
                           className={`w-9 h-9 rounded-lg text-[10px] font-black flex items-center justify-center select-none ${
                             activo ? 'bg-[#16a34a] text-white' : 'bg-gray-100 text-gray-400'
                           }`}>
@@ -1119,6 +1132,7 @@ function AsistenciaInner() {
                   localStorage.removeItem('futuro-profe-proyectos');
                   localStorage.removeItem('futuro-rol');
                 } catch {}
+                fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
                 router.push('/login');
               }}
               className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-red-200 text-red-500 font-black text-sm active:scale-[.97] transition-transform shadow-sm"
@@ -1160,6 +1174,7 @@ function AsistenciaInner() {
                 localStorage.removeItem('futuro-profe-proyectos');
                 localStorage.removeItem('futuro-rol');
               } catch {}
+              fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
               router.push('/login');
             }}
             title="Cerrar sesión"

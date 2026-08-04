@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle, XCircle, Eye, Clock, AlertCircle } from 'lucide-react';
-import { getSoportesPendientes, confirmarSoportePago, eliminarSoportePago, getDeportistas, getPagos } from '@/lib/db';
+import { getSoportesPendientes, getSoporteDatos, confirmarSoportePago, eliminarSoportePago, getDeportistas } from '@/lib/db';
 import type { SoportePago, Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -45,6 +45,23 @@ export default function PagosPendientesPage() {
   const [accion,     setAccion]     = useState<{ idx: number; tipo: 'confirmar' | 'rechazar' } | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [toast,      setToast]      = useState<{ msg: string; ok: boolean } | null>(null);
+  const [datosMap,   setDatosMap]   = useState<Record<string, string>>({}); // id -> imagen base64 (carga perezosa)
+
+  // Cargar las imágenes de a una (sin bloquear la lista ni saturar la red)
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      for (const s of soportes) {
+        if (cancel) return;
+        if (datosMap[s.id]) continue;
+        const d = await getSoporteDatos(s.id);
+        if (cancel) return;
+        if (d) setDatosMap(prev => ({ ...prev, [s.id]: d }));
+      }
+    })();
+    return () => { cancel = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [soportes]);
 
   const mostrarToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -54,30 +71,10 @@ export default function PagosPendientesPage() {
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [pendientes, deportistas, pagos] = await Promise.all([
+      const [pendientes, deportistas] = await Promise.all([
         getSoportesPendientes(),
         getDeportistas(),
-        getPagos(),
       ]);
-
-      const norm = (s: string) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
-
-      // Meses ya pagados (verificados) de un deportista — busca por id y por código
-      const mesesPagados = (depId: string, cod: string): Set<string> => {
-        const set = new Set<string>();
-        const keys = new Set<string>([depId, cod]);
-        const digits = String(cod ?? '').replace(/\D/g, '');
-        if (digits) { keys.add(digits); keys.add(String(parseInt(digits, 10))); }
-        keys.forEach(k => {
-          const rows = (pagos as any)[k];
-          if (Array.isArray(rows)) {
-            rows.forEach((r: any) => {
-              if (norm(r.estado).startsWith('PAG')) set.add(norm(r.detalle));
-            });
-          }
-        });
-        return set;
-      };
 
       // Enriquecer cada soporte con info del deportista
       const enriquecidos: SoporteEnriquecido[] = pendientes.map(s => {
@@ -92,20 +89,7 @@ export default function PagosPendientesPage() {
         };
       });
 
-      // Ocultar los soportes cuyos meses YA quedaron pagados (verificados en el estado de cuenta)
-      const visibles = enriquecidos.filter(s => {
-        if (!s.meses || s.meses.length === 0) return true;
-        const pagados = mesesPagados(s.depId, s.depCodigo);
-        if (pagados.size === 0) return true;
-        const todosPagados = s.meses.every(m => {
-          const nm = norm(m);
-          for (const p of pagados) { if (p === nm || p.startsWith(nm) || nm.startsWith(p)) return true; }
-          return false;
-        });
-        return !todosPagados;
-      });
-
-      setSoportes(visibles);
+      setSoportes(enriquecidos);
     } catch (e) {
       console.error('[pagos-pendientes] cargar:', e);
     }
@@ -117,12 +101,12 @@ export default function PagosPendientesPage() {
   async function handleConfirmar(idx: number) {
     const s = soportes[idx];
     setProcesando(true);
-    try {
-      await confirmarSoportePago(s.id);
-      setSoportes(prev => prev.filter((_, i) => i !== idx));
+    const ok = await confirmarSoportePago(s.id);
+    if (ok) {
+      setSoportes(prev => prev.filter(x => x.id !== s.id));
       mostrarToast('✅ Pago confirmado correctamente', true);
-    } catch {
-      mostrarToast('❌ Error al confirmar el pago', false);
+    } else {
+      mostrarToast('❌ No se pudo confirmar. Intenta de nuevo.', false);
     }
     setProcesando(false);
     setAccion(null);
@@ -131,12 +115,12 @@ export default function PagosPendientesPage() {
   async function handleRechazar(idx: number) {
     const s = soportes[idx];
     setProcesando(true);
-    try {
-      await eliminarSoportePago(s.id);
-      setSoportes(prev => prev.filter((_, i) => i !== idx));
+    const ok = await eliminarSoportePago(s.id);
+    if (ok) {
+      setSoportes(prev => prev.filter(x => x.id !== s.id));
       mostrarToast('🗑️ Soporte eliminado', true);
-    } catch {
-      mostrarToast('❌ Error al eliminar el soporte', false);
+    } else {
+      mostrarToast('❌ No se pudo eliminar. Intenta de nuevo.', false);
     }
     setProcesando(false);
     setAccion(null);
@@ -216,6 +200,7 @@ export default function PagosPendientesPage() {
                   <th className="px-3 py-3 text-left whitespace-nowrap">Programa</th>
                   <th className="px-3 py-3 text-left whitespace-nowrap">Proyecto</th>
                   <th className="px-3 py-3 text-left whitespace-nowrap">Meses Pagando</th>
+                  <th className="px-3 py-3 text-left whitespace-nowrap">Fecha Subido</th>
                   <th className="px-3 py-3 text-left whitespace-nowrap">Soporte de Pago</th>
                   <th className="px-3 py-3 text-center whitespace-nowrap">Acciones</th>
                 </tr>
@@ -257,36 +242,52 @@ export default function PagosPendientesPage() {
                       ) : <span className="text-gray-400">—</span>}
                     </td>
 
-                    {/* Soporte de pago */}
+                    {/* Fecha en que se subió el soporte */}
+                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-[12px]">
+                      {s.created_at
+                        ? new Date(s.created_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+                        : (s.fecha || '—')}
+                    </td>
+
+                    {/* Soporte de pago (imagen cargada aparte) */}
                     <td className="px-3 py-3">
-                      {s.datos ? (
-                        esImagen(s.datos) ? (
-                          <button
-                            onClick={() => setViendoIdx(idx)}
-                            className="relative block">
+                      {(() => {
+                        const img = datosMap[s.id];
+                        if (!img) {
+                          return (
+                            <div className="w-14 h-14 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center text-[9px] text-gray-400 animate-pulse">
+                              cargando…
+                            </div>
+                          );
+                        }
+                        return esImagen(img) ? (
+                          <button onClick={() => setViendoIdx(idx)} className="relative block">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={s.datos}
-                              alt="Soporte"
-                              className="w-14 h-14 object-cover rounded-lg border border-gray-200 hover:opacity-80 transition cursor-pointer"
-                            />
+                            <img src={img} alt="Soporte"
+                              className="w-14 h-14 object-cover rounded-lg border border-gray-200 hover:opacity-80 transition cursor-pointer" />
                             <span className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition">
                               <Eye className="w-5 h-5 text-white drop-shadow"/>
                             </span>
                           </button>
                         ) : (
-                          <a href={s.datos} target="_blank" rel="noopener noreferrer"
+                          <a href={img} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-red-600 text-xs font-semibold hover:underline">
                             <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>
                             PDF
                           </a>
-                        )
-                      ) : <span className="text-gray-300 text-xs">Sin archivo</span>}
+                        );
+                      })()}
                     </td>
 
                     {/* Acciones */}
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-1.5 justify-center">
+                        <button
+                          onClick={() => setAccion({ idx, tipo: 'confirmar' })}
+                          title="Confirmar pago"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white font-black text-[11px] transition whitespace-nowrap">
+                          <CheckCircle className="w-3.5 h-3.5"/> OK
+                        </button>
                         <button
                           onClick={() => setAccion({ idx, tipo: 'rechazar' })}
                           title="Rechazar soporte"
@@ -294,8 +295,8 @@ export default function PagosPendientesPage() {
                           <XCircle className="w-3.5 h-3.5"/>
                         </button>
                         <button
-                          onClick={() => router.push(`/alumnos/${s.depId}/estado-cuenta?edit=1`)}
-                          title="Ver cuenta y registrar el pago"
+                          onClick={() => router.push(`/alumnos/${s.depId}/estado-cuenta?readonly=1`)}
+                          title="Ver cuenta"
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold text-[11px] transition whitespace-nowrap">
                           <Eye className="w-3.5 h-3.5"/> Cuenta
                         </button>
@@ -319,7 +320,7 @@ export default function PagosPendientesPage() {
           <div className="relative max-w-2xl w-full" onClick={e => e.stopPropagation()}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={soportes[viendoIdx].datos}
+              src={datosMap[soportes[viendoIdx].id] || ''}
               alt="Soporte de pago"
               className="w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl bg-white"
             />

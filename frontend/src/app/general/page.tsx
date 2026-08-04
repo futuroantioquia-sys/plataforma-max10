@@ -293,6 +293,7 @@ export default function GeneralPage() {
     const tipoAfil   = todas.filter(c => esTipoAfil(c));
     const estado     = todas.filter(c => /^estado$/i.test(c.trim()));  // ESTADO después de TIPO AFIL
     const cod        = todas.filter(c => esCodigo(c));
+    const programa   = todas.filter(c => /^program/i.test(c.trim()));
     const proyecto   = todas.filter(c => /proyecto|^proy\b/i.test(c.trim()));
     const profe      = todas.filter(c => /^prof|\bprofe\b/i.test(c.trim()));
     const compite     = todas.filter(c => /^compite$/i.test(c.trim()));
@@ -302,7 +303,7 @@ export default function GeneralPage() {
     const torneo4     = todas.filter(c => /torneo.?4/i.test(c.trim()));
     // Excluir la clave virtual POSICIÓN del bloque "resto" (la colocamos al final)
     const excluidas = new Set([
-      ...fecha, ...tipoAfil, ...estado, ...cod, ...proyecto, ...profe,
+      ...fecha, ...tipoAfil, ...estado, ...cod, ...programa, ...proyecto, ...profe,
       ...compite, ...competencia, ...torneo2, ...torneo3, ...torneo4,
       VPOS,
     ]);
@@ -318,12 +319,13 @@ export default function GeneralPage() {
       VPOS,
     ];
 
-    // Insertar PROYECTO → PROFE → TORNEOS justo después de la columna DIA
+    // Insertar PROGRAMA → PROYECTO → PROFE → TORNEOS justo después de la columna DIA
+    // (PROGRAMA queda al lado de PROYECTO)
     const idxDia = resto.findIndex(c => /^d[ií]a$/i.test(c.trim()));
     if (idxDia >= 0) {
-      resto.splice(idxDia + 1, 0, ...proyecto, ...profe, ...torneos);
+      resto.splice(idxDia + 1, 0, ...programa, ...proyecto, ...profe, ...torneos);
     } else {
-      resto.push(...proyecto, ...profe, ...torneos);
+      resto.push(...programa, ...proyecto, ...profe, ...torneos);
     }
 
     // Garantía final: si PROFE aparece antes que PROYECTO en el array resultado,

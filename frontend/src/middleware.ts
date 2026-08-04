@@ -1,16 +1,18 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { validarFirma } from '@/lib/session';
 
 // Rutas que no requieren autenticación
 const RUTAS_PUBLICAS = ['/login', '/afiliacion', '/api'];
 
 // Rutas permitidas para el rol profesor — asistencia + portal propio + vista alumnos
-const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/valoracion-dinamica', '/sesiones', '/postpartido', '/mis-proyectos', '/alumnos'];
+const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/sesiones', '/postpartido', '/mis-proyectos', '/alumnos'];
 
-// Rutas permitidas para deportista (calidoso) — solo su perfil y secciones propias
-// EXCLUYE /pagos (muestra todos los deportistas) y /dashboard (redirige desde allí)
-const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/evaluaciones', '/valoracion-dinamica', '/afiliacion', '/calendario', '/mantenimiento', '/mis-pagos'];
+// Rutas permitidas para deportista (calidoso) — SOLO su perfil y secciones propias.
+// IMPORTANTE: NO incluye /evaluaciones ni /valoracion-dinamica → las valoraciones
+// quedan bloqueadas EN EL SERVIDOR para los calidosos (requisito fundamental).
+const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/afiliacion', '/calendario', '/mantenimiento', '/mis-pagos'];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Permitir rutas públicas
@@ -18,22 +20,28 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Verificar cookie de sesión (establecida por login page)
-  const sesion = request.cookies.get('futuro-session');
-  if (!sesion?.value) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // Verificar la PRUEBA FIRMADA (fa-sig). La cookie legible 'futuro-session' ya
+  // no basta: sin una firma válida (que sólo el servidor puede generar) el acceso
+  // se rechaza. Esto anula el truco de "document.cookie = 'futuro-session=1'".
+  const firma = request.cookies.get('fa-sig')?.value;
+  const rol = await validarFirma(firma);
+  if (!rol) {
+    const res = NextResponse.redirect(new URL('/login', request.url));
+    // Limpia una posible cookie legible forjada para evitar estados inconsistentes.
+    res.cookies.set('futuro-session', '', { path: '/', maxAge: 0 });
+    return res;
   }
 
-  // Restricción de rutas para profes — solo asistencia y consolidado de asistencia
-  if (sesion.value === 'profesor') {
+  // Restricción de rutas para profes
+  if (rol === 'profesor') {
     const permitida = RUTAS_PROFESOR.some(r => pathname === r || pathname.startsWith(r + '/'));
     if (!permitida) {
       return NextResponse.redirect(new URL('/asistencia', request.url));
     }
   }
 
-  // Restricción de rutas para deportista (calidoso) — solo su perfil, pagos y dashboard
-  if (sesion.value === 'deportista') {
+  // Restricción de rutas para deportista (calidoso)
+  if (rol === 'deportista') {
     const permitida = RUTAS_DEPORTISTA.some(r => pathname === r || pathname.startsWith(r + '/'));
     if (!permitida) {
       return NextResponse.redirect(new URL('/alumnos', request.url));

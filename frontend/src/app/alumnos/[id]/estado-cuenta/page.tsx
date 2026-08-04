@@ -8,7 +8,7 @@ import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
-import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre, getSoportesDeDeportista } from '@/lib/db';
+import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
@@ -214,7 +214,7 @@ function EstadoCuentaInner() {
   const [pagoModalIdx,  setPagoModalIdx]  = useState<number | null>(null);
   const fotoInputRef    = useRef<HTMLInputElement>(null);
   const soporteInputRef = useRef<HTMLInputElement>(null);
-  const [soportes,    setSoportes]    = useState<{ name: string; data: string; date: string; meses?: string[] }[]>([]);
+  const [soportes,    setSoportes]    = useState<{ name: string; data: string; date: string }[]>([]);
   const [verSoportes, setVerSoportes] = useState(false);
   const [pendingFiles,     setPendingFiles]     = useState<{ name: string; data: string; date: string }[]>([]);
   const [nombreSoporte,    setNombreSoporte]    = useState('');
@@ -311,25 +311,12 @@ function EstadoCuentaInner() {
     reader.readAsDataURL(file);
   }
 
-  /* ─── Cargar soportes: localStorage (rápido) + Supabase (fuente de verdad) ─── */
+  /* ─── Cargar soportes de pago desde localStorage ─── */
   useEffect(() => {
     try {
       const raw = localStorage.getItem(`futuro_soportes_${id}`);
       if (raw) setSoportes(JSON.parse(raw));
     } catch {}
-    // Supabase es la fuente real: localStorage se llena con los base64 y pierde datos,
-    // así el calidoso siempre ve los soportes que subió.
-    getSoportesDeDeportista(id as string).then(filas => {
-      if (!filas.length) return;
-      const mapped = filas.map(f => ({ name: f.nombre, data: f.datos, date: f.fecha, meses: f.meses ?? [] }));
-      setSoportes(prev => {
-        const nombresSupa = new Set(mapped.map(m => m.name));
-        const extraLocales = prev.filter(p => !nombresSupa.has(p.name));
-        const merged = [...mapped, ...extraLocales];
-        try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(merged)); } catch {}
-        return merged;
-      });
-    }).catch(() => {});
   }, [id]);
 
   function subirSoporte(e: React.ChangeEvent<HTMLInputElement>) {
@@ -378,13 +365,7 @@ function EstadoCuentaInner() {
 
   function eliminarSoporte(idx: number) {
     const nombre = soportes[idx]?.name;
-    if (nombre) {
-      const cod = dep ? getCol(dep, /^c[oó]d/i) : '';
-      const codDigits = cod.replace(/\D/g, '');
-      const candidatos = [id as string, cod, codDigits, codDigits ? String(parseInt(codDigits, 10)) : '']
-        .filter(Boolean);
-      eliminarSoportePorNombre(candidatos, nombre);
-    }
+    if (nombre && id) eliminarSoportePorNombre(id as string, nombre);
     setSoportes(prev => {
       const updated = prev.filter((_, i) => i !== idx);
       try { localStorage.setItem(`futuro_soportes_${id}`, JSON.stringify(updated)); } catch {}
@@ -732,19 +713,19 @@ function EstadoCuentaInner() {
                 <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
                   {codVal}
                 </div>
-                {/* Navegación: el calidoso ve los 4 botones en cada sección (PAGOS activo aquí);
-                    admin/profe conservan Pagos + Asistencia */}
+                {/* Botones nav: siempre 4 secciones accesibles */}
                 <div className="grid grid-cols-2 gap-1 w-full">
                   {(esDeportista
                     ? [
-                        { label: 'PAGOS',  href: null as string | null,        active: true  },
-                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,  active: false },
-                        { label: 'VAL.',   href: '/mantenimiento',             active: false },
-                        { label: 'MENS.',  href: `/alumnos/${id}/mensajes`,    active: false },
+                        { label: 'PAGOS',  href: null,                               active: true  },
+                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false },
+                        { label: 'MENS.',  href: '/mensajes',                         active: false },
                       ]
                     : [
-                        { label: 'PAGOS',  href: null as string | null,        active: true  },
-                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,  active: false },
+                        { label: 'PAGOS',  href: null,                               active: true  },
+                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false },
+                        { label: 'INF.',   href: codVal ? `/evaluaciones?cod=${encodeURIComponent(codVal)}` : '/evaluaciones', active: false },
+                        { label: 'MENS.',  href: '/mensajes',                        active: false },
                       ]
                   ).map(({ label, href, active }) => (
                     <button key={label}
@@ -1168,10 +1149,9 @@ function EstadoCuentaInner() {
         const cuentaNit   = esMax10 ? null             : '811036997';
         return (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
-             onMouseDown={e => { if (e.target === e.currentTarget) { setShowPagoModal(false); setPagoModalIdx(null); } }}>
+             onClick={() => { setShowPagoModal(false); setPagoModalIdx(null); }}>
           <div className="relative rounded-3xl overflow-hidden w-full max-w-xs shadow-2xl"
                style={{ background: '#1a2d40' }}
-               onMouseDown={e => e.stopPropagation()}
                onClick={e => e.stopPropagation()}>
 
             {/* Cerrar */}
@@ -1430,10 +1410,9 @@ function EstadoCuentaInner() {
         return (
           <div
             className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center p-4 pb-6"
-            onMouseDown={e => { if (e.target === e.currentTarget) { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); } }}>
+            onClick={() => { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); }}>
             <div
               className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
-              onMouseDown={e => e.stopPropagation()}
               onClick={e => e.stopPropagation()}>
 
               {/* Encabezado */}

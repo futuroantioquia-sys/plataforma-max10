@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, CheckCircle, Plus, Eye, EyeOff } from 'lucide-react';
-import { getProfes, saveProfes, getDeportistas } from '@/lib/db';
+import { ArrowLeft, Save, CheckCircle, Plus, Eye, EyeOff, Users, X, Trash2 } from 'lucide-react';
+import { getProfes, saveProfes, deleteProfe, getDeportistas } from '@/lib/db';
 import type { Profe } from '@/lib/db';
 import { useSoloLectura } from '@/lib/permisos';
 
@@ -65,14 +65,16 @@ export default function UsuariosPage() {
   const [proyRows,    setProyRows]    = useState<ProyRow[]>([]);
   const [meta,        setMeta]        = useState<Record<string, ProyMeta>>({});
   const [metaEdits,   setMetaEdits]   = useState<Record<string, Partial<ProyMeta>>>({});
-  const [profeEdits,  setProfeEdits]  = useState<Record<string, { usuario?: string; clave?: string }>>({});
+  const [profeEdits,  setProfeEdits]  = useState<Record<string, { usuario?: string; clave?: string; nombre?: string }>>({});
+  const [profesDirty, setProfesDirty] = useState(false); // reasignaciones de proyecto pendientes
   const [filtroPrograma, setFiltroPrograma] = useState('');
   const [guardando,   setGuardando]   = useState(false);
   const [guardado,    setGuardado]    = useState(false);
   const [errorGuard,  setErrorGuard]  = useState('');
   const [claveVis,    setClaveVis]    = useState<Record<string, boolean>>({});
   const [agregando,   setAgregando]   = useState(false);
-  const [nuevo,       setNuevo]       = useState({ usuario: '', clave: '' });
+  const [nuevo,       setNuevo]       = useState({ usuario: '', clave: '', nombre: '' });
+  const [verFormadores, setVerFormadores] = useState(false); // modal lista de formadores
   const soloLectura = useSoloLectura(); // contabilidad: solo puede ver, no editar
 
   useEffect(() => {
@@ -194,7 +196,7 @@ export default function UsuariosPage() {
     setMetaEdits({});
 
     // 2. Profes → Supabase
-    if (Object.keys(profeEdits).length > 0) {
+    if (Object.keys(profeEdits).length > 0 || profesDirty) {
       const updatedProfes = profes.map(p => {
         const edit = profeEdits[p.id];
         if (!edit) return p;
@@ -202,6 +204,7 @@ export default function UsuariosPage() {
           ...p,
           usuario: (edit.usuario !== undefined ? edit.usuario : p.usuario).toUpperCase(),
           clave:    edit.clave   !== undefined ? edit.clave   : p.clave,
+          nombre:   edit.nombre  !== undefined ? edit.nombre  : (p.nombre ?? ''),
         };
       });
       const { ok, msg } = await saveProfes(updatedProfes);
@@ -218,6 +221,7 @@ export default function UsuariosPage() {
         };
       }));
       setProfeEdits({});
+      setProfesDirty(false);
     }
 
     setGuardando(false);
@@ -226,11 +230,49 @@ export default function UsuariosPage() {
   }
 
   function agregarProfe() {
-    if (!nuevo.usuario.trim() || !nuevo.clave.trim()) return;
-    const p: Profe = { id: uuid(), usuario: nuevo.usuario.trim().toUpperCase(), clave: nuevo.clave.trim(), proyectos: [] };
-    setProfes(prev => [...prev, p]);
-    setNuevo({ usuario: '', clave: '' });
+    if (!nuevo.usuario.trim() || !nuevo.clave.trim() || !nuevo.nombre.trim()) return;
+    const p: Profe = {
+      id: uuid(),
+      usuario: nuevo.usuario.trim().toUpperCase(),
+      clave: nuevo.clave.trim(),
+      nombre: nuevo.nombre.trim().toUpperCase(),
+      proyectos: [],
+    };
+    const nuevos = [...profes, p];
+    setProfes(nuevos);
+    saveProfes(nuevos).catch(() => {}); // persistir el nuevo formador de una vez
+    setNuevo({ usuario: '', clave: '', nombre: '' });
     setAgregando(false);
+  }
+
+  /** Elimina un formador (botón de borrar en la ventana de formadores). */
+  async function eliminarProfe(id: string, usuario: string) {
+    if (!confirm(`¿Eliminar al formador "${usuario}"? Esta acción no se puede deshacer.`)) return;
+    const nuevos = profes.filter(p => p.id !== id);
+    setProfes(nuevos);
+    setProyRows(prev => prev.map(r => r.profeId === id ? { ...r, profeId: null, profeUsuario: '', profeClave: '' } : r));
+    await deleteProfe(id);
+  }
+
+  /** Asigna (o cambia) el formador de un proyecto desde el desplegable de Usuario. */
+  function asignarProfe(row: ProyRow, profeId: string) {
+    const profe = profes.find(p => p.id === profeId);
+    // Actualizar los arreglos de proyectos: quitar este proyecto a todos y dárselo al elegido
+    const nuevos = profes.map(p => {
+      const sinEste = p.proyectos.filter(pr => pr !== row.proyecto);
+      if (profe && p.id === profe.id) return { ...p, proyectos: [...sinEste, row.proyecto] };
+      return { ...p, proyectos: sinEste };
+    });
+    setProfes(nuevos);
+    setProfesDirty(true);
+    // Actualizar la fila visible
+    setProyRows(prev => prev.map(r =>
+      (r.programa === row.programa && r.proyecto === row.proyecto)
+        ? { ...r, profeId: profe?.id ?? null, profeUsuario: profe?.usuario ?? '', profeClave: profe?.clave ?? '' }
+        : r
+    ));
+    // Autocompletar el nombre del formador en ese proyecto
+    if (profe) setMetaEdit(row, 'nombreFormador', profe.nombre ?? '');
   }
 
   const programas = useMemo(() => {
@@ -250,7 +292,7 @@ export default function UsuariosPage() {
     return Object.entries(map).sort(([a], [b]) => ordenProg(a) - ordenProg(b));
   }, [proyRows, filtroPrograma]);
 
-  const hayEdits = Object.keys(metaEdits).length > 0 || Object.keys(profeEdits).length > 0;
+  const hayEdits = Object.keys(metaEdits).length > 0 || Object.keys(profeEdits).length > 0 || profesDirty;
   const G  = '#16a34a';
   const BW = '2px solid white';
   const inputCls = 'w-full bg-transparent outline-none text-[#111827] font-semibold text-[11px] px-1.5 py-1 rounded hover:bg-gray-100 focus:bg-gray-100 transition';
@@ -284,6 +326,10 @@ export default function UsuariosPage() {
             className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition">
             <Plus className="w-3.5 h-3.5" /> Nuevo formador
           </button>
+          <button onClick={() => setVerFormadores(true)}
+            className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition">
+            <Users className="w-3.5 h-3.5" /> Ver formadores
+          </button>
           <div className="flex flex-col items-end gap-0.5">
             <button onClick={guardar} disabled={guardando || !hayEdits}
               className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition ${
@@ -306,6 +352,13 @@ export default function UsuariosPage() {
             <h2 className="font-black text-gray-900 text-lg mb-4">Nuevo formador</h2>
             <div className="space-y-3">
               <div>
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Nombre completo</label>
+                <input value={nuevo.nombre}
+                  onChange={e => setNuevo(p => ({ ...p, nombre: e.target.value.toUpperCase() }))}
+                  placeholder="NOMBRE Y APELLIDOS"
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
                 <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Usuario (apellido)</label>
                 <input value={nuevo.usuario}
                   onChange={e => setNuevo(p => ({ ...p, usuario: e.target.value.toUpperCase() }))}
@@ -325,6 +378,80 @@ export default function UsuariosPage() {
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancelar</button>
               <button onClick={agregarProfe}
                 className="flex-1 py-2.5 rounded-xl bg-[#16a34a] text-white text-sm font-bold hover:bg-[#064e1e] transition">Agregar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: lista de formadores creados (ver / editar usuario y contraseña) */}
+      {verFormadores && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setVerFormadores(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h2 className="font-black text-gray-900 text-lg">Formadores creados</h2>
+                <p className="text-xs text-gray-400">{profes.length} formadores · edita nombre, usuario y contraseña</p>
+              </div>
+              <button onClick={() => setVerFormadores(false)} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto">
+              {profes.length === 0 && <p className="text-center text-sm text-gray-400 py-6">Aún no hay formadores creados.</p>}
+              {[...profes].sort((a, b) => a.usuario.localeCompare(b.usuario, 'es')).map(p => {
+                const u = profeEdits[p.id]?.usuario ?? p.usuario;
+                const c = profeEdits[p.id]?.clave ?? p.clave;
+                const vis = !!claveVis['fm-' + p.id];
+                return (
+                  <div key={p.id} className="rounded-xl border border-gray-200 p-3 bg-gray-50">
+                    <div className="flex items-end gap-2 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre completo</label>
+                        <input value={profeEdits[p.id]?.nombre ?? p.nombre ?? ''}
+                          onChange={e => setProfeEdits(prev => ({ ...prev, [p.id]: { ...prev[p.id], nombre: e.target.value.toUpperCase() } }))}
+                          placeholder="NOMBRE Y APELLIDOS"
+                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-[#111827] bg-white focus:outline-none focus:ring-2 focus:ring-green-500" />
+                      </div>
+                      <button type="button" onClick={() => eliminarProfe(p.id, p.usuario)}
+                        title="Eliminar formador"
+                        className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Usuario (apellido)</label>
+                        <input value={u}
+                          onChange={e => setProfeEdits(prev => ({ ...prev, [p.id]: { ...prev[p.id], usuario: e.target.value.toUpperCase() } }))}
+                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-[#111827] bg-white focus:outline-none focus:ring-2 focus:ring-green-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contraseña</label>
+                        <div className="relative mt-1">
+                          <input type={vis ? 'text' : 'password'} value={c}
+                            onChange={e => setProfeEdits(prev => ({ ...prev, [p.id]: { ...prev[p.id], clave: e.target.value } }))}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-9 text-sm font-bold text-[#111827] bg-white focus:outline-none focus:ring-2 focus:ring-green-500" />
+                          <button type="button" onClick={() => setClaveVis(prev => ({ ...prev, ['fm-' + p.id]: !prev['fm-' + p.id] }))}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            {vis ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    {p.proyectos && p.proyectos.length > 0 && (
+                      <p className="text-[11px] text-gray-500 mt-2 truncate">📋 Proyectos: {p.proyectos.join(', ')}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">
+              <button onClick={() => setVerFormadores(false)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cerrar</button>
+              <button onClick={() => { guardar(); setVerFormadores(false); }} disabled={guardando || !hayEdits}
+                className="px-4 py-2 rounded-xl bg-[#16a34a] text-white text-sm font-bold hover:bg-[#064e1e] disabled:opacity-40 transition flex items-center gap-1.5">
+                <Save className="w-4 h-4" /> Guardar cambios
+              </button>
             </div>
           </div>
         </div>
@@ -444,15 +571,15 @@ export default function UsuariosPage() {
 
                         {/* USUARIO */}
                         <td style={{ border: BW, padding: '4px 6px' }}>
-                          {row.profeId ? (
-                            <input
-                              value={getProfeVal(row, 'usuario')}
-                              onChange={e => setProfeEdit(row, 'usuario', e.target.value.toUpperCase())}
-                              className={inputCls}
-                            />
-                          ) : (
-                            <span className="text-gray-300 text-[10px] italic px-1.5">Sin asignar</span>
-                          )}
+                          <select
+                            value={row.profeId ?? ''}
+                            onChange={e => asignarProfe(row, e.target.value)}
+                            style={{ width: '100%', background: 'transparent', outline: 'none', fontWeight: 700, fontSize: '0.7rem', color: row.profeId ? '#111827' : '#9ca3af', cursor: 'pointer' }}>
+                            <option value="">— Sin asignar —</option>
+                            {[...profes].sort((a, b) => a.usuario.localeCompare(b.usuario)).map(p => (
+                              <option key={p.id} value={p.id}>{p.usuario}</option>
+                            ))}
+                          </select>
                         </td>
 
                         {/* CONTRASEÑA */}
