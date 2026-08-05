@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, CheckCircle, Plus, Eye, EyeOff, Users, X, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle, Plus, Eye, EyeOff, Users, X, Trash2, ChevronRight } from 'lucide-react';
 import { getProfes, saveProfes, deleteProfe, getDeportistas } from '@/lib/db';
 import type { Profe } from '@/lib/db';
 import { useSoloLectura } from '@/lib/permisos';
@@ -29,6 +29,27 @@ function uuid() {
 function ordenProg(p: string) {
   const i = ORDEN_PROGRAMA.findIndex(x => x.toLowerCase() === p.trim().toLowerCase());
   return i >= 0 ? i : 999;
+}
+
+/** Conteo de deportistas por programa y por proyecto (activos y totales). Se recalcula
+ *  cada vez que se vuelve a la pantalla, para reflejar altas/retiros al momento. */
+function calcularConteos(deps: any[]) {
+  const prog: Record<string, { act: number; tot: number }> = {};
+  const proy: Record<string, { act: number; tot: number }> = {};
+  deps.forEach(dep => {
+    const progRaw  = getCol(dep, /^program/i).trim() || '__SIN_PROGRAMA__';
+    const progDisp = progRaw === '__SIN_PROGRAMA__' ? 'Sin Programa' : progRaw;
+    const p        = getCol(dep, /^proy/i).trim();
+    const activo   = getCol(dep, /^estado/i).trim().toUpperCase() === 'ACTIVO';
+    if (!prog[progDisp]) prog[progDisp] = { act: 0, tot: 0 };
+    prog[progDisp].tot++; if (activo) prog[progDisp].act++;
+    if (p) {
+      const k = `${progRaw}::${p}`;
+      if (!proy[k]) proy[k] = { act: 0, tot: 0 };
+      proy[k].tot++; if (activo) proy[k].act++;
+    }
+  });
+  return { prog, proy };
 }
 
 interface ProyMeta {
@@ -77,6 +98,11 @@ export default function UsuariosPage() {
   const [verFormadores, setVerFormadores] = useState(false); // modal lista de formadores
   const soloLectura = useSoloLectura(); // contabilidad: solo puede ver, no editar
 
+  // Conteos de deportistas por programa y por proyecto (activos y totales)
+  const [conteos, setConteos] = useState<{ prog: Record<string, { act: number; tot: number }>; proy: Record<string, { act: number; tot: number }> }>({ prog: {}, proy: {} });
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set()); // programas desplegados (vacío = todos plegados)
+  const [modoConteo, setModoConteo] = useState<'act' | 'tot'>('act'); // 'act' = activos (por defecto), 'tot' = todos
+
   useEffect(() => {
     Promise.all([getProfes(), getDeportistas()]).then(([listaProfes, deps]) => {
       const inicial = listaProfes.length
@@ -95,11 +121,14 @@ export default function UsuariosPage() {
         map[prog].add(proy);
       });
 
+      // Conteos de deportistas por programa y por proyecto
+      setConteos(calcularConteos(deps));
+
       const rows: ProyRow[] = [];
       Object.entries(map)
         .sort(([a], [b]) => ordenProg(a) - ordenProg(b))
         .forEach(([programa, proySet]) => {
-          [...proySet].sort().forEach(proyecto => {
+          [...proySet].sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })).forEach(proyecto => {
             const profe = inicial.find(p => p.proyectos.includes(proyecto));
             rows.push({
               programa,
@@ -118,6 +147,18 @@ export default function UsuariosPage() {
         if (raw) setMeta(JSON.parse(raw));
       } catch {}
     });
+  }, []);
+
+  // Refrescar los conteos al volver a la pantalla (refleja altas/retiros al momento)
+  useEffect(() => {
+    const refrescar = () => { getDeportistas().then(deps => setConteos(calcularConteos(deps))).catch(() => {}); };
+    const onVis = () => { if (typeof document !== 'undefined' && document.visibilityState === 'visible') refrescar(); };
+    window.addEventListener('focus', refrescar);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('focus', refrescar);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, []);
 
   // ── Helpers ────────────────────────────────────────────────────
@@ -172,6 +213,43 @@ export default function UsuariosPage() {
   function setProfeEdit(row: ProyRow, field: 'usuario' | 'clave', value: string) {
     if (!row.profeId) return;
     setProfeEdits(prev => ({ ...prev, [row.profeId!]: { ...prev[row.profeId!], [field]: value } }));
+  }
+
+  /** Nombre completo conocido de un profe: su campo `nombre`, o el que ya tenga
+   *  escrito en algún proyecto que le pertenezca. Sirve para autocompletar al reasignar. */
+  function nombreDeProfe(profe: Profe | undefined): string {
+    if (!profe) return '';
+    if (profe.nombre && profe.nombre.trim()) return profe.nombre.trim();
+    for (const r of proyRows) {
+      if (r.profeId === profe.id) {
+        const nm = String(getMetaVal(r, 'nombreFormador') || '').trim();
+        if (nm) return nm;
+      }
+    }
+    return '';
+  }
+
+  /** Nombre a mostrar en la columna "Nombre del formador".
+   *  Si el proyecto tiene profe asignado → es el "Nombre completo" del profe (relación directa).
+   *  Si no tiene profe → texto libre del proyecto. */
+  function getNombreFormador(row: ProyRow): string {
+    if (row.profeId) {
+      const edit = profeEdits[row.profeId];
+      if (edit && edit.nombre !== undefined) return edit.nombre;
+      const profe = profes.find(p => p.id === row.profeId);
+      return nombreDeProfe(profe);
+    }
+    return getMetaVal(row, 'nombreFormador') as string;
+  }
+
+  /** Editar el nombre en la tabla actualiza el "Nombre completo" del profe (se refleja en
+   *  todos sus proyectos y en "Ver formadores"). Si no hay profe, queda como texto del proyecto. */
+  function setNombreFormador(row: ProyRow, value: string) {
+    if (row.profeId) {
+      setProfeEdits(prev => ({ ...prev, [row.profeId!]: { ...prev[row.profeId!], nombre: value.toUpperCase() } }));
+    } else {
+      setMetaEdit(row, 'nombreFormador', value);
+    }
   }
 
   // ── Guardar ────────────────────────────────────────────────────
@@ -271,8 +349,7 @@ export default function UsuariosPage() {
         ? { ...r, profeId: profe?.id ?? null, profeUsuario: profe?.usuario ?? '', profeClave: profe?.clave ?? '' }
         : r
     ));
-    // Autocompletar el nombre del formador en ese proyecto
-    if (profe) setMetaEdit(row, 'nombreFormador', profe.nombre ?? '');
+    // El nombre del formador se deriva del profe (relación directa), no hace falta fijarlo aquí.
   }
 
   const programas = useMemo(() => {
@@ -296,6 +373,14 @@ export default function UsuariosPage() {
   const G  = '#16a34a';
   const BW = '2px solid white';
   const inputCls = 'w-full bg-transparent outline-none text-[#111827] font-semibold text-[11px] px-1.5 py-1 rounded hover:bg-gray-100 focus:bg-gray-100 transition';
+
+  function toggleAbierto(prog: string) {
+    setAbiertos(prev => {
+      const n = new Set(prev);
+      if (n.has(prog)) n.delete(prog); else n.add(prog);
+      return n;
+    });
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -331,12 +416,11 @@ export default function UsuariosPage() {
             <Users className="w-3.5 h-3.5" /> Ver formadores
           </button>
           <div className="flex flex-col items-end gap-0.5">
-            <button onClick={guardar} disabled={guardando || !hayEdits}
-              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition ${
+            <button onClick={guardar} disabled={guardando}
+              className={`flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl transition shadow-sm ${
                 guardado   ? 'bg-white text-green-700'
                 : errorGuard ? 'bg-red-500 text-white'
-                : hayEdits   ? 'bg-white/20 hover:bg-white/30 text-white'
-                : 'bg-white/10 text-white/40 cursor-not-allowed'}`}>
+                : 'bg-white text-green-700 hover:bg-gray-100'}`}>
               {guardando ? 'Guardando…' : guardado ? <><CheckCircle className="w-3.5 h-3.5" />¡Guardado!</> : <><Save className="w-3.5 h-3.5" />Guardar cambios</>}
             </button>
             {errorGuard && <span className="text-red-200 text-[9px] max-w-[180px] text-right leading-tight">{errorGuard}</span>}
@@ -406,7 +490,7 @@ export default function UsuariosPage() {
                     <div className="flex items-end gap-2 mb-2">
                       <div className="flex-1 min-w-0">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre completo</label>
-                        <input value={profeEdits[p.id]?.nombre ?? p.nombre ?? ''}
+                        <input value={profeEdits[p.id]?.nombre ?? nombreDeProfe(p)}
                           onChange={e => setProfeEdits(prev => ({ ...prev, [p.id]: { ...prev[p.id], nombre: e.target.value.toUpperCase() } }))}
                           placeholder="NOMBRE Y APELLIDOS"
                           className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-[#111827] bg-white focus:outline-none focus:ring-2 focus:ring-green-500" />
@@ -476,6 +560,17 @@ export default function UsuariosPage() {
               </button>
             ))}
           </div>
+
+          {/* Toggle Activos / Todos (por defecto: Activos) */}
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contar:</span>
+            <div className="flex bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => setModoConteo('act')}
+                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'act' ? 'bg-[#16a34a] text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Activos</button>
+              <button onClick={() => setModoConteo('tot')}
+                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'tot' ? 'bg-[#064e1e] text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Todos</button>
+            </div>
+          </div>
         </div>
 
         {/* Tabla por programa */}
@@ -483,17 +578,27 @@ export default function UsuariosPage() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
             <p className="text-gray-400 font-semibold text-sm">No hay proyectos cargados.<br/>Importa el Excel de deportistas primero.</p>
           </div>
-        ) : gruposDisplay.map(([programa, filas]) => (
+        ) : gruposDisplay.map(([programa, filas]) => {
+          const abierto = abiertos.has(programa);
+          const pc = conteos.prog[programa]?.[modoConteo] ?? 0;
+          return (
           <div key={programa} className="rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
 
-            {/* Cabecera programa */}
-            <div style={{ background: '#4b5563' }} className="px-5 py-2.5 flex items-center gap-3">
+            {/* Cabecera programa (plegable) */}
+            <button onClick={() => toggleAbierto(programa)} style={{ background: 'linear-gradient(90deg, #064e1e, #16a34a)' }}
+              className="w-full px-5 py-2.5 flex items-center gap-3 text-left hover:brightness-110 transition">
+              <ChevronRight className={`w-4 h-4 text-white flex-shrink-0 transition-transform ${abierto ? 'rotate-90' : ''}`} />
               <span className="text-white font-black text-sm uppercase tracking-widest">{programa}</span>
               <span className="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                 {filas.length} proyecto{filas.length !== 1 ? 's' : ''}
               </span>
-            </div>
+              <span className="flex-1" />
+              <span className="flex items-center gap-1 bg-white/20 text-white text-xs font-black px-2.5 py-0.5 rounded-full flex-shrink-0" title="Deportistas en el programa">
+                <Users className="w-3.5 h-3.5" /> {pc}
+              </span>
+            </button>
 
+            {abierto && (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse" style={{ minWidth: 920 }}>
                 <thead>
@@ -528,7 +633,12 @@ export default function UsuariosPage() {
 
                         {/* PROYECTO */}
                         <td style={{ border: BW, padding: '8px 12px' }}>
-                          <span className="font-black text-[#111827] text-[11px]">{row.proyecto}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-[#111827] text-[11px]">{row.proyecto}</span>
+                            <span className="flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-1.5 py-0.5 rounded-full whitespace-nowrap" title="Deportistas en el grupo">
+                              <Users className="w-3 h-3" /> {conteos.proy[`${row.programa}::${row.proyecto}`]?.[modoConteo] ?? 0}
+                            </span>
+                          </div>
                         </td>
 
                         {/* SEDE */}
@@ -559,14 +669,11 @@ export default function UsuariosPage() {
                           </div>
                         </td>
 
-                        {/* NOMBRE FORMADOR */}
-                        <td style={{ border: BW, padding: '4px 6px' }}>
-                          <input
-                            value={nombreFormador}
-                            onChange={e => setMetaEdit(row, 'nombreFormador', e.target.value)}
-                            placeholder="Nombre completo…"
-                            className={inputCls}
-                          />
+                        {/* NOMBRE FORMADOR — solo lectura (se edita en "Ver formadores") */}
+                        <td style={{ border: BW, padding: '8px 12px' }}>
+                          {getNombreFormador(row)
+                            ? <span className="font-semibold text-[#111827] text-[11px]">{getNombreFormador(row)}</span>
+                            : <span className="text-gray-400 text-[10px] italic">— (edítalo en Ver formadores)</span>}
                         </td>
 
                         {/* USUARIO */}
@@ -618,15 +725,28 @@ export default function UsuariosPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
-        ))}
+          );
+        })}
 
-        {hayEdits && (
-          <p className="text-center text-xs text-gray-500 font-semibold">
-            ⚠️ Tienes cambios sin guardar. Pulsa <strong>Guardar cambios</strong> para actualizar.
-          </p>
-        )}
       </main>
+
+      {/* Barra inferior fija con botón Guardar (solo para quien puede editar) */}
+      {!soloLectura && (
+      <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur border-t border-gray-200 px-4 py-3 flex items-center justify-between gap-3">
+        <span className="text-xs font-bold text-gray-500">
+          {hayEdits ? '⚠️ Tienes cambios sin guardar' : '✓ Todo guardado'}
+        </span>
+        <button onClick={guardar} disabled={guardando}
+          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black text-sm shadow transition ${
+            guardado ? 'bg-green-600 text-white'
+            : errorGuard ? 'bg-red-500 text-white'
+            : 'bg-[#16a34a] text-white hover:bg-[#064e1e]'}`}>
+          {guardando ? 'Guardando…' : guardado ? <><CheckCircle className="w-4 h-4" />¡Guardado!</> : <><Save className="w-4 h-4" />Guardar cambios</>}
+        </button>
+      </div>
+      )}
     </div>
   );
 }

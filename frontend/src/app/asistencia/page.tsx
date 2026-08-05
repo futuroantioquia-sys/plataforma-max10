@@ -478,9 +478,47 @@ function AsistenciaInner() {
       .sort((a, b) => a._nombre.localeCompare(b._nombre));
   }, [deportistas, proyecto, esProfe]);
 
-  // Días EFECTIVOS del mes: si el mes tiene un ajuste propio se usa ese; si no, los días base del proyecto.
+  // Días EFECTIVOS del mes.
   const mesTieneAjuste = mesKey in overridesMes;
-  const diasEfectivos = mesTieneAjuste ? overridesMes[mesKey] : diasSel;
+
+  // Días de la semana que YA tienen asistencia registrada este mes (buscando en TODOS los
+  // proyectos donde estuvo el deportista). Sirve para NUNCA ocultar la asistencia histórica.
+  const diasConDataMes = useMemo(() => {
+    const set = new Set<number>();
+    const idsRoster = new Set(atletas.map(a => a.id));
+    for (const proyData of Object.values(asistencia)) {
+      const mesData = (proyData as any)?.[mesKey];
+      if (!mesData) continue;
+      for (const depId of Object.keys(mesData)) {
+        if (!idsRoster.has(depId)) continue;
+        for (const fecha of Object.keys(mesData[depId])) {
+          if (!mesData[depId][fecha]) continue;
+          const dt = new Date(fecha + 'T00:00:00');
+          if (!isNaN(dt.getTime())) set.add(dt.getDay());
+        }
+      }
+    }
+    return set;
+  }, [asistencia, mesKey, atletas]);
+
+  // ¿Es un mes pasado? (para no imponerle los días NUEVOS del proyecto a meses viejos)
+  const _hoy = new Date();
+  const mesKeyActual = `${_hoy.getFullYear()}_${String(_hoy.getMonth() + 1).padStart(2, '0')}`;
+  const esMesPasado = mesKey < mesKeyActual;
+
+  // Regla: la asistencia histórica NUNCA se oculta (siempre se incluyen los días que tienen datos).
+  //  · Mes con ajuste propio → sus días ajustados (+ los que tengan datos).
+  //  · Mes pasado sin ajuste → SOLO los días que realmente se usaron (conserva los días anteriores).
+  //  · Mes actual/futuro → los días base actuales del proyecto (+ los que tengan datos).
+  const diasEfectivos = useMemo(() => {
+    const conData = [...diasConDataMes];
+    let base: number[];
+    if (mesTieneAjuste) base = overridesMes[mesKey] || [];
+    else if (esMesPasado) base = [];
+    else base = diasSel;
+    const union = [...new Set([...base, ...conData])];
+    return union.length ? union : diasSel;
+  }, [mesTieneAjuste, overridesMes, mesKey, esMesPasado, diasSel, diasConDataMes]);
 
   const diasDelMes = useMemo(() => {
     const dias: Date[] = [];

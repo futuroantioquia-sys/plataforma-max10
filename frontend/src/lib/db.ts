@@ -138,7 +138,7 @@ async function fetchAllPages(
 ): Promise<any[]> {
   const all: any[] = [];
   let offset = 0;
-  for (let i = 0; i < 20; i++) {           // máximo 20 páginas = 20 000 filas
+  for (let i = 0; i < 60; i++) {           // máximo 60 páginas = 60 000 filas
     const from = offset;
     const to   = offset + pageSize - 1;
     try {
@@ -865,42 +865,45 @@ export async function getAsistencia(): Promise<AsistenciaData> {
     return result;
   };
 
-  // ── Intento 1: fetch() nativo (con límite para evitar payloads masivos) ──
+  // ── Intento 1: fetch() nativo PAGINADO — trae TODOS los meses (sin tope de 5000) ──
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&limit=5000&order=anio_mes.desc`,
+    const data = await fetchAllPages(
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&order=anio_mes.desc,id.asc`,
       {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type':  'application/json',
-          'Prefer':        'count=none',
-        },
-      }
+        'apikey':        SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      1000
     );
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const result = parseAsistRows(data);
-        lsSet(LS_ASIST, result);
-        return result;
-      }
+    if (Array.isArray(data) && data.length > 0) {
+      const result = parseAsistRows(data);
+      try { lsSet(LS_ASIST, result); } catch {}
+      return result;
     }
   } catch { /* intentar SDK */ }
 
-  // ── Intento 2: SDK ──
+  // ── Intento 2: SDK PAGINADO ──
   try {
-    const { data, error } = await supabase()
-      .from('asistencia')
-      .select('proyecto, anio_mes, deportista_id, fecha, estado')
-      .order('anio_mes', { ascending: false })
-      .limit(5000);
+    const all: any[] = [];
+    let offset = 0;
+    for (let i = 0; i < 60; i++) {
+      const { data, error } = await supabase()
+        .from('asistencia')
+        .select('proyecto, anio_mes, deportista_id, fecha, estado')
+        .order('anio_mes', { ascending: false })
+        .order('id', { ascending: true })
+        .range(offset, offset + 999);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+    if (!all.length) return lsGet<AsistenciaData>(LS_ASIST, {});
 
-    if (error) throw error;
-    if (!data || !data.length) return lsGet<AsistenciaData>(LS_ASIST, {});
-
-    const result = parseAsistRows(data);
-    lsSet(LS_ASIST, result);
+    const result = parseAsistRows(all);
+    try { lsSet(LS_ASIST, result); } catch {}
     return result;
   } catch {
     return lsGet<AsistenciaData>(LS_ASIST, {});
@@ -999,31 +1002,38 @@ export async function getAsistenciaPorProyecto(proyecto: string): Promise<Asiste
     return result;
   };
 
-  // Intento 1: fetch() nativo con filtro de proyecto
+  // Intento 1: fetch() nativo PAGINADO por proyecto (trae TODAS las filas, todos los meses)
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&proyecto=eq.${encodeURIComponent(proyecto)}`,
+    const data = await fetchAllPages(
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&proyecto=eq.${encodeURIComponent(proyecto)}&order=id.asc`,
       {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type':  'application/json',
-        },
-      }
+        'apikey':        SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      1000
     );
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) return parseRows(data);
-    }
+    if (Array.isArray(data) && data.length > 0) return parseRows(data);
   } catch { /* intentar SDK */ }
 
-  // Intento 2: SDK con filtro
+  // Intento 2: SDK PAGINADO con filtro
   try {
-    const { data, error } = await supabase()
-      .from('asistencia')
-      .select('proyecto, anio_mes, deportista_id, fecha, estado')
-      .eq('proyecto', proyecto);
-    if (!error && data) return parseRows(data);
+    const all: any[] = [];
+    let offset = 0;
+    for (let i = 0; i < 60; i++) {
+      const { data, error } = await supabase()
+        .from('asistencia')
+        .select('proyecto, anio_mes, deportista_id, fecha, estado')
+        .eq('proyecto', proyecto)
+        .order('id', { ascending: true })
+        .range(offset, offset + 999);
+      if (error) break;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+    if (all.length) return parseRows(all);
   } catch {}
 
   // Fallback: localStorage (filtrado)
@@ -1052,29 +1062,36 @@ export async function getAsistenciaDeportistas(ids: string[]): Promise<Asistenci
   // Supabase IN filter: deportista_id=in.(id1,id2,...)
   const inParam = `(${ids.map(id => encodeURIComponent(id)).join(',')})`;
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&deportista_id=in.${inParam}&limit=10000&order=anio_mes.desc`,
+    const data = await fetchAllPages(
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&deportista_id=in.${inParam}&order=id.asc`,
       {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Prefer':        'count=none',
-        },
-      }
+        'apikey':        SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      1000
     );
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) return parseRows(data);
-    }
+    if (Array.isArray(data) && data.length > 0) return parseRows(data);
   } catch { /* fallback */ }
 
-  // SDK fallback
+  // SDK fallback PAGINADO
   try {
-    const { data, error } = await supabase()
-      .from('asistencia')
-      .select('proyecto, anio_mes, deportista_id, fecha, estado')
-      .in('deportista_id', ids);
-    if (!error && data && data.length > 0) return parseRows(data);
+    const all: any[] = [];
+    let offset = 0;
+    for (let i = 0; i < 60; i++) {
+      const { data, error } = await supabase()
+        .from('asistencia')
+        .select('proyecto, anio_mes, deportista_id, fecha, estado')
+        .in('deportista_id', ids)
+        .order('id', { ascending: true })
+        .range(offset, offset + 999);
+      if (error) break;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+    if (all.length) return parseRows(all);
   } catch {}
 
   return {};
@@ -1352,6 +1369,15 @@ export async function saveSoportePago(
   deportistaId: string,
   soporte: { name: string; data: string; date: string; meses: string[] }
 ): Promise<void> {
+  // Portería de servidor primero (usa la llave maestra). Si no está lista, cae al método anterior.
+  try {
+    const r = await fetch('/api/pagos/soportes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deportistaId, nombre: soporte.name, datos: soporte.data, fecha: soporte.date, meses: soporte.meses ?? [] }),
+    });
+    if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok) return; }
+  } catch {}
+
   try {
     const { error } = await supabase()
       .from('soportes_pago')
@@ -1374,6 +1400,11 @@ export async function getSoportesDeDeportista(deportistaIds: string | string[]):
   const ids = (Array.isArray(deportistaIds) ? deportistaIds : [deportistaIds])
     .map(s => String(s ?? '').trim()).filter(Boolean);
   if (!ids.length) return [];
+  // Portería de servidor primero
+  try {
+    const rr = await fetch(`/api/pagos/soportes?deportistaIds=${encodeURIComponent(ids.join(','))}`, { cache: 'no-store' });
+    if (rr.ok) { const j = await rr.json().catch(() => null); if (j?.ok && Array.isArray(j.soportes)) return j.soportes as SoportePago[]; }
+  } catch {}
   const inList = ids.map(v => `"${v.replace(/"/g, '')}"`).join(',');
   try {
     const res = await fetch(
@@ -1392,6 +1423,21 @@ export async function getSoportesDeDeportista(deportistaIds: string | string[]):
  *  IMPORTANTE: NO trae la imagen base64 (`datos`) para que la lista sea liviana y NUNCA falle
  *  por tamaño. La imagen de cada soporte se carga aparte con getSoporteDatos(id). */
 export async function getSoportesPendientes(): Promise<SoportePago[]> {
+  // Portería de servidor primero (lista liviana SIN imagen)
+  try {
+    const r = await fetch('/api/pagos/soportes', { cache: 'no-store' });
+    if (r.ok) {
+      const j = await r.json().catch(() => null);
+      if (j?.ok && Array.isArray(j.soportes)) {
+        return j.soportes.map((s: any) => ({
+          id: s.id, deportista_id: s.deportista_id ?? '', nombre: s.nombre ?? '', datos: '',
+          fecha: s.fecha ?? '', meses: Array.isArray(s.meses) ? s.meses : [],
+          confirmado: !!s.confirmado, fecha_confirmacion: s.fecha_confirmacion ?? null, created_at: s.created_at ?? '',
+        })) as SoportePago[];
+      }
+    }
+  } catch {}
+
   const mapear = (arr: any[]): SoportePago[] => arr.map((r: any) => ({
     id: r.id, deportista_id: r.deportista_id ?? '', nombre: r.nombre ?? '', datos: '',
     fecha: r.fecha ?? '', meses: Array.isArray(r.meses) ? r.meses : [],
@@ -1433,6 +1479,11 @@ export async function getSoportesPendientes(): Promise<SoportePago[]> {
 /** Carga la imagen/base64 (`datos`) de UN soporte por su id. Se usa perezosamente en la lista. */
 export async function getSoporteDatos(soporteId: string): Promise<string> {
   if (!soporteId) return '';
+  // Portería de servidor primero
+  try {
+    const r = await fetch(`/api/pagos/soportes/datos?id=${encodeURIComponent(soporteId)}`, { cache: 'no-store' });
+    if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok) return j.datos ?? ''; }
+  } catch {}
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/soportes_pago?select=datos&id=eq.${encodeURIComponent(soporteId)}`,
@@ -1448,6 +1499,11 @@ export async function getSoporteDatos(soporteId: string): Promise<string> {
 
 /** Cuenta soportes pendientes (para badge del dashboard). */
 export async function countSoportesPendientes(): Promise<number> {
+  // Portería de servidor primero
+  try {
+    const r = await fetch('/api/pagos/soportes?solo=count', { cache: 'no-store' });
+    if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok && typeof j.count === 'number') return j.count; }
+  } catch {}
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/soportes_pago?select=id&confirmado=eq.false`,
@@ -1472,6 +1528,14 @@ export async function countSoportesPendientes(): Promise<number> {
 
 /** Marca un soporte como confirmado. Devuelve true solo si REALMENTE se guardó. */
 export async function confirmarSoportePago(soporteId: string): Promise<boolean> {
+  // Portería de servidor primero
+  try {
+    const r = await fetch('/api/pagos/soportes', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: soporteId }),
+    });
+    if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok) return true; }
+  } catch {}
   try {
     const { error } = await supabase()
       .from('soportes_pago')
@@ -1487,6 +1551,11 @@ export async function confirmarSoportePago(soporteId: string): Promise<boolean> 
 
 /** Elimina un soporte (cuando el admin rechaza). Devuelve true solo si REALMENTE se borró. */
 export async function eliminarSoportePago(soporteId: string): Promise<boolean> {
+  // Portería de servidor primero
+  try {
+    const r = await fetch(`/api/pagos/soportes?id=${encodeURIComponent(soporteId)}`, { method: 'DELETE' });
+    if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok) return true; }
+  } catch {}
   try {
     const { error } = await supabase()
       .from('soportes_pago')
@@ -1508,6 +1577,11 @@ export async function eliminarSoportePorNombre(
   const ids = (Array.isArray(deportistaIds) ? deportistaIds : [deportistaIds])
     .map(s => String(s ?? '').trim()).filter(Boolean);
   if (!ids.length || !nombre) return;
+  // Portería de servidor primero
+  try {
+    const r = await fetch(`/api/pagos/soportes?deportistaIds=${encodeURIComponent(ids.join(','))}&nombre=${encodeURIComponent(nombre)}`, { method: 'DELETE' });
+    if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok) return; }
+  } catch {}
   const inList = ids.map(v => `"${v.replace(/"/g, '')}"`).join(',');
   try {
     await fetch(
