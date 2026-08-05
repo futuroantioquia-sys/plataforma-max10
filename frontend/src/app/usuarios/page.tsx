@@ -52,6 +52,26 @@ function calcularConteos(deps: any[]) {
   return { prog, proy };
 }
 
+/** Años de nacimiento (distintos, ordenados) de los deportistas de cada proyecto.
+ *  Solo cuenta deportistas ACTIVOS (no retirados). */
+function calcularAniosPorProyecto(deps: any[]): Record<string, string[]> {
+  const map: Record<string, Set<string>> = {};
+  deps.forEach(dep => {
+    const estado = getCol(dep, /^estado/i).trim().toUpperCase();
+    if (estado === 'RETIRADO') return;
+    const proy = getCol(dep, /^proy/i).trim();
+    if (!proy) return;
+    const raw = getCol(dep, /^a[ñn]o$/i).trim();
+    const m = raw.match(/(19|20)\d{2}/);
+    if (!m) return;
+    if (!map[proy]) map[proy] = new Set();
+    map[proy].add(m[0]);
+  });
+  const out: Record<string, string[]> = {};
+  Object.entries(map).forEach(([k, s]) => { out[k] = Array.from(s).sort(); });
+  return out;
+}
+
 interface ProyMeta {
   nombreFormador: string;
   sede: string;
@@ -102,6 +122,7 @@ export default function UsuariosPage() {
   const [conteos, setConteos] = useState<{ prog: Record<string, { act: number; tot: number }>; proy: Record<string, { act: number; tot: number }> }>({ prog: {}, proy: {} });
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set()); // programas desplegados (vacío = todos plegados)
   const [modoConteo, setModoConteo] = useState<'act' | 'tot'>('act'); // 'act' = activos (por defecto), 'tot' = todos
+  const [aniosProy, setAniosProy] = useState<Record<string, string[]>>({}); // años de nacimiento por proyecto
 
   useEffect(() => {
     Promise.all([getProfes(), getDeportistas()]).then(([listaProfes, deps]) => {
@@ -123,6 +144,7 @@ export default function UsuariosPage() {
 
       // Conteos de deportistas por programa y por proyecto
       setConteos(calcularConteos(deps));
+      setAniosProy(calcularAniosPorProyecto(deps));
 
       const rows: ProyRow[] = [];
       Object.entries(map)
@@ -151,7 +173,7 @@ export default function UsuariosPage() {
 
   // Refrescar los conteos al volver a la pantalla (refleja altas/retiros al momento)
   useEffect(() => {
-    const refrescar = () => { getDeportistas().then(deps => setConteos(calcularConteos(deps))).catch(() => {}); };
+    const refrescar = () => { getDeportistas().then(deps => { setConteos(calcularConteos(deps)); setAniosProy(calcularAniosPorProyecto(deps)); }).catch(() => {}); };
     const onVis = () => { if (typeof document !== 'undefined' && document.visibilityState === 'visible') refrescar(); };
     window.addEventListener('focus', refrescar);
     document.addEventListener('visibilitychange', onVis);
@@ -600,15 +622,13 @@ export default function UsuariosPage() {
             <p className="text-gray-400 font-semibold text-sm">No hay proyectos cargados.<br/>Importa el Excel de deportistas primero.</p>
           </div>
         ) : gruposDisplay.map(([programa, filas]) => {
-          const abierto = abiertos.has(programa);
           const pc = conteos.prog[programa]?.[modoConteo] ?? 0;
           return (
           <div key={programa} className="rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
 
-            {/* Cabecera programa (plegable) */}
-            <button onClick={() => toggleAbierto(programa)} style={{ background: 'linear-gradient(90deg, #064e1e, #16a34a)' }}
-              className="w-full px-5 py-2.5 flex items-center gap-3 text-left hover:brightness-110 transition">
-              <ChevronRight className={`w-4 h-4 text-white flex-shrink-0 transition-transform ${abierto ? 'rotate-90' : ''}`} />
+            {/* Cabecera programa (título fijo) */}
+            <div style={{ background: 'linear-gradient(90deg, #064e1e, #16a34a)' }}
+              className="w-full px-5 py-2.5 flex items-center gap-3">
               <span className="text-white font-black text-sm uppercase tracking-widest">{programa}</span>
               <span className="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                 {filas.length} proyecto{filas.length !== 1 ? 's' : ''}
@@ -617,13 +637,12 @@ export default function UsuariosPage() {
               <span className="flex items-center gap-1 bg-white/20 text-white text-xs font-black px-2.5 py-0.5 rounded-full flex-shrink-0" title="Deportistas en el programa">
                 <Users className="w-3.5 h-3.5" /> {pc}
               </span>
-            </button>
+            </div>
 
-            {abierto && (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
               <table className="w-full border-collapse" style={{ minWidth: 920 }}>
                 <thead>
-                  <tr style={{ background: G }}>
+                  <tr>
                     {[
                       { h: 'PROYECTO',         w: 150 },
                       { h: 'SEDE',             w: 120 },
@@ -633,7 +652,7 @@ export default function UsuariosPage() {
                       { h: 'CONTRASEÑA',       w: 110 },
                       { h: 'EDAD',             w: 120 },
                     ].map(({ h, w }) => (
-                      <th key={h} style={{ border: BW, minWidth: w }}
+                      <th key={h} style={{ border: BW, minWidth: w, background: G, position: 'sticky', top: 0, zIndex: 2 }}
                         className="px-3 py-2 text-left text-white font-black text-[10px] uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -730,15 +749,11 @@ export default function UsuariosPage() {
                           )}
                         </td>
 
-                        {/* EDAD */}
+                        {/* EDAD — años de nacimiento de los deportistas del proyecto (automático) */}
                         <td style={{ border: BW, padding: '4px 6px' }}>
-                          <select
-                            value={edades[0] ?? ''}
-                            onChange={e => setMetaEdit(row, 'edades', e.target.value ? [Number(e.target.value)] : [])}
-                            style={{ width: '100%', background: 'transparent', outline: 'none', fontWeight: 700, fontSize: '0.7rem', color: '#111827', cursor: 'pointer' }}>
-                            <option value="">— Año nac. —</option>
-                            {ANIOS_NACIMIENTO.map(a => <option key={a} value={a}>{a}</option>)}
-                          </select>
+                          <span style={{ fontWeight: 800, fontSize: '0.72rem', color: '#111827', whiteSpace: 'nowrap' }}>
+                            {(aniosProy[row.proyecto] && aniosProy[row.proyecto].length) ? aniosProy[row.proyecto].join(' / ') : '—'}
+                          </span>
                         </td>
                       </tr>
                     );
@@ -746,7 +761,6 @@ export default function UsuariosPage() {
                 </tbody>
               </table>
             </div>
-            )}
           </div>
           );
         })}

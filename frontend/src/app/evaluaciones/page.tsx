@@ -575,7 +575,7 @@ function VistaPadres({ data, nombreEntrenador, onClose }: {
           <div style={{ flex: 1 }}>
             <div style={{ color: '#4ade80', fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>FUTURO ANTIOQUIA · MAX 10 SPORT</div>
             <div style={{ color: '#475569', fontSize: 9, marginTop: 2 }}>
-              Entrenador: {nombreEntrenador || '—'} · Directivo: STEVEN MARULANDA GRISALES
+              Entrenador: {nombreEntrenador || '—'} · Director General: HERNÁN DARÍO MARULANDA MORENO
             </div>
           </div>
           <div style={{ color: '#475569', fontSize: 9, textAlign: 'right' as const }}>{data.fecha}</div>
@@ -1532,16 +1532,34 @@ function ValoracionPageInner() {
           <tbody style={{ breakInside: 'avoid', pageBreakInside: 'avoid', breakBefore: 'avoid', pageBreakBefore: 'avoid' } as React.CSSProperties}>
             <tr>
               <td colSpan={2} style={{ padding: '8px 24px 6px', textAlign: 'center', verticalAlign: 'bottom' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  {nombreEntrenador || '___________________________'}
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.25 }}>
+                  {(() => {
+                    const prof = profes.find(p => p.proyectos.some(pr => pr.trim().toUpperCase() === (data.proyecto || '').trim().toUpperCase()));
+                    const full = ((prof?.nombre && prof.nombre.trim()) ? prof.nombre.trim() : (prof?.usuario || nombreEntrenador)) || '';
+                    const parts = full.trim().split(/\s+/).filter(Boolean);
+                    if (parts.length < 2) return full || '___________________________';
+                    const ape = parts.length >= 3 ? parts.slice(-2).join(' ') : parts[1];
+                    const nom = parts.length >= 3 ? parts.slice(0, -2).join(' ') : parts[0];
+                    return (<><div>{nom}</div><div>{ape}</div></>);
+                  })()}
                 </div>
                 <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Formador</div>
               </td>
               <td colSpan={2} style={{ padding: '8px 24px 6px', textAlign: 'center', verticalAlign: 'bottom' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  STEVEN MARULANDA GRISALES
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.25 }}>
+                  <div>HERNÁN DARÍO</div><div>MARULANDA MORENO</div>
                 </div>
-                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Coordinador</div>
+                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Director General</div>
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={4} style={{ textAlign: 'center', paddingTop: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#111', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Academia de Fútbol Futuro Antioquia
+                </div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#555', marginTop: 2 }}>
+                  34 Años Acompañando Sueños
+                </div>
               </td>
             </tr>
             <tr>

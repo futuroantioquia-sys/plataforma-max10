@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Search } from 'lucide-react';
-import { getDeportistas, getFoto } from '@/lib/db';
+import { getDeportistas, getFoto, getProfes } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { getCategoriasValoracion } from '@/lib/valoracion-textos';
 
@@ -116,118 +116,119 @@ const CATS: Cat[] = [
   ] },
 ];
 
-/** Ícono dinámico del componente Táctico: pizarra de fútbol con un lápiz que dibuja una jugada. */
-function PizarraTactica() {
-  const JUGADA = 'M6 24 Q 12 9 20 16 T 27 8';
-  return (
-    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
-      {/* Tablero */}
-      <rect x="2" y="4" width="28" height="24" rx="3" fill="#0b5d2a" stroke="#083f1d" strokeWidth="1" />
-      {/* Marcas de cancha */}
-      <line x1="16" y1="4" x2="16" y2="28" stroke="#ffffff" strokeWidth="0.7" opacity="0.65" />
-      <circle cx="16" cy="16" r="3.4" fill="none" stroke="#ffffff" strokeWidth="0.7" opacity="0.65" />
-      {/* Jugada que se va dibujando */}
-      <path d="M6 24 Q 12 9 20 16 T 27 8" fill="none" stroke="#ffe14d" strokeWidth="1.7" strokeLinecap="round"
-        strokeDasharray="44" strokeDashoffset="44">
-        <animate attributeName="stroke-dashoffset" from="44" to="0" dur="2.2s" repeatCount="indefinite" />
-      </path>
-      {/* Lápiz que se desplaza sobre la jugada */}
-      <g>
-        <animateMotion dur="2.2s" repeatCount="indefinite" path={JUGADA} />
-        <g transform="translate(-0.4,-9)">
-          <rect x="-1.2" y="0" width="2.4" height="6.4" rx="0.4" fill="#fbbf24" stroke="#b45309" strokeWidth="0.3" />
-          <rect x="-1.2" y="0" width="2.4" height="1.3" fill="#ef4444" />
-          <polygon points="-1.2,6.4 1.2,6.4 0,9" fill="#e5c07b" />
-          <polygon points="-0.45,8.2 0.45,8.2 0,9" fill="#1f2937" />
-        </g>
-      </g>
-    </svg>
-  );
-}
+// ── Íconos animados: símbolos deportivos grandes y dinámicos (blanco/verde) ──
+const ICO = { w: 56 as number, h: 56 as number };
 
-/** Físico: balón de fútbol que rebota. */
+/** Físico: mancuerna que se levanta. */
 function IconoFisico() {
   return (
-    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <ellipse cx="16" cy="28" rx="7" ry="1.6" fill="#000" opacity="0.25">
-        <animate attributeName="rx" values="7;4;7" dur="0.9s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="0.25;0.12;0.25" dur="0.9s" repeatCount="indefinite" />
-      </ellipse>
+    <svg viewBox="0 0 48 48" width={ICO.w} height={ICO.h} aria-hidden="true" style={{ flexShrink: 0 }}>
       <g>
-        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -10; 0 0" keyTimes="0;0.5;1"
-          dur="0.9s" repeatCount="indefinite" calcMode="spline" keySplines="0.3 0 0.2 1; 0.7 0 0.6 1" />
-        <circle cx="16" cy="18" r="7" fill="#fff" stroke="#111" strokeWidth="0.8" />
-        <polygon points="16,14 18.5,15.8 17.6,18.8 14.4,18.8 13.5,15.8" fill="#111" />
-        <path d="M9.5 16 l1.8 1.3 M22.5 16 l-1.8 1.3 M16 25 v-2.4" stroke="#111" strokeWidth="0.7" fill="none" />
+        <animateTransform attributeName="transform" type="translate" values="0 5;0 -5;0 5" keyTimes="0;0.5;1" dur="1.1s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" />
+        <rect x="15" y="22" width="18" height="4.5" rx="2" fill="#fff" />
+        <rect x="11" y="16" width="4.5" height="16" rx="2" fill="#fff" />
+        <rect x="32.5" y="16" width="4.5" height="16" rx="2" fill="#fff" />
+        <rect x="7" y="18.5" width="4" height="11" rx="1.8" fill="#fff" />
+        <rect x="37" y="18.5" width="4" height="11" rx="1.8" fill="#fff" />
       </g>
     </svg>
   );
 }
 
-/** Técnico: diana con una flecha que da al centro. */
+/** Técnica: balón de fútbol girando. */
 function IconoTecnico() {
   return (
-    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <circle cx="18" cy="16" r="10" fill="#fff" stroke="#111" strokeWidth="0.8" />
-      <circle cx="18" cy="16" r="6.6" fill="#ef4444" />
-      <circle cx="18" cy="16" r="3.4" fill="#fff" />
-      <circle cx="18" cy="16" r="1.5" fill="#ef4444" />
+    <svg viewBox="0 0 48 48" width={ICO.w} height={ICO.h} aria-hidden="true" style={{ flexShrink: 0 }}>
       <g>
-        <animateTransform attributeName="transform" type="translate" values="-18 0; 0 0" keyTimes="0;1"
-          dur="1.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.35 0 0.15 1" />
-        <line x1="3" y1="16" x2="16" y2="16" stroke="#6d28d9" strokeWidth="1.5" />
-        <polygon points="17,16 13.5,14.2 13.5,17.8" fill="#6d28d9" />
-        <polygon points="3,16 5.4,14.6 5.4,17.4" fill="#6d28d9" opacity="0.85" />
+        <animateTransform attributeName="transform" type="rotate" from="0 24 24" to="360 24 24" dur="3s" repeatCount="indefinite" />
+        <circle cx="24" cy="24" r="16" fill="#fff" stroke="#0b3d1e" strokeWidth="1.6" />
+        <polygon points="24,14 32,20 29,29.5 19,29.5 16,20" fill="#0b3d1e" />
+        <path d="M24 8 L24 14 M40 20 L32 20 M34 34 L29 29.5 M14 34 L19 29.5 M8 20 L16 20" stroke="#0b3d1e" strokeWidth="1.5" fill="none" />
+        <path d="M18 10 L24 14 M30 10 L24 14 M38 27 L29 29.5 M10 27 L19 29.5 M40 20 L32 20" stroke="#0b3d1e" strokeWidth="1.1" fill="none" opacity="0.7" />
       </g>
     </svg>
   );
 }
 
-/** Mental: corazón que late. */
+/** Táctica: flecha con una línea en movimiento. */
+function PizarraTactica() {
+  return (
+    <svg viewBox="0 0 48 48" width={ICO.w} height={ICO.h} aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d="M7 40 Q18 36 24 26" fill="none" stroke="#ffe14d" strokeWidth="2.6" strokeLinecap="round" strokeDasharray="3 4.5">
+        <animate attributeName="stroke-dashoffset" values="15;0" dur="0.6s" repeatCount="indefinite" />
+      </path>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0;3.5 -3.5;0 0" keyTimes="0;0.5;1" dur="1.1s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" />
+        <path d="M20 30 L36 12" stroke="#fff" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+        <path d="M36 12 L27 13.5 M36 12 L34.5 21" stroke="#fff" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </g>
+    </svg>
+  );
+}
+
+/** Mental: cabeza con un bombillo encendido en el cerebro. */
 function IconoMental() {
   return (
-    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <g transform="translate(16,16)">
-        <g>
-          <animateTransform attributeName="transform" type="scale" values="1;1.22;1;1.1;1" keyTimes="0;0.15;0.32;0.5;1"
-            dur="1.1s" repeatCount="indefinite" />
-          <path d="M0 9 C -9 2 -9 -6 -4 -7 C -1 -7.6 0 -5 0 -4.2 C 0 -5 1 -7.6 4 -7 C 9 -6 9 2 0 9 Z" fill="#f43f5e" />
-        </g>
+    <svg viewBox="0 0 48 48" width={ICO.w} height={ICO.h} aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d="M15 42 L15 34 Q9 30 9 22 Q9 10 22 9 Q35 9 35 21 Q35 27 31 30 L31 42" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <g stroke="#ffe14d" strokeWidth="1.6" strokeLinecap="round" fill="none">
+        <animate attributeName="opacity" values="0.35;1;0.35" dur="1.3s" repeatCount="indefinite" />
+        <path d="M21 4 L21 1 M11 8 L8.5 6 M31 8 L33.5 6 M9 16 L6 15.5 M33 16 L36 15.5" />
+      </g>
+      <g transform="translate(21,17)">
+        <animateTransform attributeName="transform" type="scale" additive="sum" values="1;1.14;1" keyTimes="0;0.5;1" dur="1.3s" repeatCount="indefinite" />
+        <circle r="6.5" fill="#fde047" />
+        <rect x="-3" y="5.5" width="6" height="3.4" rx="1" fill="#fff" />
+        <rect x="-2.3" y="8.6" width="4.6" height="2" rx="1" fill="#fff" />
+        <path d="M0 -3.5 L0 3 M-2.4 -2 L0 0 M2.4 -2 L0 0" stroke="#f59e0b" strokeWidth="1" fill="none" />
       </g>
     </svg>
   );
 }
 
-/** Grupal: apretón de manos con un ligero movimiento. */
+/** Trabajo en Equipo: dos puños chocando. */
 function IconoGrupal() {
   return (
-    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <g transform="translate(16,16)">
-        <g>
-          <animateTransform attributeName="transform" type="translate" values="0 -0.9; 0 0.9; 0 -0.9" dur="0.5s" repeatCount="indefinite" />
-          <g transform="rotate(-25)">
-            <rect x="-12.5" y="-2.4" width="11.5" height="4.8" rx="2.4" fill="#eab892" />
-            <rect x="1" y="-2.4" width="11.5" height="4.8" rx="2.4" fill="#b9764a" />
-            <rect x="-3.2" y="-3.2" width="6.4" height="6.4" rx="2.1" fill="#8a5a34" />
-          </g>
-        </g>
+    <svg viewBox="0 0 48 48" width={ICO.w} height={ICO.h} aria-hidden="true" style={{ flexShrink: 0 }}>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0;2.5 0;0 0" keyTimes="0;0.5;1" dur="1.1s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.4 0 0.6 1" />
+        <rect x="4" y="18" width="15" height="13" rx="4.5" fill="#fff" />
+        <circle cx="19" cy="20.5" r="2.2" fill="#fff" />
+        <circle cx="19" cy="24.5" r="2.3" fill="#fff" />
+        <circle cx="19" cy="28.5" r="2.2" fill="#fff" />
+        <path d="M13 17 q4 -2 7 1" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" fill="none" />
+        <rect x="1" y="20.5" width="5" height="8" rx="2" fill="#fff" />
+      </g>
+      <g transform="translate(48,0) scale(-1,1)">
+        <animateTransform attributeName="transform" type="translate" values="0 0;-2.5 0;0 0" keyTimes="0;0.5;1" dur="1.1s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.4 0 0.6 1" additive="sum" />
+        <rect x="4" y="18" width="15" height="13" rx="4.5" fill="#fff" />
+        <circle cx="19" cy="20.5" r="2.2" fill="#fff" />
+        <circle cx="19" cy="24.5" r="2.3" fill="#fff" />
+        <circle cx="19" cy="28.5" r="2.2" fill="#fff" />
+        <path d="M13 17 q4 -2 7 1" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" fill="none" />
+        <rect x="1" y="20.5" width="5" height="8" rx="2" fill="#fff" />
+      </g>
+      <g stroke="#ffe14d" strokeWidth="1.8" strokeLinecap="round">
+        <animate attributeName="opacity" values="0;0;1;0" keyTimes="0;0.45;0.5;0.65" dur="1.1s" repeatCount="indefinite" />
+        <path d="M24 14 L24 9 M24 34 L24 39 M17 12 L14 8 M31 12 L34 8 M17 36 L14 40 M31 36 L34 40" />
       </g>
     </svg>
   );
 }
 
-/** Comportamental: estrella que brilla. */
+/** Comportamiento: estrella que brilla. */
 function IconoComportamental() {
   return (
-    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <g transform="translate(16,16)">
-        <polygon points="0,-9 2.6,-2.8 9,-2.8 3.8,1.4 5.6,8 0,4 -5.6,8 -3.8,1.4 -9,-2.8 -2.6,-2.8" fill="#fbbf24" stroke="#f59e0b" strokeWidth="0.5">
-          <animateTransform attributeName="transform" type="scale" values="1;1.12;1" dur="1.6s" repeatCount="indefinite" />
-        </polygon>
-        <g>
-          <animate attributeName="opacity" values="0;1;0" dur="1.6s" repeatCount="indefinite" />
-          <path d="M7 -8 l0.7 1.9 1.9 0.7 -1.9 0.7 -0.7 1.9 -0.7 -1.9 -1.9 -0.7 1.9 -0.7 z" fill="#fff" />
-        </g>
+    <svg viewBox="0 0 48 48" width={ICO.w} height={ICO.h} aria-hidden="true" style={{ flexShrink: 0 }}>
+      <g transform="translate(24,24)">
+        <animateTransform attributeName="transform" type="scale" additive="sum" values="1;1.16;1" keyTimes="0;0.5;1" dur="1.2s" repeatCount="indefinite" />
+        <animateTransform attributeName="transform" type="rotate" additive="sum" values="-7;7;-7" keyTimes="0;0.5;1" dur="2.6s" repeatCount="indefinite" />
+        <polygon points="0,-16 4.6,-5.2 16,-5.2 6.8,2.4 10.4,14 0,7 -10.4,14 -6.8,2.4 -16,-5.2 -4.6,-5.2" fill="#fde047" stroke="#f59e0b" strokeWidth="1.5" />
+      </g>
+      <g fill="#fff">
+        <circle cx="9" cy="10" r="1.5"><animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" /></circle>
+        <circle cx="39" cy="15" r="1.7"><animate attributeName="opacity" values="1;0;1" dur="1.5s" repeatCount="indefinite" /></circle>
+        <circle cx="36" cy="39" r="1.3"><animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite" /></circle>
       </g>
     </svg>
   );
@@ -263,6 +264,19 @@ function ValoracionDinamicaInner() {
 
   useEffect(() => { getCategoriasValoracion().then(setCatNombres).catch(() => {}); }, []);
   const nombreComp = (titulo: string) => catNombres[titulo] || titulo;
+
+  // Nombre completo del formador por proyecto (desde Proyectos y Formadores)
+  const [profeNombrePorProy, setProfeNombrePorProy] = useState<Record<string, string>>({});
+  useEffect(() => {
+    getProfes().then(lista => {
+      const map: Record<string, string> = {};
+      lista.forEach(p => (p.proyectos ?? []).forEach(proy => {
+        const k = (proy ?? '').trim().toUpperCase();
+        if (k) map[k] = (p.nombre && p.nombre.trim()) ? p.nombre.trim() : p.usuario;
+      }));
+      setProfeNombrePorProy(map);
+    }).catch(() => {});
+  }, []);
 
   // Los calidosos (padres) aún NO tienen acceso a valoraciones
   useEffect(() => {
@@ -357,6 +371,7 @@ function ValoracionDinamicaInner() {
   const heroPerfil    = row ? String(row.perfil ?? '').trim() : '';   // derecho / izquierdo / ambidiestro
   const heroPrograma  = (row?.programa ? String(row.programa) : '') || programaDe(sel);
   const heroProyecto  = (row?.proyecto ? String(row.proyecto) : '') || proyectoDe(sel);
+  const heroFormador  = profeNombrePorProy[(heroProyecto || '').trim().toUpperCase()] || '';
   const heroIniciales = (sel?._nombre || heroNombre).split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
   const heroCodigo    = (sel ? codigoDe(sel) : '') || (codParam ?? '').trim();
   // Nombre arriba / dos apellidos abajo
@@ -462,6 +477,11 @@ function ValoracionDinamicaInner() {
                     {heroInforme && <span className="bg-[#16a34a] text-white text-[11px] font-black px-3 py-1 rounded-full uppercase">Informe {heroInforme}</span>}
                     {heroPeriodo && <span className="text-white/70 text-[11px] font-bold uppercase">{heroPeriodo}</span>}
                   </div>
+                  {heroFormador && (
+                    <p className="text-white/80 text-[12px] font-bold mt-2">
+                      <span className="text-white/50 font-black uppercase tracking-wide text-[10px]">Formador: </span>{heroFormador}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -474,8 +494,8 @@ function ValoracionDinamicaInner() {
                 <div key={cat.titulo} className="rounded-2xl overflow-hidden shadow-sm border border-white/10 bg-[#0f172a]">
                   <div className="flex items-center gap-2 px-4 py-3" style={{ background: '#16a34a' }}>
                     {iconoDeCategoria(cat.titulo) ?? <span className="text-lg">{cat.emoji}</span>}
-                    <span className="text-white font-black text-sm uppercase tracking-wide flex-1">{nombreComp(cat.titulo)}</span>
-                    <span className="text-white text-xs font-black px-3 py-1 rounded-full shadow-sm" style={{ background: '#f97316' }}>{prom5 > 0 ? prom5.toFixed(1) + ' / 5' : '—'}</span>
+                    <span className="text-white font-black text-[17px] uppercase tracking-wide flex-1">{nombreComp(cat.titulo)}</span>
+                    <span className="text-white font-black flex-shrink-0" style={{ border: '2px solid #ffffff', borderRadius: 8, padding: '1px 12px', fontSize: 19, minWidth: 52, textAlign: 'center' }}>{prom5 > 0 ? prom5.toFixed(1).replace('.', ',') : '—'}</span>
                   </div>
                   <div className="divide-y divide-white/5">
                     {cat.funds.map((f, i) => {
@@ -556,13 +576,13 @@ function ValoracionDinamicaInner() {
                       <div key={titulo} style={{ position: 'relative', height: 46, borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
                         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,#e5342b 0%,#f5811f 30%,#f4c11e 52%,#a8d33f 76%,#33b44a 100%)' }} />
                         <span style={{ position: 'relative', color: '#fff', fontWeight: 900, fontSize: 15, letterSpacing: 0.4, paddingLeft: 16, textShadow: '0 1px 3px rgba(0,0,0,0.45)' }}>{nombreComp(titulo).toUpperCase()}</span>
-                        <span style={{ position: 'relative', marginLeft: 'auto', marginRight: 10, background: 'rgba(0,0,0,0.30)', border: '2px solid #eafff0', color: '#fff', fontWeight: 900, fontSize: 15, borderRadius: 8, padding: '3px 12px', minWidth: 48, textAlign: 'center' }}>{mostrar ? fmt(prom) : '—'}</span>
+                        <span style={{ position: 'relative', marginLeft: 'auto', marginRight: 10, border: '2px solid #ffffff', color: '#fff', fontWeight: 900, fontSize: 19, borderRadius: 8, padding: '1px 12px', minWidth: 52, textAlign: 'center' }}>{mostrar ? fmt(prom) : '—'}</span>
                       </div>
                     );
                   })}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '6px 8px 4px 16px' }}>
                     <span style={{ color: '#fff', fontWeight: 900, fontSize: 16, letterSpacing: 0.5 }}>VALORACIÓN INTEGRAL</span>
-                    <span style={{ marginLeft: 'auto', background: '#f97316', color: '#fff', fontWeight: 900, fontSize: 16, borderRadius: 8, padding: '4px 16px', minWidth: 52, textAlign: 'center' }}>{mostrar ? fmt(promedio5) : '—'}</span>
+                    <span style={{ marginLeft: 'auto', border: '2px solid #ffffff', color: '#fff', fontWeight: 900, fontSize: 19, borderRadius: 8, padding: '2px 14px', minWidth: 52, textAlign: 'center' }}>{mostrar ? fmt(promedio5) : '—'}</span>
                   </div>
                 </div>
               );
@@ -597,6 +617,39 @@ function ValoracionDinamicaInner() {
                 <p className="text-sm text-white/85 leading-relaxed">{val('observaciones')}</p>
               </div>
             )}
+
+            {/* Firmas: Formador y Coordinador */}
+            <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  {(() => {
+                    const parts = (heroFormador || '').trim().split(/\s+/).filter(Boolean);
+                    const ape = parts.length >= 3 ? parts.slice(-2).join(' ') : (parts.length === 2 ? parts[1] : '');
+                    const nom = parts.length >= 3 ? parts.slice(0, -2).join(' ') : (parts.length === 2 ? parts[0] : (parts[0] || '—'));
+                    return (
+                      <>
+                        <p className="text-white font-black text-[13px] uppercase tracking-wide leading-tight min-h-[16px]">{nom || '—'}</p>
+                        {ape && <p className="text-white font-black text-[13px] uppercase tracking-wide leading-tight">{ape}</p>}
+                      </>
+                    );
+                  })()}
+                  <div className="border-t border-white/25 mt-2 pt-1.5">
+                    <p className="text-white/50 text-[10px] font-bold uppercase tracking-wide">Nombre del Formador</p>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-white font-black text-[13px] uppercase tracking-wide leading-tight min-h-[16px]">HERNÁN DARÍO</p>
+                  <p className="text-white font-black text-[13px] uppercase tracking-wide leading-tight">MARULANDA MORENO</p>
+                  <div className="border-t border-white/25 mt-2 pt-1.5">
+                    <p className="text-white/50 text-[10px] font-bold uppercase tracking-wide">Director General</p>
+                  </div>
+                </div>
+              </div>
+              <div className="text-center mt-4 pt-3 border-t border-white/10">
+                <p className="text-white font-black text-[12px] uppercase tracking-wide">Academia de Fútbol Futuro Antioquia</p>
+                <p className="text-white/60 text-[10px] font-semibold mt-1">34 Años Acompañando Sueños</p>
+              </div>
+            </div>
           </>
         )}
 
