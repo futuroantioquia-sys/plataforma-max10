@@ -63,11 +63,11 @@ const DESC_CONDUCCION: Desc = {
   'Nivel 5 (Dominante)':    'Control total del espacio y el balón; utiliza ambos perfiles para desequilibrar.',
 };
 const DESC_DRIBLING: Desc = {
-  'Nivel 1 (Iniciación)':   'Evita el duelo 1vs1; pierde el balón ante el primer contacto con el rival.',
-  'Nivel 2 (En Desarrollo)':'Intenta una finta básica pero es predecible; el rival suele anticipar el movimiento.',
-  'Nivel 3 (Competente)':   'Realiza uno o dos regates básicos para superar al rival en espacios amplios.',
-  'Nivel 4 (Avanzado)':     'Domina 2-3 movimientos de dribling; supera al rival con cambio de ritmo y de dirección.',
-  'Nivel 5 (Dominante)':    'Arsenal variado de regates; supera rivales con ambos perfiles bajo presión defensiva intensa.',
+  'Nivel 1 (Iniciación)':   'Carece de recursos para el desborde; tiende a chocar contra los defensas rivales o pierde el equilibrio al intentar realizar cualquier finta o amague.',
+  'Nivel 2 (En Desarrollo)':'Intenta regatear en situaciones de uno contra uno, pero ejecuta los amagues muy tarde o sin la velocidad de cambio necesaria para superar al oponente.',
+  'Nivel 3 (Competente)':   'Supera a rivales en duelos individuales utilizando cambios de ritmo sencillos, amagues corporales básicos o fintas hacia su perfil hábil.',
+  'Nivel 4 (Avanzado)':     'Desborda con regularidad en el uno contra uno utilizando recursos técnicos variados (fintas, bicicletas, amagues en espacios reducidos) con gran explosividad.',
+  'Nivel 5 (Dominante)':    'Es un desequilibrante neto; desmantela defensas completas mediante el dribling en espacios reducidos, generando superioridad numérica constante para su equipo.',
 };
 const DESC_REMATE: Desc = {
   'Nivel 1 (Iniciación)':   'Contacto impreciso con el balón; le cuesta dar dirección o potencia. Generalmente golpea con la punta o sin coordinar la carrera.',
@@ -76,14 +76,26 @@ const DESC_REMATE: Desc = {
   'Nivel 4 (Avanzado)':     'Ejecuta con potencia y colocación incluso en carrera. Ajusta el cuerpo rápidamente para rematar balones que vienen de diferentes ángulos.',
   'Nivel 5 (Dominante)':    'Define con ambas piernas y bajo máxima presión defensiva. Domina el remate de primera intención y utiliza recursos variados (volea, cabeza, colocación sutil).',
 };
-const DESC_CABECEO: Desc = {};
-const DESC_QUITE: Desc = {};
+const DESC_CABECEO: Desc = {
+  'Nivel 1 (Iniciación)':   'Evita el contacto aéreo o cierra los ojos al disputar balones por alto; su contacto con la cabeza suele ser débil, desviado o golpeando con zonas incorrectas del cráneo.',
+  'Nivel 2 (En Desarrollo)':'Salta a disputar balones aéreos, pero calcula mal el tiempo del impacto o carece de la fuerza de cuello necesaria para direccionar el balón con eficacia.',
+  'Nivel 3 (Competente)':   'Muestra buen timing en el salto para disputar balones aéreos estándar, logrando despejar o direccionar hacia zonas seguras en media intensidad.',
+  'Nivel 4 (Avanzado)':     'Excelente técnica de impacto aéreo; utiliza los brazos para proteger el espacio en el salto y conecta frentazos con potencia y dirección certera (tanto en defensa como en ataque).',
+  'Nivel 5 (Dominante)':    'Imponente en el juego aéreo; gana la gran mayoría de los duelos por arriba gracias a una potencia de salto sobresaliente y una capacidad quirúrgica para colocar el balón de cabeza donde desea.',
+};
+const DESC_QUITE: Desc = {
+  'Nivel 1 (Iniciación)':   'Comete faltas recurrentes al intentar recuperar la pelota; va al piso de forma precipitada o pierde la posición defensiva fácilmente ante amagues simples del rival.',
+  'Nivel 2 (En Desarrollo)':'Intenta meter el pie o interceptar el pase, pero calcula mal la distancia y la velocidad de la jugada; suele llegar con éxito solo en acciones pausadas o de baja intensidad.',
+  'Nivel 3 (Competente)':   'Mantiene una postura defensiva equilibrada; realiza quites limpios en el momento adecuado y sabe temporizar para no regalarse ante la gambeta rival.',
+  'Nivel 4 (Avanzado)':     'Posee un gran timing para la entrada defensiva; mete el pie con firmeza y elegancia para quitar el balón o cortar líneas de pase sin cometer infracción.',
+  'Nivel 5 (Dominante)':    'Implacable en el duelo 1vs1 defensivo; anticipa las intenciones del atacante con precisión quirúrgica, realizando quites limpios y saliendo con la pelota controlada para iniciar el ataque.',
+};
 const DESC_PROTECCION: Desc = {
-  'Nivel 1 (Iniciación)':   'Pierde el balón fácilmente ante el contacto físico; no usa su cuerpo como barrera.',
-  'Nivel 2 (En Desarrollo)':'Intenta interponer el cuerpo, pero pierde el equilibrio ante cargas del rival.',
-  'Nivel 3 (Competente)':   'Utiliza los brazos y la cadera para mantener la posesión mientras busca una descarga.',
-  'Nivel 4 (Avanzado)':     'Domina el uso del cuerpo para esconder el balón y girar sobre la presión del oponente.',
-  'Nivel 5 (Dominante)':    'Protege el balón con éxito ante múltiples rivales, provocando faltas o manteniendo la posesión bajo estrés máximo.',
+  'Nivel 1 (Iniciación)':   'Pierde la posición y la pelota ante el mínimo contacto físico; no utiliza los brazos ni el tronco para blindar el balón, exponiéndolo directamente al defensor.',
+  'Nivel 2 (En Desarrollo)':'Muestra intención de usar el cuerpo para proteger el balón, pero carece de la estabilidad o el centro de gravedad bajo para sostener la carga del rival de forma efectiva.',
+  'Nivel 3 (Competente)':   'Interpone el cuerpo de manera adecuada entre el rival y la pelota en acciones estáticas o de velocidad media, manteniendo la posesión bajo presión moderada.',
+  'Nivel 4 (Avanzado)':     'Protege el esférico con solidez utilizando los brazos y la espalda como escudo; se perfila bien respecto al marcador y utiliza la fuerza de piernas para girar con ventaja.',
+  'Nivel 5 (Dominante)':    'Es una muralla para proteger la pelota; domina el uso del cuerpo como escudo en máxima velocidad y en espacios reducidos, haciendo casi imposible que el rival le despoje el esférico sin cometer falta.',
 };
 const DESC_UBICACION: Desc = {
   'Nivel 1 (Iniciación)':   'Tiende a seguir el balón sin mantener una posición (efecto "enjambre").',
@@ -287,6 +299,48 @@ export async function getMetaValoracion(): Promise<Record<string, FundMetaEdit>>
 export async function saveMetaValoracion(data: Record<string, FundMetaEdit>): Promise<boolean> {
   try {
     const res = await fetch(`${SB_URL}/rest/v1/config_valoracion?id=eq.meta`, {
+      method: 'PATCH',
+      headers: { ...SB_HDR, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ data, updated_at: new Date().toISOString() }),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+// ── Nombres editables de los COMPONENTES del informe ──
+// Las CLAVES coinciden con los títulos de categoría que usa la Valoración Dinámica,
+// para poder buscarlos directamente por título.
+export const COMPONENTES: { key: string; nombre: string }[] = [
+  { key: 'Físico',               nombre: 'Físico' },
+  { key: 'Técnica',              nombre: 'Técnico' },
+  { key: 'Táctica',              nombre: 'Táctico' },
+  { key: 'Mental y Actitudinal', nombre: 'Mental' },
+  { key: 'Comportamiento',       nombre: 'Comportamental' },
+  { key: 'Trabajo en Equipo',    nombre: 'Grupal' },
+];
+
+/** Lee los nombres editables de los componentes (por defecto = el nombre base). */
+export async function getCategoriasValoracion(): Promise<Record<string, string>> {
+  let saved: Record<string, string> = {};
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/config_valoracion?id=eq.categorias&select=data`, { headers: SB_HDR });
+    if (res.ok) {
+      const d = await res.json();
+      if (Array.isArray(d) && d[0]?.data && typeof d[0].data === 'object') saved = d[0].data as Record<string, string>;
+    }
+  } catch {}
+  const out: Record<string, string> = {};
+  for (const c of COMPONENTES) {
+    const s = (saved[c.key] ?? '').toString().trim();
+    out[c.key] = s || c.nombre;
+  }
+  return out;
+}
+
+/** Guarda los nombres editados de las categorías. */
+export async function saveCategoriasValoracion(data: Record<string, string>): Promise<boolean> {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/config_valoracion?id=eq.categorias`, {
       method: 'PATCH',
       headers: { ...SB_HDR, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
       body: JSON.stringify({ data, updated_at: new Date().toISOString() }),

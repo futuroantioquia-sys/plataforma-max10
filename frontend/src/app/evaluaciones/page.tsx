@@ -9,6 +9,22 @@ import { getDescripcionesValoracion, getMetaValoracion, type FundMetaEdit } from
 
 const NIVELES = ['', 'Nivel 1 (Iniciación)', 'Nivel 2 (En Desarrollo)', 'Nivel 3 (Competente)', 'Nivel 4 (Avanzado)', 'Nivel 5 (Dominante)'];
 
+/** Textarea que crece solo con el contenido (sin scroll ni flechas). */
+function AutoTextarea({ value, onChange, placeholder, style }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; style?: React.CSSProperties;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.max(el.scrollHeight, 26) + 'px';
+  }, [value]);
+  return (
+    <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={1}
+      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 15, resize: 'none', overflow: 'hidden', fontFamily: 'Arial, sans-serif', color: '#333', display: 'block', lineHeight: 1.5, ...style }} />
+  );
+}
+
 const DESC_FUERZA: Record<string, string> = {
   'Nivel 1 (Iniciación)':   'Presenta dificultades para mantener el equilibrio en contactos físicos. Su potencia de golpeo es limitada y suele perder la posición fácilmente en los duelos 1vs1.',
   'Nivel 2 (En Desarrollo)':'Muestra intención de utilizar su cuerpo para proteger el balón, pero carece de la estabilidad necesaria para sostener la carga del rival de forma efectiva.',
@@ -185,12 +201,14 @@ const C = {
   verdeClaro: '#166534', grisClaro: '#f0f0f0', grisAzul: '#475569',
 };
 const VERDE_GRAD = 'linear-gradient(135deg, #16a34a 0%, #052a10 100%)';
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 type Valoracion = {
   fecha: string; codigo: string; nombre: string; fechaNac: string;
   programa: string; proyecto: string; perfil: string; posicion: string;
   foto: string;
   numeroInforme: string;
+  periodoDesde: string; periodoHasta: string;
   fuerzaNivel: string; fuerzaDesc: string;
   velocidadNivel: string; velocidadDesc: string;
   resistenciaNivel: string; resistenciaDesc: string;
@@ -220,12 +238,14 @@ type Valoracion = {
   tolerancia: string; companerismo: string; liderazgo: string; trabajoEquipoComp: string; sentidoPertenencia: string;
   logrosTrimestre: string;
   objetivosTrimestre: string;
+  equipoTrimestre: string;
   observaciones: string;
 };
 
 const INICIAL: Valoracion = {
   fecha: new Date().toLocaleDateString('es-CO'), codigo: '', nombre: '', fechaNac: '',
   programa: '', proyecto: '', perfil: '', posicion: '', foto: '', numeroInforme: '',
+  periodoDesde: '', periodoHasta: '',
   fuerzaNivel: '', fuerzaDesc: '', velocidadNivel: '', velocidadDesc: '',
   resistenciaNivel: '', resistenciaDesc: '',
   controlNivel: '', controlDesc: '',
@@ -252,6 +272,7 @@ const INICIAL: Valoracion = {
   tolerancia: '', companerismo: '', liderazgo: '', trabajoEquipoComp: '', sentidoPertenencia: '',
   logrosTrimestre: '',
   objetivosTrimestre: '',
+  equipoTrimestre: '',
   observaciones: '',
 };
 
@@ -527,17 +548,18 @@ function VistaPadres({ data, nombreEntrenador, onClose }: {
           </div>
         </SeccionJuego>
 
-        {/* ── LOGROS Y OBJETIVOS ── */}
-        {data.logrosTrimestre && (
+        {/* ── LOGROS Y RETOS DE TU PROYECTO DEPORTIVO (un solo cuadro) ── */}
+        {(data.logrosTrimestre || data.objetivosTrimestre) && (
           <div style={{ background: '#0d2b1a', border: '1px solid #16a34a33', borderRadius: 12, padding: '14px 16px', marginBottom: 10, marginTop: 8 }}>
-            <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>🏆 LOGROS DEL TRIMESTRE</div>
-            <p style={{ color: '#d1fae5', fontSize: 12, lineHeight: 1.7, margin: 0 }}>{data.logrosTrimestre}</p>
+            <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>🏆 LOGROS Y RETOS PERSONALES</div>
+            {data.logrosTrimestre && <p style={{ color: '#d1fae5', fontSize: 12, lineHeight: 1.7, margin: '0 0 8px' }}><b style={{ color: '#4ade80' }}>Logros: </b>{data.logrosTrimestre}</p>}
+            {data.objetivosTrimestre && <p style={{ color: '#e0f2fe', fontSize: 12, lineHeight: 1.7, margin: 0 }}><b style={{ color: '#38bdf8' }}>Retos: </b>{data.objetivosTrimestre}</p>}
           </div>
         )}
-        {data.objetivosTrimestre && (
-          <div style={{ background: '#0c1f35', border: '1px solid #0ea5e933', borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
-            <div style={{ color: '#38bdf8', fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>🎯 OBJETIVOS PRÓXIMO TRIMESTRE</div>
-            <p style={{ color: '#e0f2fe', fontSize: 12, lineHeight: 1.7, margin: 0 }}>{data.objetivosTrimestre}</p>
+        {data.equipoTrimestre && (
+          <div style={{ background: '#241a2e', border: '1px solid #8b5cf644', borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
+            <div style={{ color: '#c4b5fd', fontSize: 11, fontWeight: 800, letterSpacing: 1, marginBottom: 8 }}>🤝 LOGROS Y RETOS DEL EQUIPO</div>
+            <p style={{ color: '#ede9fe', fontSize: 12, lineHeight: 1.7, margin: 0 }}>{data.equipoTrimestre}</p>
           </div>
         )}
         {data.observaciones && (
@@ -727,7 +749,8 @@ function ValoracionPageInner() {
       autoCargadoCod.current = cod;
       textosManual.current = true;   // respetar los logros/objetivos ya guardados
       const { id, ...resto } = historial[0];
-      setData(prev => ({ ...prev, ...resto, numeroInforme: String(historial.length) }));
+      const infoGuardado = String((resto as any).numeroInforme ?? '').trim();
+      setData(prev => ({ ...prev, ...resto, numeroInforme: infoGuardado || String(Math.min(historial.length, 4)) }));
     } else {
       // Sin valoraciones previas → la próxima será la #1
       setData(prev => ({ ...prev, numeroInforme: prev.numeroInforme || '1' }));
@@ -762,7 +785,7 @@ function ValoracionPageInner() {
         const profe = profes.find(p =>
           p.proyectos.some(pr => pr.trim().toUpperCase() === proyecto.trim().toUpperCase())
         );
-        if (profe) setNombreEntrenador(profe.usuario);
+        if (profe) setNombreEntrenador((profe.nombre && profe.nombre.trim()) ? profe.nombre.trim() : profe.usuario);
       }
       setEncontrado(dep._nombre ?? '');
       setTimeout(() => setEncontrado(''), 3000);
@@ -901,7 +924,7 @@ function ValoracionPageInner() {
       codigo: p.codigo, nombre: p.nombre, fechaNac: p.fechaNac,
       programa: p.programa, proyecto: p.proyecto, perfil: p.perfil, posicion: p.posicion,
       foto: p.foto,
-      numeroInforme: String(historial.length + 1),
+      numeroInforme: String(Math.min(historial.length + 1, 4)),
     }));
   };
 
@@ -957,16 +980,34 @@ function ValoracionPageInner() {
       return a.slice(0, -1).join(', ') + ' y ' + a[a.length - 1];
     };
 
+    // Textos individuales SIMPLIFICADOS y de longitud pareja (máx. 3 aspectos)
     const logros = fuertes.length
-      ? `Durante este trimestre, ${nombre} mostró un buen nivel en ${listar(fuertes, 6)}. Se destacó por su esfuerzo, compromiso y actitud dentro y fuera de la cancha. ¡Felicitaciones por el trabajo realizado y a seguir creciendo!`
-      : `Durante este trimestre, ${nombre} mostró compromiso, disposición para aprender y buena actitud en los entrenamientos. Con trabajo constante seguirá mejorando. ¡Felicitaciones por el esfuerzo!`;
+      ? `${nombre} se destacó en ${listar(fuertes, 3)}, con buen compromiso y actitud en el trimestre.`
+      : `${nombre} mostró compromiso, buena disposición y actitud en los entrenamientos del trimestre.`;
 
     const objetivos = debiles.length
-      ? `Para el próximo trimestre: mejorar ${listar(debiles, 4)}. ¡Con práctica y ganas lo vas a lograr, ${nombre}! Paso a paso. ¡Tú puedes! 💪`
-      : `¡Gran trimestre, ${nombre}! El reto ahora es mantener el nivel y seguir creciendo cada día. ¡A por más! 💪`;
+      ? `El reto para el próximo periodo es mejorar ${listar(debiles, 3)}. ¡Con constancia lo lograrás, ${nombre}!`
+      : `El reto para el próximo periodo es mantener el nivel y seguir creciendo cada día. ¡Vamos, ${nombre}!`;
+
+    // Texto del EQUIPO — a partir de los 4 fundamentos colectivos
+    const eqItems = [
+      { label: 'la identidad de juego',          n: nvl(data.identidadNivel) },
+      { label: 'la cohesión del bloque',         n: nvl(data.bloqueNivel) },
+      { label: 'el clima interno del grupo',     n: nvl(data.climaNivel) },
+      { label: 'la gestión de la competición',   n: nvl(data.gestionCompNivel) },
+    ];
+    const eqFuertes = dedup(eqItems.filter(i => i.n >= 4).map(i => i.label));
+    const eqDebiles = dedup(eqItems.filter(i => i.n >= 1 && i.n <= 2).map(i => i.label));
+    const eqLogro = eqFuertes.length
+      ? `Como equipo, se destaca en ${listar(eqFuertes, 4)}.`
+      : `El equipo avanza en su consolidación colectiva.`;
+    const eqReto = eqDebiles.length
+      ? `El reto grupal es fortalecer ${listar(eqDebiles, 4)}.`
+      : `El reto grupal es sostener el buen funcionamiento colectivo.`;
 
     set('logrosTrimestre', logros);
     set('objetivosTrimestre', objetivos);
+    set('equipoTrimestre', `${eqLogro} ${eqReto}`);
   };
 
   // Cuando se completa el ÚLTIMO campo de evaluación, se generan solos los Logros y Objetivos.
@@ -988,6 +1029,27 @@ function ValoracionPageInner() {
     if (evaluacionCompleta) generarTextos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [evaluacionKey]);
+
+  // Rellena SOLO el texto del equipo si está vacío (para valoraciones ya guardadas sin ese campo).
+  const colectivosListos = !!(data.identidadNivel && data.bloqueNivel && data.climaNivel && data.gestionCompNivel);
+  useEffect(() => {
+    if (data.equipoTrimestre.trim() || !colectivosListos) return;
+    const nvl = (s: string) => { if ((s ?? '').trim().toUpperCase() === 'NO APLICA') return -1; const i = NIVELES.indexOf(s); return i > 0 ? i : 0; };
+    const dedup = (arr: string[]) => Array.from(new Set(arr));
+    const listar = (a: string[]) => a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' y ' + a[a.length - 1];
+    const it = [
+      { label: 'la identidad de juego',        n: nvl(data.identidadNivel) },
+      { label: 'la cohesión del bloque',       n: nvl(data.bloqueNivel) },
+      { label: 'el clima interno del grupo',   n: nvl(data.climaNivel) },
+      { label: 'la gestión de la competición', n: nvl(data.gestionCompNivel) },
+    ];
+    const f = dedup(it.filter(i => i.n >= 4).map(i => i.label));
+    const d = dedup(it.filter(i => i.n >= 1 && i.n <= 2).map(i => i.label));
+    const lo = f.length ? `Como equipo, se destaca en ${listar(f)}.` : 'El equipo avanza en su consolidación colectiva.';
+    const re = d.length ? `El reto grupal es fortalecer ${listar(d)}.` : 'El reto grupal es sostener el buen funcionamiento colectivo.';
+    set('equipoTrimestre', `${lo} ${re}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colectivosListos, data.equipoTrimestre, data.identidadNivel, data.bloqueNivel, data.climaNivel, data.gestionCompNivel]);
 
   const cargarDeHistorial = (ev: Evaluacion) => {
     const { id, ...resto } = ev;
@@ -1042,6 +1104,10 @@ function ValoracionPageInner() {
         </button>
         <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
           <RefreshCw size={13} /> Limpiar
+        </button>
+        <button onClick={() => { textosManual.current = false; generarTextos(); }} title="Rellena Logros, Retos y Logros y Retos del Equipo según la valoración"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+          <RefreshCw size={13} /> Regenerar textos
         </button>
         <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.verde, color: '#fff', cursor: guardando ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, opacity: guardando ? 0.7 : 1 }}>
           <Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}
@@ -1154,12 +1220,15 @@ function ValoracionPageInner() {
                           </select>
                         </div>
                       </div>
-                      {/* # INFORME + PERFIL */}
+                      {/* INFORME + PERFIL */}
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>VALORACIÓN N°</span>
-                          <input value={data.numeroInforme} readOnly title="Se numera automáticamente" placeholder="—"
-                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('numeroInforme') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 700, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 40, padding: 0, cursor: 'default' }} />
+                          <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>INFORME</span>
+                          <select value={data.numeroInforme} onChange={e => set('numeroInforme', e.target.value)}
+                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('numeroInforme') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                            <option value="">—</option>
+                            {[1, 2, 3, 4].map(n => <option key={n} value={String(n)}>Informe {n}</option>)}
+                          </select>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>PERFIL</span>
@@ -1168,6 +1237,21 @@ function ValoracionPageInner() {
                             {PERFILES.map(o => <option key={o} value={o}>{o || '— Seleccionar —'}</option>)}
                           </select>
                         </div>
+                      </div>
+                      {/* PERIODO EVALUADO (de mes a mes) */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>PERIODO</span>
+                        <select value={data.periodoDesde} onChange={e => set('periodoDesde', e.target.value)}
+                          style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #cbd5e1', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                          <option value="">Mes inicial</option>
+                          {MESES.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>a</span>
+                        <select value={data.periodoHasta} onChange={e => set('periodoHasta', e.target.value)}
+                          style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #cbd5e1', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                          <option value="">Mes final</option>
+                          {MESES.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -1360,90 +1444,86 @@ function ValoracionPageInner() {
             const comportamental = avg([cv(data.responsabilidad), cv(data.puntualidad), cv(data.disciplinaComp), cv(data.respeto), cv(data.tolerancia), cv(data.companerismo), cv(data.liderazgo), cv(data.trabajoEquipoComp), cv(data.sentidoPertenencia)]);
             const color = (v: number) => v === 0 ? '#aaa' : v >= 4 ? '#1a7c4f' : v >= 3 ? '#1d4e89' : v >= 2 ? '#e85d04' : '#c62a47';
             const etiquetaComp = (v: number) => v === 0 ? '—' : v >= 4.5 ? 'SIEMPRE' : v >= 3.5 ? 'CASI SIEMPRE' : v >= 2.5 ? 'ALGUNAS VECES' : v >= 1.5 ? 'CASI NUNCA' : 'NUNCA';
+            const trabajoEquipo  = avg([nv(data.identidadNivel), nv(data.bloqueNivel), nv(data.climaNivel), nv(data.gestionCompNivel)]);
+            const promedioGeneral = avg([
+              nv(data.fuerzaNivel), nv(data.velocidadNivel), nv(data.resistenciaNivel),
+              nv(data.controlNivel), nv(data.paseNivel), nv(data.conductaNivel), nv(data.driblingNivel),
+              nv(data.remataNivel), nv(data.cabeceoNivel), nv(data.quiteNivel), nv(data.proteccionNivel),
+              nv(data.posicionNivel), nv(data.visionNivel), nv(data.defensaNivel), nv(data.amplitudNivel),
+              nv(data.transicionNivel), nv(data.superioridadNivel), nv(data.basculacionNivel),
+              nv(data.trabajoNivel), nv(data.disciplinaNivel), nv(data.actitudNivel), nv(data.identidadNivel),
+              nv(data.bloqueNivel), nv(data.climaNivel), nv(data.gestionCompNivel),
+              cv(data.responsabilidad), cv(data.puntualidad), cv(data.disciplinaComp), cv(data.respeto),
+              cv(data.tolerancia), cv(data.companerismo), cv(data.liderazgo), cv(data.trabajoEquipoComp), cv(data.sentidoPertenencia),
+            ]);
             const filas: [string, number][] = [
-              ['Aspecto Condicional',            condicional],
-              ['Aspecto Técnico',                tecnico],
-              ['Aspecto Táctico',                tactico],
-              ['Socio-Afectiva y Actitudinal',   socioAfectiva],
-              ['Aspecto Comportamental',         comportamental],
+              ['Físico',               condicional],
+              ['Técnico',              tecnico],
+              ['Táctico',              tactico],
+              ['Mental y Actitudinal', socioAfectiva],
+              ['Trabajo en Equipo',    trabajoEquipo],
+              ['Comportamental',       comportamental],
             ];
+            const barra = (val: number, alto: number) => (
+              <div style={{ background: '#e5e7eb', borderRadius: 4, height: alto, flex: 1, overflow: 'hidden', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                <div style={{ width: `${(val / 5) * 100}%`, height: '100%', background: color(val), borderRadius: 4, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties} />
+              </div>
+            );
             return (
               <tbody>
-                <tr>{celda(VERDE_GRAD, '#fff', 'PERFIL INDIVIDUAL', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '6px 8px' } as any)}</tr>
-                <tr style={{ background: '#d0dae6' }}>
-                  <td colSpan={2} style={{ padding: '5px 12px', fontSize: 10, fontWeight: 700, color: '#333', letterSpacing: 1 }}>ASPECTO</td>
-                  <td colSpan={2} style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#333', textAlign: 'center' }}>CALIFICACIÓN</td>
+                <tr>{celda(VERDE_GRAD, '#fff', 'VALORACIÓN POR COMPONENTES', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '6px 8px' } as any)}</tr>
+                {filas.map(([nombre, val], i) => (
+                  <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
+                    <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 700, color: '#333', textTransform: 'uppercase', letterSpacing: 0.5 }}>{nombre}</td>
+                    <td colSpan={2} style={{ padding: '7px 10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {barra(val, 10)}
+                        <span style={{ minWidth: 30, textAlign: 'right', fontSize: 13, fontWeight: 900, color: color(val) }}>{val === 0 ? '—' : val.toFixed(1)}</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {/* VALORACIÓN DEL DEPORTISTA — nota final (promedio de TODOS los fundamentos; No Aplica = 5) */}
+                <tr>
+                  <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '8px 12px', fontSize: 12, fontWeight: 900, letterSpacing: 1, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                    VALORACIÓN DEL DEPORTISTA
+                  </td>
+                  <td colSpan={2} style={{ background: VERDE_GRAD, padding: '8px 10px', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ background: 'rgba(255,255,255,0.25)', borderRadius: 4, height: 12, flex: 1, overflow: 'hidden' }}>
+                        <div style={{ width: `${(promedioGeneral / 5) * 100}%`, height: '100%', background: '#fff', borderRadius: 4, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties} />
+                      </div>
+                      <span style={{ minWidth: 34, textAlign: 'right', fontSize: 18, fontWeight: 900, color: '#fff' }}>{promedioGeneral === 0 ? '—' : promedioGeneral.toFixed(1)}</span>
+                    </div>
+                  </td>
                 </tr>
-                {filas.map(([nombre, val], i) => {
-                  return (
-                    <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
-                      <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, color: '#333', textTransform: 'uppercase' }}>{nombre}</td>
-                      <td colSpan={2} style={{ padding: '7px 8px', textAlign: 'center', fontSize: 14, fontWeight: 700, color: '#111' }}>
-                        {val === 0 ? '—' : val.toFixed(1)}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {/* Promedio general — PLANO sobre TODOS los fundamentos (igual que la vista de padres); No Aplica = 5 */}
-                {(() => {
-                  const promedioGeneral = avg([
-                    nv(data.fuerzaNivel), nv(data.velocidadNivel), nv(data.resistenciaNivel),
-                    nv(data.controlNivel), nv(data.paseNivel), nv(data.conductaNivel), nv(data.driblingNivel),
-                    nv(data.remataNivel), nv(data.cabeceoNivel), nv(data.quiteNivel), nv(data.proteccionNivel),
-                    nv(data.posicionNivel), nv(data.visionNivel), nv(data.defensaNivel), nv(data.amplitudNivel),
-                    nv(data.transicionNivel), nv(data.superioridadNivel), nv(data.basculacionNivel),
-                    nv(data.trabajoNivel), nv(data.disciplinaNivel), nv(data.actitudNivel), nv(data.identidadNivel),
-                    nv(data.bloqueNivel), nv(data.climaNivel), nv(data.gestionCompNivel),
-                    cv(data.responsabilidad), cv(data.puntualidad), cv(data.disciplinaComp), cv(data.respeto),
-                    cv(data.tolerancia), cv(data.companerismo), cv(data.liderazgo), cv(data.trabajoEquipoComp), cv(data.sentidoPertenencia),
-                  ]);
-                  return (
-                    <tr>
-                      <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '6px 12px', fontSize: 11, fontWeight: 900, letterSpacing: 1, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
-                        VALORACIÓN DEPORTISTA
-                      </td>
-                      <td colSpan={2} style={{ background: VERDE_GRAD, color: '#fff', padding: '6px 8px', textAlign: 'center', fontSize: 15, fontWeight: 900, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
-                        {promedioGeneral === 0 ? '—' : promedioGeneral.toFixed(1)}
-                      </td>
-                    </tr>
-                  );
-                })()}
               </tbody>
             );
           })()}
 
-          {/* OBSERVACIONES */}
+          {/* LOGROS Y RETOS DE TU PROYECTO DEPORTIVO (un solo cuadro) */}
           <tbody>
-            <tr>{celda(VERDE_GRAD, '#fff', 'OBSERVACIONES GENERALES', { colSpan: 4, textAlign: 'center', fontSize: 12, letterSpacing: 2 } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'LOGROS Y RETOS PERSONALES', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr>
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
-                <textarea value={data.observaciones} onChange={e => set('observaciones', e.target.value)}
-                  rows={2} placeholder="Observaciones generales del entrenador..."
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+                <div style={{ fontSize: 10, fontWeight: 800, color: '#16a34a', letterSpacing: 1, marginBottom: 2 }}>LOGROS</div>
+                <AutoTextarea value={data.logrosTrimestre} onChange={v => { textosManual.current = true; set('logrosTrimestre', v); }}
+                  placeholder="Se genera automáticamente al completar la valoración (puedes editarlo)…" />
+                <div style={{ borderTop: '1px dashed #cbd5e1', margin: '6px 0' }} />
+                <div style={{ fontSize: 10, fontWeight: 800, color: '#0ea5e9', letterSpacing: 1, marginBottom: 2 }}>RETOS</div>
+                <AutoTextarea value={data.objetivosTrimestre} onChange={v => { textosManual.current = true; set('objetivosTrimestre', v); }}
+                  placeholder="Se genera automáticamente al completar la valoración (puedes editarlo)…" />
               </td>
             </tr>
           </tbody>
 
-          {/* LOGROS DE TU PROYECTO DEPORTIVO */}
+          {/* LOGROS Y RETOS DEL EQUIPO */}
           <tbody>
-            <tr>{celda(VERDE_GRAD, '#fff', 'LOGROS DE TU PROYECTO DEPORTIVO', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
+            <tr>{celda(VERDE_GRAD, '#fff', 'LOGROS Y RETOS DEL EQUIPO', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
             <tr>
               <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
-                <textarea value={data.logrosTrimestre} onChange={e => { textosManual.current = true; set('logrosTrimestre', e.target.value); }}
-                  rows={2} placeholder="Se genera automáticamente al completar la valoración (puedes editarlo)…"
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
-              </td>
-            </tr>
-          </tbody>
-
-          {/* RETOS DE TU PROYECTO DEPORTIVO */}
-          <tbody>
-            <tr>{celda(VERDE_GRAD, '#fff', 'RETOS DE TU PROYECTO DEPORTIVO', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
-            <tr>
-              <td colSpan={4} style={{ background: C.grisClaro, padding: '8px 12px' }}>
-                <textarea value={data.objetivosTrimestre} onChange={e => { textosManual.current = true; set('objetivosTrimestre', e.target.value); }}
-                  rows={2} placeholder="Se genera automáticamente al completar la valoración (puedes editarlo)…"
-                  style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333' }} />
+                <AutoTextarea value={data.equipoTrimestre} onChange={v => { textosManual.current = true; set('equipoTrimestre', v); }}
+                  placeholder="Se genera desde los fundamentos colectivos (Identidad, Bloque, Clima y Gestión de la Competición)…" />
               </td>
             </tr>
           </tbody>
@@ -1455,13 +1535,13 @@ function ValoracionPageInner() {
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   {nombreEntrenador || '___________________________'}
                 </div>
-                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Entrenador</div>
+                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Formador</div>
               </td>
               <td colSpan={2} style={{ padding: '8px 24px 6px', textAlign: 'center', verticalAlign: 'bottom' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   STEVEN MARULANDA GRISALES
                 </div>
-                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Directivo</div>
+                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Coordinador</div>
               </td>
             </tr>
             <tr>

@@ -7,6 +7,7 @@ import {
   FUNDAMENTOS, NIVELES_LABELS, DESCRIPCIONES_DEFAULT,
   getDescripcionesValoracion, saveDescripcionesValoracion,
   getMetaValoracion, saveMetaValoracion,
+  getCategoriasValoracion, saveCategoriasValoracion, COMPONENTES,
   type Desc, type FundMetaEdit,
 } from '@/lib/valoracion-textos';
 
@@ -17,13 +18,14 @@ export default function GestionValoracionPage() {
   const router = useRouter();
   const [textos,    setTextos]    = useState<Record<string, Desc>>({});
   const [meta,      setMeta]      = useState<Record<string, FundMetaEdit>>({});
+  const [catNombres, setCatNombres] = useState<Record<string, string>>({});
   const [cargando,  setCargando]  = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [guardado,  setGuardado]  = useState(false);
 
   useEffect(() => {
-    Promise.all([getDescripcionesValoracion(), getMetaValoracion()])
-      .then(([t, m]) => { setTextos(t); setMeta(m); setCargando(false); })
+    Promise.all([getDescripcionesValoracion(), getMetaValoracion(), getCategoriasValoracion()])
+      .then(([t, m, c]) => { setTextos(t); setMeta(m); setCatNombres(c); setCargando(false); })
       .catch(() => setCargando(false));
   }, []);
 
@@ -41,12 +43,13 @@ export default function GestionValoracionPage() {
 
   const guardar = async () => {
     setGuardando(true);
-    const [okT, okM] = await Promise.all([
+    const [okT, okM, okC] = await Promise.all([
       saveDescripcionesValoracion(textos),
       saveMetaValoracion(meta),
+      saveCategoriasValoracion(catNombres),
     ]);
     setGuardando(false);
-    if (okT && okM) { setGuardado(true); setTimeout(() => setGuardado(false), 2500); }
+    if (okT && okM && okC) { setGuardado(true); setTimeout(() => setGuardado(false), 2500); }
     else alert('No se pudo guardar. Revisa la conexión e intenta de nuevo.');
   };
 
@@ -77,6 +80,23 @@ export default function GestionValoracionPage() {
           Aquí editas la <b>base de textos</b> de cada nivel. Al guardar, las <b>próximas valoraciones</b> que
           haga el formador usarán estos textos, y así también los verá el padre de familia.
         </div>
+
+        {!cargando && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+            <p className="text-[#064e1e] font-black text-sm mb-1">Nombres de los componentes</p>
+            <p className="text-gray-500 text-[12px] mb-3">Estos nombres aparecen en el informe (Valoración Dinámica), incluido el consolidado del final. Edítalos y presiona Guardar.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {COMPONENTES.map(c => (
+                <div key={c.key}>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wide mb-1">{c.nombre}</label>
+                  <input value={catNombres[c.key] ?? ''} onChange={e => setCatNombres(prev => ({ ...prev, [c.key]: e.target.value }))}
+                    placeholder={c.nombre}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#16a34a]" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {cargando ? (
           <div className="text-center text-gray-400 py-16 font-semibold">Cargando textos…</div>

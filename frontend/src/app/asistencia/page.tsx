@@ -76,6 +76,10 @@ function getCol(dep: Deportista, rx: RegExp) {
 function proyectoDe(dep: Deportista) {
   return getCol(dep, /^proy/i) || '__SIN_PROYECTO__';
 }
+// Un deportista está retirado si su columna ESTADO contiene "retirado".
+function esRetirado(dep: Deportista) {
+  return /retirad/i.test(getCol(dep, /^estado/i) || '');
+}
 function semanaNum(fecha: Date) {
   const iso = fecha.getDay() === 0 ? 7 : fecha.getDay();
   const lun = new Date(fecha);
@@ -151,6 +155,7 @@ function AsistenciaInner() {
   const [asistencia,   setAsistencia]   = useState<AsistenciaData>({});
   const [programa,     setPrograma]     = useState('');
   const [proyecto,     setProyecto]     = useState('');
+  const [mostrarRetirados, setMostrarRetirados] = useState(false); // modo "solo retirados"
   const [mes,          setMes]          = useState(0);
   const [anio,         setAnio]         = useState(2026);
   const [diasSel,      setDiasSel]      = useState<number[]>([]);
@@ -469,26 +474,28 @@ function AsistenciaInner() {
 
   const atletas = useMemo(() => {
     if (!proyecto) return [];
+    // Filtro por estado: en modo normal se OCULTAN los retirados; en modo retirados solo ellos.
+    const pasaEstado = (d: Deportista) => mostrarRetirados ? esRetirado(d) : !esRetirado(d);
     if (esProfe) {
       // Para profe los deportistas ya vienen filtrados del API
-      return [...deportistas].sort((a, b) => a._nombre.localeCompare(b._nombre));
+      return [...deportistas].filter(pasaEstado).sort((a, b) => a._nombre.localeCompare(b._nombre));
     }
     return deportistas
-      .filter(d => proyectoDe(d) === proyecto)
+      .filter(d => proyectoDe(d) === proyecto && pasaEstado(d))
       .sort((a, b) => a._nombre.localeCompare(b._nombre));
-  }, [deportistas, proyecto, esProfe]);
+  }, [deportistas, proyecto, esProfe, mostrarRetirados]);
 
   // Días EFECTIVOS del mes.
   const mesTieneAjuste = mesKey in overridesMes;
 
-  // Días de la semana que YA tienen asistencia registrada este mes (buscando en TODOS los
-  // proyectos donde estuvo el deportista). Sirve para NUNCA ocultar la asistencia histórica.
+  // Días de la semana con asistencia registrada este mes, SOLO en el proyecto actual.
+  // (Así, si un deportista viene de otro grupo con días distintos, esos días viejos NO
+  //  contaminan la vista de este grupo. Su historial completo se ve en su ficha.)
   const diasConDataMes = useMemo(() => {
     const set = new Set<number>();
     const idsRoster = new Set(atletas.map(a => a.id));
-    for (const proyData of Object.values(asistencia)) {
-      const mesData = (proyData as any)?.[mesKey];
-      if (!mesData) continue;
+    const mesData = (asistencia[proyecto] as any)?.[mesKey];
+    if (mesData) {
       for (const depId of Object.keys(mesData)) {
         if (!idsRoster.has(depId)) continue;
         for (const fecha of Object.keys(mesData[depId])) {
@@ -499,7 +506,7 @@ function AsistenciaInner() {
       }
     }
     return set;
-  }, [asistencia, mesKey, atletas]);
+  }, [asistencia, proyecto, mesKey, atletas]);
 
   // ¿Es un mes pasado? (para no imponerle los días NUEVOS del proyecto a meses viejos)
   const _hoy = new Date();
@@ -538,23 +545,15 @@ function AsistenciaInner() {
   }, [mes, anio, diasEfectivos]);
 
   // ── Memoizar estado por celda ────────────────────────────────
-  // Busca en TODOS los proyectos: si el deportista cambió de proyecto su historial lo sigue
+  // SOLO el proyecto actual: cada grupo muestra únicamente SU propia asistencia.
+  // El historial completo del deportista (incluidos grupos anteriores) se ve en su ficha.
   const estadoMap = useMemo(() => {
     const m: Record<string, Record<string, Estado>> = {};
     atletas.forEach(dep => {
       m[dep.id] = {};
       diasDelMes.forEach(d => {
         const fk = d.toISOString().split('T')[0];
-        // 1. Proyecto actual (prioridad para nuevos registros)
-        let est: Estado = asistencia[proyecto]?.[mesKey]?.[dep.id]?.[fk] ?? '';
-        // 2. Si no encontró, busca en proyectos anteriores (traslado)
-        if (!est) {
-          for (const proyData of Object.values(asistencia)) {
-            const v = proyData?.[mesKey]?.[dep.id]?.[fk] ?? '';
-            if (v) { est = v as Estado; break; }
-          }
-        }
-        m[dep.id][fk] = est;
+        m[dep.id][fk] = asistencia[proyecto]?.[mesKey]?.[dep.id]?.[fk] ?? '';
       });
     });
     return m;
@@ -910,6 +909,16 @@ function AsistenciaInner() {
                 </div>
               )}
 
+              {/* Toggle Activos / Retirados */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Vista</label>
+                <button onClick={() => setMostrarRetirados(v => !v)}
+                  title="Alterna entre deportistas activos y retirados"
+                  className={`rounded-lg px-3 py-1.5 text-sm font-black border transition whitespace-nowrap ${mostrarRetirados ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                  {mostrarRetirados ? '● Retirados' : 'Activos'}
+                </button>
+              </div>
+
               {/* Mes + Año en fila */}
               <div className="flex gap-2">
                 <div className="min-w-[110px]">
@@ -1102,7 +1111,7 @@ function AsistenciaInner() {
                               key={fk}
                               estado={estadoMap[dep.id]?.[fk] ?? ''}
                               onClick={() => toggleEstado(dep.id, d)}
-                              readOnly={!esProfe}
+                              readOnly={!esProfe || mostrarRetirados}
                             />
                           );
                         })}

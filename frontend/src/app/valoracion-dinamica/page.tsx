@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Search } from 'lucide-react';
 import { getDeportistas, getFoto } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
+import { getCategoriasValoracion } from '@/lib/valoracion-textos';
 
 const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
@@ -95,6 +96,8 @@ const CATS: Cat[] = [
     { label: 'Trabajo en Equipo',        nivelCol: 'trabajo_nivel',      descCol: 'trabajo_desc' },
     { label: 'Gestión de la Frustración', nivelCol: 'disciplina_nivel',   descCol: 'disciplina_desc' },
     { label: 'Comunicación Asertiva',    nivelCol: 'actitud_nivel',      descCol: 'actitud_desc' },
+  ] },
+  { titulo: 'Trabajo en Equipo', emoji: '🤝', color: '#0891b2', funds: [
     { label: 'Identidad y Estilo de Juego', nivelCol: 'identidad_nivel', descCol: 'identidad_desc' },
     { label: 'Bloque y Cohesión Táctica', nivelCol: 'bloque_nivel',      descCol: 'bloque_desc' },
     { label: 'Clima Interno y Comunicación', nivelCol: 'clima_nivel',    descCol: 'clima_desc' },
@@ -113,6 +116,136 @@ const CATS: Cat[] = [
   ] },
 ];
 
+/** Ícono dinámico del componente Táctico: pizarra de fútbol con un lápiz que dibuja una jugada. */
+function PizarraTactica() {
+  const JUGADA = 'M6 24 Q 12 9 20 16 T 27 8';
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
+      {/* Tablero */}
+      <rect x="2" y="4" width="28" height="24" rx="3" fill="#0b5d2a" stroke="#083f1d" strokeWidth="1" />
+      {/* Marcas de cancha */}
+      <line x1="16" y1="4" x2="16" y2="28" stroke="#ffffff" strokeWidth="0.7" opacity="0.65" />
+      <circle cx="16" cy="16" r="3.4" fill="none" stroke="#ffffff" strokeWidth="0.7" opacity="0.65" />
+      {/* Jugada que se va dibujando */}
+      <path d="M6 24 Q 12 9 20 16 T 27 8" fill="none" stroke="#ffe14d" strokeWidth="1.7" strokeLinecap="round"
+        strokeDasharray="44" strokeDashoffset="44">
+        <animate attributeName="stroke-dashoffset" from="44" to="0" dur="2.2s" repeatCount="indefinite" />
+      </path>
+      {/* Lápiz que se desplaza sobre la jugada */}
+      <g>
+        <animateMotion dur="2.2s" repeatCount="indefinite" path={JUGADA} />
+        <g transform="translate(-0.4,-9)">
+          <rect x="-1.2" y="0" width="2.4" height="6.4" rx="0.4" fill="#fbbf24" stroke="#b45309" strokeWidth="0.3" />
+          <rect x="-1.2" y="0" width="2.4" height="1.3" fill="#ef4444" />
+          <polygon points="-1.2,6.4 1.2,6.4 0,9" fill="#e5c07b" />
+          <polygon points="-0.45,8.2 0.45,8.2 0,9" fill="#1f2937" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/** Físico: balón de fútbol que rebota. */
+function IconoFisico() {
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <ellipse cx="16" cy="28" rx="7" ry="1.6" fill="#000" opacity="0.25">
+        <animate attributeName="rx" values="7;4;7" dur="0.9s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.25;0.12;0.25" dur="0.9s" repeatCount="indefinite" />
+      </ellipse>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0; 0 -10; 0 0" keyTimes="0;0.5;1"
+          dur="0.9s" repeatCount="indefinite" calcMode="spline" keySplines="0.3 0 0.2 1; 0.7 0 0.6 1" />
+        <circle cx="16" cy="18" r="7" fill="#fff" stroke="#111" strokeWidth="0.8" />
+        <polygon points="16,14 18.5,15.8 17.6,18.8 14.4,18.8 13.5,15.8" fill="#111" />
+        <path d="M9.5 16 l1.8 1.3 M22.5 16 l-1.8 1.3 M16 25 v-2.4" stroke="#111" strokeWidth="0.7" fill="none" />
+      </g>
+    </svg>
+  );
+}
+
+/** Técnico: diana con una flecha que da al centro. */
+function IconoTecnico() {
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <circle cx="18" cy="16" r="10" fill="#fff" stroke="#111" strokeWidth="0.8" />
+      <circle cx="18" cy="16" r="6.6" fill="#ef4444" />
+      <circle cx="18" cy="16" r="3.4" fill="#fff" />
+      <circle cx="18" cy="16" r="1.5" fill="#ef4444" />
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="-18 0; 0 0" keyTimes="0;1"
+          dur="1.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.35 0 0.15 1" />
+        <line x1="3" y1="16" x2="16" y2="16" stroke="#6d28d9" strokeWidth="1.5" />
+        <polygon points="17,16 13.5,14.2 13.5,17.8" fill="#6d28d9" />
+        <polygon points="3,16 5.4,14.6 5.4,17.4" fill="#6d28d9" opacity="0.85" />
+      </g>
+    </svg>
+  );
+}
+
+/** Mental: corazón que late. */
+function IconoMental() {
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <g transform="translate(16,16)">
+        <g>
+          <animateTransform attributeName="transform" type="scale" values="1;1.22;1;1.1;1" keyTimes="0;0.15;0.32;0.5;1"
+            dur="1.1s" repeatCount="indefinite" />
+          <path d="M0 9 C -9 2 -9 -6 -4 -7 C -1 -7.6 0 -5 0 -4.2 C 0 -5 1 -7.6 4 -7 C 9 -6 9 2 0 9 Z" fill="#f43f5e" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/** Grupal: apretón de manos con un ligero movimiento. */
+function IconoGrupal() {
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <g transform="translate(16,16)">
+        <g>
+          <animateTransform attributeName="transform" type="translate" values="0 -0.9; 0 0.9; 0 -0.9" dur="0.5s" repeatCount="indefinite" />
+          <g transform="rotate(-25)">
+            <rect x="-12.5" y="-2.4" width="11.5" height="4.8" rx="2.4" fill="#eab892" />
+            <rect x="1" y="-2.4" width="11.5" height="4.8" rx="2.4" fill="#b9764a" />
+            <rect x="-3.2" y="-3.2" width="6.4" height="6.4" rx="2.1" fill="#8a5a34" />
+          </g>
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/** Comportamental: estrella que brilla. */
+function IconoComportamental() {
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <g transform="translate(16,16)">
+        <polygon points="0,-9 2.6,-2.8 9,-2.8 3.8,1.4 5.6,8 0,4 -5.6,8 -3.8,1.4 -9,-2.8 -2.6,-2.8" fill="#fbbf24" stroke="#f59e0b" strokeWidth="0.5">
+          <animateTransform attributeName="transform" type="scale" values="1;1.12;1" dur="1.6s" repeatCount="indefinite" />
+        </polygon>
+        <g>
+          <animate attributeName="opacity" values="0;1;0" dur="1.6s" repeatCount="indefinite" />
+          <path d="M7 -8 l0.7 1.9 1.9 0.7 -1.9 0.7 -0.7 1.9 -0.7 -1.9 -1.9 -0.7 1.9 -0.7 z" fill="#fff" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/** Devuelve el ícono animado según el título de la categoría (o null para usar el emoji). */
+function iconoDeCategoria(titulo: string): React.ReactNode {
+  switch (titulo) {
+    case 'Físico':               return <IconoFisico />;
+    case 'Técnica':              return <IconoTecnico />;
+    case 'Táctica':              return <PizarraTactica />;
+    case 'Mental y Actitudinal': return <IconoMental />;
+    case 'Trabajo en Equipo':    return <IconoGrupal />;
+    case 'Comportamiento':       return <IconoComportamental />;
+    default:                     return null;
+  }
+}
+
 function ValoracionDinamicaInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -126,6 +259,10 @@ function ValoracionDinamicaInner() {
   const [buscada, setBuscada] = useState(false);
   const [mostrar, setMostrar] = useState(false);
   const [fotoCalidoso, setFotoCalidoso] = useState('');   // foto que subió el calidoso
+  const [catNombres, setCatNombres] = useState<Record<string, string>>({});   // nombres de componentes editados en Gestión
+
+  useEffect(() => { getCategoriasValoracion().then(setCatNombres).catch(() => {}); }, []);
+  const nombreComp = (titulo: string) => catNombres[titulo] || titulo;
 
   // Los calidosos (padres) aún NO tienen acceso a valoraciones
   useEffect(() => {
@@ -189,6 +326,25 @@ function ValoracionDinamicaInner() {
   const todosNiveles = CATS.flatMap(c => c.funds.map(f => valorPromedio(val(f.nivelCol)))).filter((n): n is number => n != null);
   const promedio5 = todosNiveles.length ? (todosNiveles.reduce((a, b) => a + b, 0) / todosNiveles.length) : 0;
 
+  // Logros y Retos del Equipo: usa el texto guardado o lo genera desde los 4 fundamentos colectivos.
+  const textoEquipo = (() => {
+    const stored = String(row?.equipo_trimestre ?? '').trim();
+    if (stored) return stored;
+    const items = [
+      { label: 'la identidad de juego',        n: nivelNum(String(row?.identidad_nivel ?? '')) },
+      { label: 'la cohesión del bloque',       n: nivelNum(String(row?.bloque_nivel ?? '')) },
+      { label: 'el clima interno del grupo',   n: nivelNum(String(row?.clima_nivel ?? '')) },
+      { label: 'la gestión de la competición', n: nivelNum(String(row?.gestion_comp_nivel ?? '')) },
+    ];
+    if (!items.some(i => i.n > 0)) return '';
+    const listar = (a: string[]) => a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' y ' + a[a.length - 1];
+    const fuertes = items.filter(i => i.n >= 4).map(i => i.label);
+    const debiles = items.filter(i => i.n >= 1 && i.n <= 2).map(i => i.label);
+    const lo = fuertes.length ? `Como equipo, se destaca en ${listar(fuertes)}.` : 'El equipo avanza en su consolidación colectiva.';
+    const re = debiles.length ? `El reto grupal es fortalecer ${listar(debiles)}.` : 'El reto grupal es sostener el buen funcionamiento colectivo.';
+    return `${lo} ${re}`;
+  })();
+
   const sinEval = !!sel && buscada && !row;
 
   // Datos para el hero (foto grande estilo vista padres)
@@ -203,6 +359,17 @@ function ValoracionDinamicaInner() {
   const heroProyecto  = (row?.proyecto ? String(row.proyecto) : '') || proyectoDe(sel);
   const heroIniciales = (sel?._nombre || heroNombre).split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
   const heroCodigo    = (sel ? codigoDe(sel) : '') || (codParam ?? '').trim();
+  // Nombre arriba / dos apellidos abajo
+  const heroPartes    = heroNombre.trim().split(/\s+/).filter(Boolean);
+  const heroApellidos = heroPartes.length >= 3 ? heroPartes.slice(-2).join(' ') : (heroPartes.length === 2 ? heroPartes[1] : '');
+  const heroNombres   = heroPartes.length >= 3 ? heroPartes.slice(0, -2).join(' ') : (heroPartes.length === 2 ? heroPartes[0] : heroNombre);
+  // Informe y periodo (los edita el profe en la valoración sencilla)
+  const heroInforme   = row ? (String(row.numero_informe ?? '').trim() || '1') : '';
+  const pDesde        = row ? String(row.periodo_desde ?? '').trim() : '';
+  const pHasta        = row ? String(row.periodo_hasta ?? '').trim() : '';
+  const heroAnio      = (String(row?.fecha ?? '').match(/(\d{4})/) || [])[1] || '';
+  const heroPeriodo   = (pDesde && pHasta) ? `${pDesde} a ${pHasta}${heroAnio ? ' de ' + heroAnio : ''}`
+                       : (pDesde || pHasta || '');
 
   return (
     <div className="min-h-screen bg-black">
@@ -276,23 +443,24 @@ function ValoracionDinamicaInner() {
                 </div>
                 {/* Info principal */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-white font-black text-2xl sm:text-3xl leading-tight break-words">{heroNombre}</p>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {heroPrograma && <span className="bg-[#16a34a] text-white text-[11px] font-black px-3 py-1 rounded-full">{heroPrograma}</span>}
-                    {heroProyecto && <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10">{heroProyecto}</span>}
-                    {heroPosicion && <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase">{heroPosicion}</span>}
-                    {heroPerfil && <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase">Perfil {heroPerfil}</span>}
-                  </div>
-                  {/* Valoración general */}
-                  <div className="mt-4 flex items-center gap-3">
-                    <div className="text-3xl leading-none">🏅</div>
-                    <div>
-                      <p className="text-white font-black text-3xl leading-none">
-                        {mostrar ? promedio5.toFixed(1) : '0.0'}<span className="text-white/50 text-lg font-bold"> / 5</span>
-                      </p>
-                      <p className="text-white/50 text-[10px] font-bold tracking-widest mt-0.5">CALIFICACIÓN GENERAL</p>
+                  {/* Nombre arriba, dos apellidos abajo */}
+                  <p className="text-white font-black text-2xl sm:text-3xl leading-tight break-words uppercase">{heroNombres}</p>
+                  {heroApellidos && <p className="text-white font-black text-2xl sm:text-3xl leading-tight break-words uppercase">{heroApellidos}</p>}
+                  <div className="mt-3 flex flex-col gap-2 items-start">
+                    <div className="flex flex-wrap gap-2">
+                      {heroPrograma && <span className="bg-[#16a34a] text-white text-[11px] font-black px-3 py-1 rounded-full">{heroPrograma}</span>}
+                      {heroProyecto && <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10">{heroProyecto}</span>}
                     </div>
-                    {row.fecha && <span className="text-white/40 text-[10px] font-semibold self-end ml-auto">{row.fecha}</span>}
+                    <div className="flex flex-wrap gap-2">
+                      {heroPosicion && <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase">{heroPosicion}</span>}
+                      {heroPerfil && <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase">Perfil {heroPerfil}</span>}
+                    </div>
+                  </div>
+                  {/* Título + informe + periodo (sin calificación arriba — la nota va en el consolidado) */}
+                  <p className="text-white font-black text-xl leading-tight tracking-wide uppercase mt-4">Valoración Integral<br/>del Deportista</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    {heroInforme && <span className="bg-[#16a34a] text-white text-[11px] font-black px-3 py-1 rounded-full uppercase">Informe {heroInforme}</span>}
+                    {heroPeriodo && <span className="text-white/70 text-[11px] font-bold uppercase">{heroPeriodo}</span>}
                   </div>
                 </div>
               </div>
@@ -305,8 +473,8 @@ function ValoracionDinamicaInner() {
               return (
                 <div key={cat.titulo} className="rounded-2xl overflow-hidden shadow-sm border border-white/10 bg-[#0f172a]">
                   <div className="flex items-center gap-2 px-4 py-3" style={{ background: '#16a34a' }}>
-                    <span className="text-lg">{cat.emoji}</span>
-                    <span className="text-white font-black text-sm uppercase tracking-wide flex-1">{cat.titulo}</span>
+                    {iconoDeCategoria(cat.titulo) ?? <span className="text-lg">{cat.emoji}</span>}
+                    <span className="text-white font-black text-sm uppercase tracking-wide flex-1">{nombreComp(cat.titulo)}</span>
                     <span className="text-white text-xs font-black px-3 py-1 rounded-full shadow-sm" style={{ background: '#f97316' }}>{prom5 > 0 ? prom5.toFixed(1) + ' / 5' : '—'}</span>
                   </div>
                   <div className="divide-y divide-white/5">
@@ -370,18 +538,57 @@ function ValoracionDinamicaInner() {
               );
             })}
 
-            {/* Logros en tu Proyecto Deportivo (solo lectura — se edita en el formato del profe) */}
-            {val('logros_trimestre') && (
+            {/* CONSOLIDADO POR COMPONENTE — barras con degradado (rojo→verde) y nota al lado */}
+            {(() => {
+              const fmt = (n: number) => n > 0 ? n.toFixed(1).replace('.', ',') : '—';
+              const promDe = (titulo: string) => {
+                const cat = CATS.find(c => c.titulo === titulo);
+                if (!cat) return 0;
+                const ns = cat.funds.map(f => valorPromedio(val(f.nivelCol))).filter((n): n is number => n != null);
+                return ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : 0;
+              };
+              const COMP_TITULOS = ['Físico', 'Técnica', 'Táctica', 'Mental y Actitudinal', 'Comportamiento', 'Trabajo en Equipo'];
+              return (
+                <div style={{ background: '#000', border: '2px solid #16324a', borderRadius: 16, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {COMP_TITULOS.map(titulo => {
+                    const prom = promDe(titulo);
+                    return (
+                      <div key={titulo} style={{ position: 'relative', height: 46, borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,#e5342b 0%,#f5811f 30%,#f4c11e 52%,#a8d33f 76%,#33b44a 100%)' }} />
+                        <span style={{ position: 'relative', color: '#fff', fontWeight: 900, fontSize: 15, letterSpacing: 0.4, paddingLeft: 16, textShadow: '0 1px 3px rgba(0,0,0,0.45)' }}>{nombreComp(titulo).toUpperCase()}</span>
+                        <span style={{ position: 'relative', marginLeft: 'auto', marginRight: 10, background: 'rgba(0,0,0,0.30)', border: '2px solid #eafff0', color: '#fff', fontWeight: 900, fontSize: 15, borderRadius: 8, padding: '3px 12px', minWidth: 48, textAlign: 'center' }}>{mostrar ? fmt(prom) : '—'}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '6px 8px 4px 16px' }}>
+                    <span style={{ color: '#fff', fontWeight: 900, fontSize: 16, letterSpacing: 0.5 }}>VALORACIÓN INTEGRAL</span>
+                    <span style={{ marginLeft: 'auto', background: '#f97316', color: '#fff', fontWeight: 900, fontSize: 16, borderRadius: 8, padding: '4px 16px', minWidth: 52, textAlign: 'center' }}>{mostrar ? fmt(promedio5) : '—'}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Logros y Retos de tu Proyecto Deportivo — un solo cuadro (solo lectura) */}
+            {(val('logros_trimestre') || val('objetivos_trimestre')) && (
               <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
-                <p className="text-[11px] font-black uppercase tracking-widest mb-1.5 text-white">🏆 Logros en tu Proyecto Deportivo</p>
-                <p className="text-sm text-white/85 leading-relaxed whitespace-pre-wrap">{val('logros_trimestre')}</p>
+                <p className="text-[11px] font-black uppercase tracking-widest mb-2 text-white">🏆 Logros y Retos Personales</p>
+                {val('logros_trimestre') && (
+                  <p className="text-sm text-white/85 leading-relaxed whitespace-pre-wrap mb-2">
+                    <span className="font-black text-[#4ade80]">Logros: </span>{val('logros_trimestre')}
+                  </p>
+                )}
+                {val('objetivos_trimestre') && (
+                  <p className="text-sm text-white/85 leading-relaxed whitespace-pre-wrap">
+                    <span className="font-black text-[#4ade80]">Retos: </span>{val('objetivos_trimestre')}
+                  </p>
+                )}
               </div>
             )}
-            {/* Retos en tu Proyecto Deportivo (solo lectura) */}
-            {val('objetivos_trimestre') && (
-              <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
-                <p className="text-[11px] font-black uppercase tracking-widest mb-1.5 text-white">🎯 Retos en tu Proyecto Deportivo</p>
-                <p className="text-sm text-white/85 leading-relaxed whitespace-pre-wrap">{val('objetivos_trimestre')}</p>
+            {/* Logros y Retos del Equipo (desde Identidad, Bloque, Clima y Gestión de la Competición) */}
+            {textoEquipo && (
+              <div className="rounded-2xl border border-white/10 shadow-sm p-4" style={{ background: 'linear-gradient(135deg,#1e1b3a 0%,#0f172a 100%)' }}>
+                <p className="text-[11px] font-black uppercase tracking-widest mb-1.5 text-white">🤝 Logros y Retos del Equipo</p>
+                <p className="text-sm text-white/85 leading-relaxed whitespace-pre-wrap">{textoEquipo}</p>
               </div>
             )}
             {val('observaciones') && (

@@ -1928,6 +1928,8 @@ export interface Evaluacion {
   responsabilidad?: string; puntualidad?: string; disciplinaComp?: string; respeto?: string;
   tolerancia?: string; companerismo?: string; liderazgo?: string; trabajoEquipoComp?: string; sentidoPertenencia?: string;
   logrosTrimestre?: string; objetivosTrimestre?: string;
+  periodoDesde?: string; periodoHasta?: string; numeroInforme?: string;
+  equipoTrimestre?: string;
 }
 
 const LS_EVALUACIONES = 'futuro_evaluaciones';
@@ -1979,6 +1981,8 @@ export async function getEvaluaciones(codigo?: string): Promise<Evaluacion[]> {
       liderazgo: r.liderazgo ?? '', trabajoEquipoComp: r.trabajo_equipo_comp ?? '',
       sentidoPertenencia: r.sentido_pertenencia ?? '',
       logrosTrimestre: r.logros_trimestre ?? '', objetivosTrimestre: r.objetivos_trimestre ?? '',
+      periodoDesde: r.periodo_desde ?? '', periodoHasta: r.periodo_hasta ?? '', numeroInforme: r.numero_informe ?? '',
+      equipoTrimestre: r.equipo_trimestre ?? '',
     }));
     lsSet(LS_EVALUACIONES, lista);
     return lista;
@@ -2033,6 +2037,9 @@ export async function saveEvaluacion(data: Omit<Evaluacion, 'id'>): Promise<void
       liderazgo: (data as any).liderazgo ?? '',                  trabajo_equipo_comp: (data as any).trabajoEquipoComp ?? '',
       sentido_pertenencia: (data as any).sentidoPertenencia ?? '',
       logros_trimestre: (data as any).logrosTrimestre ?? '',     objetivos_trimestre: (data as any).objetivosTrimestre ?? '',
+      periodo_desde: (data as any).periodoDesde ?? '',           periodo_hasta: (data as any).periodoHasta ?? '',
+      numero_informe: (data as any).numeroInforme ?? '',
+      equipo_trimestre: (data as any).equipoTrimestre ?? '',
       observaciones: data.observaciones,
     };
     const { error } = await supabase().from('evaluaciones').insert(row);
