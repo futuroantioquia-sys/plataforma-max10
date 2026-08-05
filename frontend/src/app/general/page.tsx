@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSoloLectura } from '@/lib/permisos';
 import { ArrowLeft, Search, Users, Save, CheckCircle, Columns3, Upload, X, Trophy, AlertCircle, Trash2 } from 'lucide-react';
-import { getDeportistas, saveDeportistas, deleteAllDeportistas } from '@/lib/db';
+import { getDeportistas, saveDeportistas, deleteAllDeportistas, getProfes } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -363,10 +363,36 @@ export default function GeneralPage() {
     return result;
   }, [deportistas]);
 
-  // ── Columna PROGRAMA (nombre real en el Excel) ────────────────
+  // ── Columna PROGRAMA / PROYECTO / PROFE (nombre real en el Excel) ──
   const colPrograma = useMemo(
     () => columnas.find(c => /^program/i.test(c.trim())) ?? '',
     [columnas]
+  );
+  const colProy = useMemo(
+    () => columnas.find(c => RX_PROY.test(c.trim())) ?? '',
+    [columnas]
+  );
+  const colProfe = useMemo(
+    () => columnas.find(c => /^prof/i.test(c.trim())) ?? '',
+    [columnas]
+  );
+
+  // ── Mapa proyecto → formador (usuario), desde la tabla de formadores ──
+  // El PROFE de un deportista se deriva del proyecto en el que está.
+  const [profePorProyecto, setProfePorProyecto] = useState<Record<string, string>>({});
+  useEffect(() => {
+    getProfes().then(lista => {
+      const map: Record<string, string> = {};
+      lista.forEach(p => (p.proyectos ?? []).forEach(proy => {
+        const k = (proy ?? '').trim();
+        if (k) map[k.toUpperCase()] = p.usuario;
+      }));
+      setProfePorProyecto(map);
+    }).catch(() => {});
+  }, []);
+  const profeDeProyecto = useCallback(
+    (proy: string) => profePorProyecto[(proy ?? '').trim().toUpperCase()] ?? '',
+    [profePorProyecto]
   );
 
   // ── Opciones únicas por columna select ───────────────────────
@@ -1129,7 +1155,14 @@ export default function GeneralPage() {
                                   className="px-0 py-0">
                                   <select
                                     value={rawVal}
-                                    onChange={e => setCelda(dep.id, col, e.target.value)}
+                                    onChange={e => {
+                                      setCelda(dep.id, col, e.target.value);
+                                      // Al cambiar el PROGRAMA, limpiar PROYECTO y PROFE (se debe reseleccionar)
+                                      if (col === colPrograma) {
+                                        if (colProy)  setCelda(dep.id, colProy, '');
+                                        if (colProfe) setCelda(dep.id, colProfe, '');
+                                      }
+                                    }}
                                     className="w-full text-[11px] font-semibold py-[7px] px-1.5 outline-none bg-transparent text-[#111827] cursor-pointer truncate">
                                     <option value="">—</option>
                                     {opciones.map(o => <option key={o} value={o}>{o}</option>)}
@@ -1156,7 +1189,12 @@ export default function GeneralPage() {
                                     className="px-0 py-0">
                                     <select
                                       value={rawVal === '—' ? '' : rawVal}
-                                      onChange={e => setCelda(dep.id, col, e.target.value)}
+                                      onChange={e => {
+                                        const nuevaProy = e.target.value;
+                                        setCelda(dep.id, col, nuevaProy);
+                                        // El PROFE se deriva del proyecto: al cambiar de proyecto, se actualiza solo
+                                        if (colProfe) setCelda(dep.id, colProfe, profeDeProyecto(nuevaProy));
+                                      }}
                                       className="w-full text-[13px] font-semibold text-white py-[6px] px-2 outline-none bg-transparent cursor-pointer truncate">
                                       <option value="">—</option>
                                       {opsProy.map(o => <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o}</option>)}
@@ -1165,23 +1203,18 @@ export default function GeneralPage() {
                                 );
                               }
 
-                              // PROFE — input, letra más grande
+                              // PROFE — se DERIVA del formador asignado al proyecto (solo lectura).
+                              // Si en /usuarios cambia el profe del proyecto, aquí se refleja.
                               const esProfe = /^prof/i.test(col.trim());
                               if (esProfe) {
-                                if (soloLectura) return (
-                                  <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-2 py-[6px]">
-                                    <span className="block w-full text-[13px] font-semibold text-[#111827] truncate">{rawVal && rawVal !== '—' ? rawVal : '—'}</span>
-                                  </td>
-                                );
+                                const proyActual = getValCelda(dep, colProy).trim();
+                                const derivado   = profeDeProyecto(proyActual);
+                                const mostrar    = derivado || (rawVal && rawVal !== '—' ? rawVal : '');
                                 return (
-                                <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-0 py-0">
-                                  <input
-                                    value={rawVal === '—' ? '' : rawVal}
-                                    onChange={e => setCelda(dep.id, col, e.target.value)}
-                                    placeholder="—"
-                                    className="w-full text-[13px] font-semibold text-[#111827] py-[6px] px-2 outline-none bg-transparent truncate"
-                                  />
-                                </td>
+                                  <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-2 py-[6px]"
+                                    title="Se asigna automáticamente según el formador del proyecto (se cambia en Usuarios)">
+                                    <span className="block w-full text-[13px] font-semibold text-[#111827] truncate">{mostrar || '—'}</span>
+                                  </td>
                                 );
                               }
 

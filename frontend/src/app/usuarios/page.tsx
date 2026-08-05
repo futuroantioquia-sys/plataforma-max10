@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, CheckCircle, Plus, Eye, EyeOff, Users, X, Trash2, ChevronRight } from 'lucide-react';
 import { getProfes, saveProfes, deleteProfe, getDeportistas } from '@/lib/db';
@@ -160,6 +160,27 @@ export default function UsuariosPage() {
       document.removeEventListener('visibilitychange', onVis);
     };
   }, []);
+
+  // Migración (una sola vez): sube a la BD los nombres de formador que estaban solo en la
+  // configuración local del navegador. Así aparecen en todas partes (incluido Vercel).
+  // En un navegador sin esa config local, no encuentra nada y no hace nada.
+  const migradoNombresRef = useRef(false);
+  useEffect(() => {
+    if (migradoNombresRef.current) return;
+    if (profes.length === 0 || proyRows.length === 0) return;
+    const actualizados = profes.map(p => {
+      if (p.nombre && p.nombre.trim()) return p;
+      const nm = nombreDeProfe(p);
+      return nm ? { ...p, nombre: nm } : p;
+    });
+    const cambio = actualizados.some((p, i) => (p.nombre ?? '') !== (profes[i].nombre ?? ''));
+    migradoNombresRef.current = true;
+    if (cambio) {
+      setProfes(actualizados);
+      saveProfes(actualizados).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profes, proyRows, meta]);
 
   // ── Helpers ────────────────────────────────────────────────────
   function metaKey(row: ProyRow): string {
