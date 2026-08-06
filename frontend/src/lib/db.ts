@@ -1890,6 +1890,55 @@ export async function deleteProfe(id: string): Promise<{ ok: boolean; msg?: stri
   }
 }
 
+// ── ADMINISTRADORES (contabilidad / deportivo) ────────────────
+export interface Admin {
+  id:      string;
+  usuario: string;                          // login en mayúsculas
+  clave:   string;                          // contraseña
+  nombre:  string;                          // nombre visible
+  tipo:    'contabilidad' | 'deportivo';    // define los permisos
+}
+
+export async function getAdmins(): Promise<Admin[]> {
+  try {
+    const { data, error } = await supabase()
+      .from('admins')
+      .select('id,usuario,clave,nombre,tipo')
+      .order('usuario');
+    if (error) { console.warn('[db] getAdmins:', error.message); return []; }
+    return (data || []).map((r: any) => ({
+      id:      r.id ?? '',
+      usuario: String(r.usuario ?? '').toUpperCase(),
+      clave:   r.clave ?? '',
+      nombre:  r.nombre ?? '',
+      tipo:    r.tipo === 'contabilidad' ? 'contabilidad' : 'deportivo',
+    }));
+  } catch (e: any) { console.error('[db] getAdmins:', e?.message); return []; }
+}
+
+export async function saveAdmin(a: Admin): Promise<{ ok: boolean; msg?: string }> {
+  const row = {
+    id:      a.id,
+    usuario: String(a.usuario || '').trim().toUpperCase(),
+    clave:   String(a.clave || '').trim(),
+    nombre:  String(a.nombre || '').trim(),
+    tipo:    a.tipo === 'contabilidad' ? 'contabilidad' : 'deportivo',
+  };
+  try {
+    const { error } = await supabase().from('admins').upsert(row, { onConflict: 'id' });
+    if (error) { console.error('[db] saveAdmin:', error.message); return { ok: false, msg: error.message }; }
+    return { ok: true };
+  } catch (e: any) { console.error('[db] saveAdmin:', e?.message); return { ok: false, msg: String(e?.message ?? e) }; }
+}
+
+export async function deleteAdmin(id: string): Promise<{ ok: boolean; msg?: string }> {
+  try {
+    const { error } = await supabase().from('admins').delete().eq('id', id);
+    if (error) { console.error('[db] deleteAdmin:', error.message); return { ok: false, msg: error.message }; }
+    return { ok: true };
+  } catch (e: any) { console.error('[db] deleteAdmin:', e?.message); return { ok: false, msg: String(e?.message ?? e) }; }
+}
+
 // ── EVALUACIONES (Valoración deportiva — historial real) ───────
 
 export interface Evaluacion {

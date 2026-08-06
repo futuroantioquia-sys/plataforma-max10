@@ -38,13 +38,32 @@ export async function POST(request: NextRequest) {
   const usuario = String(body?.usuario ?? '').trim().toUpperCase();
   const clave   = String(body?.clave ?? '').trim();
 
-  // ── ADMINISTRADOR / CONTABILIDAD (Diana) ──
+  // ── ADMINISTRADOR / CONTABILIDAD / DEPORTIVO ──
   if (tab === 'admin') {
+    // ADMON: super-administrador maestro (siempre disponible, no editable desde la app)
     if (usuario === ADMIN_USER && clave === ADMIN_PASS) {
-      return darSesion('1', { rol: 'administracion' });
+      return darSesion('1', { rol: 'administracion', nombre: 'Administrador' });
     }
+    // Administradores dinámicos (tabla admins): tipo 'contabilidad' o 'deportivo'
+    try {
+      const res = await fetch(
+        `${SB_URL}/rest/v1/admins?select=usuario,clave,nombre,tipo`,
+        { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, cache: 'no-store' },
+      );
+      if (res.ok) {
+        const lista: any[] = await res.json();
+        const a = Array.isArray(lista)
+          ? lista.find(x => String(x?.usuario ?? '').toUpperCase() === usuario && String(x?.clave ?? '') === clave)
+          : undefined;
+        if (a) {
+          const tipo = a.tipo === 'contabilidad' ? 'contabilidad' : 'deportivo';
+          return darSesion(tipo, { rol: tipo, nombre: a.nombre || '' });
+        }
+      }
+    } catch { /* cae al respaldo / 401 */ }
+    // Respaldo de emergencia para Diana si la tabla no responde
     if (usuario === DIANA_USER && clave === DIANA_PASS) {
-      return darSesion('contabilidad', { rol: 'contabilidad' });
+      return darSesion('contabilidad', { rol: 'contabilidad', nombre: 'Diana' });
     }
     return NextResponse.json({ ok: false }, { status: 401 });
   }

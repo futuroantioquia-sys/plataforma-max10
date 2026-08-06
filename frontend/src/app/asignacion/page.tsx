@@ -43,6 +43,7 @@ function colJornada(d: Deportista) {
 function colAno(d: Deportista)      { return getCol(d, /^a[ñn]o$/i); }
 function colMes(d: Deportista)      { return getCol(d, /^mes$/i); }
 function colDia(d: Deportista)      { return getCol(d, /^d[ií]a$/i) || getCol(d, /^dia_nac/i); }
+function colProfe(d: Deportista)    { return getCol(d, /^profe/i); }
 
 /** Sin proyecto asignado */
 function sinProyecto(d: Deportista): boolean {
@@ -70,6 +71,84 @@ type AsignForm = {
   proyecto:  string;
   proyNuevo: string;
 };
+
+/** Info agregada de cada grupo (proyecto), a partir de los deportistas ya asignados. */
+type Grupo = { proy: string; programa: string; sede: string; jornada: string; profe: string; count: number; anios: string[] };
+
+function topKey(o: Record<string, number>): string {
+  const e = Object.entries(o).sort((a, b) => b[1] - a[1])[0];
+  return e ? e[0] : '';
+}
+
+function getGruposInfo(todos: Deportista[]): Grupo[] {
+  const map: Record<string, { programa: string; sede: Record<string, number>; jornada: Record<string, number>; profe: Record<string, number>; anios: Set<string>; count: number }> = {};
+  todos.filter(d => !sinProyecto(d)).forEach(d => {
+    const proy = colProy(d).trim();
+    if (!proy) return;
+    if (!map[proy]) map[proy] = { programa: '', sede: {}, jornada: {}, profe: {}, anios: new Set<string>(), count: 0 };
+    const g = map[proy];
+    g.count++;
+    if (!g.programa) g.programa = colPrograma(d).trim();
+    const s = colSede(d).trim();    if (s)  g.sede[s]    = (g.sede[s]    || 0) + 1;
+    const j = colJornada(d).trim(); if (j)  g.jornada[j] = (g.jornada[j] || 0) + 1;
+    const p = colProfe(d).trim();   if (p)  g.profe[p]   = (g.profe[p]   || 0) + 1;
+    const y = colAno(d).match(/(19|20)\d{2}/); if (y) g.anios.add(y[0]);
+  });
+  return Object.entries(map).map(([proy, g]) => ({
+    proy, programa: g.programa, sede: topKey(g.sede), jornada: topKey(g.jornada), profe: topKey(g.profe),
+    count: g.count, anios: Array.from(g.anios).sort(),
+  })).sort((a, b) => a.proy.localeCompare(b.proy, 'es', { numeric: true }));
+}
+
+/** Tarjeta de un grupo sugerido. */
+function GrupoCard({ g, tag, activo, onClick }: { g: Grupo; tag: 'ok' | 'alt' | 'alt2'; activo: boolean; onClick: () => void }) {
+  const tagInfo = tag === 'ok'
+    ? { txt: 'Jornada exacta', cls: 'bg-[#16a34a] text-white' }
+    : tag === 'alt'
+      ? { txt: 'Otra jornada',  cls: 'bg-amber-100 text-amber-700' }
+      : { txt: 'Otra sede',     cls: 'bg-blue-100 text-blue-700' };
+  return (
+    <button type="button" onClick={onClick}
+      className={cn(
+        'text-left border rounded-lg p-2 transition-all w-full',
+        activo
+          ? 'border-[#16a34a] bg-[#f0fdf4] ring-2 ring-[#16a34a]'
+          : 'border-gray-200 hover:border-[#16a34a] hover:-translate-y-0.5 hover:shadow-md',
+        tag !== 'ok' && !activo ? 'opacity-70' : '',
+      )}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-black text-gray-900 text-sm">{g.proy}</span>
+        <span className="text-[9px] font-black text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">👤 {g.count}</span>
+      </div>
+      <div className="text-[10px] text-gray-500 mt-0.5 leading-snug">
+        <span className="font-bold text-gray-700">{g.programa || '—'}</span>{g.sede ? ' · ' + g.sede : ''}
+        {g.jornada && <><br />{g.jornada}</>}
+        {g.profe && <> · {g.profe}</>}
+      </div>
+      {g.anios.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Años</span>
+          {g.anios.map(a => (
+            <span key={a} className="text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">{a}</span>
+          ))}
+        </div>
+      )}
+      <span className={cn('inline-block mt-1.5 text-[8px] font-black px-1.5 py-0.5 rounded-full', tagInfo.cls)}>{tagInfo.txt}</span>
+    </button>
+  );
+}
+
+function SeccionGrupos({ titulo, grupos, tag, onPick, sel }: { titulo: string; grupos: Grupo[]; tag: 'ok' | 'alt' | 'alt2'; onPick: (g: Grupo) => void; sel: string }) {
+  if (!grupos.length) return null;
+  return (
+    <div>
+      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{titulo}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
+        {grupos.map(g => <GrupoCard key={g.proy} g={g} tag={tag} activo={sel === g.proy} onClick={() => onPick(g)} />)}
+      </div>
+    </div>
+  );
+}
 
 const G_COL   = ['CÓDIGO','NOMBRE','AÑO','MES','DÍA','SEDE ESCOGIDA','JORNADA','PROGRAMA ESCOGIDO'];
 const G_STYLE  = { background: '#16a34a', color: 'white', border: '1px solid white', padding: '8px 10px', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', whiteSpace: 'nowrap' as const, textAlign: 'center' as const };
@@ -109,6 +188,38 @@ export default function AsignacionPage() {
       colPrograma(d).toLowerCase().includes(q)
     );
   }, [sinProyectoLista, busqueda]);
+
+  // Info de todos los grupos existentes (para sugerir según programa · sede · jornada)
+  const gruposInfo = useMemo(() => getGruposInfo(todos), [todos]);
+
+  // Grupos sugeridos. FILTROS en orden: 1) PROGRAMA  2) SEDE  3) AÑO cercano (±1).
+  // Si el programa o la sede no coinciden, o el año no es cercano, el grupo NO aparece.
+  const sugeridos = useMemo(() => {
+    if (!selected) return null;
+    const prog = colPrograma(selected).trim();
+    const sede = colSede(selected).trim();
+    const jor  = colJornada(selected).trim();
+    const anioTxt = (colAno(selected).match(/(19|20)\d{2}/) || [])[0] || '';
+    const anioDep = anioTxt ? parseInt(anioTxt, 10) : 0;
+    const up = (s: string) => s.trim().toUpperCase();
+    // ±1 año: un 2018 acepta grupos con 2017, 2018 o 2019.
+    const anioCerca = (g: Grupo) => {
+      if (!anioDep) return true;
+      return g.anios.some(a => { const n = parseInt(a, 10); return !!n && Math.abs(n - anioDep) <= 1; });
+    };
+    const base = (prog && sede)
+      ? gruposInfo.filter(g => up(g.programa) === up(prog) && up(g.sede) === up(sede) && anioCerca(g))
+      : [];
+    const exactos = base.filter(g => jor && up(g.jornada) === up(jor));
+    const otros   = base.filter(g => !(jor && up(g.jornada) === up(jor)));
+    return { prog, sede, jor, anio: anioTxt, exactos, otros, total: base.length };
+  }, [selected, gruposInfo]);
+
+  // Al elegir un grupo sugerido, se autocompleta el formulario (solo falta confirmar).
+  function elegirGrupo(g: Grupo) {
+    setError('');
+    setForm(f => ({ ...f, programa: g.programa || f.programa, proyecto: g.proy, proyNuevo: '' }));
+  }
 
   function seleccionar(dep: Deportista) {
     setSelected(dep);
@@ -173,7 +284,7 @@ export default function AsignacionPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-3 sm:px-4 py-4 space-y-4">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 space-y-4">
 
         {exito && (
           <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-5 py-4">
@@ -191,10 +302,10 @@ export default function AsignacionPage() {
             <p className="text-gray-400 text-sm mt-1">No hay deportistas sin proyecto.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
 
             {/* ── Lista con tabla ── */}
-            <div className="xl:col-span-2 space-y-3">
+            <div className="space-y-3">
 
               {/* Buscador */}
               <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 px-3 py-2 shadow-sm">
@@ -255,6 +366,34 @@ export default function AsignacionPage() {
                   </table>
                 </div>
               </div>
+
+              {/* ── Panel flotante: grupos sugeridos (programa · sede · jornada) ── */}
+              {selected && sugeridos && (
+                <div className="rounded-2xl border border-green-200 bg-white shadow-lg overflow-hidden animate-fade-up">
+                  <div className="px-4 py-3 flex items-center gap-2 flex-wrap" style={{ background: 'linear-gradient(90deg,#065f46,#16a34a)' }}>
+                    <span>🎯</span>
+                    <span className="text-white font-black text-sm">Grupos sugeridos</span>
+                    {sugeridos.prog && <span className="text-[10px] font-black text-white px-2.5 py-0.5 rounded-full" style={{ background: '#16a34a' }}>Programa: {sugeridos.prog}</span>}
+                    {sugeridos.sede && <span className="text-[10px] font-black text-white px-2.5 py-0.5 rounded-full" style={{ background: '#1d4ed8' }}>Sede: {sugeridos.sede}</span>}
+                    {sugeridos.anio && <span className="text-[10px] font-black text-white px-2.5 py-0.5 rounded-full" style={{ background: '#7c3aed' }}>Año: {sugeridos.anio} (±1)</span>}
+                    {sugeridos.jor && <span className="text-[10px] font-black text-white px-2.5 py-0.5 rounded-full" style={{ background: '#4b5563' }}>Jornada: {sugeridos.jor}</span>}
+                  </div>
+                  <div className="p-3">
+                    {!sugeridos.prog ? (
+                      <p className="text-center text-gray-400 text-sm font-semibold py-6">Este deportista no tiene programa escogido. Elige primero el programa en el panel de la derecha.</p>
+                    ) : !sugeridos.sede ? (
+                      <p className="text-center text-gray-400 text-sm font-semibold py-6">Este deportista no tiene sede escogida, no se pueden sugerir grupos por sede.</p>
+                    ) : sugeridos.total === 0 ? (
+                      <p className="text-center text-gray-400 text-sm font-semibold py-6">No hay grupos en <b>{sugeridos.prog}</b> · <b>{sugeridos.sede}</b> con edades cercanas a <b>{sugeridos.anio || '—'}</b>.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        <SeccionGrupos titulo="✅ Coinciden con la jornada" grupos={sugeridos.exactos} tag="ok"  onPick={elegirGrupo} sel={form.proyecto} />
+                        <SeccionGrupos titulo="Otra jornada"                grupos={sugeridos.otros}   tag="alt" onPick={elegirGrupo} sel={form.proyecto} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── Panel de asignación ── */}

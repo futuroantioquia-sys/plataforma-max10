@@ -157,7 +157,7 @@ export default function PerfilDeportista() {
   const { id } = useParams<{ id: string }>();
   const usuario = useAuthStore(s => s.usuario);
   const esPadre    = usuario?.rol === 'padre';
-  const esAdmin    = usuario?.rol === 'administracion';
+  const esAdmin    = usuario?.rol === 'administracion' || usuario?.rol === 'deportivo';
   const esProfesor = usuario?.rol === 'profesor';
 
   const [dep,           setDep]          = useState<Deportista | null>(null);

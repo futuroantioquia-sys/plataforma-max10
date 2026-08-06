@@ -24,6 +24,19 @@ export function esContabilidad(): boolean {
   try { return localStorage.getItem('futuro-rol') === 'contabilidad'; } catch { return false; }
 }
 
+/** Administrador deportivo: acceso total EXCEPTO finanzas. */
+export function esDeportivo(): boolean {
+  if (getSesion() === 'deportivo') return true;
+  try { return localStorage.getItem('futuro-rol') === 'deportivo'; } catch { return false; }
+}
+
+/** Super-administrador (ADMON) — único que gestiona administradores. */
+export function esSuperAdmin(): boolean {
+  const s = getSesion();
+  if (s === '1' || s === 'administracion') return true;
+  try { return localStorage.getItem('futuro-rol') === 'administracion'; } catch { return false; }
+}
+
 /** ¿La ruta actual pertenece a Finanzas? (incluye subrutas como /pagos/importar-valores) */
 export function rutaEsFinanzas(pathname: string): boolean {
   return RUTAS_FINANZAS.some(r => pathname === r || pathname.startsWith(r + '/'));

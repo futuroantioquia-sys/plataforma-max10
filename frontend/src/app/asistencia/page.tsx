@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import React, { Suspense, useState, useMemo, useEffect, useCallback, memo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp, Home, LogOut } from 'lucide-react';
-import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, getAsistenciaDeportistas, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha, getCalificaciones, saveCalificacion, getJornadaMes, saveJornadaMes } from '@/lib/db';
+import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, getAsistenciaDeportistas, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha, getCalificaciones, saveCalificacion, getJornadaMes, saveJornadaMes, getProfes } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -181,6 +181,18 @@ function AsistenciaInner() {
   const [esProfe,        setEsProfe]        = useState(false);
   const [proyectosProfe, setProyectosProfe] = useState<string[]>([]);
   const [nombreProfe,    setNombreProfe]    = useState('Profe');
+  // Nombre del formador (nombre completo) por proyecto — para el subtítulo del grupo
+  const [formadorPorProy, setFormadorPorProy] = useState<Record<string, string>>({});
+  useEffect(() => {
+    getProfes().then(lista => {
+      const m: Record<string, string> = {};
+      (lista || []).forEach((p: any) => (p.proyectos || []).forEach((pr: string) => {
+        const k = String(pr).trim().toUpperCase();
+        if (k && !m[k]) m[k] = (p.nombre && p.nombre.trim()) ? p.nombre.trim() : (p.usuario || '');
+      }));
+      setFormadorPorProy(m);
+    }).catch(() => {});
+  }, []);
 
   const [fotoProfe, setFotoProfe] = useState('');
   useEffect(() => {
@@ -1003,6 +1015,16 @@ function AsistenciaInner() {
               </details>
 
             </div>
+
+            {/* Formador del grupo seleccionado (debajo de Programa y Proyecto) */}
+            {!esProfe && proyecto && formadorPorProy[proyecto.trim().toUpperCase()] && (
+              <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Formador</span>
+                <span className="inline-flex items-center bg-[#16a34a] text-white text-sm font-black px-3 py-1 rounded-lg">
+                  {formadorPorProy[proyecto.trim().toUpperCase()]}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

@@ -46,24 +46,28 @@ export default function LoginPage() {
         });
         const data = await r.json().catch(() => ({} as any));
         if (r.ok && data?.ok) {
-          const esContab = data.rol === 'contabilidad';
+          const rolSrv = data.rol === 'contabilidad' ? 'contabilidad'
+                       : data.rol === 'deportivo'    ? 'deportivo'
+                       : 'administracion';
           try {
             localStorage.removeItem('futuro-profe-proyectos');
             localStorage.removeItem('futuro-profe-nombre');
           } catch {}
+          const nombreSrv = data.nombre
+            || (rolSrv === 'contabilidad' ? 'Diana' : rolSrv === 'deportivo' ? 'Administrador Deportivo' : 'Administrador');
           useAuthStore.setState({
             usuario: {
-              id:       esContab ? 'contab-diana' : 'admin-1',
-              email:    esContab ? 'diana@futuroantioquia.com' : 'admin@futuroantioquia.com',
-              nombre:   esContab ? 'Diana' : 'Administrador',
-              apellido: esContab ? 'Contabilidad' : '',
-              rol:      (esContab ? 'contabilidad' : 'administracion') as any,
+              id:       rolSrv === 'contabilidad' ? 'contab-diana' : rolSrv === 'deportivo' ? 'admin-dep' : 'admin-1',
+              email:    rolSrv === 'contabilidad' ? 'diana@futuroantioquia.com' : 'admin@futuroantioquia.com',
+              nombre:   nombreSrv,
+              apellido: '',
+              rol:      rolSrv as any,
               activo:   true,
               academia: { id: '1', nombre: 'Futuro Antioquia' },
             },
             cargando: false, error: null,
           });
-          try { localStorage.setItem('futuro-rol', esContab ? 'contabilidad' : 'administracion'); } catch {}
+          try { localStorage.setItem('futuro-rol', rolSrv); } catch {}
           router.push('/dashboard');
         } else {
           setErrLocal('Usuario o contraseña incorrectos');

@@ -48,6 +48,22 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Administrador DEPORTIVO: acceso total EXCEPTO Finanzas
+  if (rol === 'deportivo') {
+    const finanzas = ['/pagos', '/pagos-pendientes', '/productos'];
+    const esFinanzas = finanzas.some(r => pathname === r || pathname.startsWith(r + '/'));
+    if (esFinanzas) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // Gestión de administradores: SOLO el super-administrador (ADMON, rol '1')
+  if (pathname === '/administradores' || pathname.startsWith('/administradores/')) {
+    if (rol !== '1') {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
   return NextResponse.next();
 }
 

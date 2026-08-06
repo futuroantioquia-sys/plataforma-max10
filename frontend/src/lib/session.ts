@@ -23,7 +23,7 @@ export const DUR_SEG = 24 * 60 * 60;
 export const COOKIE_LEGIBLE = 'futuro-session';
 export const COOKIE_FIRMA   = 'fa-sig';
 
-const ROLES_VALIDOS = ['1', 'contabilidad', 'profesor', 'deportista'];
+const ROLES_VALIDOS = ['1', 'contabilidad', 'deportivo', 'profesor', 'deportista'];
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();

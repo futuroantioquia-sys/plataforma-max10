@@ -6,9 +6,10 @@ import {
   Users, DollarSign, Calendar,
   Star, MessageCircle, Clipboard, Activity, ClipboardList, UserPlus, LayoutList,
   Link2, Copy, Check, QrCode, BarChart3, Trophy, Upload, FolderKanban,
-  LogOut, Zap, Shield, Dumbbell, HardHat, Clock,
+  LogOut, Zap, Shield, Dumbbell, HardHat, Clock, UserCog,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
+import { esSuperAdmin, esDeportivo } from '@/lib/permisos';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
 import { getDeportistas, countSoportesPendientes, countLibroPagos, getResumenVisitas, getVisitasPorDia } from '@/lib/db';
@@ -252,6 +253,10 @@ function DashboardAdmin() {
   const [pendientesAsign,    setPendientesAsign]    = useState(0);
   const [pendientesSoportes, setPendientesSoportes] = useState(0);
   const [pagosCargados,      setPagosCargados]      = useState(0);
+  // Rol (se resuelve en cliente para evitar desajustes de hidratación)
+  const [esSuper, setEsSuper] = useState(false); // ADMON → gestiona administradores
+  const [esDep,   setEsDep]   = useState(false); // deportivo → sin finanzas
+  useEffect(() => { setEsSuper(esSuperAdmin()); setEsDep(esDeportivo()); }, []);
 
   useEffect(() => {
     // Refresca los contadores (asignación, soportes por confirmar, pagos cargados).
@@ -299,7 +304,9 @@ function DashboardAdmin() {
 
       <div className="divider-fade" />
 
-      {/* Categoría: Finanzas */}
+      {/* Categoría: Finanzas — oculta para el Administrador Deportivo */}
+      {!esDep && (
+      <>
       <CategoriaSection emoji="💰" titulo="Finanzas" color="azul" delay={200}>
         <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="azul" />
         <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" badge={pagosCargados} />
@@ -308,6 +315,8 @@ function DashboardAdmin() {
       </CategoriaSection>
 
       <div className="divider-fade" />
+      </>
+      )}
 
       {/* Categoría: Seguimiento */}
       <CategoriaSection emoji="📊" titulo="Seguimiento" color="purple" delay={300}>
@@ -323,6 +332,9 @@ function DashboardAdmin() {
 
       {/* Categoría: Gestión */}
       <CategoriaSection emoji="⚙️" titulo="Gestión" color="teal" delay={400}>
+        {esSuper && (
+          <AccesoCard titulo="Administradores" icono={UserCog} href="/administradores" descripcion="Crear y editar administradores" color="teal" />
+        )}
         <AccesoCard titulo="Info Proyectos y Formadores" icono={Shield} href="/usuarios" descripcion="Profes, sedes y proyectos" color="teal" />
         <AccesoCard titulo="Gestión de Valoración" icono={Star} href="/gestion-valoracion" descripcion="Editar textos de los niveles" color="teal" />
         <AccesoCard titulo="Mensajes"            icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"    color="teal" />
@@ -652,6 +664,8 @@ function DashboardInner() {
   const vistaPorRol: Record<string, JSX.Element> = {
     administracion: <DashboardAdmin />,
     contable:       <DashboardAdmin />,
+    contabilidad:   <DashboardAdmin />,
+    deportivo:      <DashboardAdmin />,
     profesor:       <DashboardProfesor />,
     padre:          <DashboardPadre />,
     deportista:     <DashboardPadre />,
