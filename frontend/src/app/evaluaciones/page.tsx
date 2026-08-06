@@ -706,6 +706,47 @@ function ValoracionPageInner() {
   const codParamAplicado = useRef(false);   // aplicar ?cod= una sola vez
   const autoCargadoCod   = useRef('');       // código cuya última evaluación ya se auto-cargó
   const textosManual     = useRef(false);    // el profe editó a mano logros/objetivos → no auto-generar
+  // Barra de herramientas SIEMPRE fija arriba (fixed no depende del overflow del padre)
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarH, setToolbarH] = useState(52);
+  const [scrolled, setScrolled] = useState(false); // móvil: barra compacta al ir bajando
+  // Detecta el scroll de CUALQUIER contenedor (captura) para colapsar la barra en móvil
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      const t: any = e.target;
+      const st = (t === document || t === window || t === document.documentElement)
+        ? (window.scrollY || document.documentElement.scrollTop || 0)
+        : (t?.scrollTop || 0);
+      setScrolled(st > 28);
+    };
+    document.addEventListener('scroll', onScroll, true);
+    return () => document.removeEventListener('scroll', onScroll, true);
+  }, []);
+  // Mide la altura de la barra fija (cambia entre completa/compacta) para el espaciador
+  useEffect(() => {
+    const medir = () => { if (toolbarRef.current) setToolbarH(toolbarRef.current.offsetHeight); };
+    medir();
+    const t = setTimeout(medir, 80);
+    window.addEventListener('resize', medir);
+    return () => { window.removeEventListener('resize', medir); clearTimeout(t); };
+  }, [scrolled, historial.length]);
+  // Descargar / imprimir la valoración (validando campos)
+  function descargarPDF() {
+    setIntentoDescarga(true);
+    const camposVacios = camposFaltantes();
+    if (camposVacios.length > 0) {
+      alert(`Completa los siguientes campos antes de descargar:\n\n• ${camposVacios.join('\n• ')}`);
+      return;
+    }
+    const codigo  = data.codigo.trim();
+    const nombre  = data.nombre.trim().replace(/\s+/g, '-');
+    const informe = data.numeroInforme.trim();
+    const titulo  = `${codigo}_${nombre}_Informe-${informe}`;
+    const prev    = document.title;
+    document.title = titulo;
+    window.print();
+    setTimeout(() => { document.title = prev; }, 1000);
+  }
   useEffect(() => {
     try {
       const raw = localStorage.getItem('futuro-profe-nombre');
@@ -1090,47 +1131,58 @@ function ValoracionPageInner() {
         <VistaPadres data={data} nombreEntrenador={nombreEntrenador} onClose={() => setVistaGamificada(false)} />
       )}
 
-      {/* Barra herramientas */}
-      <div className="print:hidden" style={{ position: 'sticky', top: 0, zIndex: 20, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>← Volver al deportista</button>
-        <span style={{ fontWeight: 800, color: '#111', flex: 1, fontSize: 15 }}>Valoración del Deportista</span>
-        {historial.length > 0 && (
-          <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-            <History size={13} /> Historial ({historial.length})
-          </button>
-        )}
-        <button onClick={nuevaValoracion} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-          ＋ Nueva valoración
-        </button>
-        <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-          <RefreshCw size={13} /> Limpiar
-        </button>
-        <button onClick={() => { textosManual.current = false; generarTextos(); }} title="Rellena Logros, Retos y Logros y Retos del Equipo según la valoración"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-          <RefreshCw size={13} /> Regenerar textos
-        </button>
-        <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.verde, color: '#fff', cursor: guardando ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, opacity: guardando ? 0.7 : 1 }}>
-          <Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}
-        </button>
-        <button onClick={() => {
-          setIntentoDescarga(true);
-          const camposVacios = camposFaltantes();
-          if (camposVacios.length > 0) {
-            alert(`Completa los siguientes campos antes de descargar:\n\n• ${camposVacios.join('\n• ')}`);
-            return;
-          }
-          const codigo  = data.codigo.trim();
-          const nombre  = data.nombre.trim().replace(/\s+/g, '-');
-          const informe = data.numeroInforme.trim();
-          const titulo  = `${codigo}_${nombre}_Informe-${informe}`;
-          const prev    = document.title;
-          document.title = titulo;
-          window.print();
-          setTimeout(() => { document.title = prev; }, 1000);
-        }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.naranja, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-          <Download size={13} /> Descargar
-        </button>
+      {/* Barra herramientas — FIJA arriba. En móvil se organiza y se colapsa al bajar. */}
+      <div ref={toolbarRef} className="print:hidden" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: '#fff', borderBottom: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+
+        {/* ===== ESCRITORIO: barra completa siempre ===== */}
+        <div className="hidden sm:flex" style={{ alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 16px' }}>
+          <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>← Volver al deportista</button>
+          <span style={{ fontWeight: 800, color: '#111', flex: 1, fontSize: 15 }}>Valoración del Deportista</span>
+          {historial.length > 0 && (
+            <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+              <History size={13} /> Historial ({historial.length})
+            </button>
+          )}
+          <button onClick={nuevaValoracion} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>＋ Nueva valoración</button>
+          <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}><RefreshCw size={13} /> Limpiar</button>
+          <button onClick={() => { textosManual.current = false; generarTextos(); }} title="Rellena Logros, Retos y Logros y Retos del Equipo según la valoración" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}><RefreshCw size={13} /> Regenerar textos</button>
+          <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.verde, color: '#fff', cursor: guardando ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, opacity: guardando ? 0.7 : 1 }}><Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}</button>
+          <button onClick={descargarPDF} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.naranja, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}><Download size={13} /> Descargar</button>
+        </div>
+
+        {/* ===== MÓVIL ===== */}
+        <div className="sm:hidden">
+          {!scrolled ? (
+            /* Completa y organizada (arriba) */
+            <div style={{ padding: '8px 12px 10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>← Volver al deportista</button>
+                <span style={{ fontWeight: 900, color: '#111', fontSize: 14 }}>· Valoración</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
+                <button onClick={nuevaValoracion} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', fontSize: 12, fontWeight: 800 }}>＋ Nueva</button>
+                <button onClick={() => { textosManual.current = false; generarTextos(); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', fontSize: 12, fontWeight: 800 }}><RefreshCw size={13} /> Regenerar</button>
+                <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: 'none', background: C.verde, color: '#fff', fontSize: 12, fontWeight: 800, opacity: guardando ? 0.7 : 1 }}><Save size={13} /> {guardado ? 'Guardado' : guardando ? '...' : 'Guardar'}</button>
+                <button onClick={descargarPDF} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: 'none', background: C.naranja, color: '#fff', fontSize: 12, fontWeight: 800 }}><Download size={13} /> Descargar</button>
+                <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #e5e7eb', background: '#f9fafb', color: '#374151', fontSize: 12, fontWeight: 800 }}><RefreshCw size={13} /> Limpiar</button>
+                {historial.length > 0 && (
+                  <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #e5e7eb', background: '#f9fafb', color: '#374151', fontSize: 12, fontWeight: 800 }}><History size={13} /> Historial</button>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Compacta (al bajar): Atrás · Guardar · Limpiar */
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, padding: '10px 12px' }}>
+              <button onClick={volverAlDeportista} style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 5, color: '#6b7280', fontSize: 13, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 2px' }}>← Atrás</button>
+              <button onClick={guardar} disabled={guardando} style={{ justifySelf: 'center', display: 'inline-flex', alignItems: 'center', gap: 6, background: C.verde, color: '#fff', border: 'none', borderRadius: 9, padding: '9px 24px', fontSize: 14, fontWeight: 800, opacity: guardando ? 0.7 : 1 }}><Save size={14} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}</button>
+              <button onClick={limpiar} style={{ justifySelf: 'end', display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 9, padding: '8px 14px', fontSize: 13, fontWeight: 700 }}><RefreshCw size={13} /> Limpiar</button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Espaciador: compensa la altura de la barra fija para que no tape el contenido */}
+      <div className="print:hidden" style={{ height: toolbarH }} />
 
       {/* HISTORIAL DE EVALUACIONES DEL DEPORTISTA */}
       {verHistorial && historial.length > 0 && (
