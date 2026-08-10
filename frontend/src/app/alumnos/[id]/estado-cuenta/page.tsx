@@ -8,7 +8,7 @@ import LoadingBall from '@/components/LoadingBall';
 import { cn } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
-import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre } from '@/lib/db';
+import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre, updateColumnasDeportista, enviarMensaje } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
@@ -49,7 +49,7 @@ const VC_KEYS: Record<string, string> = {
 type PagoRow = {
   detalle: string;
   vCargado: string;
-  estado: 'PAGÓ' | 'PEND' | 'PROX' | 'ELIM';
+  estado: 'PAGÓ' | 'PEND' | 'PROX' | 'ELIM' | 'NOPAGA';
   destino: string;
   fecha: string;
   vPagado: string;
@@ -210,6 +210,10 @@ function EstadoCuentaInner() {
   const [elimConfirm,   setElimConfirm]   = useState<number | null>(null);
   const [anio,     setAnio]    = useState(new Date().getFullYear());
   const [confirmRevert, setConfirmRevert] = useState<number | null>(null);
+  const [malDescModal,  setMalDescModal]  = useState<number | null>(null); // modal mal descuento (validar/revertir)
+  const [editMens,      setEditMens]      = useState(false);   // editando la mensualidad del encabezado
+  const [mensInput,     setMensInput]     = useState('');
+  const [guardandoMens, setGuardandoMens] = useState(false);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [pagoModalIdx,  setPagoModalIdx]  = useState<number | null>(null);
   const fotoInputRef    = useRef<HTMLInputElement>(null);
@@ -221,6 +225,14 @@ function EstadoCuentaInner() {
   const [showNombreModal,  setShowNombreModal]  = useState(false);
   const [mesesSelSoporte,  setMesesSelSoporte]  = useState<string[]>([]);
   const [toastSoporte,     setToastSoporte]     = useState(false);
+
+  // ── Mensajes del calidoso: Área de Pagos / Formador / Director ──
+  type CanalMsg = { titulo: string; para: 'institucion' | 'profesor'; prefijo: string; color: string };
+  const [msgDestino,     setMsgDestino]     = useState<CanalMsg | null>(null);
+  const [pagosMsgTexto,  setPagosMsgTexto]  = useState('');
+  const [pagosMsgWa,     setPagosMsgWa]     = useState('');
+  const [enviandoPagos,  setEnviandoPagos]  = useState(false);
+  const [pagosMsgOk,     setPagosMsgOk]     = useState(false);
 
   // ── OTROS PAGOS ────────────────────────────────────────────────
   const xlsxInputRef            = useRef<HTMLInputElement>(null);
@@ -400,8 +412,15 @@ function EstadoCuentaInner() {
           }
         }
 
-        /* Override: ediciones manuales bajo dep.id */
+        /* Override: ediciones manuales bajo dep.id.
+           PERO un PAGÓ real (publicado desde el libro bajo el código) NO puede ser pisado
+           por una fila vieja PENDIENTE/PRÓX guardada bajo el id interno. Así, si el pago ya
+           se subió, siempre se ve pagado (arregla "no sube el pago al estado"). */
         for (const r of ((allPagos as AllPagos)[id] ?? [])) {
+          const prev = mergeMap.get(r.detalle);
+          // Un reverso INTENCIONAL (destino 'REVERT') sí puede volver a pendiente un PAGÓ;
+          // una fila pendiente vieja/en blanco (destino vacío) NO pisa un PAGÓ real.
+          if (prev && prev.estado === 'PAGÓ' && r.estado !== 'PAGÓ' && r.destino !== 'REVERT') continue;
           mergeMap.set(r.detalle, r);
         }
 
@@ -463,11 +482,14 @@ function EstadoCuentaInner() {
 
       if (!vcRow) return;
 
-      /* Solo actualizar filas donde vCargado esté vacío */
-      setPagos(prev => prev.map(row => ({
-        ...row,
-        vCargado: row.vCargado || ensurePeso(vcRow[VC_KEYS[row.detalle]]) || '',
-      })));
+      /* Solo actualizar filas donde vCargado esté vacío.
+         Los meses en NO PAGA quedan SIN cifra cargada (no se rellenan). */
+      setPagos(prev => prev.map(row => (
+        row.estado === 'NOPAGA' ? row : {
+          ...row,
+          vCargado: row.vCargado || ensurePeso(vcRow[VC_KEYS[row.detalle]]) || '',
+        }
+      )));
     }).catch(console.error);
   }, [dep]);
 
@@ -498,12 +520,21 @@ function EstadoCuentaInner() {
     }
   }
 
+  /* ─── Autorizar un mal descuento: queda PAGÓ (verde), validado (no vuelve a pendiente) ─── */
+  function autorizarDescuento(viewIdx: number) {
+    const realIdx = realIdxDe(viewIdx);
+    if (realIdx === -1) return;
+    const updated = pagos.map((r, i) => i === realIdx ? { ...r, vCargado: 'AUTORIZADO' } : r);
+    savePagos(updated);
+    setMalDescModal(null);
+  }
+
   function ejecutarRevert() {
     if (confirmRevert === null) return;
     const realIdx = realIdxDe(confirmRevert);
     if (realIdx !== -1) {
       const updated = pagos.map((r, i) =>
-        i === realIdx ? { ...r, estado: 'PEND' as const, destino: '', fecha: '', vPagado: '' } : r
+        i === realIdx ? { ...r, estado: 'PEND' as const, destino: 'REVERT', fecha: '', vPagado: '' } : r
       );
       savePagos(updated);
     }
@@ -527,17 +558,29 @@ function EstadoCuentaInner() {
     setEditForm({});
   }
 
-  /** Elimina un mes del cobro (desde el modal de PEND) */
+  /** No cobrar un mes: NO se elimina — queda en el estado de cuenta, en su orden
+   *  consecutivo, marcado en verde como "NO PAGA". */
   function eliminarMes(viewIdx: number) {
     const realIdx = realIdxDe(viewIdx);
     if (realIdx === -1) return;
     const updated = pagos.map((r, i) => i === realIdx
-      ? { ...r, estado: 'ELIM' as const, vPagado: '', destino: '', fecha: '' }
+      ? { ...r, estado: 'NOPAGA' as const, vCargado: '', vPagado: '', destino: '', fecha: '' }
       : r
     );
     savePagos(updated);
     setEditIdx(null);
     setEditForm({});
+  }
+
+  /** Revertir "NO PAGA" → vuelve a PEND (se vuelve a cobrar). */
+  function revertirNoPaga(viewIdx: number) {
+    const realIdx = realIdxDe(viewIdx);
+    if (realIdx === -1) return;
+    const updated = pagos.map((r, i) => i === realIdx
+      ? { ...r, estado: 'PEND' as const, vPagado: '', destino: '', fecha: '' }
+      : r
+    );
+    savePagos(updated);
   }
 
   /* ─── Loading ─── */
@@ -558,6 +601,43 @@ function EstadoCuentaInner() {
   const becado    = esBecado(codRaw);
   const sedeVal   = getCol(dep, /^sede/i);
 
+  /* ─── Canales de comunicación del calidoso ─── */
+  const CANALES_MSG: (CanalMsg & { emoji: string; desc: string; boton: string })[] = [
+    { titulo: 'Área de Pagos', boton: 'Escríbele al Área de Pagos',    para: 'institucion', prefijo: 'ACLARACIÓN PAGOS',   color: '#7c3aed', emoji: '💬',   desc: 'Duda, solicitud o reclamo sobre pagos.' },
+    { titulo: 'Formador',      boton: 'Escríbele al Formador de tu hijo', para: 'profesor', prefijo: 'MENSAJE AL FORMADOR', color: '#0f766e', emoji: '👨‍🏫', desc: 'Escríbele al entrenador del deportista.' },
+    { titulo: 'Director',      boton: 'Escríbele al Director',         para: 'institucion', prefijo: 'MENSAJE AL DIRECTOR', color: '#1e3a8a', emoji: '🎓',   desc: 'Comunícate con la dirección.' },
+  ];
+
+  /* ─── Enviar mensaje al canal elegido (queda en la plataforma) ─── */
+  async function enviarMensajePagos() {
+    const destino = msgDestino;
+    const texto = pagosMsgTexto.trim();
+    if (!destino) return;
+    if (!texto) { alert('Escribe tu mensaje antes de enviar.'); return; }
+    setEnviandoPagos(true);
+    const wa = pagosMsgWa.trim();
+    const textoFull = `${destino.prefijo}\n\n${texto}${wa ? `\n\nWhatsApp de contacto: ${wa}` : ''}`;
+    try {
+      // Guarda en el historial de la ficha + "mensajes por leer"
+      await enviarMensaje({
+        deportistaId: String(id ?? ''),
+        codigo: codVal,
+        nombre,
+        texto: textoFull,
+        de: 'calidoso',
+        para: destino.para,
+        proyecto,
+      });
+      setPagosMsgOk(true);
+      setPagosMsgTexto('');
+      setPagosMsgWa('');
+      setTimeout(() => { setMsgDestino(null); setPagosMsgOk(false); }, 2200);
+    } catch {
+      alert('No se pudo enviar el mensaje. Intenta de nuevo.');
+    }
+    setEnviandoPagos(false);
+  }
+
   /* ─── Tarifa mensual según programa y sede ─── */
   function calcTarifa(prog: string, sede: string): string {
     const strip = (v: string) => String(v ?? '').toLowerCase().normalize('NFD').split('').filter(
@@ -574,7 +654,22 @@ function EstadoCuentaInner() {
     if (p.includes('estimul')) return '$80.000';
     return '$138.000';
   }
-  const tarifa = calcTarifa(catVal, sedeVal);
+  // Si hay una cuota MANUAL guardada (acuerdo con la familia) manda sobre la tabla.
+  const cuotaManual = getCol(dep, /^cuota_?manual$/i);
+  const tarifa = (cuotaManual && /\d/.test(cuotaManual)) ? ensurePeso(cuotaManual) : calcTarifa(catVal, sedeVal);
+
+  /* ─── Guardar la mensualidad editada a mano (aplica en toda la plataforma) ─── */
+  async function confirmarMensualidad() {
+    if (!dep) return;
+    const limpio = String(mensInput).replace(/[^0-9]/g, '');
+    if (!limpio) { setEditMens(false); return; }
+    setGuardandoMens(true);
+    const nuevas = { ...dep._columnas, 'CUOTA_MANUAL': limpio };
+    const ok = await updateColumnasDeportista(dep.id, nuevas);
+    setGuardandoMens(false);
+    if (ok) { setDep({ ...dep, _columnas: nuevas }); setEditMens(false); }
+    else window.alert('No se pudo guardar la mensualidad. Intenta de nuevo.');
+  }
 
   /* ─── Mes de afiliación (para ocultar meses anteriores solo si se afilió en 2026) ───
      Si la afiliación es de 2025 o antes → mostrar todos los meses (mesAfilNum = 1).
@@ -589,6 +684,39 @@ function EstadoCuentaInner() {
     if (anioAfil < 2026) return 1; // matriculado en 2025 o antes → todos los meses
     return mes;
   })();
+
+  /* ─── PRONTO PAGO: ¿el descuento fue mal tomado? → naranja "PAGÓ CON MAL DESCUENTO" ───
+     Verde (ok) si: pagó completo o más; o pagó el 90% (pronto pago) HASTA EL 5 del mes y
+     estando AL DÍA (sin meses anteriores en mora). Naranja si tomó descuento pero pagó
+     del 6 en adelante, o debe un mes anterior, o pagó menos del 90%. */
+  const tarifaNum = Number(String(tarifa).replace(/[^0-9]/g, '')) || 0;
+  const montoNum  = (v: string) => Number(String(v ?? '').replace(/[^0-9]/g, '')) || 0;
+  const fechaPagoDate = (v: string): Date | null => {
+    const f = formatFecha(v);
+    const m = f.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
+  };
+  function esMalDescuento(row: PagoRow): boolean {
+    if (row.estado !== 'PAGÓ') return false;
+    const mesNum = MES_NUM[row.detalle];
+    if (mesNum === undefined || mesNum === 0) return false;   // no aplica a matrícula
+    if (row.vCargado === 'AUTORIZADO') return false;          // el admin lo autorizó como bueno
+    // GRANDFATHER: el naranja SOLO aplica a pagos NUEVOS (del 5-ago-2026 en adelante).
+    // Lo que ya estaba en verde PAGÓ (histórico, antes de esa fecha) NUNCA se marca naranja.
+    const fp = fechaPagoDate(row.fecha);
+    if (!fp || fp < new Date(2026, 7, 5)) return false;
+    const C = tarifaNum, P = montoNum(row.vPagado);
+    if (!C || !P) return false;
+    if (P >= C) return false;                                 // pagó completo o de más → ok
+    if (P < Math.round(C * 0.9)) return true;                 // menos que el 90% → mal
+    // tomó el 10%: válido solo si pagó HASTA EL 5 del mes y está AL DÍA
+    const hastaEl5 = !!fp && fp <= new Date(2026, mesNum - 1, 5, 23, 59, 59);
+    const enMora = pagos.some(r => {
+      const m = MES_NUM[r.detalle];
+      return m !== undefined && m > 0 && m < mesNum && m >= mesAfilNum && r.estado === 'PEND';
+    });
+    return !(hastaEl5 && !enMora);
+  }
 
   /* ─── Filas según año seleccionado ─── */
   const anioActual = new Date().getFullYear();
@@ -641,13 +769,19 @@ function EstadoCuentaInner() {
             <rect width="100%" height="100%" fill="url(#sp-ec)"/>
           </svg>
         </div>
-        <button onClick={() => window.history.length > 1 ? router.back() : router.push(`/alumnos/${id}`)} className="relative text-white/70 hover:text-white transition">
+        <button onClick={() => searchParams.get('from') === 'contabilidad' ? router.push('/contabilidad') : (window.history.length > 1 ? router.back() : router.push(`/alumnos/${id}`))} className="relative text-white/70 hover:text-white transition">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="relative flex-1">
           <h1 className="text-white font-black text-lg">Estado de Cuenta</h1>
           <p className="text-white/60 text-xs">Control de pagos individual</p>
         </div>
+        {searchParams.get('from') === 'contabilidad' && (
+          <button onClick={() => router.push('/contabilidad')}
+            className="relative flex items-center gap-1.5 text-xs font-black text-white bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg transition flex-shrink-0">
+            <ArrowLeft className="w-4 h-4" /> Libro contable
+          </button>
+        )}
         <div className="flex flex-col items-end flex-shrink-0">
           <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
           <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
@@ -692,7 +826,6 @@ function EstadoCuentaInner() {
                   { label: 'PROGRAMA',    val: catVal },
                   { label: 'PROYECTO',    val: proyecto },
                   { label: 'FECHA AFIL.', val: fechaAfil ? formatFecha(fechaAfil) : '' },
-                  { label: 'MENSUALIDAD', val: tarifa },
                 ].filter(r => r.val).map(({ label, val }) => (
                   <div key={label} className="flex items-center gap-2">
                     <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
@@ -703,6 +836,39 @@ function EstadoCuentaInner() {
                     </span>
                   </div>
                 ))}
+
+                {/* MENSUALIDAD — editable a mano (acuerdo con la familia). Aplica a toda la plataforma. */}
+                <div className="flex items-center gap-2">
+                  <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
+                    MENSUALIDAD
+                  </span>
+                  {editMens && puedeEditar ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        value={mensInput}
+                        onChange={e => setMensInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmarMensualidad(); if (e.key === 'Escape') setEditMens(false); }}
+                        autoFocus
+                        placeholder="138000"
+                        className="w-[90px] text-[11px] font-bold text-[#111827] bg-white rounded px-2 py-[3px] focus:outline-none"
+                      />
+                      <button onClick={confirmarMensualidad} disabled={guardandoMens}
+                        className="bg-white text-[#16a34a] text-[10px] font-black px-2 py-[3px] rounded hover:bg-green-50 transition disabled:opacity-60">
+                        {guardandoMens ? '…' : 'Confirmar'}
+                      </button>
+                      <button onClick={() => setEditMens(false)} className="text-white/70 hover:text-white text-[12px] px-1">✕</button>
+                    </div>
+                  ) : (
+                    <span className="text-white text-[11px] font-semibold flex items-center gap-2">
+                      {String(tarifa).toUpperCase()}
+                      {cuotaManual && /\d/.test(cuotaManual) && <span className="text-[8px] text-amber-300 font-bold">(ajustada)</span>}
+                      {puedeEditar && (
+                        <button onClick={() => { setMensInput(String(cuotaManual || '').replace(/[^0-9]/g, '') || String(calcTarifa(catVal, sedeVal)).replace(/[^0-9]/g, '')); setEditMens(true); }}
+                          className="text-white/60 hover:text-white underline text-[9px] font-bold">editar</button>
+                      )}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -717,19 +883,22 @@ function EstadoCuentaInner() {
                 <div className="grid grid-cols-2 gap-1 w-full">
                   {(esDeportista
                     ? [
-                        { label: 'PAGOS',  href: null,                               active: true  },
-                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false },
-                        { label: 'MENS.',  href: '/mensajes',                         active: false },
+                        { label: 'PAGOS',  href: null,                               active: true,  accion: '' },
+                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false, accion: '' },
+                        { label: 'MENS.',  href: null,                               active: false, accion: 'msg' },
                       ]
                     : [
-                        { label: 'PAGOS',  href: null,                               active: true  },
-                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false },
-                        { label: 'INF.',   href: codVal ? `/evaluaciones?cod=${encodeURIComponent(codVal)}` : '/evaluaciones', active: false },
-                        { label: 'MENS.',  href: '/mensajes',                        active: false },
+                        { label: 'PAGOS',  href: null,                               active: true,  accion: '' },
+                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false, accion: '' },
+                        { label: 'INF.',   href: codVal ? `/evaluaciones?cod=${encodeURIComponent(codVal)}` : '/evaluaciones', active: false, accion: '' },
+                        { label: 'MENS.',  href: '/mensajes',                        active: false, accion: '' },
                       ]
-                  ).map(({ label, href, active }) => (
+                  ).map(({ label, href, active, accion }) => (
                     <button key={label}
-                      onClick={() => href && router.push(href)}
+                      onClick={() => {
+                        if (accion === 'msg') { document.getElementById('canales-msg')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+                        if (href) router.push(href);
+                      }}
                       className={cn(
                         'transition rounded-lg py-1.5 px-1 text-[9px] font-black tracking-wide text-center w-full',
                         active
@@ -795,10 +964,11 @@ function EstadoCuentaInner() {
             <thead>
               <tr>
                 {[
-                  { label: 'FECHA',     pct: '20%' },
-                  { label: 'V. PAGADO', pct: '22%' },
-                  { label: 'DETALLE',   pct: '32%' },
-                  { label: 'ESTADO',    pct: '26%' },
+                  { label: 'FECHA',      pct: '15%' },
+                  { label: 'V. CARGADO', pct: '20%' },
+                  { label: 'V. PAGADO',  pct: '20%' },
+                  { label: 'DETALLE',    pct: '27%' },
+                  { label: 'ESTADO',     pct: '18%' },
                 ].map(({ label, pct }) => (
                   <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '9px 5px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', width: pct }}>
                     {label}
@@ -808,7 +978,11 @@ function EstadoCuentaInner() {
             </thead>
             <tbody>
               {pagosVista.map((row, idx) => {
+                const esNoPaga     = row.estado === 'NOPAGA';   // mes exonerado: no se cobra, verde "NO PAGA"
                 const isPaid       = becado || row.estado === 'PAGÓ';
+                const isPaidReal   = row.estado === 'PAGÓ';   // pago REAL (ignora el becado), para edición del admin
+                const malDesc      = !becado && isPaid && esMalDescuento(row);  // pagó con mal descuento
+                const debeDesc     = malDesc ? Math.max(0, tarifaNum - montoNum(row.vPagado)) : 0; // diferencia que debe
                 const isProx       = !becado && row.estado === 'PROX';
                 // hasSoporte: true si hay algún soporte que cubra este mes (PEND o PROX)
                 // El padre puede pagar un mes próximo por adelantado — soporte tiene prioridad sobre PROX
@@ -816,7 +990,7 @@ function EstadoCuentaInner() {
                   !s.meses || s.meses.length === 0 || s.meses.includes(row.detalle)
                 );
                 const rowBg        = (isProx && (!hasSoporte || esProfesor || esReadonly)) ? '#f9fafb' : ROW;
-                const detBg        = becado ? '#374151' : isPaid ? '#374151'
+                const detBg        = becado ? '#374151' : (isPaid || esNoPaga) ? '#374151'
                   : (esProfesor || esReadonly)
                     ? (isProx ? '#9ca3af' : '#dc2626')
                     : hasSoporte ? '#d97706' : isProx ? '#9ca3af' : '#dc2626';
@@ -835,6 +1009,20 @@ function EstadoCuentaInner() {
                       ) : (
                         <span className="text-[9px] font-semibold text-[#111827]">{formatFecha(row.fecha) || '—'}</span>
                       )}
+                    </td>
+
+                    {/* V. CARGADO — valor de la cuota del mes (matrícula = lo que pagó exacto) */}
+                    <td style={{ background: '#f3f4f6', border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                      <span className="text-[9px] font-bold text-[#374151]">
+                        {(() => {
+                          // MATRÍCULA: el valor exacto que pagó. Mensualidades: SIEMPRE la cuota
+                          // del programa (tarifa). (El ajuste manual con Confirmar llega después.)
+                          if (esNoPaga) return '—';   // mes exonerado: sin valor cargado
+                          const esMatricula = /MATR[IÍ]CUL/i.test(row.detalle);
+                          if (esMatricula) return ensurePeso(row.vPagado) || '—';
+                          return tarifa || '—';
+                        })()}
+                      </span>
                     </td>
 
                     {/* V. PAGADO — gris claro, número con $ y puntos */}
@@ -862,18 +1050,41 @@ function EstadoCuentaInner() {
 
                     {/* ESTADO PAGO */}
                     <td style={{ background: rowBg, border: BW, padding: '6px 4px', textAlign: 'center' }}>
-                      {becado
-                        ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white"
-                            style={{ background: '#16a34a' }}>BECADO</span>
+                      {esNoPaga
+                        ? (puedeEditar
+                            ? <button onClick={() => revertirNoPaga(idx)}
+                                title="NO PAGA OK — clic para volver a cobrar este mes (PEND)"
+                                className="rounded font-black text-white transition w-full bg-green-600 hover:bg-green-700 px-2 py-1 text-[11px]">
+                                NO PAGA OK
+                              </button>
+                            : <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white"
+                                style={{ background: '#16a34a' }}>NO PAGA OK</span>)
+                        : becado
+                        ? (puedeEditar
+                            // El admin SÍ puede editar un becado y registrarle un pago si es necesario
+                            ? <button onClick={() => toggleEstado(idx)}
+                                title="Becado — clic para registrar o editar un pago si fuera necesario"
+                                className="rounded font-black text-white transition w-full bg-green-600 hover:bg-green-700 px-2 py-1 text-[11px]">
+                                {isPaidReal ? 'PAGÓ' : 'BECADO'}
+                              </button>
+                            // Calidosos / profesor / lectura: BECADO fijo
+                            : <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white"
+                                style={{ background: '#16a34a' }}>BECADO</span>)
                         : puedeEditar
-                          ? <button onClick={() => toggleEstado(idx)}
-                              className={cn('px-3 py-1 rounded font-black text-white text-[11px] transition w-full',
-                                isPaid ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
-                                {isPaid ? 'PAGÓ' : 'PEND'}
+                          ? <button onClick={() => (isPaid && malDesc ? setMalDescModal(idx) : toggleEstado(idx))}
+                              title={isPaid && malDesc ? 'Clic para validar el descuento o revertir el pago' : undefined}
+                              className={cn('rounded font-black text-white transition w-full',
+                                !isPaid ? 'bg-red-500 hover:bg-red-600 px-3 py-1 text-[11px]'
+                                : malDesc ? 'bg-orange-500 hover:bg-orange-600 px-1 py-[3px] text-[8px] leading-tight'
+                                : 'bg-green-500 hover:bg-green-600 px-3 py-1 text-[11px]')}>
+                                {!isPaid ? 'PEND'
+                                  : malDesc ? <>PAGÓ CON MAL DESCUENTO<br/>DEBE: {ensurePeso(String(debeDesc))}</>
+                                  : 'PAGÓ'}
                             </button>
                           : isPaid
-                              ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white cursor-default bg-green-500">
-                                  PAGÓ
+                              ? <span className={cn('rounded font-black w-full block text-center text-white cursor-default',
+                                  malDesc ? 'bg-orange-500 px-1 py-[3px] text-[8px] leading-tight' : 'bg-green-500 px-2 py-1 text-[11px]')}>
+                                  {malDesc ? <>PAGÓ CON MAL DESCUENTO<br/>DEBE: {ensurePeso(String(debeDesc))}</> : 'PAGÓ'}
                                 </span>
                               : (esProfesor || esReadonly)
                                 ? isProx
@@ -919,14 +1130,6 @@ function EstadoCuentaInner() {
                 Solo lectura · Edición disponible desde Control de Pagos
               </p>
         }
-        {esDeportista && !esReadonly && <p className="text-center text-[11px] text-gray-400 pb-4">
-          ¿Tienes dudas? Comunícate con la línea de pagos{' '}
-          <a href="https://wa.me/573045401497" target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-0.5 font-black text-[#16a34a] underline underline-offset-2">
-            <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.117.554 4.103 1.523 5.824L.057 23.5a.5.5 0 0 0 .609.61l5.79-1.477A11.952 11.952 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.9a9.9 9.9 0 0 1-5.031-1.371l-.361-.214-3.733.952.984-3.617-.235-.374A9.859 9.859 0 0 1 2.1 12C2.1 6.525 6.525 2.1 12 2.1S21.9 6.525 21.9 12 17.475 21.9 12 21.9z"/></svg>
-            304 540 1497
-          </a>
-        </p>}
 
         {/* ── OTROS PAGOS (admin y profe ven; admin edita) ── */}
         {!esDeportista && (
@@ -1088,6 +1291,77 @@ function EstadoCuentaInner() {
           </div>
         )}
 
+        {/* ── COMUNICACIÓN (solo calidoso): Área de Pagos / Formador / Director ── */}
+        {esDeportista && !esReadonly && (
+          <div id="canales-msg" className="pb-6" style={{ scrollMarginTop: 80 }}>
+            <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2 px-1">
+              ¿Tienes una duda, solicitud o reclamo? Deja tu mensaje:
+            </p>
+            <div className="flex flex-col gap-2">
+              {CANALES_MSG.map(c => (
+                <button key={c.titulo}
+                  onClick={() => { setMsgDestino(c); setPagosMsgOk(false); setPagosMsgTexto(''); setPagosMsgWa(''); }}
+                  className="w-full text-left flex items-center gap-3 py-3 px-4 rounded-2xl font-bold text-sm text-white transition active:scale-95"
+                  style={{ background: c.color }}>
+                  <span className="text-lg leading-none">{c.emoji}</span>
+                  <span className="flex-1">
+                    <span className="font-black">{c.boton}</span>
+                    <span className="block text-[11px] font-medium text-white/80">{c.desc}</span>
+                  </span>
+                  <span className="text-white/70">›</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── MODAL: dejar mensaje al canal elegido ── */}
+        {msgDestino && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+            onClick={() => !enviandoPagos && setMsgDestino(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+              {pagosMsgOk ? (
+                <div className="text-center py-6">
+                  <div className="text-4xl mb-3">✅</div>
+                  <p className="font-black text-gray-900 text-lg">¡Mensaje enviado!</p>
+                  <p className="text-gray-500 text-sm mt-1">Revisaremos tu mensaje y te contactaremos.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="font-black text-gray-900 text-base mb-1">Mensaje a {msgDestino.titulo}</p>
+                  <p className="text-gray-500 text-xs mb-4">Escribe tu duda, solicitud o reclamo. Quedará registrado en la plataforma.</p>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1">Tu mensaje</label>
+                  <textarea value={pagosMsgTexto} onChange={e => setPagosMsgTexto(e.target.value)} rows={4}
+                    placeholder="Escribe aquí tu mensaje..."
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 resize-none mb-3"
+                    style={{ ['--tw-ring-color' as any]: msgDestino.color }} />
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1">WhatsApp de contacto</label>
+                  <input value={pagosMsgWa} onChange={e => setPagosMsgWa(e.target.value)} inputMode="tel"
+                    placeholder="Ej: 3001234567"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 mb-4"
+                    style={{ ['--tw-ring-color' as any]: msgDestino.color }} />
+                  {msgDestino.titulo === 'Área de Pagos' && (
+                    <button type="button" onClick={() => router.push(`/alumnos/${id}/factura`)}
+                      className="w-full mb-4 rounded-xl py-3 text-sm font-black text-white transition active:scale-95 flex items-center justify-center gap-2"
+                      style={{ background: '#0f766e' }}>
+                      🧾 Solicita tu factura
+                    </button>
+                  )}
+                  <div className="flex gap-3">
+                    <button onClick={() => setMsgDestino(null)} disabled={enviandoPagos}
+                      className="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancelar</button>
+                    <button onClick={enviarMensajePagos} disabled={enviandoPagos || !pagosMsgTexto.trim()}
+                      className="flex-1 rounded-xl py-3 text-sm font-black text-white transition"
+                      style={{ background: enviandoPagos || !pagosMsgTexto.trim() ? '#9ca3af' : msgDestino.color }}>
+                      {enviandoPagos ? 'Enviando...' : 'Enviar mensaje'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* ── MODAL CONFIRMAR REVERT ── */}
@@ -1121,6 +1395,49 @@ function EstadoCuentaInner() {
                   onClick={ejecutarRevert}
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-3 text-sm font-black transition">
                   Sí, revertir
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── MODAL MAL DESCUENTO: validar (queda PAGÓ verde) o revertir el pago ── */}
+      {malDescModal !== null && (() => {
+        const row = pagosVista[malDescModal];
+        const debe = Math.max(0, tarifaNum - montoNum(row?.vPagado || ''));
+        return (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-orange-600 text-xl font-black">!</span>
+                </div>
+                <div>
+                  <h3 className="font-black text-gray-900 text-base leading-tight">Pagó con mal descuento</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{row?.detalle}</p>
+                </div>
+              </div>
+              <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 mb-5 text-xs text-gray-700 space-y-1">
+                {row?.vPagado && <p><span className="font-bold">Pagó:</span> {ensurePeso(row.vPagado)}</p>}
+                <p><span className="font-bold">Debe:</span> {ensurePeso(String(debe))}</p>
+                {row?.fecha && <p><span className="font-bold">Fecha:</span> {row.fecha}</p>}
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => autorizarDescuento(malDescModal)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 text-sm font-black transition">
+                  ✓ Validar el mal descuento (queda PAGÓ verde)
+                </button>
+                <button
+                  onClick={() => { const i = malDescModal; setMalDescModal(null); setConfirmRevert(i); }}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white rounded-xl py-3 text-sm font-black transition">
+                  ↩ Revertir el pago (hubo un error)
+                </button>
+                <button
+                  onClick={() => setMalDescModal(null)}
+                  className="w-full border border-gray-200 rounded-xl py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
+                  Cancelar
                 </button>
               </div>
             </div>
@@ -1369,7 +1686,7 @@ function EstadoCuentaInner() {
               <button
                 onClick={() => editIdx !== null && eliminarMes(editIdx)}
                 className="text-red-400 hover:text-red-600 text-xs font-bold transition underline underline-offset-2">
-                No cobrar este mes (eliminar del estado de cuenta)
+                No cobrar este mes
               </button>
             </div>
           </div>
@@ -1468,11 +1785,7 @@ function EstadoCuentaInner() {
                             </span>
                           </p>
                           <p className="text-red-500 text-[10px] mt-0.5">
-                            No puedes seleccionar meses posteriores mientras haya meses anteriores pendientes. ¿Tienes dudas? Comunícate con la línea de pagos{' '}
-                            <a href="https://wa.me/573045401497" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 font-black underline underline-offset-2">
-                              <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.117.554 4.103 1.523 5.824L.057 23.5a.5.5 0 0 0 .609.61l5.79-1.477A11.952 11.952 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.9a9.9 9.9 0 0 1-5.031-1.371l-.361-.214-3.733.952.984-3.617-.235-.374A9.859 9.859 0 0 1 2.1 12C2.1 6.525 6.525 2.1 12 2.1S21.9 6.525 21.9 12 17.475 21.9 12 21.9z"/></svg>
-                              304 540 1497
-                            </a>
+                            No puedes seleccionar meses posteriores mientras haya meses anteriores pendientes. Si tienes dudas, deja tu mensaje al Área de Pagos más abajo.
                           </p>
                         </div>
                       </div>

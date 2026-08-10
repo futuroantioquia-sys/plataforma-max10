@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares } from '@/lib/db';
+import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares, enviarMensaje } from '@/lib/db';
 import type { Deportista, CalificacionEscolar } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
 import { BalonCargando } from '@/components/BalonCargando';
@@ -168,6 +168,14 @@ export default function PerfilDeportista() {
   const [tab,           setTab]           = useState(0);
   const [procesandoFoto, setProcesandoFoto] = useState(false);
   const inputFotoRef  = useRef<HTMLInputElement>(null);
+
+  // ── Mensajes del padre: Área de Pagos / Formador / Director ──
+  const [msgDestino, setMsgDestino] = useState<{ titulo: string; para: 'institucion' | 'profesor'; prefijo: string; color: string } | null>(null);
+  const [msgTexto,    setMsgTexto]    = useState('');
+  const [msgWa,       setMsgWa]       = useState('');
+  const [msgEnviando, setMsgEnviando] = useState(false);
+  const [msgOk,       setMsgOk]       = useState(false);
+  const [showCanales, setShowCanales] = useState(false);
 
   type DocFile = { name: string; data: string; date: string } | null;
   const [docTI,  setDocTI]  = useState<DocFile>(null);
@@ -351,6 +359,40 @@ export default function PerfilDeportista() {
   const programaVal    = getC(/^program/i);
   const proyectoVal    = getC(/^proy/i);
   const codigoVal      = getC(/^c[oó]d/i);
+
+  // ── Canales de mensaje del padre y envío (queda en la plataforma) ──
+  const CANALES_MSG: { titulo: string; boton: string; para: 'institucion' | 'profesor'; prefijo: string; color: string; emoji: string; desc: string }[] = [
+    { titulo: 'Área de Pagos', boton: 'Escríbele al Área de Pagos',    para: 'institucion', prefijo: 'ACLARACIÓN PAGOS',   color: '#7c3aed', emoji: '💬',   desc: 'Duda, solicitud o reclamo sobre pagos.' },
+    { titulo: 'Formador',      boton: 'Escríbele al Formador de tu hijo', para: 'profesor', prefijo: 'MENSAJE AL FORMADOR', color: '#0f766e', emoji: '👨‍🏫', desc: 'Escríbele al entrenador del deportista.' },
+    { titulo: 'Director',      boton: 'Escríbele al Director',         para: 'institucion', prefijo: 'MENSAJE AL DIRECTOR', color: '#1e3a8a', emoji: '🎓',   desc: 'Comunícate con la dirección.' },
+  ];
+  async function enviarMensajeCanal() {
+    const destino = msgDestino;
+    const texto = msgTexto.trim();
+    if (!destino) return;
+    if (!texto) { alert('Escribe tu mensaje antes de enviar.'); return; }
+    setMsgEnviando(true);
+    const wa = msgWa.trim();
+    const textoFull = `${destino.prefijo}\n\n${texto}${wa ? `\n\nWhatsApp de contacto: ${wa}` : ''}`;
+    try {
+      await enviarMensaje({
+        deportistaId: String(id ?? ''),
+        codigo: codigoVal,
+        nombre: dep?._nombre ?? '',
+        texto: textoFull,
+        de: 'calidoso',
+        para: destino.para,
+        proyecto: proyectoVal,
+      });
+      setMsgOk(true);
+      setMsgTexto('');
+      setMsgWa('');
+      setTimeout(() => { setMsgDestino(null); setMsgOk(false); }, 2200);
+    } catch {
+      alert('No se pudo enviar el mensaje. Intenta de nuevo.');
+    }
+    setMsgEnviando(false);
+  }
   const mensualidadVal = getC(/mensual|tarifa|cuota|valor/i);
   const fechaAfilVal = (() => {
     const raw = getC(/fecha.*afil|afil.*fecha/i);
@@ -455,12 +497,12 @@ export default function PerfilDeportista() {
           {/* Botones */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginTop: 16 }}>
             {[
-              { label: 'PAGOS',       href: `/alumnos/${id}/estado-cuenta`,   mant: false },
-              { label: 'ASISTENCIA',  href: `/alumnos/${id}/asistencia`,      mant: false },
-              { label: 'VALORACIÓN',  href: '/mantenimiento',                  mant: true  },
-              { label: 'MENSAJES',    href: '/mantenimiento',                 mant: true  },
-            ].filter(b => !esProfesor || !b.mant).map(({ label, href, mant }) => (
-              <button key={label} onClick={() => router.push(href)} style={{
+              { label: 'PAGOS',       href: `/alumnos/${id}/estado-cuenta`,   mant: false, accion: '' },
+              { label: 'ASISTENCIA',  href: `/alumnos/${id}/asistencia`,      mant: false, accion: '' },
+              { label: 'VALORACIÓN',  href: '/mantenimiento',                  mant: true,  accion: '' },
+              { label: 'MENSAJES',    href: '',                                mant: false, accion: 'mensajes' },
+            ].filter(b => !esProfesor || !b.mant).map(({ label, href, mant, accion }) => (
+              <button key={label} onClick={() => { if (accion === 'mensajes') { setShowCanales(true); setMsgDestino(null); setMsgOk(false); } else router.push(href); }} style={{
                 background: mant ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.11)',
                 border: mant ? '1.5px solid rgba(255,255,255,0.12)' : '1.5px solid rgba(255,255,255,0.22)',
                 borderRadius: 13, padding: '8px 2px 6px',
@@ -475,6 +517,57 @@ export default function PerfilDeportista() {
             ))}
           </div>
         </div>
+
+        {/* ── MENSAJES: elegir canal y escribir (queda en la plataforma) ── */}
+        {showCanales && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            onClick={() => { if (!msgEnviando) { setShowCanales(false); setMsgDestino(null); } }}>
+            <div style={{ width: '100%', maxWidth: 420, background: '#fff', borderRadius: 18, padding: 18 }} onClick={e => e.stopPropagation()}>
+              {msgOk ? (
+                <div style={{ textAlign: 'center', padding: '18px 0' }}>
+                  <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+                  <p style={{ fontWeight: 900, color: '#111', fontSize: 18 }}>¡Mensaje enviado!</p>
+                  <p style={{ color: '#6b7280', fontSize: 13, marginTop: 4 }}>Revisaremos tu mensaje y te contactaremos.</p>
+                </div>
+              ) : !msgDestino ? (
+                <>
+                  <p style={{ fontWeight: 900, color: '#111', fontSize: 16, marginBottom: 2 }}>¿Con quién deseas comunicarte?</p>
+                  <p style={{ color: '#6b7280', fontSize: 12, marginBottom: 12 }}>Deja tu duda, solicitud o reclamo. Quedará registrado en la plataforma.</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {CANALES_MSG.map(c => (
+                      <button key={c.titulo} onClick={() => setMsgDestino(c)}
+                        style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 14, border: 'none', color: '#fff', cursor: 'pointer', background: c.color }}>
+                        <span style={{ fontSize: 18 }}>{c.emoji}</span>
+                        <span style={{ flex: 1 }}>
+                          <span style={{ fontWeight: 900, fontSize: 14 }}>{c.boton}</span>
+                          <span style={{ display: 'block', fontSize: 11, opacity: 0.85 }}>{c.desc}</span>
+                        </span>
+                        <span style={{ opacity: 0.7 }}>›</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setShowCanales(false)} style={{ width: '100%', marginTop: 12, border: '1px solid #e5e7eb', borderRadius: 12, padding: '11px', fontWeight: 700, color: '#6b7280', background: '#fff', cursor: 'pointer' }}>Cancelar</button>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontWeight: 900, color: '#111', fontSize: 16, marginBottom: 2 }}>Mensaje a {msgDestino.titulo}</p>
+                  <p style={{ color: '#6b7280', fontSize: 12, marginBottom: 12 }}>Escribe tu mensaje. Quedará registrado en la plataforma.</p>
+                  <textarea value={msgTexto} onChange={e => setMsgTexto(e.target.value)} rows={4} placeholder="Escribe aquí tu mensaje..."
+                    style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 12px', fontSize: 14, resize: 'none', marginBottom: 10, outline: 'none' }} />
+                  <input value={msgWa} onChange={e => setMsgWa(e.target.value)} inputMode="tel" placeholder="WhatsApp de contacto (opcional)"
+                    style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 12px', fontSize: 14, marginBottom: 12, outline: 'none' }} />
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => setMsgDestino(null)} disabled={msgEnviando} style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px', fontWeight: 700, color: '#6b7280', background: '#fff', cursor: 'pointer' }}>Atrás</button>
+                    <button onClick={enviarMensajeCanal} disabled={msgEnviando || !msgTexto.trim()}
+                      style={{ flex: 1, borderRadius: 12, padding: '12px', fontWeight: 900, color: '#fff', border: 'none', cursor: (msgEnviando || !msgTexto.trim()) ? 'default' : 'pointer', background: (msgEnviando || !msgTexto.trim()) ? '#9ca3af' : msgDestino.color }}>
+                      {msgEnviando ? 'Enviando...' : 'Enviar mensaje'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── INPUTS OCULTOS DOCUMENTOS ── */}
         <input ref={inputTIRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'ti')}/>
@@ -799,12 +892,12 @@ export default function PerfilDeportista() {
             ))}
           </div>
 
-          {/* VISTA PADRES — vista dinámica bonita (admin y profe) */}
+          {/* VISTA DINÁMICA — vista bonita (admin y profe) */}
           {codigoVal && (esAdmin || esProfesor) && (
             <button
               onClick={() => router.push(`/valoracion-dinamica?cod=${encodeURIComponent(codigoVal)}`)}
               className="w-full mt-2 bg-gradient-to-r from-[#16a34a] to-[#064e1e] hover:opacity-90 border border-white/20 active:opacity-80 transition rounded-xl py-2.5 text-white font-black text-[11px] tracking-wide flex items-center justify-center gap-2">
-              👨‍👩‍👦 VISTA PADRES
+              📊 VISTA DINÁMICA
             </button>
           )}
         </div>

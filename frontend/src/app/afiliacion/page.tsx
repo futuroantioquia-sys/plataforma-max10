@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { getDeportistas, saveDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
+import { guardarMapeo, soloDigitos, normNombre } from '@/lib/contabilidad';
 import { cn } from '@/lib/utils';
 
 // ── Constantes ───────────────────────────────────────────────
@@ -22,8 +23,20 @@ const PIN_NUEVO    = '34';
 const EXCLUIDAS    = [/^proy/i, /^profe/i, /^cal$/i, /^compite/i, /^__EMPTY/i];
 const esExcluida   = (k: string) => EXCLUIDAS.some(rx => rx.test(k));
 
+// Campos de CUENTAS DE PAGO — se relacionan con el diccionario de CONTABILIDAD
+const CAMPOS_CUENTAS: { key: string; label: string; tipo: string; seccion?: string; seccionDesc?: string }[] = [
+  {
+    key: 'CUENTA_PAGO_1',
+    label: 'Cuenta 1 #',
+    tipo: 'text',
+    seccion: 'CUENTAS DESDE DONDE REALIZAS LOS PAGOS',
+    seccionDesc: 'Con el fin de relacionar los pagos que realizas, por favor digita el número de cuenta o el Titular NEQUI',
+  },
+  { key: 'CUENTA_PAGO_2', label: 'Cuenta 2 #', tipo: 'text' },
+];
+
 // Campos base para deportistas nuevos — divididos en secciones
-const CAMPOS_NUEVO: { key: string; label: string; tipo: string; seccion?: string }[] = [
+const CAMPOS_NUEVO: { key: string; label: string; tipo: string; seccion?: string; seccionDesc?: string }[] = [
   // ── SECCIÓN 1: DATOS DE AFILIACIÓN ─────────────────────────
   { key: 'ESTADO',          label: 'Tipo de afiliación',        tipo: 'select', seccion: 'DATOS DE AFILIACIÓN' },
   { key: 'PROGRAMA',        label: 'Programa',                  tipo: 'select' },
@@ -68,6 +81,8 @@ const CAMPOS_NUEVO: { key: string; label: string; tipo: string; seccion?: string
   { key: 'CARGO',           label: 'Cargo',                               tipo: 'text'   },
   // ── Otros ────────────────────────────────────────────────────
   { key: 'EMAIL',           label: 'Correo electrónico',                  tipo: 'email'  },
+  // ── CUENTAS DESDE DONDE REALIZAS LOS PAGOS (van a Contabilidad) ──
+  ...CAMPOS_CUENTAS,
   // ── SECCIÓN 4: DATOS DE OTRO FAMILIAR ───────────────────────
   { key: 'NOMBRE_FAMILIAR', label: 'Nombre del familiar',                 tipo: 'text',   seccion: 'DATOS DE OTRO FAMILIAR' },
   { key: 'PARENTESCO',      label: 'Parentesco',                          tipo: 'select' },
@@ -381,7 +396,7 @@ export default function AfiliacionPage() {
   }, []);
 
   const [depId,      setDepId]      = useState<string | null>(null);
-  const [campos,     setCampos]     = useState<{ key: string; label: string; tipo: string; seccion?: string }[]>([]);
+  const [campos,     setCampos]     = useState<{ key: string; label: string; tipo: string; seccion?: string; seccionDesc?: string }[]>([]);
   const [valores,    setValores]    = useState<Record<string, string>>({});
   const [auth,       setAuth]       = useState([false, false, false]);
   const [codigoError, setCodigoError] = useState('');
@@ -451,6 +466,11 @@ export default function AfiliacionPage() {
       // Si el Excel no tiene columna de documento, se acepta con solo el código
 
       const cols = camposDesdeExcel(dep);
+      // Agregar campos de cuentas de pago (para relacionar con contabilidad)
+      // solo si aún no existen entre las columnas del deportista.
+      CAMPOS_CUENTAS.forEach(cc => {
+        if (!cols.some(c => c.key === cc.key)) cols.push({ ...cc });
+      });
       const vals: Record<string, string> = { _nombre: dep._nombre };
       cols.forEach(c => { vals[c.key] = dep._columnas[c.key] ?? ''; });
       setCampos(cols); setValores(vals); setDepId(dep.id); setPaso('formulario');
@@ -484,6 +504,36 @@ export default function AfiliacionPage() {
     setCodigoError(existe
       ? `⚠ El código "${val.trim()}" ya existe y pertenece a otro deportista afiliado. Por favor usa un código diferente.`
       : '');
+  }
+
+  // ── Registrar cuentas de pago en el diccionario de contabilidad ──
+  // Detecta si cada valor es un número de cuenta (→ tipo 'cuenta') o el nombre
+  // de un Titular NEQUI (→ tipo 'nombre') y lo enlaza al código del deportista.
+  function registrarCuentasContabilidad() {
+    // Código del deportista (para nuevos: campo CODIGO; para antiguos: su columna de código)
+    const codigoDep = (() => {
+      const directo = (valores['CODIGO'] ?? '').trim();
+      if (directo) return directo;
+      const k = Object.keys(valores).find(c => /^c[oó]d/i.test(c));
+      return k ? (valores[k] ?? '').trim() : '';
+    })();
+    if (!codigoDep) return;
+
+    const cuentas = [valores['CUENTA_PAGO_1'], valores['CUENTA_PAGO_2']]
+      .map(s => (s ?? '').trim())
+      .filter(Boolean);
+    if (!cuentas.length) return;
+
+    const entradas = cuentas.map(val => {
+      const digitos = soloDigitos(val);
+      const soloNumeros = digitos.length >= 6 && /^[\d\s.-]+$/.test(val);
+      return soloNumeros
+        ? { tipo: 'cuenta', clave: digitos,        codigo: codigoDep }
+        : { tipo: 'nombre', clave: normNombre(val), codigo: codigoDep };
+    });
+
+    // No bloquea el envío del formulario si contabilidad falla.
+    guardarMapeo(entradas).catch(() => {});
   }
 
   // ── Guardar formulario ───────────────────────────────────────
@@ -537,7 +587,7 @@ export default function AfiliacionPage() {
             cols['FECHA_AFILIACION'] = hoy;
           }
 
-          return { ...d, _nombre: valores['_nombre'] || d._nombre, _columnas: cols };
+          return { ...d, _nombre: (valores['_nombre'] || d._nombre).toUpperCase(), _columnas: cols };
         });
         saveDeportistas(act);
         _setDeps(act);
@@ -548,13 +598,20 @@ export default function AfiliacionPage() {
         cols['DOCUMENTO_INGRESO'] = valores['DOCUMENTO'] ?? '';
         const nuevo: Deportista = {
           id: `nuevo_${Date.now()}`,
-          _nombre: valores['NOMBRE_COMPLETO'] || 'Nuevo deportista',
+          _nombre: (valores['NOMBRE_COMPLETO'] || 'Nuevo deportista').toUpperCase(),
           _columnas: cols,
         };
         const nuevaLista = [...lista, nuevo];
         saveDeportistas(nuevaLista);
         _setDeps(nuevaLista);
       }
+
+      // ── Relacionar las cuentas de pago con el DICCIONARIO DE CONTABILIDAD ──
+      // Cada cuenta digitada (número de cuenta o Titular NEQUI) se guarda en
+      // cont_mapeo enlazada al código del deportista, para que al importar el
+      // extracto bancario los pagos se asignen automáticamente.
+      registrarCuentasContabilidad();
+
       setPaso('enviado');
     } catch { setError('Error al guardar. Intenta de nuevo.'); }
     setEnviando(false);
@@ -891,7 +948,7 @@ export default function AfiliacionPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {campos.flatMap(c => {
                 if (depId && /^deportista|^nombre/i.test(c.key)) return [];
-                const esLargo   = /direcci|observ|notas|comment|horario|antecedent|condici/i.test(c.key);
+                const esLargo   = /direcci|observ|notas|comment|horario|antecedent|condici|cuenta_pago/i.test(c.key);
                 const dropdown  = getDropdown(c.key);
                 const labelShow = c.label || labelDe(c.key);
                 const secHeader = c.seccion ? (
@@ -900,6 +957,11 @@ export default function AfiliacionPage() {
                       <p className="text-white font-black text-[13px] uppercase tracking-widest drop-shadow">
                         {c.seccion}
                       </p>
+                      {c.seccionDesc && (
+                        <p className="text-white/90 text-[12px] font-medium mt-1.5 normal-case tracking-normal leading-snug">
+                          {c.seccionDesc}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : null;

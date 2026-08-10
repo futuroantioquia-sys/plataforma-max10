@@ -6,7 +6,7 @@ import {
   Users, DollarSign, Calendar,
   Star, MessageCircle, Clipboard, Activity, ClipboardList, UserPlus, LayoutList,
   Link2, Copy, Check, QrCode, BarChart3, Trophy, Upload, FolderKanban,
-  LogOut, Zap, Shield, Dumbbell, HardHat, Clock, UserCog,
+  LogOut, Zap, Shield, Dumbbell, HardHat, Clock, UserCog, Calculator,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { esSuperAdmin, esDeportivo } from '@/lib/permisos';
@@ -308,10 +308,12 @@ function DashboardAdmin() {
       {!esDep && (
       <>
       <CategoriaSection emoji="💰" titulo="Finanzas" color="azul" delay={200}>
+        <AccesoCard titulo="Contabilidad"          icono={Calculator}   href="/contabilidad"            descripcion="Libro dinámico contable"       color="azul" />
         <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="azul" />
         <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" badge={pagosCargados} />
         <AccesoCard titulo="Confirmar Pagos"      icono={Clock}        href="/pagos-pendientes"         descripcion="Soportes enviados por padres"  color="azul" badge={pendientesSoportes} />
         <AccesoCard titulo="Productos"            icono={DollarSign}   href="/productos"                descripcion="Torneos e implementos"         color="azul" />
+        <AccesoCard titulo="Facturas Pendientes"  icono={ClipboardList} href="/facturas"                descripcion="Solicitudes de factura de acudientes" color="azul" />
       </CategoriaSection>
 
       <div className="divider-fade" />
@@ -338,12 +340,8 @@ function DashboardAdmin() {
         <AccesoCard titulo="Info Proyectos y Formadores" icono={Shield} href="/usuarios" descripcion="Profes, sedes y proyectos" color="teal" />
         <AccesoCard titulo="Gestión de Valoración" icono={Star} href="/gestion-valoracion" descripcion="Editar textos de los niveles" color="teal" />
         <AccesoCard titulo="Mensajes"            icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"    color="teal" />
+        <AccesoCard titulo="Certificados Asistencia" icono={Clipboard} href="/certificados" descripcion="Quién descargó su certificado" color="teal" />
       </CategoriaSection>
-
-      <div className="divider-fade" />
-
-      {/* Link inscripción */}
-      <LinkInscripcionCard />
     </div>
   );
 }

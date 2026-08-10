@@ -24,6 +24,11 @@ const SELECTS_RX: RegExp[] = [
   /^estado$/i,
 ];
 
+// ── Opciones estándar para TIPO DE AFILIACIÓN (editable) ─
+const OPCIONES_AFIL = [
+  'Nuevo', 'Antiguo', 'Reingreso', 'Pasó de Est.', 'B Institucional', 'MB Institucional',
+];
+
 // ── Convierte serial de Excel a fecha legible ─────────────────
 function serialAFecha(val: string): string {
   const n = Number(String(val).trim());
@@ -135,6 +140,9 @@ export default function GeneralPage() {
 
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const [edits,       setEdits]       = useState<Record<string, Record<string, string>>>({});
+  // Nombre del deportista en edición (doble clic en Consolidado Afiliados)
+  const [editNombreId, setEditNombreId] = useState<string | null>(null);
+  const nombreClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [buscar,      setBuscar]      = useState('');
   const [buscarCod,   setBuscarCod]   = useState('');
   const [guardado,    setGuardado]    = useState(false);
@@ -296,22 +304,27 @@ export default function GeneralPage() {
     const programa   = todas.filter(c => /^program/i.test(c.trim()));
     const proyecto   = todas.filter(c => /proyecto|^proy\b/i.test(c.trim()));
     const profe      = todas.filter(c => /^prof|\bprofe\b/i.test(c.trim()));
+    const celAcud    = todas.filter(c => /^celular del acudiente$/i.test(c.trim())); // después de PROFE
+    const cal        = todas.filter(c => /^cal$/i.test(c.trim()));      // después de COMPETENCIA
+    const com        = todas.filter(c => /^com$/i.test(c.trim()));      // después de COMPETENCIA
     const compite     = todas.filter(c => /^compite$/i.test(c.trim()));
     const competencia = todas.filter(c => /^competencia$/i.test(c.trim()));
     const torneo2     = todas.filter(c => /torneo.?2/i.test(c.trim()));
     const torneo3     = todas.filter(c => /torneo.?3/i.test(c.trim()));
     const torneo4     = todas.filter(c => /torneo.?4/i.test(c.trim()));
-    // Excluir la clave virtual POSICIÓN del bloque "resto" (la colocamos al final)
+    // Estas columnas las ubicamos manualmente, así que las sacamos del bloque "resto"
     const excluidas = new Set([
       ...fecha, ...tipoAfil, ...estado, ...cod, ...programa, ...proyecto, ...profe,
-      ...compite, ...competencia, ...torneo2, ...torneo3, ...torneo4,
+      ...celAcud, ...cal, ...com, ...compite, ...competencia, ...torneo2, ...torneo3, ...torneo4,
       VPOS,
     ]);
     const resto    = todas.filter(c => !excluidas.has(c));
 
-    // Columnas de torneo siempre presentes: COMPETENCIA → T1 → T2 → T3 → T4 → POSICIÓN
+    // Torneos: COMPETENCIA → CAL → COM → T1 → T2 → T3 → T4 → POSICIÓN
     const torneos = [
       ...(competencia.length ? competencia : [VTC]),
+      ...cal,
+      ...com,
       ...(compite.length ? compite : [VT1]),
       ...(torneo2.length ? torneo2 : [VT2]),
       ...(torneo3.length ? torneo3 : [VT3]),
@@ -319,26 +332,16 @@ export default function GeneralPage() {
       VPOS,
     ];
 
-    // Insertar PROGRAMA → PROYECTO → PROFE → TORNEOS justo después de la columna DIA
-    // (PROGRAMA queda al lado de PROYECTO)
+    // Después de la columna DÍA: PROYECTO → PROFE → CELULAR DEL ACUDIENTE → TORNEOS
     const idxDia = resto.findIndex(c => /^d[ií]a$/i.test(c.trim()));
     if (idxDia >= 0) {
-      resto.splice(idxDia + 1, 0, ...programa, ...proyecto, ...profe, ...torneos);
+      resto.splice(idxDia + 1, 0, ...proyecto, ...profe, ...celAcud, ...torneos);
     } else {
-      resto.push(...programa, ...proyecto, ...profe, ...torneos);
+      resto.push(...proyecto, ...profe, ...celAcud, ...torneos);
     }
 
-    // Garantía final: si PROFE aparece antes que PROYECTO en el array resultado,
-    // mover PROFE a después de PROYECTO (por si los nombres no coincidían con regex)
-    const finalArr = [...fecha, ...tipoAfil, ...estado, ...cod, ...resto];
-    const iProy = finalArr.findIndex(c => /proyecto|proy/i.test(c.trim()));
-    const iProf = finalArr.findIndex(c => /^prof|\bprofe\b/i.test(c.trim()));
-    if (iProy > -1 && iProf > -1 && iProf < iProy) {
-      const [colProf] = finalArr.splice(iProf, 1);
-      const newIProy  = finalArr.findIndex(c => /proyecto|proy/i.test(c.trim()));
-      finalArr.splice(newIProy + 1, 0, colProf);
-    }
-    return finalArr;
+    // PROGRAMA queda ENSEGUIDA de TIPO DE AFILIACIÓN
+    return [...fecha, ...tipoAfil, ...programa, ...estado, ...cod, ...resto];
   }, [deportistas]);
 
   // DEPORTISTA/NOMBRE/ALUMNO/JUGADOR/ATLETA nunca se ocultan (columna crítica)
@@ -479,7 +482,11 @@ export default function GeneralPage() {
   function actualizarTodo() {
     const nueva = deportistas.map(d => {
       if (!edits[d.id]) return d;
-      return { ...d, _columnas: { ...d._columnas, ...edits[d.id] } };
+      // El nombre del deportista se guarda aparte (no es una columna del Excel) y en MAYÚSCULA
+      const { __NOMBRE__, ...cols } = edits[d.id];
+      const actualizado = { ...d, _columnas: { ...d._columnas, ...cols } };
+      if (__NOMBRE__ !== undefined) actualizado._nombre = __NOMBRE__.toUpperCase();
+      return actualizado;
     });
     saveDeportistas(nueva);
     setDeportistas(nueva);
@@ -1075,8 +1082,11 @@ export default function GeneralPage() {
 
                               // CÓD — color por afiliación + columna DEPORTISTA fija a la derecha
                               if (esCod) {
-                                const afilVal  = getColVal(dep, /tipo.*afil|^afil/i);
-                                const codColor = retirado ? '#9ca3af' : colorCodigo(afilVal);
+                                const afilVal   = getColVal(dep, /tipo.*afil|^afil/i);
+                                const estadoVal = getColVal(dep, /^estado$/i);
+                                // Naranja para TODOS los nuevos activos (por tipo de afiliación o por estado "Nuevo")
+                                const esNuevo   = /nuevo/i.test(afilVal) || /nuevo/i.test(estadoVal);
+                                const codColor  = retirado ? '#9ca3af' : (esNuevo ? '#f97316' : colorCodigo(afilVal));
                                 // Buscar el código con regex por si está bajo "CODIGO" (sin tilde) u otra variante
                                 const rawValCod = rawVal || getColVal(dep, /^c[oó]d/i);
                                 return (
@@ -1090,13 +1100,73 @@ export default function GeneralPage() {
                                       className="w-full text-center outline-none bg-transparent" style={{ fontSize: '16px', fontWeight: '800', color: 'white', letterSpacing: '0.08em', padding: '6px 8px' }}
                                     />
                                   </td>
-                                  {/* Columna DEPORTISTA fija */}
+                                  {/* Columna DEPORTISTA fija — 1 clic: estado de cuenta · doble clic: editar nombre */}
                                   <td key="__nombre_td__"
                                     className="px-3 py-0 sticky left-[120px] z-10 whitespace-nowrap"
                                     style={{ backgroundColor: stickyBg, border: '2px solid white', minWidth: 180 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
-                                      {dep._nombre}
-                                    </span>
+                                    {editNombreId === dep.id ? (
+                                      <input
+                                        autoFocus
+                                        value={edits[dep.id]?.['__NOMBRE__'] ?? dep._nombre}
+                                        onChange={e => setCelda(dep.id, '__NOMBRE__', e.target.value)}
+                                        onBlur={e => {
+                                          // Si queda vacío, se descarta la edición y vuelve el nombre original
+                                          if (!e.target.value.trim()) {
+                                            setEdits(prev => {
+                                              const row = { ...(prev[dep.id] ?? {}) };
+                                              delete row['__NOMBRE__'];
+                                              const next = { ...prev };
+                                              if (Object.keys(row).length) next[dep.id] = row;
+                                              else delete next[dep.id];
+                                              return next;
+                                            });
+                                          }
+                                          setEditNombreId(null);
+                                        }}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter' || e.key === 'Escape') {
+                                            e.preventDefault();
+                                            (e.target as HTMLInputElement).blur();
+                                          }
+                                        }}
+                                        style={{
+                                          fontSize: 13, fontWeight: 700, color: '#111827', width: '100%',
+                                          outline: 'none', background: 'white', textTransform: 'uppercase',
+                                          border: '1px solid #16a34a', borderRadius: 4, padding: '4px 6px',
+                                        }}
+                                      />
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (nombreClickTimer.current) return;
+                                          nombreClickTimer.current = setTimeout(() => {
+                                            nombreClickTimer.current = null;
+                                            router.push(`/alumnos/${dep.id}/estado-cuenta${soloLectura ? '' : '?edit=1'}`);
+                                          }, 220);
+                                        }}
+                                        onDoubleClick={() => {
+                                          if (nombreClickTimer.current) {
+                                            clearTimeout(nombreClickTimer.current);
+                                            nombreClickTimer.current = null;
+                                          }
+                                          if (!soloLectura) setEditNombreId(dep.id);
+                                        }}
+                                        title="Un clic: estado de cuenta · Doble clic: editar nombre"
+                                        style={{
+                                          fontSize: 13, fontWeight: 700,
+                                          color: (edits[dep.id]?.['__NOMBRE__'] ?? dep._nombre) ? '#111827' : '#9ca3af',
+                                          background: 'none', border: 'none', padding: 0, margin: 0,
+                                          cursor: 'pointer', textAlign: 'left',
+                                          display: 'inline-block', minWidth: 120,
+                                          textTransform: 'uppercase',
+                                          textDecoration: 'underline', textDecorationColor: '#16a34a',
+                                          textDecorationThickness: 2, textUnderlineOffset: 3,
+                                        }}
+                                        className="hover:text-[#16a34a] transition-colors">
+                                        {(edits[dep.id]?.['__NOMBRE__'] ?? dep._nombre) || '✏️ (doble clic para nombrar)'}
+                                      </button>
+                                    )}
                                   </td>
                                   </>
                                 );
@@ -1118,26 +1188,48 @@ export default function GeneralPage() {
                                 );
                               }
 
-                              // TIPO AFILIACIÓN — badge coloreado (solo lectura)
+                              // TIPO AFILIACIÓN — badge coloreado, editable (solo lectura para contabilidad)
                               if (esTipoAfil(col)) {
                                 const color = colorCodigo(rawVal);
+                                if (soloLectura) {
+                                  return (
+                                    <td key={col}
+                                      style={{ border: '2px solid white', backgroundColor: '#f8fafc' }}
+                                      className="px-1 py-0 text-center">
+                                      <span style={{
+                                        display: 'inline-block',
+                                        backgroundColor: color,
+                                        color: 'white',
+                                        borderRadius: 4,
+                                        padding: '2px 6px',
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        letterSpacing: '0.04em',
+                                        whiteSpace: 'nowrap',
+                                      }}>
+                                        {rawVal || '—'}
+                                      </span>
+                                    </td>
+                                  );
+                                }
+                                // Incluir el valor actual si no está en la lista estándar
+                                const opsAfil = (!rawVal || OPCIONES_AFIL.includes(rawVal))
+                                  ? OPCIONES_AFIL : [rawVal, ...OPCIONES_AFIL];
                                 return (
                                   <td key={col}
-                                    style={{ border: '2px solid white', backgroundColor: '#f8fafc' }}
-                                    className="px-1 py-0 text-center">
-                                    <span style={{
-                                      display: 'inline-block',
-                                      backgroundColor: color,
-                                      color: 'white',
-                                      borderRadius: 4,
-                                      padding: '2px 6px',
-                                      fontSize: 10,
-                                      fontWeight: 700,
-                                      letterSpacing: '0.04em',
-                                      whiteSpace: 'nowrap',
-                                    }}>
-                                      {rawVal || '—'}
-                                    </span>
+                                    style={{ border: '2px solid white', backgroundColor: color }}
+                                    className="px-0 py-0">
+                                    <select
+                                      value={rawVal}
+                                      onChange={e => setCelda(dep.id, col, e.target.value)}
+                                      title="Tipo de afiliación"
+                                      style={{ color: 'white' }}
+                                      className="w-full text-[11px] font-bold py-[7px] px-1.5 outline-none bg-transparent cursor-pointer truncate">
+                                      <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
+                                      {opsAfil.map(o => (
+                                        <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o}</option>
+                                      ))}
+                                    </select>
                                   </td>
                                 );
                               }

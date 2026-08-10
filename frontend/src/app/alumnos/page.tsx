@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getDeportistasPorProyecto, saveDeportistas, getCodigosConAcceso, getFotosDeportistas, getResumenDocumentos } from '@/lib/db';
+import { getDeportistas, getDeportistasPorProyecto, saveDeportistas, getCodigosConAcceso, getFotosDeportistas, getResumenDocumentos, getEvaluaciones } from '@/lib/db';
 import { useSoloLectura } from '@/lib/permisos';
 import type { Deportista } from '@/lib/db';
 
@@ -368,6 +368,22 @@ function DashboardProyecto({
       return { ...fromCols, ...stored };
     } catch { return fromCols; }
   });
+  // ── Estado de INFORMES de valoración por código (INF1/INF2/INF3) — solo admin ──
+  const [infMap, setInfMap] = useState<Record<string, Set<string>>>({});
+  useEffect(() => {
+    if (esProfe) return; // solo el admin carga/ve el estado de informes
+    getEvaluaciones().then(evs => {
+      const m: Record<string, Set<string>> = {};
+      evs.forEach((ev: any) => {
+        const c = String(ev.codigo ?? '').trim().toUpperCase();
+        const n = (String(ev.numeroInforme ?? '').match(/[123]/) || [])[0];
+        if (!c || !n) return;
+        (m[c] = m[c] || new Set()).add(n);
+      });
+      setInfMap(m);
+    }).catch(() => {});
+  }, [esProfe]);
+
   function setCal(depId: string, value: string) {
     setCalMap(prev => {
       const updated = { ...prev, [depId]: value };
@@ -764,6 +780,14 @@ function DashboardProyecto({
                     title="Competencia en torneo">
                     COM
                   </th>
+                  {/* INF1 / INF2 / INF3 — estado de informes de valoración (solo admin) */}
+                  {!esProfe && ['INF1', 'INF2', 'INF3'].map(h => (
+                    <th key={h} className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center"
+                      style={{ minWidth: 52, background: '#b45309' }}
+                      title={`¿Está hecho el ${h.replace('INF', 'Informe ')} de la valoración del deportista?`}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -869,11 +893,23 @@ function DashboardProyecto({
                           <option value="INV">INV</option>
                         </select>
                       </td>
+                      {/* ── INF1 / INF2 / INF3 — ✓ si el informe ya está hecho, — si no (solo admin) ── */}
+                      {!esProfe && (() => {
+                        const codDep = val(dep, 'codigo').trim().toUpperCase();
+                        const hechos = infMap[codDep];
+                        return ['1', '2', '3'].map(n => (
+                          <td key={n} className="border border-white px-1 py-1.5 text-center" style={{ background: '#fffbeb' }}>
+                            {hechos?.has(n)
+                              ? <span className="text-green-600 font-black text-sm">✓</span>
+                              : <span className="text-gray-300 font-black text-sm">—</span>}
+                          </td>
+                        ));
+                      })()}
                     </tr>
                   );
                 })}
                 {filtrada.length === 0 && (
-                  <tr><td colSpan={cols.length + 7} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
+                  <tr><td colSpan={cols.length + 7 + (esProfe ? 0 : 3)} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
                 )}
               </tbody>
             </table>

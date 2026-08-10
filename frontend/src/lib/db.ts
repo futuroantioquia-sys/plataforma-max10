@@ -460,6 +460,26 @@ export async function saveDeportistas(deps: Deportista[]): Promise<void> {
   }
 }
 
+/** Actualiza las columnas (JSONB) de UN deportista y refresca la caché para que el
+ *  cambio (p. ej. la cuota mensual manual) aplique en TODA la plataforma. */
+export async function updateColumnasDeportista(id: string, columnas: Record<string, any>): Promise<boolean> {
+  try {
+    const { error } = await supabase()
+      .from('deportistas')
+      .update({ columnas })
+      .eq('id', id);
+    if (error) { console.error('[db] updateColumnasDeportista:', error.message); return false; }
+    if (Array.isArray(_cacheDeportistas)) {
+      _cacheDeportistas = _cacheDeportistas.map(d => d.id === id ? { ...d, _columnas: columnas } : d);
+      lsSet(LS_DEPS, _cacheDeportistas);
+    }
+    return true;
+  } catch (e) {
+    console.error('[db] updateColumnasDeportista:', e);
+    return false;
+  }
+}
+
 // ── PAGOS ────────────────────────────────────────────────────
 
 /** Lee todos los pagos: fetch() directo → SDK → localStorage. */
@@ -582,6 +602,10 @@ export async function getPagosPorCodigos(codigos: string[]): Promise<AllPagos> {
 
   const inClause = codigos.map(c => encodeURIComponent(c)).join(',');
 
+  /* NOTA: el estado de cuenta lee SOLO lo autorizado (pagos_estado). El libro
+     dinámico NO se refleja aquí automáticamente; se publica manualmente con el
+     botón "Actualizar estados de cuenta" del libro. */
+
   /* ── Intento 1: fetch() nativo con filtro in() ── */
   try {
     const res = await fetch(
@@ -642,6 +666,62 @@ export async function savePagosDeportista(depId: string, filas: FilaPago[]): Pro
   } catch (e) {
     console.error('[db] savePagosDeportista:', e);
   }
+}
+
+/**
+ * PUBLICA pagos del libro dinámico al estado de cuenta (tabla pagos_estado).
+ * Es una acción MANUAL/autorizada (se llama solo desde el botón del libro).
+ * Solo escribe lo PAGADO (estado/v_pagado/destino/fecha); NO incluye v_cargado,
+ * así el "cargado" (lo que debe pagar) queda intacto.
+ */
+export async function publicarPagosEstado(
+  rows: { deportista_id: string; detalle: string; vPagado: string; destino: string; fecha: string }[],
+): Promise<{ ok: boolean; n: number; msg?: string }> {
+  if (!rows.length) return { ok: true, n: 0 };
+  const payload = rows.map(r => ({
+    deportista_id: r.deportista_id,
+    detalle:       r.detalle,
+    estado:        'PAGÓ',
+    v_pagado:      r.vPagado,
+    destino:       r.destino,
+    fecha:         r.fecha,
+  }));
+  try {
+    for (let i = 0; i < payload.length; i += 500) {
+      const { error } = await supabase()
+        .from('pagos_estado')
+        .upsert(payload.slice(i, i + 500), { onConflict: 'deportista_id,detalle' });
+      if (error) { console.error('[db] publicarPagosEstado:', error.message); return { ok: false, n: 0, msg: error.message }; }
+    }
+    return { ok: true, n: payload.length };
+  } catch (e: any) {
+    console.error('[db] publicarPagosEstado:', e);
+    return { ok: false, n: 0, msg: String(e?.message ?? e) };
+  }
+}
+
+/** Devuelve las claves "código|mes" que YA están PAGADAS en el estado de cuenta
+ *  (para marcar en verde en el libro dinámico, de forma permanente). */
+export async function getPagadosKeys(): Promise<string[]> {
+  const out: string[] = [];
+  const paso = 1000;
+  try {
+    const { count } = await supabase().from('pagos_estado').select('*', { count: 'exact', head: true });
+    const total = count ?? 0;
+    const nP = Math.ceil(total / paso);
+    const reqs = [];
+    for (let p = 0; p < nP; p++) reqs.push(supabase().from('pagos_estado').select('deportista_id,detalle,estado,v_pagado').range(p * paso, p * paso + paso - 1));
+    const res = await Promise.all(reqs);
+    for (const r of res) {
+      for (const row of (((r as any).data || []) as any[])) {
+        const est = String(row.estado || '');
+        const vp = String(row.v_pagado || '').replace(/\D/g, '');
+        const pagado = /PAG/i.test(est) || vp.length > 0;
+        if (pagado && row.deportista_id && row.detalle) out.push(String(row.deportista_id) + '|' + String(row.detalle));
+      }
+    }
+  } catch (e: any) { console.error('[db] getPagadosKeys', e?.message); }
+  return out;
 }
 
 /** Borra TODOS los pagos del libro contable: localStorage + Supabase. */
@@ -2413,4 +2493,130 @@ export async function getResumenVisitas(): Promise<{ total: number; unicos: numb
     if (rUnicos.ok) { const d = await rUnicos.json(); if (Array.isArray(d)) unicos = d.length; }
     return { total, unicos };
   } catch { return { total: 0, unicos: 0 }; }
+}
+
+// ── SOLICITUDES DE FACTURA (calidoso → Área de Pagos / Finanzas) ──────────────
+export interface FacturaSolicitud {
+  id: string;
+  deportistaId: string;
+  codigo: string;
+  nombreDeportista: string;
+  facturaNombre: string;   // a nombre de quién se factura
+  cedula: string;
+  direccion: string;
+  ciudad: string;
+  telefono: string;
+  email: string;
+  detalle: string;         // detalle a facturar
+  valor: string;
+  observacion: string;
+  estado: string;          // 'PEND' | 'OK'
+  createdAt: string;
+}
+
+function mapFactura(r: any): FacturaSolicitud {
+  return {
+    id: r.id, deportistaId: r.deportista_id ?? '', codigo: r.codigo ?? '',
+    nombreDeportista: r.nombre_deportista ?? '', facturaNombre: r.factura_nombre ?? '',
+    cedula: r.cedula ?? '', direccion: r.direccion ?? '', ciudad: r.ciudad ?? '',
+    telefono: r.telefono ?? '', email: r.email ?? '', detalle: r.detalle ?? '',
+    valor: String(r.valor ?? ''), observacion: r.observacion ?? '',
+    estado: r.estado ?? 'PEND', createdAt: r.created_at ?? '',
+  };
+}
+
+/** Crea una solicitud de factura (queda PENDIENTE en Finanzas). */
+export async function crearSolicitudFactura(data: {
+  deportistaId: string; codigo: string; nombreDeportista: string;
+  facturaNombre: string; cedula: string; direccion: string; ciudad: string;
+  telefono: string; email: string; detalle: string; valor: string; observacion: string;
+}): Promise<boolean> {
+  try {
+    const { error } = await supabase().from('facturas_solicitudes').insert({
+      deportista_id: data.deportistaId ?? '',
+      codigo: (data.codigo ?? '').trim(),
+      nombre_deportista: (data.nombreDeportista ?? '').trim(),
+      factura_nombre: (data.facturaNombre ?? '').trim(),
+      cedula: (data.cedula ?? '').trim(),
+      direccion: (data.direccion ?? '').trim(),
+      ciudad: (data.ciudad ?? '').trim(),
+      telefono: (data.telefono ?? '').trim(),
+      email: (data.email ?? '').trim(),
+      detalle: (data.detalle ?? '').trim(),
+      valor: Number(String(data.valor ?? '').replace(/\D/g, '')) || 0,
+      observacion: (data.observacion ?? '').trim(),
+      estado: 'PEND',
+    });
+    if (error) { console.error('[db] crearSolicitudFactura:', error.message); return false; }
+    return true;
+  } catch (e) { console.error('[db] crearSolicitudFactura:', e); return false; }
+}
+
+/** Historial de solicitudes de un deportista (por código). Más recientes primero. */
+export async function getSolicitudesFacturaPorCodigo(codigo: string): Promise<FacturaSolicitud[]> {
+  try {
+    const { data, error } = await supabase()
+      .from('facturas_solicitudes').select('*')
+      .eq('codigo', (codigo ?? '').trim())
+      .order('created_at', { ascending: false });
+    if (error) { console.error('[db] getSolicitudesFacturaPorCodigo:', error.message); return []; }
+    return (data || []).map(mapFactura);
+  } catch (e) { console.error('[db] getSolicitudesFacturaPorCodigo:', e); return []; }
+}
+
+/** Todas las solicitudes PENDIENTES (para el módulo FACTURAS PENDIENTES de Finanzas). */
+export async function getSolicitudesFacturaPendientes(): Promise<FacturaSolicitud[]> {
+  try {
+    const { data, error } = await supabase()
+      .from('facturas_solicitudes').select('*')
+      .eq('estado', 'PEND')
+      .order('created_at', { ascending: false });
+    if (error) { console.error('[db] getSolicitudesFacturaPendientes:', error.message); return []; }
+    return (data || []).map(mapFactura);
+  } catch (e) { console.error('[db] getSolicitudesFacturaPendientes:', e); return []; }
+}
+
+/** Marca una solicitud como realizada (OK) → deja de aparecer en pendientes. */
+export async function marcarFacturaOk(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase().from('facturas_solicitudes').update({ estado: 'OK' }).eq('id', id);
+    if (error) { console.error('[db] marcarFacturaOk:', error.message); return false; }
+    return true;
+  } catch (e) { console.error('[db] marcarFacturaOk:', e); return false; }
+}
+
+// ── CERTIFICADO DE ASISTENCIA: registro de descargas (informe en Gestión) ─────
+export interface CertDescarga { deportistaId: string; codigo: string; nombre: string; createdAt: string; }
+
+/** Registra que un deportista descargó su certificado de asistencia. */
+export async function registrarDescargaCertificado(data: { deportistaId: string; codigo: string; nombre: string }): Promise<void> {
+  try {
+    await supabase().from('cert_asistencia_log').insert({
+      deportista_id: data.deportistaId ?? '',
+      codigo: (data.codigo ?? '').trim(),
+      nombre: (data.nombre ?? '').trim(),
+    });
+  } catch (e) { console.error('[db] registrarDescargaCertificado:', e); }
+}
+
+/** Lee todo el registro de descargas del certificado de asistencia (para el informe). */
+export async function getCertificadosLog(): Promise<CertDescarga[]> {
+  const out: CertDescarga[] = [];
+  try {
+    let desde = 0; const paso = 1000;
+    while (true) {
+      const { data, error } = await supabase()
+        .from('cert_asistencia_log').select('deportista_id,codigo,nombre,created_at')
+        .order('created_at', { ascending: false })
+        .range(desde, desde + paso - 1);
+      if (error) { console.error('[db] getCertificadosLog:', error.message); break; }
+      (data || []).forEach((r: any) => out.push({
+        deportistaId: r.deportista_id ?? '', codigo: r.codigo ?? '',
+        nombre: r.nombre ?? '', createdAt: r.created_at ?? '',
+      }));
+      if (!data || data.length < paso) break;
+      desde += paso;
+    }
+  } catch (e) { console.error('[db] getCertificadosLog:', e); }
+  return out;
 }

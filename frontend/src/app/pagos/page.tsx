@@ -134,9 +134,10 @@ function PagosInner() {
 
   const filtrados = useMemo(() => {
     return deportistas.filter(d => {
-      const estado = depEstados[d.id] ?? 'ACTIVO';
-      if (!mostrarRetirados && estado === 'RETIRADO') return false;
-      if (mostrarRetirados && estado !== 'RETIRADO') return false;
+      // Retirado si su columna ESTADO dice "Retirado" (base) o si se marcó localmente.
+      const retirado = depEstados[d.id] === 'RETIRADO' || /retirad/i.test(getCol(d, /^estado$/i) || '');
+      if (!mostrarRetirados && retirado) return false;
+      if (mostrarRetirados && !retirado) return false;
       const q    = busqueda.toLowerCase();
       const cod  = codigoDe(d).toLowerCase();
       const prog = getCol(d, /^program/i);
@@ -351,6 +352,7 @@ function PagosInner() {
                 <tr>
                   {[
                     { h: 'ESTADO DEP',            align: 'center' },
+                    { h: 'FECHA AFILIACIÓN',      align: 'center' },
                     { h: 'CÓDIGO',                align: 'center' },
                     { h: 'NOMBRE DEL DEPORTISTA', align: 'left'   },
                     { h: 'PROGRAMA',              align: 'center' },
@@ -389,7 +391,8 @@ function PagosInner() {
                       {/* ESTADO DEP — solo lectura */}
                       <td style={{ background: bg, border: '1px solid white', padding: '4px 6px', textAlign: 'center' }}>
                         {(() => {
-                          const est: DepEstado = depEstados[dep.id] ?? 'ACTIVO';
+                          const est: DepEstado = /retirad/i.test(getCol(dep, /^estado$/i) || '')
+                            ? 'RETIRADO' : (depEstados[dep.id] ?? 'ACTIVO');
                           const colors: Record<DepEstado, string> = {
                             ACTIVO:   '#16a34a',
                             PAUSO:    '#f59e0b',
@@ -400,6 +403,13 @@ function PagosInner() {
                           );
                         })()}
                       </td>
+
+                      {/* FECHA DE AFILIACIÓN */}
+                      <td style={{
+                        background: bg, color: '#374151', border: '1px solid white',
+                        padding: '8px 10px', textAlign: 'center',
+                        fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                      }}>{fmtFecha(getCol(dep, /fecha.*afil|afil.*fecha/i)) || '—'}</td>
 
                       {/* CÓDIGO — color por afiliación */}
                       <td style={{

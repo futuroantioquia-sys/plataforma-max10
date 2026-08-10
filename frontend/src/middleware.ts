@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { validarFirma } from '@/lib/session';
+import { PADRES_VEN_VALORACION } from '@/lib/config';
 
 // Rutas que no requieren autenticación
 const RUTAS_PUBLICAS = ['/login', '/afiliacion', '/api'];
@@ -42,6 +43,17 @@ export async function middleware(request: NextRequest) {
 
   // Restricción de rutas para deportista (calidoso)
   if (rol === 'deportista') {
+    // Módulo de valoración (seguimiento + valoración dinámica):
+    // bloqueado hasta que se AUTORICE a los padres (PADRES_VEN_VALORACION).
+    const esValoracion =
+      /^\/alumnos\/[^/]+\/seguimiento/.test(pathname) ||
+      pathname === '/valoracion-dinamica' || pathname.startsWith('/valoracion-dinamica/');
+    if (esValoracion) {
+      if (!PADRES_VEN_VALORACION) {
+        return NextResponse.redirect(new URL('/alumnos', request.url));
+      }
+      return NextResponse.next(); // autorizado: ve el módulo nuevo
+    }
     const permitida = RUTAS_DEPORTISTA.some(r => pathname === r || pathname.startsWith(r + '/'));
     if (!permitida) {
       return NextResponse.redirect(new URL('/alumnos', request.url));
@@ -50,7 +62,7 @@ export async function middleware(request: NextRequest) {
 
   // Administrador DEPORTIVO: acceso total EXCEPTO Finanzas
   if (rol === 'deportivo') {
-    const finanzas = ['/pagos', '/pagos-pendientes', '/productos'];
+    const finanzas = ['/pagos', '/pagos-pendientes', '/productos', '/contabilidad', '/facturas'];
     const esFinanzas = finanzas.some(r => pathname === r || pathname.startsWith(r + '/'));
     if (esFinanzas) {
       return NextResponse.redirect(new URL('/dashboard', request.url));

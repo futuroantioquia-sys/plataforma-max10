@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Calendar, BarChart2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getAsistencia, getAsistenciaDeportista, getFoto } from '@/lib/db';
+import { getDeportistas, getAsistencia, getAsistenciaDeportista, getFoto, registrarDescargaCertificado } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import LoadingBall from '@/components/LoadingBall';
 import { useAuthStore } from '@/store/auth.store';
@@ -208,6 +208,12 @@ export default function AsistenciaAtletaPage() {
 
   function generarCertificado(desdeParam?: number, hastaParam?: number) {
     if (!dep) return;
+    // Registrar la descarga para el informe de Gestión (no bloquea la generación)
+    registrarDescargaCertificado({
+      deportistaId: String(id ?? ''),
+      codigo: getCol(dep, /^c[oó]d/i),
+      nombre: dep._nombre,
+    });
     const d = desdeParam ?? certDesde;
     const h = hastaParam ?? certHasta;
     const docDep   = getCol(dep, /num.*doc|^doc|c[eé]dul/i) || '—';

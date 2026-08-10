@@ -76,7 +76,8 @@ export default function ConsolidadoPage() {
   const atletas = useMemo(() => {
     if (!proyecto) return [];
     return deportistas
-      .filter(d => proyectoDe(d) === proyecto)
+      // Los retirados NO aparecen en asistencia (solo en el Consolidado Retirados)
+      .filter(d => proyectoDe(d) === proyecto && !/retirad/i.test(getCol(d, /^estado$/i) || ''))
       .sort((a, b) => a._nombre.localeCompare(b._nombre, 'es'));
   }, [deportistas, proyecto]);
 

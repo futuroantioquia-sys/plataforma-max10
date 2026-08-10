@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Search } from 'lucide-react';
+import { ArrowLeft, Search, Download } from 'lucide-react';
 import { getDeportistas, getFoto, getProfes } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { getCategoriasValoracion } from '@/lib/valoracion-textos';
+import { esSuperAdmin, esDeportivo, esContabilidad } from '@/lib/permisos';
 
 const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
@@ -252,6 +253,10 @@ function ValoracionDinamicaInner() {
   const searchParams = useSearchParams();
   const codParam = searchParams.get('cod');
 
+  // Solo administradores ven el botón de descargar PDF (para probar)
+  const [esAdminUI, setEsAdminUI] = useState(false);
+  useEffect(() => { setEsAdminUI(esSuperAdmin() || esDeportivo() || esContabilidad()); }, []);
+
   const [deps, setDeps]   = useState<Deportista[]>([]);
   const [q, setQ]         = useState('');
   const [sel, setSel]     = useState<Deportista | null>(null);
@@ -386,9 +391,27 @@ function ValoracionDinamicaInner() {
   const heroPeriodo   = (pDesde && pHasta) ? `${pDesde} a ${pHasta}${heroAnio ? ' de ' + heroAnio : ''}`
                        : (pDesde || pHasta || '');
 
+  function descargarPDF() {
+    const cod = (codParam || '').trim();
+    const nombre = (sel?._nombre || '').trim().replace(/\s+/g, '-');
+    const prev = document.title;
+    document.title = [cod, nombre, 'Valoracion-Dinamica'].filter(Boolean).join('_') || 'Valoracion-Dinamica';
+    window.print();
+    setTimeout(() => { document.title = prev; }, 1000);
+  }
+
   return (
     <div className="min-h-screen bg-black">
-      <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
+      {/* Impresión/PDF: conservar fondo negro y TODOS los colores tal cual se ven */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          @page { margin: 6mm; }
+          html, body { background: #000 !important; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .print\\:hidden { display: none !important; }
+        }
+      ` }} />
+      <header className="print:hidden bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => { if (sel?.id) router.push(`/alumnos/${sel.id}`); else router.back(); }} className="text-white/70 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <div className="flex-1 min-w-0">
           <h1 className="text-white font-black text-lg leading-tight">Valoración Dinámica</h1>
@@ -402,7 +425,7 @@ function ValoracionDinamicaInner() {
 
       <main className="max-w-xl mx-auto px-3 py-4 space-y-4">
         {/* Buscador */}
-        <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
+        <div className="print:hidden bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Buscar deportista</label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -650,6 +673,14 @@ function ValoracionDinamicaInner() {
                 <p className="text-white/60 text-[10px] font-semibold mt-1">34 Años Acompañando Sueños</p>
               </div>
             </div>
+
+            {/* Botón Descargar PDF — solo administradores (para probar) */}
+            {esAdminUI && (
+              <button onClick={descargarPDF}
+                className="print:hidden w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#16a34a] to-[#064e1e] hover:opacity-90 active:opacity-80 transition rounded-2xl py-3.5 text-white font-black text-sm tracking-wide">
+                <Download className="w-4 h-4" /> Descargar PDF
+              </button>
+            )}
           </>
         )}
 
