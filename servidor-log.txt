@@ -1,0 +1,31 @@
+
+> futuro-antioquia-web@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.4
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1810ms
+ ✓ Compiled /src/middleware in 113ms (75 modules)
+ ✓ Compiled /api/pagos/soportes in 202ms (53 modules)
+ ✓ Compiled (58 modules)
+ GET /api/deportistas 200 in 448ms
+ GET /api/pagos/soportes?solo=count 502 in 452ms
+ GET /api/deportistas 200 in 136ms
+ GET /api/pagos/soportes?solo=count 502 in 147ms
+ GET /api/deportistas 200 in 136ms
+ GET /api/pagos/soportes?solo=count 502 in 140ms
+ GET /api/deportistas 200 in 129ms
+ GET /api/pagos/soportes?solo=count 502 in 133ms
+ GET /api/deportistas 200 in 167ms
+ GET /api/pagos/soportes?solo=count 502 in 171ms
+ ✓ Compiled /api/auth/logout in 321ms (60 modules)
+ POST /api/auth/logout 200 in 433ms
+ GET /api/deportistas 200 in 285ms
+ GET /api/pagos/soportes?solo=count 502 in 291ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 6.8s (1352 modules)
+ ✓ Compiled in 353ms (662 modules)
+ GET /login 200 in 167ms

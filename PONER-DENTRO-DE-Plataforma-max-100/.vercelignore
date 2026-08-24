@@ -1,0 +1,10 @@
+# Cosas que NO hay que subir a internet al publicar.
+# Se publica desde la carpeta de arriba porque el proyecto en Vercel tiene
+# configurada la subcarpeta "frontend" como raiz. Sin este archivo se subiria
+# tambien el respaldo completo, que pesa muchisimo y no sirve para nada alla.
+/RESPALDO
+/MUDANZA
+/code-error-reviewer
+/.git
+/deploy-log.txt
+/servidor-log.txt

@@ -1,0 +1,35 @@
+=========================================================
+  ACTUALIZACION DEL PC NUEVO
+  Trae todo el trabajo del 10 al 24 de agosto
+=========================================================
+
+QUE HACER (2 minutos):
+
+ 1. Cierre la ventana negra del servidor si esta abierta.
+
+ 2. Entre a esta carpeta descomprimida.
+
+ 3. Seleccione TODO lo que hay adentro (Ctrl + E o Ctrl + A)
+    y copielo (Ctrl + C).
+
+ 4. Vaya a:
+       C:\Users\futur\Claude\Projects\Plataforma max 100
+    y pegue (Ctrl + V).
+
+ 5. Windows va a preguntar dos cosas. Responda:
+       - "Reemplazar los archivos en el destino"
+       - "Combinar" (si pregunta por las carpetas)
+
+ 6. Doble clic en  PRENDER-LOCAL.bat
+    Espere 30 segundos y abra:  http://localhost:3000/login
+
+=========================================================
+DESPUES, MUY IMPORTANTE
+=========================================================
+ Doble clic en  push2.vbs  y escriba:
+   "trabajo del 10 al 24 de agosto"
+
+ Eso sube TODO a GitHub. Desde ese momento los dos
+ computadores quedan sincronizados y ya nunca se
+ vuelve a perder nada.
+=========================================================
