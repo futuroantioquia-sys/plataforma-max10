@@ -3,11 +3,20 @@ node_modules/
 .pnp
 .pnp.js
 
-# Variables de entorno — NUNCA subir al repositorio
+# Variables de entorno — NUNCA subir al repositorio.
+# Se ignora TODO .env salvo el ejemplo, que no lleva valores reales.
+# (Antes .env.production quedaba fuera de la regla y sí se subía.)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 backend/.env
+
+# Archivos con claves o datos personales que nunca deben ir al repositorio
+DEVOLVER-CLAVES.sql
+ARREGLOS-CODIGOS.sql
+deploy-log.txt
+servidor-log.txt
+push_result.txt
 
 # Next.js
 frontend/.next/

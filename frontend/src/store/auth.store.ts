@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { createClient } from '@/lib/supabase/client';
 
 export type Rol = 'administracion' | 'contable' | 'profesor' | 'padre' | 'deportista' | 'visitante';
@@ -24,6 +24,49 @@ interface AuthState {
   cargarPerfil: () => Promise<void>;
   limpiarError: () => void;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Almacenamiento a prueba de "memoria llena".
+   El navegador solo deja guardar unos 5 MB por sitio. Las cachés de
+   deportistas y fotos lo llenaban, y al iniciar sesión el guardado
+   fallaba con QuotaExceededError — el ingreso se caía sin avisar.
+   Ahora, si no cabe, se borran primero las cachés pesadas y se
+   reintenta; la sesión siempre gana.
+   ───────────────────────────────────────────────────────────── */
+const CACHES_PESADAS = [
+  'futuro_fotos_deportistas',
+  'futuro_deportistas',
+  'futuro_libro_pagos',
+  'futuro_vista_contable',
+  'futuro_pagos_estado',
+];
+
+const almacenamientoSeguro = {
+  getItem: (nombre: string): string | null => {
+    try { return localStorage.getItem(nombre); } catch { return null; }
+  },
+  setItem: (nombre: string, valor: string): void => {
+    try { localStorage.setItem(nombre, valor); return; } catch { /* lleno */ }
+    for (const k of CACHES_PESADAS) {
+      try {
+        localStorage.removeItem(k);
+        localStorage.setItem(nombre, valor);
+        console.warn('[auth] almacenamiento lleno: se liberó la caché', k);
+        return;
+      } catch { /* sigue faltando espacio */ }
+    }
+    try {
+      localStorage.clear();
+      localStorage.setItem(nombre, valor);
+      console.warn('[auth] almacenamiento lleno: se limpió todo para poder entrar');
+    } catch (e) {
+      console.error('[auth] no se pudo guardar la sesión:', e);
+    }
+  },
+  removeItem: (nombre: string): void => {
+    try { localStorage.removeItem(nombre); } catch { /* noop */ }
+  },
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -93,6 +136,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'futuro-antioquia-auth',
+      storage: createJSONStorage(() => almacenamientoSeguro),
       partialize: (state) => ({ usuario: state.usuario }),
     }
   )

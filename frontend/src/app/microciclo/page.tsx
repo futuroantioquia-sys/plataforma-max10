@@ -121,7 +121,7 @@ const CAMPOS_DIA: { k: keyof MicrocicloDia; t: string }[] = [
   { k: 'componentes',  t: 'Componentes'       },
   { k: 'carga',        t: 'Carga'             },
   { k: 'objetivo_dia', t: 'Objetivo del día'  },
-  { k: 'contenidos',   t: 'Contenidos'        },
+  { k: 'contenidos',   t: 'Objetivos específicos' },
   { k: 'fase_inicial', t: 'Fase inicial'      },
   { k: 'fase_central', t: 'Fase central'      },
   { k: 'fase_final',   t: 'Fase final'        },
@@ -1245,7 +1245,7 @@ function DiaLectura({
         </div>
 
         <BloqueLectura titulo="Objetivo del día" texto={dia.objetivo_dia} />
-        <BloqueLectura titulo="Contenidos"       texto={dia.contenidos} />
+        <BloqueLectura titulo="Objetivos específicos" texto={dia.contenidos} />
         <BloqueLectura titulo="Fase inicial"     texto={dia.fase_inicial} />
         <BloqueLectura titulo="Fase central"     texto={dia.fase_central} />
         <BloqueLectura titulo="Fase final"       texto={dia.fase_final} />
@@ -1333,7 +1333,7 @@ function DiaCard({
     !franja                && 'Horario',
     componentes.length === 0 && 'Componentes',
     !objetivo.trim()       && 'Objetivo del día',
-    !contenidos.trim()     && 'Contenidos',
+    !contenidos.trim()     && 'Objetivos específicos',
     !faseI.trim()          && 'Fase inicial',
     !faseC.trim()          && 'Fase central',
     !faseF.trim()          && 'Fase final',
@@ -1372,7 +1372,7 @@ function DiaCard({
     // Se guardó todo menos escenario / horario / componentes.
     if (err?.startsWith('SOLO_FALTAN_NUEVAS')) {
       alert(
-        'Se guardó el objetivo, los contenidos, las fases y las observaciones.\n\n'
+        'Se guardó el objetivo, los objetivos específicos, las fases y las observaciones.\n\n'
         + 'NO se pudo guardar: ESCENARIO, HORARIO y COMPONENTES.\n'
         + 'A la base todavía le faltan esas tres columnas.\n\n'
         + 'Para habilitarlas: abre MICROCICLO-TABLAS.sql, cópialo completo y\n'
@@ -1545,7 +1545,7 @@ function DiaCard({
           </div>
 
           <Bloque titulo="Objetivo del día" filas={2} valor={objetivo}      onChange={setObjetivo}      marcar={senalar} bloqueado={cerrado} />
-          <Bloque titulo="Contenidos"       filas={3} valor={contenidos}    onChange={setContenidos}    marcar={senalar} bloqueado={cerrado} />
+          <Bloque titulo="Objetivos específicos" filas={3} valor={contenidos}    onChange={setContenidos}    marcar={senalar} bloqueado={cerrado} />
 
           <Bloque titulo="Fase inicial"     filas={3} valor={faseI}         onChange={setFaseI}         marcar={senalar} bloqueado={cerrado} pizarra />
           <Bloque titulo="Fase central"     filas={3} valor={faseC}         onChange={setFaseC}         marcar={senalar} bloqueado={cerrado} pizarra />

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSoloLectura } from '@/lib/permisos';
 import { ArrowLeft, Search, Users, Save, CheckCircle, Columns3, Upload, X, Trophy, AlertCircle, Trash2 } from 'lucide-react';
-import { getDeportistas, saveDeportistas, deleteAllDeportistas, getProfes } from '@/lib/db';
+import { getDeportistas, saveDeportistas, deleteAllDeportistas, eliminarDeportista, getProfes } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -23,6 +23,17 @@ const SELECTS_RX: RegExp[] = [
   /^program/i,
   /^estado$/i,
 ];
+
+// ── PALETA (la misma del consolidado de asistencias) ─────────
+const LIENZO     = '#333F50';   // lienzo de la tabla
+const PANEL      = '#3C4759';   // fila de datos
+const CAMPO      = '#2B3547';   // barras y paneles alrededor
+const BORDE      = '#4A5568';
+const VERDE      = '#00B050';
+const GRIS_VACIO = '#717985';   // retirados / pausados
+
+// Años de nacimiento del filtro: del más nuevo al más viejo.
+const ANIOS_NACIMIENTO = Array.from({ length: 2024 - 2011 + 1 }, (_, i) => String(2024 - i));
 
 // ── Opciones estándar para TIPO DE AFILIACIÓN (editable) ─
 const OPCIONES_AFIL = [
@@ -44,6 +55,72 @@ function serialAFecha(val: string): string {
 
 function esFechaAfil(col: string) { return /fecha.*afil|afil.*fecha|fecha_afil/i.test(col.trim()); }
 function esCodigo(col: string)    { return /^c[oó]d/i.test(col.trim()); }
+
+// Normaliza el NOMBRE de una columna para poder emparejar los datos que entraron
+// con distinto nombre (Excel vs formulario de la app). Ej:
+//   'GÉNERO' y 'GENERO'  → 'GENERO'
+//   'DIRECCIÓN' y 'DIRECCION' → 'DIRECCION'
+//   'PESO (CM)' y 'PESO' → 'PESO'
+//   'PARENTEZCO' y 'PARENTESCO' → 'PARENTESCO'
+function normKey(s: string): string {
+  return String(s ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // quita tildes
+    .toUpperCase()
+    .replace(/\([^)]*\)/g, '')                          // quita "(CM)", "(KG)"…
+    .replace(/[^A-Z0-9]/g, '')                          // quita espacios/puntuacion
+    .replace(/Z/g, 'S');                                // parentezco = parentesco
+}
+
+// Diccionario de equivalencias entre los DOS formatos de captura (Excel vs APP).
+// Cada grupo lista los nombres equivalentes; el primero es solo de referencia.
+const SINONIMOS = [
+  /* CÓDIGO: durante un tiempo el mismo dato se guardó con tres nombres distintos
+     ("CÓDIGO", "CODIGO" sin tilde y "CÓDIGO DEL DEPORTISTA"). Ya se unificaron
+     todos en la base bajo "CÓDIGO", pero se dejan aquí como equivalentes para que,
+     si un Excel vuelve a entrar con otro nombre, la plataforma lo siga tratando
+     como la MISMA columna y ningún deportista desaparezca de las búsquedas. */
+  ['CÓDIGO', 'CODIGO', 'CÓDIGO DEL DEPORTISTA', 'CODIGO DEL DEPORTISTA', 'COD'],
+  ['NOMBRE DEL ACUDIENTE', 'ACUDIENTE'],
+  ['ANTECEDENTES MEDICOS', 'ANTECEDENTES_MED'],
+  ['NUMERO DE CELULAR', 'CEL_FAMILIAR'],
+  ['CELULAR DEL ACUDIENTE', 'TEL_ACUDIENTE'],
+  ['INSTITUCION EDUCATIVA', 'COLEGIO'],
+  ['ALGUNA CONDICION MENTAL O COMPORTAMENTAL?', 'CONDICION_MENTAL'],
+  ['NUMERO DE DOCUMENTO DEL ACUDIENTE', 'DOC_ACUD'],
+  ['NUMERO DE DOCUMENTO', 'DOCUMENTO', 'DOCUMENTO_INGRESO'],
+  ['EMPRESA DONDE LABORA', 'EMPRESA'],
+  ['EPS / ENTIFDAD DE SALUD', 'EPS'],
+  ['GRADO EN CURSO', 'GRADO'],
+  ['TIENES HERMANOS EN EL CLUB?', 'HERMANOS_CLUB'],
+  ['HORARIO DE ESTUDIO', 'HORARIO_ESTUDIO'],
+  ['JORNADA DE ESTUDIO', 'JORNADA'],
+  ['JORNADA DE ENTRENAMIENTO', 'JORNADA_ENT'],
+  ['NOMBRE DEL FAMILIAR', 'NOMBRE_FAMILIAR'],
+  ['NOMBRE DE TU HERMANO', 'NOMBRE_HERMANO'],
+  ['SI ES NUEVO QUE ESPERA RECIBIR SI ES ANTIGUO EN QUE DEBE MEJORAR', 'OBSERVACIONES'],
+  ['PARENTEZCO DEL ACUDIENTE', 'PARENTESCO_ACUD'],
+  ['PIE DOMINANTE', 'PIE_HABIL'],
+  ['POSICION EN EL CAMPO', 'POSICION'],
+  ['SEDE DE ENTRENAMIENTO', 'SEDE'],
+  ['TALLA DEL UNIFORME', 'TALLA_UNIFORME'],
+  ['TIPO DE COLEGIO', 'TIPO_COL'],
+  ['TIPO DE DOCUMENTO', 'TIPO_DOC'],
+  ['TIPO DE DOCUMENTO DEL ACUDIENTE', 'TIPO_DOC_ACUD'],
+  ['EN CUANTOS TORNEOS LOCALES LE GUSTARIA PARTICIPAR?', 'TORNEOS_LOCALES'],
+  ['LE GUSTARIA PARTICIPAR EN TORNEOS NACIONALES?', 'TORNEOS_NAC'],
+];
+const CANON = (() => {
+  const m = {};
+  for (const grupo of SINONIMOS) {
+    const canonica = normKey(grupo[0]);
+    for (const nombre of grupo) m[normKey(nombre)] = canonica;
+  }
+  return m;
+})();
+function claveCanonica(s) {
+  const n = normKey(s);
+  return CANON[n] ?? n;
+}
 function esTipoAfil(col: string)  { return !esFechaAfil(col) && /tipo.*afil|^afil/i.test(col.trim()); }
 
 function prioridadCodigo(cod: number): number {
@@ -84,6 +161,27 @@ function ordenAfil(dep: Deportista): number {
   return 6;
 }
 
+/** Orden oficial del listado: por código, con la prioridad de siempre.
+ *  Recibe cómo leer el código y el nombre, para poder tener en cuenta lo que
+ *  todavía está escrito en pantalla y sin guardar (los cambios pendientes). */
+function cmpDeportistasCon(
+  codigoDe: (d: Deportista) => string,
+  nombreDe: (d: Deportista) => string,
+) {
+  return (a: Deportista, b: Deportista): number => {
+    // Primero separa activos / pausados / retirados; lo demás queda igual.
+    const rA = rangoEstado(a), rB = rangoEstado(b);
+    if (rA !== rB) return rA - rB;
+    const nA = Number(codigoDe(a).replace(/\D/g, '')) || 0;
+    const nB = Number(codigoDe(b).replace(/\D/g, '')) || 0;
+    const pA = prioridadCodigo(nA);
+    const pB = prioridadCodigo(nB);
+    if (pA !== pB) return pA - pB;
+    if (nA !== nB) return nA - nB;
+    return nombreDe(a).localeCompare(nombreDe(b), 'es');
+  };
+}
+
 function getColVal(dep: Deportista, rx: RegExp): string {
   const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k.trim()));
   return k ? (dep._columnas[k] ?? '') : '';
@@ -94,6 +192,16 @@ function ordenPrograma(prog: string) {
   return i >= 0 ? i : ORDEN_PROGRAMA.length;
 }
 function esRetirado(dep: Deportista) { return /retir/i.test(getColVal(dep, /^estado$/i)); }
+function esPausado(dep: Deportista)  { return /pausa/i.test(getColVal(dep, /^estado$/i)); }
+/** Los que ya no están entrenando bajan al final de la lista:
+ *  0 = activo · 1 = pausado · 2 = retirado.
+ *  Dentro de cada bloque NO se altera nada: sigue mandando el orden de códigos
+ *  de siempre (nuevos naranja, antiguos verde, reingreso azul). — 22/08/2026 */
+function rangoEstado(dep: Deportista): number {
+  if (esRetirado(dep)) return 2;
+  if (esPausado(dep))  return 1;
+  return 0;
+}
 function grupoDep(dep: Deportista): string {
   if (esRetirado(dep)) return '__RETIRADO__';
   return getColVal(dep, /^program/i).trim() || '__SIN_PROGRAMA__';
@@ -167,6 +275,7 @@ export default function GeneralPage() {
   const [resizingActive, setResizingActive] = useState<string | null>(null);
   const [programaFiltro, setProgramaFiltro] = useState<string | null>(null);
   const [proyectoFiltro, setProyectoFiltro] = useState<string | null>(null);
+  const [anioFiltro,     setAnioFiltro]     = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // ── Importar Torneos ─────────────────────────────────────────
@@ -419,30 +528,54 @@ export default function GeneralPage() {
     return result;
   }, [columnas, deportistas]);
 
+  /* Un dato recién escrito en la tabla vive en `edits` hasta que se oprime
+     ACTUALIZAR. Antes, buscar y ordenar solo miraban lo YA guardado: por eso un
+     código apenas digitado (26401) no aparecía al buscarlo y la fila se iba al
+     final en vez de quedar junto a los de su serie. Estas dos funciones leen
+     primero lo que está en pantalla. */
+  const codigoDeDep = useCallback((d: Deportista): string => {
+    const e = edits[d.id];
+    if (e) {
+      const k = Object.keys(e).find(x => /^c[oó]d/i.test(x.trim()));
+      if (k && String(e[k] ?? '').trim()) return String(e[k]);
+    }
+    return getColVal(d, /^c[oó]d/i);
+  }, [edits]);
+
+  const nombreDeDep = useCallback((d: Deportista): string => {
+    const e = edits[d.id];
+    if (e) {
+      const k = Object.keys(e).find(x => /^(deportista|nombre)/i.test(x.trim()));
+      if (k && String(e[k] ?? '').trim()) return String(e[k]);
+    }
+    return d._nombre ?? '';
+  }, [edits]);
+
   // ── Filtro + sort ────────────────────────────────────────────
   const ordenados = useMemo(() => {
     const q    = buscar.trim().toLowerCase();
     const qCod = buscarCod.trim().toLowerCase();
     const lista = deportistas.filter(d => {
-      if (q && !d._nombre.toLowerCase().includes(q)) return false;
+      if (q && !nombreDeDep(d).toLowerCase().includes(q)) return false;
       if (qCod) {
-        const cod = getColVal(d, /^c[oó]d/i).toLowerCase();
+        const cod = codigoDeDep(d).toLowerCase();
         if (!cod.includes(qCod)) return false;
       }
       return true;
     });
 
-    return lista.sort((a, b) => {
-      // Orden puro por código — sin importar afiliación ni estado
-      const nA = Number(getColVal(a, /^c[oó]d/i).replace(/\D/g, '')) || 0;
-      const nB = Number(getColVal(b, /^c[oó]d/i).replace(/\D/g, '')) || 0;
-      const pA = prioridadCodigo(nA);
-      const pB = prioridadCodigo(nB);
-      if (pA !== pB) return pA - pB;
-      if (nA !== nB) return nA - nB;
-      return a._nombre.localeCompare(b._nombre, 'es');
-    });
-  }, [deportistas, buscar, buscarCod]);
+    return lista.sort(cmpDeportistasCon(codigoDeDep, nombreDeDep));
+  }, [deportistas, buscar, buscarCod, codigoDeDep, nombreDeDep]);
+
+  /* N° DE FILA FIJO: se calcula sobre el listado COMPLETO, no sobre lo que quedó
+     después de buscar o filtrar. Así, al buscar un código, la fila conserva el
+     mismo número que tiene en la lista completa y se sabe dónde está parado. */
+  const numFilaGlobal = useMemo(() => {
+    const m: Record<string, number> = {};
+    deportistas.slice().sort(cmpDeportistasCon(codigoDeDep, nombreDeDep))
+      .forEach((d, i) => { m[d.id] = i + 1; });
+    return m;
+  }, [deportistas, codigoDeDep, nombreDeDep]);
 
   // ── Grupos ───────────────────────────────────────────────────
   const grupos = useMemo(() => {
@@ -469,14 +602,84 @@ export default function GeneralPage() {
     setGuardado(false);
   }, []);
 
+  // Índice de nombres de columna NORMALIZADOS por deportista → nombre real de la llave.
+  // Permite mostrar el dato aunque haya entrado con otro nombre (Excel vs app).
+  const idxNorm = useMemo(() => {
+    const m = new Map<string, Record<string, string>>();
+    deportistas.forEach(d => {
+      const nk: Record<string, string> = {};
+      Object.keys(d._columnas ?? {}).forEach(k => {
+        const n = claveCanonica(k);
+        if (n && !(n in nk)) nk[n] = k;   // el primero que aparezca gana
+      });
+      m.set(d.id, nk);
+    });
+    return m;
+  }, [deportistas]);
+
   function getValCelda(dep: Deportista, col: string): string {
-    return edits[dep.id]?.[col] ?? dep._columnas[col] ?? '';
+    const e = edits[dep.id]?.[col];
+    if (e !== undefined) return e;
+    const cols = dep._columnas ?? {};
+    const directo = cols[col];
+    if (directo !== undefined && String(directo).trim() !== '') return directo;
+    // Respaldo: si la casilla exacta está vacía, buscar el mismo dato bajo un
+    // nombre equivalente (sin tildes, sin "(CM)", parentezco/parentesco…).
+    const realKey = idxNorm.get(dep.id)?.[claveCanonica(col)];
+    if (realKey && realKey !== col) {
+      const v = cols[realKey];
+      if (v !== undefined && String(v).trim() !== '') return v;
+    }
+    return directo ?? '';
   }
 
   const pendingCount = useMemo(
     () => Object.values(edits).reduce((s, d) => s + Object.keys(d).length, 0),
     [edits]
   );
+
+  // Deportista que se está eliminando (para no repetir el clic)
+  const [borrandoDep, setBorrandoDep] = useState<string | null>(null);
+
+  /** Elimina un deportista de la base. Muestra TODO lo que se va a borrar antes
+   *  de tocar nada; el borrado no se puede deshacer desde la pantalla. */
+  async function eliminarFilaDeportista(dep: Deportista, nFila: number) {
+    if (borrandoDep) return;
+    const cod    = getColVal(dep, /^c[oó]d/i).trim();
+    const prog   = getColVal(dep, /^program/i).trim();
+    const fechaA = serialAFecha(getColVal(dep, /fecha.*afil|afil.*fecha/i));
+    const aviso =
+      'ELIMINAR DEPORTISTA\n\n' +
+      `   Fila:      N° ${nFila}\n` +
+      `   Nombre:    ${dep._nombre || '— sin nombre —'}\n` +
+      `   Código:    ${cod || '— sin código —'}\n` +
+      `   Programa:  ${prog || '— sin programa —'}\n` +
+      `   Afiliado:  ${fechaA || '— sin fecha —'}\n\n` +
+      'Se borra la ficha de la base de datos y NO se puede deshacer desde aquí.\n' +
+      'Sus pagos, asistencias y documentos no se borran: quedan sin dueño.\n\n' +
+      '¿Eliminar esta ficha?';
+    if (!window.confirm(aviso)) return;
+
+    setBorrandoDep(dep.id);
+    const ok = await eliminarDeportista(dep.id);
+    if (ok) {
+      setDeportistas(prev => prev.filter(d => d.id !== dep.id));
+      setEdits(prev => { const n = { ...prev }; delete n[dep.id]; return n; });
+    } else {
+      window.alert('No se pudo eliminar. Revisa la conexión e inténtalo de nuevo.');
+    }
+    setBorrandoDep(null);
+  }
+
+  /* Los cambios escritos en la tabla viven solo en la memoria del navegador hasta
+     que se oprime ACTUALIZAR. Si se recarga o se cierra la pestaña ANTES, se
+     pierden sin avisar. Este aviso obliga a confirmar la salida. */
+  useEffect(() => {
+    if (!pendingCount) return;
+    const avisar = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [pendingCount]);
 
   // ── ACTUALIZAR: guarda TODO ───────────────────────────────────
   function actualizarTodo() {
@@ -726,12 +929,29 @@ export default function GeneralPage() {
     setTorneoPaso('listo');
   }
 
+  // ── Barra de desplazamiento horizontal superior (sincronizada) ──
+  const mainRef   = useRef<HTMLElement>(null);
+  const topBarRef = useRef<HTMLDivElement>(null);
+  const [anchoScroll,  setAnchoScroll]  = useState(0);
+  const [anchoVisible, setAnchoVisible] = useState(0);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const medir = () => { setAnchoScroll(el.scrollWidth); setAnchoVisible(el.clientWidth); };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    window.addEventListener('resize', medir);
+    return () => { ro.disconnect(); window.removeEventListener('resize', medir); };
+  }, [deportistas, colVisibles, cargando]);
+
   // ─────────────────────────────────────────────────────────────
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col" style={{ background: LIENZO }}>
 
       {/* ── HEADER ── */}
-      <header className="relative bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-3 flex items-center gap-3 flex-shrink-0 z-30 overflow-hidden">
+      <header className="relative bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-3 flex items-center gap-3 flex-shrink-0 z-30 overflow-hidden">
         {/* Patrón balones */}
         <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
           <svg className="absolute inset-0 w-full h-full opacity-[0.12]" xmlns="http://www.w3.org/2000/svg">
@@ -791,26 +1011,11 @@ export default function GeneralPage() {
           </button>
         )}
 
-        {/* Botón deshacer último lote — solo visible si hay lote */}
-        {!soloLectura && ultimoLote.length > 0 && (
-          <button
-            onClick={eliminarUltimoLote}
-            className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-500/90 hover:bg-amber-600 text-white transition flex-shrink-0"
-            title={`Eliminar los ${ultimoLote.length} deportistas del último lote subido`}>
-            <Trash2 className="w-3.5 h-3.5" />
-            Deshacer último ({ultimoLote.length})
-          </button>
-        )}
-
-        {/* Botón SUBIR NUEVOS DEPORTISTAS */}
-        {!soloLectura && (
-        <button
-          onClick={() => { setModalNuevos(true); setNuevosPaso('subir'); setNuevosFilas([]); }}
-          className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#16a34a] text-white hover:bg-[#064e1e] transition flex-shrink-0 shadow-sm">
-          <Upload className="w-3.5 h-3.5" />
-          Subir nuevos
-        </button>
-        )}
+        {/* 22/08/2026 — se retiraron de esta barra:
+              · "Deshacer último": borraba de golpe el lote recién importado.
+              · "Subir nuevos": la importación de Excel.
+              · "Columnas": el panel para ocultar columnas.
+            El código de los tres sigue en el archivo, solo sin botón. */}
 
         {/* Input oculto para nuevos deportistas */}
         <input ref={nuevosInputRef} type="file" accept=".xlsx,.xls" className="hidden"
@@ -826,67 +1031,6 @@ export default function GeneralPage() {
         </button>
         )}
 
-        {/* Botón columnas visibles */}
-        <div className="relative flex-shrink-0" ref={panelRef}>
-          <button
-            onClick={() => setPanelColumnas(p => !p)}
-            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold transition ${
-              panelColumnas ? 'bg-white text-[#111827]' : 'bg-white/15 text-white hover:bg-white/25'
-            }`}>
-            <Columns3 className="w-3.5 h-3.5" />
-            Columnas
-            {ocultasCount > 0 && (
-              <span className="bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center">
-                {ocultasCount}
-              </span>
-            )}
-          </button>
-
-          {/* Panel desplegable */}
-          {panelColumnas && (
-            <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
-              {/* Header del panel */}
-              <div className="bg-[#4b5563] px-4 py-2.5 flex items-center justify-between">
-                <span className="text-white font-black text-[11px] uppercase tracking-wider">
-                  Columnas visibles
-                </span>
-                {ocultasCount > 0 && (
-                  <button onClick={mostrarTodas}
-                    className="text-white/70 hover:text-white text-[10px] font-semibold underline transition">
-                    Mostrar todas
-                  </button>
-                )}
-              </div>
-              {/* Lista de columnas */}
-              <div className="max-h-72 overflow-y-auto divide-y divide-gray-100">
-                {colVisibles.map(col => {
-                  const visible = colVisible[col] !== false;
-                  return (
-                    <button key={col}
-                      onClick={() => toggleColVisible(col)}
-                      className={`w-full flex items-center gap-3 px-4 py-2 text-left transition hover:bg-gray-50 ${
-                        visible ? '' : 'bg-gray-50'
-                      }`}>
-                      <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 transition ${
-                        visible
-                          ? 'bg-[#16a34a] border-[#16a34a]'
-                          : 'bg-white border-gray-300'
-                      }`}>
-                        {visible && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
-                      </div>
-                      <span className={`text-[11px] font-semibold truncate ${
-                        visible ? 'text-[#16a34a]' : 'text-gray-400 line-through'
-                      }`}>
-                        {labelCol(col)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Botón ACTUALIZAR */}
         {!soloLectura && (
         <button
@@ -901,7 +1045,7 @@ export default function GeneralPage() {
           }`}>
           {guardado
             ? <><CheckCircle className="w-4 h-4" /> Guardado</>
-            : <><Save className="w-4 h-4" /> ACTUALIZAR
+            : <><Save className="w-4 h-4" /> GUARDAR
               {pendingCount > 0 && (
                 <span className="bg-red-500 text-white text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center">
                   {pendingCount > 99 ? '99+' : pendingCount}
@@ -920,18 +1064,18 @@ export default function GeneralPage() {
 
       {/* ── BARRA DE FILTRO PROGRAMA + PROYECTO ── */}
       {deportistas.length > 0 && (
-        <div className="flex-shrink-0 bg-white border-b border-gray-100 shadow-sm px-4 py-3 flex flex-wrap gap-4 items-end">
+        <div className="flex-shrink-0 border-b shadow-sm px-4 py-3 flex flex-wrap gap-4 items-end" style={{ background: CAMPO, borderColor: BORDE }}>
 
           {/* Programa */}
           <div className="min-w-[180px]">
-            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Programa</label>
+            <label className="block text-[11px] font-black text-white/55 uppercase tracking-widest mb-1">Programa</label>
             <select
               value={programaFiltro ?? ''}
               onChange={e => {
                 setProgramaFiltro(e.target.value || null);
                 setProyectoFiltro(null);
               }}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              className="w-full rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white border" style={{ background: LIENZO, borderColor: BORDE }}>
               <option value="">— Todos —</option>
               {grupos.map(({ key }) => (
                 <option key={key} value={key}>{LABEL_GRUPO[key] ?? key}</option>
@@ -941,11 +1085,11 @@ export default function GeneralPage() {
 
           {/* Proyecto */}
           <div className="min-w-[180px]">
-            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Proyecto</label>
+            <label className="block text-[11px] font-black text-white/55 uppercase tracking-widest mb-1">Proyecto</label>
             <select
               value={proyectoFiltro ?? ''}
               onChange={e => setProyectoFiltro(e.target.value || null)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              className="w-full rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white border" style={{ background: LIENZO, borderColor: BORDE }}>
               <option value="">— Todos —</option>
               {(programaFiltro
                 ? (proyectosPorPrograma[programaFiltro] ?? [])
@@ -954,10 +1098,38 @@ export default function GeneralPage() {
             </select>
           </div>
 
+          {/* Año de nacimiento — 2024 … 2011 */}
+          <div className="min-w-[150px]">
+            <label className="block text-[11px] font-black text-white/55 uppercase tracking-widest mb-1">Año de nacimiento</label>
+            <select
+              value={anioFiltro ?? ''}
+              onChange={e => setAnioFiltro(e.target.value || null)}
+              className="w-full rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white border" style={{ background: LIENZO, borderColor: BORDE }}>
+              <option value="">— Todos —</option>
+              {ANIOS_NACIMIENTO.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+
         </div>
       )}
 
-      <main className="flex-1 overflow-auto px-2 pb-3">
+      {/* ── Barra superior para desplazarse a las columnas de la derecha ── */}
+      {!cargando && deportistas.length > 0 && anchoScroll > anchoVisible + 4 && (
+        <div
+          ref={topBarRef}
+          onScroll={e => { if (mainRef.current) mainRef.current.scrollLeft = e.currentTarget.scrollLeft; }}
+          className="flex-shrink-0 overflow-x-auto overflow-y-hidden bg-gray-200/80 border-b border-gray-300"
+          style={{ height: 16 }}
+          title="Desliza para ver más columnas →"
+        >
+          <div style={{ width: anchoScroll, height: 1 }} />
+        </div>
+      )}
+
+      <main
+        ref={mainRef}
+        onScroll={e => { if (topBarRef.current) topBarRef.current.scrollLeft = e.currentTarget.scrollLeft; }}
+        className="flex-1 overflow-auto px-2 pb-3">
 
         {/* Buscadores móvil */}
         <div className="sm:hidden mt-2 mb-2 flex gap-2">
@@ -985,14 +1157,27 @@ export default function GeneralPage() {
             <p className="text-gray-400 font-semibold text-base">No hay deportistas cargados</p>
             <p className="text-gray-300 text-sm mt-1">Importa el archivo Excel desde Programas y Proyectos</p>
             <button onClick={() => router.push('/alumnos/importar')}
-              className="mt-5 px-5 py-2.5 bg-[#16a34a] text-white rounded-xl text-sm font-bold hover:bg-[#064e1e] transition">
+              className="mt-5 px-5 py-2.5 text-white rounded-xl text-sm font-bold hover:bg-[#064e1e] transition">
               Ir a importar
             </button>
           </div>
         ) : (
 
-          <div className="rounded-2xl shadow-sm border border-gray-200 bg-white">
-            <div>
+          <div className="rounded-2xl shadow-sm border overflow-hidden" style={{ background: LIENZO, borderColor: BORDE }}>
+            {/* Barra de desplazamiento: la tabla es más ancha que la pantalla,
+                así que su contenedor debe poder rodar en los dos sentidos.
+                La barra se pinta clara para que se vea sobre el fondo oscuro. */}
+            <style>{`
+              .tabla-scroll::-webkit-scrollbar { width: 12px; height: 12px; }
+              .tabla-scroll::-webkit-scrollbar-track { background: #2B3547; }
+              .tabla-scroll::-webkit-scrollbar-thumb {
+                background: #717985; border-radius: 8px; border: 3px solid #2B3547;
+              }
+              .tabla-scroll::-webkit-scrollbar-thumb:hover { background: #8D96A3; }
+              .tabla-scroll::-webkit-scrollbar-corner { background: #2B3547; }
+              .tabla-scroll { scrollbar-color: #717985 #2B3547; scrollbar-width: thin; }
+            `}</style>
+            <div className="overflow-auto tabla-scroll" style={{ maxHeight: 'calc(100vh - 210px)' }}>
               <table className="border-collapse text-xs" style={{ width: 'max-content', tableLayout: 'fixed' }}>
 
                 {/* ── COLGROUP para anchos ── */}
@@ -1005,9 +1190,9 @@ export default function GeneralPage() {
 
                 {/* ── CABECERA ── */}
                 <thead className="sticky top-0 z-20">
-                  <tr className="bg-[#16a34a] text-white">
+                  <tr className="text-white" style={{ background: VERDE }}>
                     {/* N° fijo */}
-                    <th className="px-2 py-2.5 text-center font-black text-[10px] whitespace-nowrap sticky left-0 bg-[#16a34a] z-30" style={{ border: '2px solid white', color: 'white' }}>
+                    <th className="px-2 py-2.5 text-center font-black text-[10px] whitespace-nowrap sticky left-0 z-30" style={{ border: '2px solid #ffffff', color: 'white', background: VERDE }}>
                       N°
                     </th>
                     {colVisibles.map(col => {
@@ -1015,7 +1200,7 @@ export default function GeneralPage() {
                       return (
                         <>
                         <th key={col}
-                          style={{ border: '2px solid white', background: '#16a34a', color: 'white' }}
+                          style={{ border: '2px solid #ffffff', background: '#00B050', color: 'white' }}
                           className={`relative px-2 py-2.5 text-center font-black text-[10px] whitespace-nowrap select-none ${
                             esCod ? 'sticky left-[36px] z-30' : ''
                           }`}>
@@ -1037,7 +1222,7 @@ export default function GeneralPage() {
                         {/* Columna fija DEPORTISTA justo después de CÓDIGO */}
                         {esCod && (
                           <th key="__nombre_th__"
-                            style={{ border: '2px solid white', background: '#16a34a', color: 'white', minWidth: 180 }}
+                            style={{ border: '2px solid #ffffff', background: '#00B050', color: 'white', minWidth: 180 }}
                             className="px-3 py-2.5 text-left font-black text-[10px] whitespace-nowrap sticky left-[120px] z-30">
                             DEPORTISTA
                           </th>
@@ -1054,22 +1239,34 @@ export default function GeneralPage() {
                     const listaPlana = ordenados.filter(d => {
                       if (programaFiltro !== null && grupoDep(d) !== programaFiltro) return false;
                       if (proyectoFiltro && getColVal(d, RX_PROY).trim() !== proyectoFiltro) return false;
+                      if (anioFiltro && getColVal(d, /^a[ñn]o$/i).trim() !== anioFiltro) return false;
                       return true;
                     });
                     return listaPlana.map((dep, rowIdx) => {
-                        const rowNum   = rowIdx + 1;
+                        const rowNum   = numFilaGlobal[dep.id] ?? (rowIdx + 1);
                         const retirado = esRetirado(dep);
-                        const rowBg    = retirado ? '#d1d5db' : '#f1f5f9';
-                        const stickyBg = retirado ? '#d1d5db' : '#f1f5f9';
+                        const inactivo = retirado || esPausado(dep);
+                        const rowBg    = inactivo ? GRIS_VACIO : PANEL;
+                        const stickyBg = rowBg;
                         return (
                           <tr key={dep.id}
                             style={{ backgroundColor: rowBg }}
                             className="hover:brightness-95 transition-all">
 
                             {/* N° */}
-                            <td className="px-2 py-0 text-center text-[#111827] font-semibold sticky left-0 z-10 text-[10px] w-[36px]"
-                              style={{ backgroundColor: stickyBg, border: '2px solid white' }}>
-                              {rowNum}
+                            <td className="px-1 py-0 text-center text-white font-semibold sticky left-0 z-10 text-[10px] w-[36px] group"
+                              style={{ backgroundColor: stickyBg, border: '2px solid #ffffff' }}>
+                              <span className="group-hover:hidden">{rowNum}</span>
+                              {/* Papelera: aparece solo al pasar el mouse sobre el N° */}
+                              <button
+                                onClick={() => eliminarFilaDeportista(dep, rowNum)}
+                                disabled={borrandoDep === dep.id}
+                                title={`Eliminar la ficha de ${dep._nombre || 'este deportista'}`}
+                                className="hidden group-hover:inline-flex items-center justify-center text-red-500 hover:text-red-700 disabled:opacity-40">
+                                {borrandoDep === dep.id
+                                  ? <span className="text-[9px] font-black">…</span>
+                                  : <Trash2 className="w-3.5 h-3.5" />}
+                              </button>
                             </td>
 
                             {/* Columnas dinámicas */}
@@ -1093,7 +1290,7 @@ export default function GeneralPage() {
                                   <>
                                   <td key={col}
                                     className="px-0 py-0 text-center sticky left-[36px] z-10"
-                                    style={{ backgroundColor: codColor, border: '2px solid white' }}>
+                                    style={{ backgroundColor: codColor, border: '2px solid #ffffff' }}>
                                     <input
                                       value={rawValCod}
                                       onChange={e => setCelda(dep.id, col, e.target.value)}
@@ -1103,7 +1300,7 @@ export default function GeneralPage() {
                                   {/* Columna DEPORTISTA fija — 1 clic: estado de cuenta · doble clic: editar nombre */}
                                   <td key="__nombre_td__"
                                     className="px-3 py-0 sticky left-[120px] z-10 whitespace-nowrap"
-                                    style={{ backgroundColor: stickyBg, border: '2px solid white', minWidth: 180 }}>
+                                    style={{ backgroundColor: stickyBg, border: '2px solid #ffffff', minWidth: 180 }}>
                                     {editNombreId === dep.id ? (
                                       <input
                                         autoFocus
@@ -1155,15 +1352,14 @@ export default function GeneralPage() {
                                         title="Un clic: estado de cuenta · Doble clic: editar nombre"
                                         style={{
                                           fontSize: 13, fontWeight: 700,
-                                          color: (edits[dep.id]?.['__NOMBRE__'] ?? dep._nombre) ? '#111827' : '#9ca3af',
+                                          color: (edits[dep.id]?.['__NOMBRE__'] ?? dep._nombre) ? '#ffffff' : 'rgba(255,255,255,.45)',
                                           background: 'none', border: 'none', padding: 0, margin: 0,
                                           cursor: 'pointer', textAlign: 'left',
                                           display: 'inline-block', minWidth: 120,
                                           textTransform: 'uppercase',
-                                          textDecoration: 'underline', textDecorationColor: '#16a34a',
-                                          textDecorationThickness: 2, textUnderlineOffset: 3,
+                                          textDecoration: 'none',
                                         }}
-                                        className="hover:text-[#16a34a] transition-colors">
+                                        className="hover:!text-[#00B050] hover:underline transition-colors">
                                         {(edits[dep.id]?.['__NOMBRE__'] ?? dep._nombre) || '✏️ (doble clic para nombrar)'}
                                       </button>
                                     )}
@@ -1177,12 +1373,12 @@ export default function GeneralPage() {
                                 const display = serialAFecha(rawVal);
                                 return (
                                   <td key={col}
-                                    style={{ background: '#f1f5f9', border: '2px solid white' }}
+                                    style={{ background: PANEL, border: '2px solid #ffffff' }}
                                     className="px-0 py-0 text-center">
                                     <input
                                       value={display}
                                       onChange={e => setCelda(dep.id, col, e.target.value)}
-                                      className="w-full text-center text-[11px] font-semibold py-[7px] px-2 outline-none bg-transparent text-[#111827] truncate"
+                                      className="w-full text-center text-[11px] font-semibold py-[7px] px-2 outline-none bg-transparent text-white truncate"
                                     />
                                   </td>
                                 );
@@ -1194,11 +1390,11 @@ export default function GeneralPage() {
                                 if (soloLectura) {
                                   return (
                                     <td key={col}
-                                      style={{ border: '2px solid white', backgroundColor: '#f8fafc' }}
+                                      style={{ border: '2px solid #ffffff', backgroundColor: PANEL }}
                                       className="px-1 py-0 text-center">
                                       <span style={{
                                         display: 'inline-block',
-                                        backgroundColor: color,
+                                        backgroundColor: 'transparent',
                                         color: 'white',
                                         borderRadius: 4,
                                         padding: '2px 6px',
@@ -1217,7 +1413,7 @@ export default function GeneralPage() {
                                   ? OPCIONES_AFIL : [rawVal, ...OPCIONES_AFIL];
                                 return (
                                   <td key={col}
-                                    style={{ border: '2px solid white', backgroundColor: color }}
+                                    style={{ border: '2px solid #ffffff', backgroundColor: PANEL }}
                                     className="px-0 py-0">
                                     <select
                                       value={rawVal}
@@ -1237,13 +1433,13 @@ export default function GeneralPage() {
                               // SELECT (Programa / Estado)
                               if (opciones) {
                                 if (soloLectura) return (
-                                  <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-1.5 py-[7px]">
-                                    <span className="block w-full text-[11px] font-semibold text-[#111827] truncate">{rawVal || '—'}</span>
+                                  <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-1.5 py-[7px]">
+                                    <span className="block w-full text-[11px] font-semibold text-white truncate">{rawVal || '—'}</span>
                                   </td>
                                 );
                                 return (
                                 <td key={col}
-                                  style={{ background: '#f1f5f9', border: '2px solid white' }}
+                                  style={{ background: PANEL, border: '2px solid #ffffff' }}
                                   className="px-0 py-0">
                                   <select
                                     value={rawVal}
@@ -1255,7 +1451,7 @@ export default function GeneralPage() {
                                         if (colProfe) setCelda(dep.id, colProfe, '');
                                       }
                                     }}
-                                    className="w-full text-[11px] font-semibold py-[7px] px-1.5 outline-none bg-transparent text-[#111827] cursor-pointer truncate">
+                                    className="w-full text-[11px] font-semibold py-[7px] px-1.5 outline-none bg-transparent text-white cursor-pointer truncate">
                                     <option value="">—</option>
                                     {opciones.map(o => <option key={o} value={o}>{o}</option>)}
                                   </select>
@@ -1271,13 +1467,13 @@ export default function GeneralPage() {
                                   ? proyectosPorPrograma[progActual]
                                   : Object.entries(proyectosPorPrograma).filter(([k]) => k !== '__RETIRADO__').flatMap(([,v]) => v).filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>{ const na=parseInt(a,10),nb=parseInt(b,10); return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b,'es'); });
                                 if (soloLectura) return (
-                                  <td key={col} style={{ border: '2px solid white', backgroundColor: '#16a34a' }} className="px-2 py-[6px]">
+                                  <td key={col} style={{ border: '2px solid #ffffff', backgroundColor: VERDE }} className="px-2 py-[6px]">
                                     <span className="block w-full text-[13px] font-semibold text-white truncate">{rawVal && rawVal !== '—' ? rawVal : '—'}</span>
                                   </td>
                                 );
                                 return (
                                   <td key={col}
-                                    style={{ border: '2px solid white', backgroundColor: '#16a34a' }}
+                                    style={{ border: '2px solid #ffffff', backgroundColor: VERDE }}
                                     className="px-0 py-0">
                                     <select
                                       value={rawVal === '—' ? '' : rawVal}
@@ -1303,26 +1499,26 @@ export default function GeneralPage() {
                                 const derivado   = profeDeProyecto(proyActual);
                                 const mostrar    = derivado || (rawVal && rawVal !== '—' ? rawVal : '');
                                 return (
-                                  <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-2 py-[6px]"
+                                  <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-2 py-[6px]"
                                     title="Se asigna automáticamente según el formador del proyecto (se cambia en Usuarios)">
-                                    <span className="block w-full text-[13px] font-semibold text-[#111827] truncate">{mostrar || '—'}</span>
+                                    <span className="block w-full text-[13px] font-semibold text-white truncate">{mostrar || '—'}</span>
                                   </td>
                                 );
                               }
 
                               // TEXTO genérico
                               if (soloLectura) return (
-                                <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-2 py-[7px]">
-                                  <span className="block w-full text-[11px] text-[#111827] truncate">{rawVal && rawVal !== '—' ? rawVal : '—'}</span>
+                                <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-2 py-[7px]">
+                                  <span className="block w-full text-[11px] text-white truncate">{rawVal && rawVal !== '—' ? rawVal : '—'}</span>
                                 </td>
                               );
                               return (
-                                <td key={col} style={{ background: '#f1f5f9', border: '2px solid white' }} className="px-0 py-0">
+                                <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-0 py-0">
                                   <input
                                     value={rawVal === '—' ? '' : rawVal}
                                     onChange={e => setCelda(dep.id, col, e.target.value)}
                                     placeholder="—"
-                                    className="w-full text-[11px] text-[#111827] py-[7px] px-2 outline-none bg-transparent truncate"
+                                    className="w-full text-[11px] text-white py-[7px] px-2 outline-none bg-transparent truncate"
                                   />
                                 </td>
                               );
@@ -1337,12 +1533,12 @@ export default function GeneralPage() {
 
             {/* Footer con botón ACTUALIZAR */}
             {!soloLectura && pendingCount > 0 && (
-              <div className="sticky bottom-0 bg-[#f1f5f9] border-t-2 border-white px-5 py-3 flex items-center justify-between">
+              <div className="sticky bottom-0 border-t-2 px-5 py-3 flex items-center justify-between" style={{ background: CAMPO, borderColor: BORDE }}>
                 <p className="text-[#111827] font-semibold text-sm">
                   Tienes <strong>{pendingCount}</strong> cambio{pendingCount !== 1 ? 's' : ''} sin guardar.
                 </p>
                 <button onClick={actualizarTodo}
-                  className="flex items-center gap-2 bg-[#16a34a] text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-[#064e1e] transition shadow-md">
+                  className="flex items-center gap-2 text-white px-5 py-2.5 rounded-xl font-black text-sm hover:brightness-110 transition shadow-md" style={{ background: VERDE }}>
                   <Save className="w-4 h-4" /> ACTUALIZAR TODOS LOS CAMBIOS
                 </button>
               </div>
@@ -1378,7 +1574,7 @@ export default function GeneralPage() {
                   <p>El archivo debe tener estas columnas (en cualquier orden):</p>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {['CÓDIGO', 'DEPORTISTA', 'COMPETENCIA', 'TORNEO 1', 'TORNEO 2', 'TORNEO 3', 'TORNEO 4'].map(c => (
-                      <span key={c} className="bg-[#16a34a] text-white text-[10px] font-black px-2.5 py-1 rounded-full">{c}</span>
+                      <span key={c} className="text-white text-[10px] font-black px-2.5 py-1 rounded-full">{c}</span>
                     ))}
                   </div>
                   <p className="text-[11px] text-[#4b5563] mt-2">
@@ -1438,7 +1634,7 @@ export default function GeneralPage() {
                 {/* Tabla preview */}
                 <div className="overflow-auto flex-1">
                   <table className="text-xs border-collapse w-full">
-                    <thead className="sticky top-0 bg-[#16a34a] text-white">
+                    <thead className="sticky top-0 text-white">
                       <tr>
                         <th className="px-3 py-2 text-left font-black">ESTADO</th>
                         <th className="px-3 py-2 text-left font-black">CÓDIGO</th>
@@ -1456,7 +1652,7 @@ export default function GeneralPage() {
                           <td className="px-3 py-1.5 border-b border-gray-100">
                             {f.depId ? (
                               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                f.match === 'codigo' ? 'bg-[#16a34a] text-white' : 'bg-gray-200 text-[#111827]'
+                                f.match === 'codigo' ? 'text-white' : 'bg-gray-200 text-[#111827]'
                               }`}>
                                 {f.match === 'codigo' ? '✓ Código' : '✓ Nombre'}
                               </span>
@@ -1488,7 +1684,7 @@ export default function GeneralPage() {
                   <button
                     onClick={aplicarTorneos}
                     disabled={!torneoFilas.some(f => f.depId)}
-                    className="flex items-center gap-2 bg-[#16a34a] text-white px-6 py-2.5 rounded-xl text-sm font-black hover:bg-[#064e1e] transition disabled:opacity-50">
+                    className="flex items-center gap-2 text-white px-6 py-2.5 rounded-xl text-sm font-black hover:bg-[#064e1e] transition disabled:opacity-50">
                     <Trophy className="w-4 h-4" />
                     Aplicar {torneoFilas.filter(f => f.depId).length} deportistas
                   </button>
@@ -1507,7 +1703,7 @@ export default function GeneralPage() {
                   Se actualizaron <strong>{torneoFilas.filter(f => f.depId).length}</strong> deportistas con los datos de torneo.
                 </p>
                 <button onClick={() => setModalTorneo(false)}
-                  className="bg-[#16a34a] text-white px-8 py-3 rounded-xl font-black hover:bg-[#064e1e] transition">
+                  className="text-white px-8 py-3 rounded-xl font-black hover:bg-[#064e1e] transition">
                   Cerrar
                 </button>
               </div>
@@ -1551,7 +1747,7 @@ export default function GeneralPage() {
                 <button
                   onClick={() => nuevosInputRef.current?.click()}
                   disabled={nuevosProc}
-                  className="bg-[#16a34a] text-white font-bold px-8 py-3 rounded-xl hover:bg-[#064e1e] transition disabled:opacity-50 flex items-center gap-2">
+                  className="text-white font-bold px-8 py-3 rounded-xl hover:bg-[#064e1e] transition disabled:opacity-50 flex items-center gap-2">
                   <Upload className="w-4 h-4" />
                   {nuevosProc ? 'Procesando…' : 'Seleccionar archivo .xlsx'}
                 </button>
@@ -1609,7 +1805,7 @@ export default function GeneralPage() {
                   </button>
                   <button onClick={confirmarNuevos}
                     disabled={nuevosFilas.filter(r => !r.duplicado).length === 0}
-                    className="flex-1 bg-[#16a34a] text-white font-bold py-2.5 rounded-xl hover:bg-[#064e1e] transition disabled:opacity-40 text-sm flex items-center justify-center gap-2">
+                    className="flex-1 text-white font-bold py-2.5 rounded-xl hover:bg-[#064e1e] transition disabled:opacity-40 text-sm flex items-center justify-center gap-2">
                     <CheckCircle className="w-4 h-4" />
                     Agregar {nuevosFilas.filter(r => !r.duplicado).length} deportistas
                   </button>
@@ -1629,7 +1825,7 @@ export default function GeneralPage() {
                   Ya aparecen en la tabla.
                 </p>
                 <button onClick={() => setModalNuevos(false)}
-                  className="bg-[#16a34a] text-white px-8 py-3 rounded-xl font-black hover:bg-[#064e1e] transition">
+                  className="text-white px-8 py-3 rounded-xl font-black hover:bg-[#064e1e] transition">
                   Cerrar
                 </button>
               </div>

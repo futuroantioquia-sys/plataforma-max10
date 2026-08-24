@@ -52,7 +52,12 @@ function supabase() { return createClient(); }
  * Si el campo `nombre` es un código numérico (o está vacío),
  * busca en columnas alguna clave que represente el nombre real.
  */
+/** Todo nombre de deportista se muestra SIEMPRE en MAYÚSCULA en la plataforma. */
 function derivarNombre(nombre: string, columnas: Record<string, string>): string {
+  return derivarNombreBase(nombre, columnas).toUpperCase();
+}
+
+function derivarNombreBase(nombre: string, columnas: Record<string, string>): string {
   const n = (nombre ?? '').trim();
   // Si tiene contenido y NO es solo dígitos → es el nombre real
   if (n && !/^\d+$/.test(n)) return n;
@@ -125,9 +130,10 @@ function rowToDeportista(r: any): Deportista {
 }
 
 /** Guarda deportistas solo si la nueva lista tiene MÁS registros que la actual en localStorage */
-function lsSetDeps(deps: Deportista[]) {
-  const actual = lsGet<Deportista[]>(LS_DEPS, []);
-  if (deps.length >= actual.length) lsSet(LS_DEPS, deps);
+function lsSetDeps(_deps: Deportista[]) {
+  // Ya no se guarda la lista completa en el navegador: son ~1.100 fichas y
+  // desbordaban la cuota de 5 MB. La caché en memoria (_cacheDeportistas)
+  // sigue funcionando mientras la pestaña esté abierta.
 }
 
 /** Fetch paginado: recorre páginas de 1000 hasta agotar todos los registros */
@@ -159,6 +165,20 @@ async function fetchAllPages(
 /** Lee deportistas: proxy Vercel → fetch paginado → SDK paginado → localStorage. */
 export async function getDeportistas(): Promise<Deportista[]> {
   if (_cacheDeportistas) return _cacheDeportistas;
+
+  /* ── Limpieza única de la copia vieja del navegador ──────────────
+     Versiones anteriores guardaban la lista COMPLETA de deportistas en
+     localStorage ('futuro_deportistas'). Esa copia ya no se actualiza,
+     pero el "Fallback" de más abajo todavía la puede leer, y entonces
+     reaparecen fichas que YA fueron borradas de la nube (ej. el fantasma
+     "NUEVO DEPORTISTA" del 15/08/2026). Se borra una sola vez por
+     navegador para que la nube sea siempre la única fuente de verdad. */
+  try {
+    if (!localStorage.getItem('futuro_deps_ls_purgado_v1')) {
+      localStorage.removeItem(LS_DEPS);
+      localStorage.setItem('futuro_deps_ls_purgado_v1', '1');
+    }
+  } catch { /* noop */ }
 
   // ── Intento 1: API route de Vercel (una sola llamada, el servidor pagina internamente) ──
   try {
@@ -438,13 +458,75 @@ export async function deleteAllDeportistas(): Promise<void> {
   }
 }
 
+/** Elimina UN deportista de la base de datos. Devuelve true si lo logro.
+
+    La pantalla "General" ya la usaba, pero la funcion no estaba en este
+    archivo: al oprimir Eliminar la pantalla reventaba con
+    "eliminarDeportista is not a function".
+
+    Borra SOLO la ficha del deportista. Sus pagos, asistencias y documentos
+    no se tocan (quedan sin dueno), tal como advierte el mensaje de
+    confirmacion que ve el usuario antes de borrar. */
+export async function eliminarDeportista(id: string): Promise<boolean> {
+  const dep = String(id ?? '').trim();
+  if (!dep) return false;
+  try {
+    const { error } = await supabase().from('deportistas').delete().eq('id', dep);
+    if (error) { console.error('[db] eliminarDeportista:', error.message); return false; }
+
+    // Se saca tambien de la cache en memoria y del respaldo del navegador,
+    // para que no reaparezca al cambiar de pantalla.
+    if (_cacheDeportistas) _cacheDeportistas = _cacheDeportistas.filter(d => d.id !== dep);
+    try {
+      const guardados = lsGet<Deportista[]>(LS_DEPS, []);
+      if (guardados.length) lsSetDeps(guardados.filter(d => d.id !== dep));
+    } catch { /* el respaldo local es opcional */ }
+
+    return true;
+  } catch (e) {
+    console.error('[db] eliminarDeportista:', e);
+    return false;
+  }
+}
+
 /** Guarda deportistas en Supabase (upsert) y en localStorage. */
 export async function saveDeportistas(deps: Deportista[]): Promise<void> {
-  _cacheDeportistas = deps; // actualizar caché inmediatamente
-  lsSet(LS_DEPS, deps);
+  /* ── BLINDAJE DE LOS DEPORTISTAS (20/08/2026) ────────────────────────────
+     Esta función guarda TODOS los deportistas de una sola vez, escribiendo
+     encima lo que tenga en memoria. El 20 de agosto ese mismo patrón, en la
+     tabla de formadores, borró las claves de los 24 profes: la lista llegó
+     incompleta y el "guardar" la escribió encima.
+     Con 1.164 fichas, el mismo descuido borraría los datos de todos.
+     Por eso ahora hay tres frenos:
+       1. Si llega MUCHO menos de lo que hay, no se guarda nada.
+       2. Una ficha SIN columnas nunca se escribe.
+       3. La copia local solo se actualiza con lo que de verdad se guardó.  */
+
+  const lista = Array.isArray(deps) ? deps : [];
+  const previos = Array.isArray(_cacheDeportistas) ? _cacheDeportistas.length : 0;
+
+  // FRENO 1 — llegó menos de la mitad de lo que ya había: algo salió mal.
+  if (previos > 20 && lista.length < previos * 0.5) {
+    console.error(
+      `[db] saveDeportistas ABORTADO: llegaron ${lista.length} fichas y en memoria hay ${previos}. ` +
+      'No se guarda nada para no borrar datos.',
+    );
+    return;
+  }
+
+  // FRENO 2 — fichas vacías (sin ninguna columna): no se escriben.
+  const validos = lista.filter(d => d && d.id && Object.keys(d._columnas ?? {}).length > 0);
+  const descartados = lista.length - validos.length;
+  if (descartados > 0) {
+    console.warn(`[db] saveDeportistas: ${descartados} ficha(s) sin datos — no se guardan para no borrar lo que hay.`);
+  }
+  if (!validos.length) {
+    console.error('[db] saveDeportistas: no hay ninguna ficha con datos. No se guarda nada.');
+    return;
+  }
 
   try {
-    const rows = deps.map(d => ({
+    const rows = validos.map(d => ({
       id:      d.id,
       nombre:  derivarNombre(d._nombre, d._columnas),
       columnas: d._columnas,
@@ -454,7 +536,11 @@ export async function saveDeportistas(deps: Deportista[]): Promise<void> {
       .from('deportistas')
       .upsert(rows, { onConflict: 'id' });
 
-    if (error) console.error('[db] saveDeportistas:', error.message);
+    if (error) { console.error('[db] saveDeportistas:', error.message); return; }
+
+    // FRENO 3 — la copia local solo se actualiza si el guardado salió bien.
+    _cacheDeportistas = lista;
+    lsSet(LS_DEPS, lista);
   } catch (e) {
     console.error('[db] saveDeportistas:', e);
   }
@@ -859,13 +945,7 @@ export async function getFoto(depId: string): Promise<string | null> {
       .maybeSingle();
 
     if (error) throw error;
-    if (data?.base64) {
-      // Guardar en localStorage también
-      const fotos = lsGet<Record<string, string>>(LS_FOTOS, {});
-      fotos[depId] = data.base64;
-      lsSet(LS_FOTOS, fotos);
-      return data.base64;
-    }
+    if (data?.base64) return data.base64;   // sin copia en el navegador: ocupa demasiado
   } catch {}
 
   // Fallback localStorage
@@ -874,10 +954,92 @@ export async function getFoto(depId: string): Promise<string | null> {
 }
 
 /** Guarda foto en Supabase y localStorage. */
+
+/* ============================================================
+   COMPRESIÓN AUTOMÁTICA DE IMÁGENES AL SUBIR
+   ------------------------------------------------------------
+   Antes, cada foto o documento entraba tal como salía del celular:
+   1,2 MB en promedio y hasta 11 MB. Eso llenó el cupo de la base
+   y tumbó la plataforma el 17/08/2026.
+   Ahora TODA imagen se reduce en el navegador ANTES de subirla.
+   El archivo original del papá no se toca: solo se sube la copia liviana.
+   ============================================================ */
+
+/** Tamaño en KB de un texto base64 (para registrar en consola). */
+function pesoKB(base64: string): number {
+  return Math.round((String(base64 || '').length * 0.75) / 1024);
+}
+
+/**
+ * Reduce una imagen en el navegador.
+ * @param ladoMax  lado más largo permitido, en píxeles
+ * @param calidad  0 a 1 (0.7 = documentos, 0.88 = fotos de deportistas)
+ * @param topeKB   si aún pesa más que esto, vuelve a reducir
+ */
+export async function comprimirImagen(
+  base64: string,
+  ladoMax = 1600,
+  calidad = 0.7,
+  topeKB = 400,
+): Promise<string> {
+  const dato = String(base64 || '');
+  if (!dato) return dato;
+
+  // Los PDF no se pueden comprimir con este método: se dejan tal cual.
+  if (!/^data:image\//i.test(dato)) return dato;
+  if (typeof document === 'undefined') return dato;   // no hay navegador
+
+  try {
+    const img: HTMLImageElement = await new Promise((ok, mal) => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = () => mal(new Error('imagen ilegible'));
+      i.src = dato;
+    });
+
+    let salida = dato;
+    let lado = ladoMax;
+    let q = calidad;
+
+    // Hasta 4 pasadas: si sigue pesando de más, reduce un poco más.
+    for (let intento = 0; intento < 4; intento++) {
+      const escala = Math.min(1, lado / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width  * escala));
+      const h = Math.max(1, Math.round(img.height * escala));
+
+      const lienzo = document.createElement('canvas');
+      lienzo.width = w; lienzo.height = h;
+      const ctx = lienzo.getContext('2d');
+      if (!ctx) return dato;
+      ctx.fillStyle = '#ffffff';          // fondo blanco: los PNG con
+      ctx.fillRect(0, 0, w, h);           // transparencia no salen negros
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, w, h);
+
+      salida = lienzo.toDataURL('image/jpeg', q);
+      if (pesoKB(salida) <= topeKB) break;
+      lado = Math.round(lado * 0.8);
+      q = Math.max(0.5, q - 0.1);
+    }
+
+    // Si por lo que sea quedó más pesada que la original, se deja la original.
+    if (salida.length >= dato.length) return dato;
+
+    console.log(`[db] imagen comprimida: ${pesoKB(dato)} KB -> ${pesoKB(salida)} KB`);
+    return salida;
+  } catch (e) {
+    console.error('[db] comprimirImagen:', e);
+    return dato;   // ante cualquier falla, se sube la original
+  }
+}
+
 export async function saveFoto(depId: string, base64: string): Promise<void> {
-  const fotos = lsGet<Record<string, string>>(LS_FOTOS, {});
-  fotos[depId] = base64;
-  lsSet(LS_FOTOS, fotos);
+  // Las fotos YA NO se guardan en el navegador: pesan ~230 KB cada una y llenaban
+  // el almacenamiento (tope ~5 MB), lo que tumbaba el inicio de sesión.
+
+  // FOTO DEL DEPORTISTA: se conserva BUENA RESOLUCIÓN, porque se usa en la
+  // tarjeta de cumpleaños y en la ficha. 1200 px y calidad alta.
+  base64 = await comprimirImagen(base64, 1200, 0.88, 300);
 
   try {
     const { error } = await supabase()
@@ -1271,6 +1433,8 @@ export async function getDocumentos(deportistaId: string): Promise<DocsDeportist
 
 /** Guarda o actualiza un documento de un deportista en Supabase. */
 export async function saveDocumento(deportistaId: string, tipo: DocTipo, doc: DocFile): Promise<void> {
+  // Documentos escaneados: se reducen fuerte, solo hay que poder leerlos.
+  doc = { ...doc, datos: await comprimirImagen(doc.datos, 1600, 0.7, 250) };
   try {
     const { error } = await supabase()
       .from('documentos_deportista')
@@ -1315,6 +1479,8 @@ export async function getCalificacionesEscolares(deportistaId: string): Promise<
 
 /** Agrega una calificación escolar nueva. Devuelve la fila creada o null. */
 export async function addCalificacionEscolar(deportistaId: string, nombre: string, datos: string): Promise<CalificacionEscolar | null> {
+  // Boletines: se reducen fuerte, solo hay que poder leer las notas.
+  datos = await comprimirImagen(datos, 1600, 0.7, 250);
   try {
     const { data, error } = await supabase()
       .from('calificaciones_escolares')
@@ -1342,21 +1508,56 @@ export async function deleteCalificacionEscolar(id: string): Promise<void> {
   } catch (e) { console.error('[db] deleteCalificacionEscolar:', e); }
 }
 
-/** Resumen para el cuadro de proyecto: qué deportistas tienen documento, EPS y calificaciones. */
-export async function getResumenDocumentos(): Promise<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> }> {
-  const conDoc = new Set<string>(), conEps = new Set<string>(), conEsc = new Set<string>();
+/**
+ * Resumen de GESTIÓN para el consolidado de asistencia: quién tiene FOTO,
+ * DOCUMENTO (TI o RC), EPS y CALIFICACIONES escolares. A diferencia de
+ * getResumenDocumentos(), esta versión PAGINA: no se queda en las primeras 1000 filas.
+ */
+export async function getResumenGestion(): Promise<{ conFoto: Set<string>; conDoc: Set<string>; conEps: Set<string>; conCal: Set<string> }> {
+  const conFoto = new Set<string>(), conDoc = new Set<string>(), conEps = new Set<string>(), conCal = new Set<string>();
+  const headers = {
+    'apikey':        SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type':  'application/json',
+  };
   try {
-    const [docsRes, escRes] = await Promise.all([
+    const [docs, fotos, cals] = await Promise.all([
+      fetchAllPages(`${SUPABASE_URL}/rest/v1/documentos_deportista?select=deportista_id,tipo&order=deportista_id.asc`, headers, 1000),
+      fetchAllPages(`${SUPABASE_URL}/rest/v1/fotos_deportistas?select=deportista_id&order=deportista_id.asc`, headers, 1000),
+      fetchAllPages(`${SUPABASE_URL}/rest/v1/calificaciones_escolares?select=deportista_id&order=deportista_id.asc`, headers, 1000),
+    ]);
+    for (const r of docs as any[]) {
+      if (!r?.deportista_id) continue;
+      const t = String(r.tipo || '').toLowerCase();
+      if (t === 'eps') conEps.add(r.deportista_id);
+      else if (t === 'ti' || t === 'rc') conDoc.add(r.deportista_id);
+    }
+    for (const r of fotos as any[]) if (r?.deportista_id) conFoto.add(r.deportista_id);
+    for (const r of cals  as any[]) if (r?.deportista_id) conCal.add(r.deportista_id);
+  } catch (e) {
+    console.error('[db] getResumenGestion:', e);
+  }
+  return { conFoto, conDoc, conEps, conCal };
+}
+
+/** Resumen para el cuadro de proyecto: qué deportistas tienen documento, EPS y calificaciones. */
+export async function getResumenDocumentos(): Promise<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string>; conFoto: Set<string> }> {
+  const conDoc = new Set<string>(), conEps = new Set<string>(), conEsc = new Set<string>(), conFoto = new Set<string>();
+  try {
+    const [docsRes, escRes, fotoRes] = await Promise.all([
       supabase().from('documentos_deportista').select('deportista_id, tipo'),
       supabase().from('calificaciones_escolares').select('deportista_id'),
+      // Solo el id (sin base64): chequeo LIVIANO de "¿tiene foto?" sin descargar la imagen.
+      supabase().from('fotos_deportistas').select('deportista_id').neq('base64', ''),
     ]);
     for (const r of (docsRes.data ?? []) as any[]) {
       if (r.tipo === 'eps') conEps.add(r.deportista_id);
       else if (r.tipo === 'ti' || r.tipo === 'rc') conDoc.add(r.deportista_id);
     }
     for (const r of (escRes.data ?? []) as any[]) conEsc.add(r.deportista_id);
+    for (const r of (fotoRes.data ?? []) as any[]) if (r.deportista_id) conFoto.add(r.deportista_id);
   } catch (e) { console.error('[db] getResumenDocumentos:', e); }
-  return { conDoc, conEps, conEsc };
+  return { conDoc, conEps, conEsc, conFoto };
 }
 
 // ── CALIFICACIONES ───────────────────────────────────────────
@@ -1412,6 +1613,63 @@ export async function getCalificaciones(ids: string[], anioMes: string): Promise
 }
 
 /**
+ * VALORACIONES DE TODO UN AÑO.
+ * Devuelve, por deportista, el promedio de las valoraciones que tenga en ese
+ * año, con un decimal. Lo usa el CONSOLIDADO de asistencias, que resume el año
+ * entero y no un mes suelto. Si un deportista no tiene ninguna, no aparece.
+ */
+export async function getValoracionesAnio(ids: string[], anio: number | string): Promise<Record<string, string>> {
+  if (!ids.length) return {};
+  const inParam = `(${ids.map(id => encodeURIComponent(id)).join(',')})`;
+  const patron  = `${anio}\\_%`;   // 2026_01, 2026_02, … (la _ se escapa: es comodín en LIKE)
+
+  const promediar = (filas: any[]): Record<string, string> => {
+    const acum: Record<string, number[]> = {};
+    for (const r of filas) {
+      const n = parseFloat(String(r.valor ?? '').replace(',', '.'));
+      if (!isFinite(n) || n <= 0) continue;
+      (acum[r.deportista_id] = acum[r.deportista_id] || []).push(n);
+    }
+    const out: Record<string, string> = {};
+    for (const [id, vals] of Object.entries(acum)) {
+      if (!vals.length) continue;
+      out[id] = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+    }
+    return out;
+  };
+
+  // Intento 1: fetch() directo
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/calificaciones?select=deportista_id,valor&deportista_id=in.${inParam}&anio_mes=like.${encodeURIComponent(patron)}`,
+      {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer':        'count=none',
+        },
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return promediar(data);
+    }
+  } catch { /* intentar SDK */ }
+
+  // Intento 2: SDK
+  try {
+    const { data, error } = await supabase()
+      .from('calificaciones')
+      .select('deportista_id, valor')
+      .in('deportista_id', ids)
+      .like('anio_mes', `${anio}\\_%`);
+    if (!error && data) return promediar(data);
+  } catch { /* ignorar */ }
+
+  return {};
+}
+
+/**
  * Guarda/actualiza la calificación de un deportista para un mes.
  * Keyed por deportista_id — no por proyecto, así sobrevive traslados.
  */
@@ -1445,10 +1703,23 @@ export interface SoportePago {
 }
 
 /** Guarda un soporte de pago en Supabase (dual-save con localStorage). */
+/* ── BLINDAJE (22/08/2026) ────────────────────────────────────────────────────
+   Varias funciones intentan primero la "portería de servidor" (/api/...) y, si
+   falla, siguen por el camino directo a Supabase con la clave pública. El
+   problema: también seguían cuando el servidor respondía "no autorizado", con
+   lo cual el control de acceso quedaba anulado. Esta función distingue los dos
+   casos: 401/403 significa PARAR. */
+function accesoDenegado(r: Response): boolean {
+  return r.status === 401 || r.status === 403;
+}
+
 export async function saveSoportePago(
   deportistaId: string,
   soporte: { name: string; data: string; date: string; meses: string[] }
 ): Promise<void> {
+  // Soportes de pago: se reducen, solo hay que poder leer el comprobante.
+  soporte = { ...soporte, data: await comprimirImagen(soporte.data, 1600, 0.7, 250) };
+
   // Portería de servidor primero (usa la llave maestra). Si no está lista, cae al método anterior.
   try {
     const r = await fetch('/api/pagos/soportes', {
@@ -1483,6 +1754,7 @@ export async function getSoportesDeDeportista(deportistaIds: string | string[]):
   // Portería de servidor primero
   try {
     const rr = await fetch(`/api/pagos/soportes?deportistaIds=${encodeURIComponent(ids.join(','))}`, { cache: 'no-store' });
+    if (accesoDenegado(rr)) return [];   // el servidor dijo que no: no se busca por otro lado
     if (rr.ok) { const j = await rr.json().catch(() => null); if (j?.ok && Array.isArray(j.soportes)) return j.soportes as SoportePago[]; }
   } catch {}
   const inList = ids.map(v => `"${v.replace(/"/g, '')}"`).join(',');
@@ -1506,6 +1778,7 @@ export async function getSoportesPendientes(): Promise<SoportePago[]> {
   // Portería de servidor primero (lista liviana SIN imagen)
   try {
     const r = await fetch('/api/pagos/soportes', { cache: 'no-store' });
+    if (accesoDenegado(r)) return [];   // el servidor dijo que no
     if (r.ok) {
       const j = await r.json().catch(() => null);
       if (j?.ok && Array.isArray(j.soportes)) {
@@ -1562,6 +1835,7 @@ export async function getSoporteDatos(soporteId: string): Promise<string> {
   // Portería de servidor primero
   try {
     const r = await fetch(`/api/pagos/soportes/datos?id=${encodeURIComponent(soporteId)}`, { cache: 'no-store' });
+    if (accesoDenegado(r)) return '';   // el servidor dijo que no
     if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok) return j.datos ?? ''; }
   } catch {}
   try {
@@ -1582,6 +1856,7 @@ export async function countSoportesPendientes(): Promise<number> {
   // Portería de servidor primero
   try {
     const r = await fetch('/api/pagos/soportes?solo=count', { cache: 'no-store' });
+    if (accesoDenegado(r)) return 0;   // el servidor dijo que no
     if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok && typeof j.count === 'number') return j.count; }
   } catch {}
   try {
@@ -1614,6 +1889,7 @@ export async function confirmarSoportePago(soporteId: string): Promise<boolean> 
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: soporteId }),
     });
+    if (accesoDenegado(r)) return false;   // el servidor dijo que no
     if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok) return true; }
   } catch {}
   try {
@@ -1634,6 +1910,7 @@ export async function eliminarSoportePago(soporteId: string): Promise<boolean> {
   // Portería de servidor primero
   try {
     const r = await fetch(`/api/pagos/soportes?id=${encodeURIComponent(soporteId)}`, { method: 'DELETE' });
+    if (accesoDenegado(r)) return false;   // el servidor dijo que no
     if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok) return true; }
   } catch {}
   try {
@@ -1660,6 +1937,7 @@ export async function eliminarSoportePorNombre(
   // Portería de servidor primero
   try {
     const r = await fetch(`/api/pagos/soportes?deportistaIds=${encodeURIComponent(ids.join(','))}&nombre=${encodeURIComponent(nombre)}`, { method: 'DELETE' });
+    if (accesoDenegado(r)) return;   // el servidor dijo que no
     if (r.ok) { const j = await r.json().catch(() => null); if (j?.ok) return; }
   } catch {}
   const inList = ids.map(v => `"${v.replace(/"/g, '')}"`).join(',');
@@ -1804,39 +2082,19 @@ export interface Profe {
 
 const LS_PROFES = 'futuro_profes';
 
-// Profes iniciales — fallback garantizado si no hay BD ni caché.
-// PROYECTOS SINCRONIZADOS con Supabase — actualizar aquí cuando cambien asignaciones.
-const PROFES_INICIALES: Profe[] = [
-  { id: 'pi-01', usuario: 'CASTRO',   clave: '1214734807', proyectos: ['SUB 8A','SUB 8B'] },
-  { id: 'pi-02', usuario: 'MEJIA',    clave: '1152192324', proyectos: [] },
-  { id: 'pi-03', usuario: 'RAMIREZ',  clave: '1017258984', proyectos: ['SUB 11A'] },
-  { id: 'pi-04', usuario: 'SAMUEL',   clave: '1000415036', proyectos: ['SUB 12A','SUB 12B'] },
-  { id: 'pi-05', usuario: 'TABARES',  clave: '1000084856', proyectos: ['SUB 9A','SUB 9B'] },
-  { id: 'pi-06', usuario: 'CHALARCA', clave: '1128389946', proyectos: ['3','SUB 11B','SUB 15A'] },
-  { id: 'pi-07', usuario: 'RIOS',     clave: '1036639022', proyectos: ['2','5','SUB 14A','SUB 14B','SUB 8C'] },
-  { id: 'pi-08', usuario: 'JESUS',    clave: '1003404311', proyectos: ['SUB 10A','SUB 10B'] },
-  { id: 'pi-09', usuario: 'MARTIN',   clave: '1013458275', proyectos: ['10','6','SUB 7A'] },
-  { id: 'pi-10', usuario: 'MARLON',   clave: '1017192180', proyectos: ['4','8','80'] },
-  { id: 'pi-11', usuario: 'ALEX',     clave: '1020464354', proyectos: ['40','45','46','47','48','48A','48B'] },
-  { id: 'pi-12', usuario: 'DORIA',    clave: '1003050289', proyectos: ['20','21','52','55','57','59','SUB 8C'] },
-  { id: 'pi-13', usuario: 'MUÑOZ',    clave: '1034776238', proyectos: ['22','33','34','35','36'] },
-  { id: 'pi-14', usuario: 'ALVAREZ',  clave: '1033180115', proyectos: ['41','42','SUB 13C','SUB 15B'] },
-  { id: 'pi-15', usuario: 'DUVAN',    clave: '1002066215', proyectos: ['51','54','56','60','SUB 9C'] },
-  { id: 'pi-16', usuario: 'GIRALDO',  clave: '1127792656', proyectos: ['31','SUB 10C','SUB 12C'] },
-  { id: 'pi-17', usuario: 'NICOLAS',  clave: '1005372826', proyectos: ['30','50','53','61','SUB 7B'] },
-  { id: 'pi-18', usuario: 'KAREN',    clave: '1000870631', proyectos: ['11','12A','12B','13'] },
-  { id: 'pi-19', usuario: 'CAMILA',   clave: '1193081467', proyectos: ['23','24','25'] },
-  { id: 'pi-20', usuario: 'EDGAR',    clave: '98539787',   proyectos: ['32','34','7','SUB 11C','SUB 13C'] },
-  { id: 'pi-21', usuario: 'JIMENEZ',  clave: '1036864427', proyectos: ['43','44'] },
-  { id: 'pi-22', usuario: 'GUZMAN',   clave: '1000203538', proyectos: [] },
-];
+// BLINDAJE (22/08/2026): aquí había una lista con el usuario y la CÉDULA de 22
+// formadores. Como este archivo se compila dentro del JavaScript que descarga
+// cualquier visitante, esas 22 cédulas —que además son sus contraseñas— quedaban
+// publicadas en internet. La lista se eliminó por completo.
 
 /** Convierte una fila cruda de Supabase al tipo Profe */
 function rowToProfe(r: any): Profe {
   return {
     id:        r.id        ?? '',
     usuario:   r.usuario   ?? '',
-    clave:     r.clave     ?? '',
+    // Seguridad: la contraseña (cifrada) NO se envía al navegador. El campo va vacío;
+    // si el admin escribe una nueva, se cifra al guardar; si lo deja vacío, no cambia.
+    clave:     '',
     nombre:    r.nombre    ?? '',
     proyectos: Array.isArray(r.proyectos) ? r.proyectos : [],
     foto:      r.foto      ?? '',
@@ -1848,6 +2106,7 @@ export async function getProfes(): Promise<Profe[]> {
   // ── Intento 1: API route de Vercel (proxy — siempre alcanzable desde mobile) ──
   try {
     const res = await fetch('/api/profes', { cache: 'no-store' });
+    if (accesoDenegado(res)) return [];   // el servidor dijo que no
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
@@ -1861,7 +2120,7 @@ export async function getProfes(): Promise<Profe[]> {
   // ── Intento 2: fetch() nativo directo a Supabase ──
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/profes?select=*&order=usuario`,
+      `${SUPABASE_URL}/rest/v1/profes?select=id,usuario,nombre,proyectos,foto&order=usuario`,
       {
         headers: {
           'apikey':        SUPABASE_ANON_KEY,
@@ -1884,7 +2143,8 @@ export async function getProfes(): Promise<Profe[]> {
   try {
     const { data, error } = await supabase()
       .from('profes')
-      .select('*')
+      // Blindaje: nunca traer la columna `clave` al navegador.
+      .select('id,usuario,nombre,proyectos,foto')
       .order('usuario');
     if (!error && Array.isArray(data) && data.length > 0) {
       const lista: Profe[] = data.map(rowToProfe);
@@ -1899,8 +2159,8 @@ export async function getProfes(): Promise<Profe[]> {
     return cached;
   }
 
-  // ── Fallback final: lista hardcodeada con proyectos actualizados ──
-  return PROFES_INICIALES;
+  // ── Sin datos: se devuelve vacío. Ya NO hay lista de respaldo con cédulas. ──
+  return [];
 }
 
 export async function saveProfes(lista: Profe[]): Promise<{ ok: boolean; msg?: string }> {
@@ -1908,14 +2168,29 @@ export async function saveProfes(lista: Profe[]): Promise<{ ok: boolean; msg?: s
 
   if (!lista.length) return { ok: true };
 
-  const rows = lista.map(p => ({
-    id:        p.id,
-    usuario:   p.usuario,
-    clave:     p.clave,
-    nombre:    p.nombre ?? '',
-    proyectos: p.proyectos,
-    foto:      p.foto ?? '',
-  }));
+  /* PROTECCIÓN DE LAS CLAVES (20/08/2026)
+     Esta función guarda TODOS los formadores, no solo el que se editó. Si la
+     lista llega con la clave vacía —porque no se alcanzó a leer, o porque vino
+     de una copia incompleta del navegador— guardar borraba la clave de TODOS y
+     ningún profe podía volver a entrar. Ya pasó una vez.
+     Regla: una clave vacía NUNCA se escribe. Si viene vacía, se deja la que
+     tenga la base. */
+  const conClave = (p: Profe) => String((p as any).clave ?? '').trim() !== '';
+
+  const rows = lista.map(p => {
+    const base: any = {
+      id:        p.id,
+      usuario:   p.usuario,
+      nombre:    p.nombre ?? '',
+      proyectos: p.proyectos,
+      foto:      p.foto ?? '',
+    };
+    if (conClave(p)) base.clave = p.clave;   // solo si trae clave de verdad
+    return base;
+  });
+
+  const sinClave = lista.filter(p => !conClave(p)).length;
+  if (sinClave) console.warn(`[db] saveProfes: ${sinClave} formador(es) sin clave — no se les toca la clave guardada.`);
 
   // Intento 1: upsert por id (funciona si el id ya existe en Supabase)
   try {
@@ -1932,9 +2207,13 @@ export async function saveProfes(lista: Profe[]): Promise<{ ok: boolean; msg?: s
   try {
     for (const row of rows) {
       // Intentar UPDATE por usuario
+      // Ojo: `row` ya viene sin la casilla `clave` cuando venía vacía, así que
+      // este update no puede borrarla.
+      const patch: any = { nombre: row.nombre, proyectos: row.proyectos, foto: row.foto };
+      if ((row as any).clave !== undefined) patch.clave = (row as any).clave;
       const { data, error: updErr } = await supabase()
         .from('profes')
-        .update({ clave: row.clave, nombre: row.nombre, proyectos: row.proyectos, foto: row.foto })
+        .update(patch)
         .eq('usuario', row.usuario)
         .select('id');
       if (updErr) {
@@ -1983,13 +2262,15 @@ export async function getAdmins(): Promise<Admin[]> {
   try {
     const { data, error } = await supabase()
       .from('admins')
-      .select('id,usuario,clave,nombre,tipo')
+      // Blindaje: nunca traer la columna `clave` al navegador.
+      .select('id,usuario,nombre,tipo')
       .order('usuario');
     if (error) { console.warn('[db] getAdmins:', error.message); return []; }
     return (data || []).map((r: any) => ({
       id:      r.id ?? '',
       usuario: String(r.usuario ?? '').toUpperCase(),
-      clave:   r.clave ?? '',
+      // Seguridad: la contraseña (cifrada) NO se envía al navegador (vacío = no cambiar).
+      clave:   '',
       nombre:  r.nombre ?? '',
       tipo:    r.tipo === 'contabilidad' ? 'contabilidad' : 'deportivo',
     }));
@@ -2113,11 +2394,63 @@ export async function getEvaluaciones(codigo?: string): Promise<Evaluacion[]> {
       periodoDesde: r.periodo_desde ?? '', periodoHasta: r.periodo_hasta ?? '', numeroInforme: r.numero_informe ?? '',
       equipoTrimestre: r.equipo_trimestre ?? '',
     }));
-    lsSet(LS_EVALUACIONES, lista);
+    // Solo se guarda la cache completa cuando se pidio TODO; si se pidio un
+    // deportista puntual, pisar la cache dejaria al resto sin respaldo.
+    if (!codigo) lsSet(LS_EVALUACIONES, lista);
     return lista;
   } catch {
     const cached = lsGet<Evaluacion[]>(LS_EVALUACIONES, []);
     return codigo ? cached.filter(e => e.codigo === codigo.trim().toUpperCase()) : cached;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RESUMEN DE VALORACIONES  (carga rápida)
+
+   Las pantallas "Control de Informes" y el listado de deportistas solo
+   necesitan saber QUE informes existen (codigo, numero y fecha), no el
+   contenido completo de cada valoracion.
+
+   getEvaluaciones() hace select('*'): decenas de columnas de texto MAS la
+   foto en base64 de cada informe. Con miles de registros eso son varios MB
+   en cada carga. Ademas PostgREST corta la respuesta en 1000 filas, por lo
+   que faltaban informes de forma intermitente ("a veces si aparecen").
+
+   Esta version pide 4 columnas y pagina de a 1000 hasta traerlas todas.
+   ───────────────────────────────────────────────────────────────────────────── */
+export interface EvaluacionResumen {
+  id: string; codigo: string; fecha: string; numeroInforme: string;
+}
+
+const LS_EVALS_RESUMEN = 'futuro_evaluaciones_resumen';
+
+export async function getEvaluacionesResumen(): Promise<EvaluacionResumen[]> {
+  const paso = 1000;
+  const out: EvaluacionResumen[] = [];
+  try {
+    for (let desde = 0; desde < 200000; desde += paso) {
+      const { data, error } = await supabase()
+        .from('evaluaciones')
+        .select('id, codigo, fecha, numero_informe')
+        .order('id', { ascending: true })
+        .range(desde, desde + paso - 1);
+      if (error) throw error;
+      const lote = data ?? [];
+      for (const r of lote as any[]) {
+        out.push({
+          id:            String(r.id ?? ''),
+          codigo:        String(r.codigo ?? '').trim().toUpperCase(),
+          fecha:         r.fecha ?? '',
+          numeroInforme: String(r.numero_informe ?? '').trim(),
+        });
+      }
+      if (lote.length < paso) break;
+    }
+    lsSet(LS_EVALS_RESUMEN, out);
+    return out;
+  } catch {
+    // Sin conexion: se usa lo ultimo que se alcanzo a guardar en este navegador.
+    return lsGet<EvaluacionResumen[]>(LS_EVALS_RESUMEN, []);
   }
 }
 
@@ -2576,6 +2909,19 @@ export async function getSolicitudesFacturaPendientes(): Promise<FacturaSolicitu
   } catch (e) { console.error('[db] getSolicitudesFacturaPendientes:', e); return []; }
 }
 
+/** Cuenta las solicitudes de factura PENDIENTES (para el contador del panel).
+ *  Consulta liviana: pide solo el conteo, no trae las filas. */
+export async function countSolicitudesFacturaPendientes(): Promise<number> {
+  try {
+    const { count, error } = await supabase()
+      .from('facturas_solicitudes')
+      .select('id', { count: 'exact', head: true })
+      .eq('estado', 'PEND');
+    if (error) { console.error('[db] countSolicitudesFacturaPendientes:', error.message); return 0; }
+    return count ?? 0;
+  } catch (e) { console.error('[db] countSolicitudesFacturaPendientes:', e); return 0; }
+}
+
 /** Marca una solicitud como realizada (OK) → deja de aparecer en pendientes. */
 export async function marcarFacturaOk(id: string): Promise<boolean> {
   try {
@@ -2618,5 +2964,773 @@ export async function getCertificadosLog(): Promise<CertDescarga[]> {
       desde += paso;
     }
   } catch (e) { console.error('[db] getCertificadosLog:', e); }
+  return out;
+}
+// ── FOTOS: carga liviana (agregado para el módulo de Cumpleaños) ──
+// La tabla fotos_deportistas pesa ~61 MB. Traerla completa en una sola
+// petición hace que la foto nunca llegue. Estas dos funciones permiten
+// (1) saber QUIÉN tiene foto sin descargar ninguna imagen, y
+// (2) bajar solo las fotos que se van a mostrar, en tandas pequeñas.
+
+/** Devuelve el conjunto de deportista_id que tienen foto subida (consulta liviana). */
+export async function getIdsConFoto(): Promise<Set<string>> {
+  const set = new Set<string>();
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/fotos_deportistas?select=deportista_id`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (res.ok) {
+      const rows = await res.json();
+      if (Array.isArray(rows)) for (const r of rows) if (r?.deportista_id) set.add(r.deportista_id);
+    }
+  } catch { /* noop */ }
+  return set;
+}
+
+/** Descarga las fotos SOLO de los ids indicados, en tandas de 6. */
+export async function getFotosPorIds(ids: string[]): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  const limpios = Array.from(new Set((ids ?? []).filter(Boolean)));
+  for (let i = 0; i < limpios.length; i += 6) {
+    const tanda = limpios.slice(i, i + 6);
+    const filtro = `deportista_id=in.(${tanda.map(x => `"${x}"`).join(',')})`;
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/fotos_deportistas?select=deportista_id,base64&${filtro}`,
+        { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+      );
+      if (!res.ok) continue;
+      const rows = await res.json();
+      if (Array.isArray(rows)) for (const r of rows) if (r?.deportista_id && r?.base64) map[r.deportista_id] = r.base64;
+    } catch { /* sigue con la siguiente tanda */ }
+  }
+  return map;
+}
+
+// ── TARJETAS DE CUMPLEAÑOS YA ENVIADAS POR WHATSAPP ──────────
+/* Guarda, por deportista y por AÑO, cuáles tarjetas ya se mandaron de verdad
+   al acudiente. Se marca SOLO desde el botón de WhatsApp (o a mano con el
+   chulo), nunca al descargar una tarjeta de prueba. Como la clave incluye el
+   año, en enero arranca la lista limpia otra vez.
+   Se guarda en Supabase (así lo ve cualquier computador del club) y además
+   se deja una copia chiquita en el navegador para que el chulo aparezca al
+   instante y siga funcionando si se cae el internet. */
+
+const LS_CUMPLE_ENVIADOS = 'futuro_cumple_enviados';
+
+function lsEnviados(anio: number): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const crudo = localStorage.getItem(`${LS_CUMPLE_ENVIADOS}_${anio}`);
+    const arr = crudo ? JSON.parse(crudo) : [];
+    return new Set(Array.isArray(arr) ? arr.filter((x: any) => typeof x === 'string') : []);
+  } catch { return new Set(); }
+}
+
+function lsGuardarEnviados(anio: number, ids: Set<string>): void {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(`${LS_CUMPLE_ENVIADOS}_${anio}`, JSON.stringify(Array.from(ids))); }
+  catch { /* si el navegador está lleno, no pasa nada: manda Supabase */ }
+}
+
+/** Ids de los deportistas cuya tarjeta YA se envió por WhatsApp este año. */
+export async function getCumpleEnviados(anio: number): Promise<Set<string>> {
+  const local = lsEnviados(anio);
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/cumple_enviados?select=deportista_id&anio=eq.${anio}`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (res.ok) {
+      const rows = await res.json();
+      if (Array.isArray(rows)) {
+        const remoto = new Set<string>();
+        for (const r of rows) if (r?.deportista_id) remoto.add(r.deportista_id);
+        lsGuardarEnviados(anio, remoto);
+        return remoto;
+      }
+    }
+  } catch { /* sin internet: sirve la copia del navegador */ }
+  return local;
+}
+
+/** Marca (o desmarca) la tarjeta de un deportista como enviada este año. */
+export async function marcarCumpleEnviado(
+  deportistaId: string,
+  anio: number,
+  enviado: boolean,
+  datos?: { codigo?: string; nombre?: string; medio?: string },
+): Promise<boolean> {
+  if (!deportistaId || !anio) return false;
+
+  // 1) Copia local primero, para que el chulo cambie de una.
+  const set = lsEnviados(anio);
+  if (enviado) set.add(deportistaId); else set.delete(deportistaId);
+  lsGuardarEnviados(anio, set);
+
+  // 2) Supabase, que es el registro de verdad.
+  try {
+    if (enviado) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/cumple_enviados`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify({
+          deportista_id: deportistaId,
+          anio,
+          codigo: datos?.codigo ?? null,
+          nombre: datos?.nombre ?? null,
+          medio: datos?.medio ?? 'whatsapp',
+          enviado_at: new Date().toISOString(),
+        }),
+      });
+      return res.ok;
+    }
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/cumple_enviados?deportista_id=eq.${encodeURIComponent(deportistaId)}&anio=eq.${anio}`,
+      {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+      }
+    );
+    return res.ok;
+  } catch { return false; }
+}
+
+// ── TELÉFONO DE WHATSAPP ALTERNO ─────────────────────────────
+/* A veces el celular que está en la ficha NO tiene WhatsApp, pero la
+   institución conoce otro número que sí. Aquí se guarda ese número aparte,
+   sin tocar la ficha: queda como el "teléfono de WhatsApp" del deportista y
+   lo ve cualquier computador del club. El de la ficha se conserva en la
+   columna telefono_ficha, como historial. */
+
+export interface TelefonoWhatsApp {
+  deportistaId: string;
+  telefono: string;
+  telefonoFicha: string;
+  nota: string;
+  actualizadoEn: string;
+}
+
+/** Todos los teléfonos de WhatsApp corregidos, por id de deportista. */
+export async function getTelefonosWhatsApp(): Promise<Record<string, TelefonoWhatsApp>> {
+  const out: Record<string, TelefonoWhatsApp> = {};
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/telefonos_whatsapp?select=deportista_id,telefono,telefono_ficha,nota,actualizado_at`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (!res.ok) return out;
+    const rows = await res.json();
+    if (Array.isArray(rows)) {
+      for (const r of rows) {
+        if (!r?.deportista_id || !r?.telefono) continue;
+        out[r.deportista_id] = {
+          deportistaId:  r.deportista_id,
+          telefono:      String(r.telefono),
+          telefonoFicha: String(r.telefono_ficha ?? ''),
+          nota:          String(r.nota ?? ''),
+          actualizadoEn: String(r.actualizado_at ?? ''),
+        };
+      }
+    }
+  } catch { /* sin internet: se usa el de la ficha */ }
+  return out;
+}
+
+/** Guarda (o corrige) el número de WhatsApp de un deportista. */
+export async function guardarTelefonoWhatsApp(
+  deportistaId: string,
+  telefono: string,
+  datos?: { codigo?: string; nombre?: string; telefonoFicha?: string; nota?: string },
+): Promise<boolean> {
+  const tel = String(telefono || '').trim();
+  if (!deportistaId || !tel) return false;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/telefonos_whatsapp`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({
+        deportista_id:  deportistaId,
+        telefono:       tel,
+        telefono_ficha: datos?.telefonoFicha ?? null,
+        codigo:         datos?.codigo ?? null,
+        nombre:         datos?.nombre ?? null,
+        nota:           datos?.nota ?? null,
+        actualizado_at: new Date().toISOString(),
+      }),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+/** Quita el número corregido: vuelve a mandar al celular de la ficha. */
+export async function borrarTelefonoWhatsApp(deportistaId: string): Promise<boolean> {
+  if (!deportistaId) return false;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/telefonos_whatsapp?deportista_id=eq.${encodeURIComponent(deportistaId)}`,
+      { method: 'DELETE', headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    return res.ok;
+  } catch { return false; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MICROCICLO DE ENTRENAMIENTO  (categoría SEGUIMIENTO)
+// Se construye desde ADMON · lo gestiona el FORMADOR.
+//
+// REGLA DEL MÓDULO: la asistencia NO se guarda aquí.
+// El microciclo LEE la tabla `asistencia` (el formato que el formador
+// actualiza) y solo toma de ella: % de asistencia, número de asistentes
+// y la lista de faltantes con su motivo.
+// ═══════════════════════════════════════════════════════════════
+
+export type TipoDia  = 'entreno' | 'partido' | 'descarga' | 'recuperacion' | 'descanso' | 'competencia';
+export type CargaDia = 'baja' | 'media' | 'alta' | 'muy_alta';
+export type EstadoMicrociclo = 'borrador' | 'publicado' | 'cerrado';
+
+export interface MicrocicloDia {
+  id:             string;
+  microciclo_id:  string;
+  fecha:          string;      // YYYY-MM-DD
+  dia_semana:     number;      // 1 = lunes … 7 = domingo
+  tipo_dia:       TipoDia;
+  carga:          CargaDia;
+  /** Sede donde se entrena ese día (los proyectos rotan de escenario). */
+  escenario:      string;
+  /** Hora de inicio, formato 24 h "HH:MM". */
+  hora:           string;
+  /** Componentes a desarrollar: tecnico · fisico · tactico · psicologico. */
+  componentes:    string[];
+  objetivo_dia:   string;
+  contenidos:     string;
+  fase_inicial:   string;
+  fase_central:   string;
+  fase_final:     string;
+  /** FASE 2 — pizarra táctica (jugadores, balones, conos, aros, flechas). */
+  pizarra_inicial: unknown | null;
+  pizarra_central: unknown | null;
+  pizarra_final:   unknown | null;
+  observaciones:  string;
+}
+
+export interface Microciclo {
+  id:               string;
+  proyecto:         string;
+  profesor:         string;
+  numero:           number;
+  mesociclo:        string;
+  fecha_inicio:     string;    // lunes
+  fecha_fin:        string;    // domingo
+  objetivo_general: string;
+  objetivo_tecnico: string;
+  objetivo_tactico: string;
+  objetivo_fisico:  string;
+  objetivo_psico:   string;
+  estado:           EstadoMicrociclo;
+  creado_por:       string;
+  dias?:            MicrocicloDia[];
+}
+
+const LS_MICROCICLOS = 'futuro_microciclos';
+
+let _ultimoErrorMicrociclo = '';
+/** Último error crudo de la base — para decirle al usuario qué pasó de verdad. */
+export function ultimoErrorMicrociclo(): string { return _ultimoErrorMicrociclo; }
+
+const HDR_MC = () => ({
+  'apikey':        SUPABASE_ANON_KEY,
+  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+  'Content-Type':  'application/json',
+});
+
+function mapMicrociclo(r: any): Microciclo {
+  return {
+    id:               r.id,
+    proyecto:         r.proyecto ?? '',
+    profesor:         r.profesor ?? '',
+    numero:           Number(r.numero ?? 1),
+    mesociclo:        r.mesociclo ?? '',
+    fecha_inicio:     r.fecha_inicio ?? '',
+    fecha_fin:        r.fecha_fin ?? '',
+    objetivo_general: r.objetivo_general ?? '',
+    objetivo_tecnico: r.objetivo_tecnico ?? '',
+    objetivo_tactico: r.objetivo_tactico ?? '',
+    objetivo_fisico:  r.objetivo_fisico ?? '',
+    objetivo_psico:   r.objetivo_psico ?? '',
+    estado:           (r.estado ?? 'borrador') as EstadoMicrociclo,
+    creado_por:       r.creado_por ?? '',
+  };
+}
+
+/* ═══ ESCENARIO · HORARIO · COMPONENTES — dónde se guardan ═══════════════════
+   La tabla `microciclo_dias` no tiene esas tres columnas y crearlas exige
+   correr un ALTER TABLE en Supabase. Mientras eso pasa, los tres datos viajan
+   juntos, en formato JSON, dentro de `pizarra_inicial`: una columna que ya
+   existe, está vacía en todas las filas y pertenece a la pizarra táctica, que
+   todavía no se ha construido.
+
+   No se pierde nada y es reversible: el día que se creen las columnas de
+   verdad, `mapDia` las prefiere automáticamente y solo hay que mover los datos
+   una vez. — 23/08/2026 */
+const COL_EXTRAS = 'pizarra_inicial';
+
+function empacarExtras(escenario: string, hora: string, componentes: string[]): string {
+  return JSON.stringify({ escenario: escenario ?? '', hora: hora ?? '', componentes: componentes ?? [] });
+}
+
+function desempacarExtras(v: unknown): { escenario: string; hora: string; componentes: string[] } {
+  let o: any = v;
+  if (typeof o === 'string') { try { o = JSON.parse(o); } catch { o = null; } }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return { escenario: '', hora: '', componentes: [] };
+  return {
+    escenario:   String(o.escenario ?? ''),
+    hora:        String(o.hora ?? ''),
+    componentes: Array.isArray(o.componentes) ? o.componentes.map(String) : [],
+  };
+}
+
+function mapDia(r: any): MicrocicloDia {
+  return {
+    id:              r.id,
+    microciclo_id:   r.microciclo_id,
+    fecha:           r.fecha ?? '',
+    dia_semana:      Number(r.dia_semana ?? 1),
+    tipo_dia:        (r.tipo_dia ?? 'entreno') as TipoDia,
+    carga:           (r.carga ?? 'media') as CargaDia,
+    // Si algún día existen las columnas propias, mandan ellas.
+    escenario:       r.escenario ?? desempacarExtras(r[COL_EXTRAS]).escenario,
+    // Ojo: aquí NO se corta el texto. La hora es una franja completa
+    // "08:00-09:30"; recortarla a 5 letras borraba la hora de salida.
+    hora:            String(r.hora ?? desempacarExtras(r[COL_EXTRAS]).hora ?? ''),
+    componentes:     Array.isArray(r.componentes)
+                       ? r.componentes
+                       : desempacarExtras(r[COL_EXTRAS]).componentes,
+    objetivo_dia:    r.objetivo_dia ?? '',
+    contenidos:      r.contenidos ?? '',
+    fase_inicial:    r.fase_inicial ?? '',
+    fase_central:    r.fase_central ?? '',
+    fase_final:      r.fase_final ?? '',
+    pizarra_inicial: r.pizarra_inicial ?? null,
+    pizarra_central: r.pizarra_central ?? null,
+    pizarra_final:   r.pizarra_final ?? null,
+    observaciones:   r.observaciones ?? '',
+  };
+}
+
+/** Lista de microciclos (cabeceras), opcionalmente de un solo proyecto. */
+export async function getMicrociclos(proyecto?: string): Promise<Microciclo[]> {
+  const filtro = proyecto ? `&proyecto=eq.${encodeURIComponent(proyecto)}` : '';
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/microciclos?select=*${filtro}&order=fecha_inicio.desc`,
+      { headers: HDR_MC() }
+    );
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    const lista = (Array.isArray(data) ? data : []).map(mapMicrociclo);
+    try { lsSet(LS_MICROCICLOS, lista); } catch {}
+    return lista;
+  } catch {
+    const cache = lsGet<Microciclo[]>(LS_MICROCICLOS, []);
+    return proyecto ? cache.filter(m => m.proyecto === proyecto) : cache;
+  }
+}
+
+/** Un microciclo con sus 7 días ordenados de lunes a domingo. */
+export async function getMicrociclo(id: string): Promise<Microciclo | null> {
+  if (!id) return null;
+  try {
+    const [rCab, rDias] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/microciclos?select=*&id=eq.${encodeURIComponent(id)}`, { headers: HDR_MC() }),
+      fetch(`${SUPABASE_URL}/rest/v1/microciclo_dias?select=*&microciclo_id=eq.${encodeURIComponent(id)}&order=dia_semana.asc`, { headers: HDR_MC() }),
+    ]);
+    if (!rCab.ok) return null;
+    const cab = await rCab.json();
+    if (!Array.isArray(cab) || !cab.length) return null;
+    const dias = rDias.ok ? await rDias.json() : [];
+    return { ...mapMicrociclo(cab[0]), dias: (Array.isArray(dias) ? dias : []).map(mapDia) };
+  } catch {
+    return null;
+  }
+}
+
+/** Lunes de la semana a la que pertenece una fecha (ISO, lunes = inicio). */
+export function lunesDeLaSemana(fecha: Date): Date {
+  const d = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+  const dow = d.getDay() === 0 ? 7 : d.getDay();   // 1..7
+  d.setDate(d.getDate() - (dow - 1));
+  return d;
+}
+
+/** Fecha → 'YYYY-MM-DD' en hora local (no usar toISOString: corre el día). */
+export function claveFecha(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * ¿Están creadas las tablas del microciclo en Supabase?
+ * Devuelve un motivo legible para mostrarlo en pantalla en vez de un
+ * "no se pudo" a secas.
+ */
+export async function estadoTablasMicrociclo(): Promise<{ ok: boolean; motivo: string }> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/microciclos?select=id&limit=1`, { headers: HDR_MC() });
+    if (res.ok) return { ok: true, motivo: '' };
+
+    const txt = await res.text().catch(() => '');
+    if (res.status === 404 || txt.includes('PGRST205') || /schema cache/i.test(txt)) {
+      return { ok: false, motivo: 'FALTAN_TABLAS' };
+    }
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, motivo: `PERMISO: ${txt.slice(0, 200)}` };
+    }
+    return { ok: false, motivo: `HTTP ${res.status}: ${txt.slice(0, 200)}` };
+  } catch (e) {
+    return { ok: false, motivo: `SIN_CONEXION: ${String(e).slice(0, 200)}` };
+  }
+}
+
+export interface InfoProyecto {
+  dias:     number[];   // 0 = domingo … 6 = sábado
+  formador: string;
+  sede:     string;
+}
+
+/**
+ * Ficha del proyecto tal como está en `jornadas_proyecto`: días de entreno,
+ * formador responsable y sede habitual. Es la misma fuente que usa /asistencia.
+ */
+export async function getInfoProyecto(proyecto: string): Promise<InfoProyecto> {
+  const p = (proyecto ?? '').trim();
+  const vacio: InfoProyecto = { dias: [], formador: '', sede: '' };
+  if (!p) return vacio;
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/jornadas_proyecto?select=dias,nombre_formador,sede&proyecto=eq.${encodeURIComponent(p)}&limit=1`,
+      { headers: HDR_MC(), cache: 'no-store' }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length) {
+        const r = data[0];
+        const info: InfoProyecto = {
+          dias:     Array.isArray(r.dias) ? r.dias : [],
+          formador: r.nombre_formador ?? '',
+          sede:     r.sede ?? '',
+        };
+        if (info.dias.length) { try { localStorage.setItem(`futuro_dias_${p}`, JSON.stringify(info.dias)); } catch {} }
+        return info;
+      }
+    }
+  } catch { /* respaldo local */ }
+
+  return { ...vacio, dias: await getDiasProyecto(p) };
+}
+
+/**
+ * Días de entrenamiento base de un proyecto (0 = domingo … 6 = sábado).
+ * Misma fuente que usa /asistencia: la tabla `jornadas_proyecto`.
+ */
+export async function getDiasProyecto(proyecto: string): Promise<number[]> {
+  const p = (proyecto ?? '').trim();
+  if (!p) return [];
+  try {
+    const res = await fetch(`/api/jornada-proyecto?proyecto=${encodeURIComponent(p)}`, { cache: 'no-store' });
+    if (res.ok) {
+      const { dias } = await res.json();
+      if (Array.isArray(dias) && dias.length) {
+        try { localStorage.setItem(`futuro_dias_${p}`, JSON.stringify(dias)); } catch {}
+        return dias as number[];
+      }
+    }
+  } catch { /* seguimos al respaldo local */ }
+
+  try {
+    const raw = localStorage.getItem(`futuro_dias_${p}`);
+    const dias = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(dias)) return dias as number[];
+  } catch {}
+  return [];
+}
+
+/**
+ * Crea un microciclo con sus 7 días (lunes → domingo).
+ * `fechasEntreno` marca cuáles días son de entrenamiento según el calendario
+ * del proyecto; los demás quedan como descanso.
+ * Devuelve el id creado, o null si falló.
+ */
+export async function crearMicrociclo(datos: {
+  proyecto: string; profesor?: string; numero?: number; mesociclo?: string;
+  fecha_inicio: string; objetivo_general?: string; creado_por?: string;
+  fechasEntreno?: string[];
+}): Promise<string | null> {
+  const proyecto = (datos.proyecto ?? '').trim();
+  if (!proyecto || !datos.fecha_inicio) return null;
+
+  const [a, m, d] = datos.fecha_inicio.split('-').map(Number);
+  const inicio = lunesDeLaSemana(new Date(a, m - 1, d));
+  const fin    = new Date(inicio); fin.setDate(fin.getDate() + 6);
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/microciclos`, {
+      method:  'POST',
+      headers: { ...HDR_MC(), 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        proyecto,
+        profesor:         datos.profesor  ?? '',
+        numero:           datos.numero    ?? 1,
+        mesociclo:        datos.mesociclo ?? '',
+        fecha_inicio:     claveFecha(inicio),
+        fecha_fin:        claveFecha(fin),
+        objetivo_general: datos.objetivo_general ?? '',
+        creado_por:       datos.creado_por ?? '',
+        estado:           'borrador',
+      }),
+    });
+    if (!res.ok) {
+      _ultimoErrorMicrociclo = `HTTP ${res.status} · ${(await res.text().catch(() => '')).slice(0, 300)}`;
+      console.error('[db] crearMicrociclo:', _ultimoErrorMicrociclo);
+      return null;
+    }
+    const creado = await res.json();
+    const id = Array.isArray(creado) ? creado[0]?.id : creado?.id;
+    if (!id) return null;
+
+    // Los 7 días de la semana. Si vino el calendario del proyecto, los días
+    // sin sesión nacen marcados como descanso.
+    const conCalendario = Array.isArray(datos.fechasEntreno) && datos.fechasEntreno.length > 0;
+    const setEntreno = new Set(datos.fechasEntreno ?? []);
+    const dias = Array.from({ length: 7 }, (_, i) => {
+      const f  = new Date(inicio); f.setDate(f.getDate() + i);
+      const fk = claveFecha(f);
+      const entrena = conCalendario ? setEntreno.has(fk) : i < 6;
+      return {
+        microciclo_id: id,
+        fecha:         fk,
+        dia_semana:    i + 1,
+        tipo_dia:      entrena ? 'entreno' : 'descanso',
+        carga:         entrena ? 'media' : 'baja',
+      };
+    });
+    await fetch(`${SUPABASE_URL}/rest/v1/microciclo_dias`, {
+      method: 'POST', headers: HDR_MC(), body: JSON.stringify(dias),
+    });
+    return id;
+  } catch (e) {
+    _ultimoErrorMicrociclo = String(e).slice(0, 300);
+    console.error('[db] crearMicrociclo:', e);
+    return null;
+  }
+}
+
+
+
+/** Actualiza la cabecera (objetivos, estado, profesor…). */
+export async function guardarMicrociclo(id: string, cambios: Partial<Microciclo>): Promise<boolean> {
+  if (!id) return false;
+  const permitido: Record<string, unknown> = {};
+  (['profesor','numero','mesociclo','objetivo_general','objetivo_tecnico','objetivo_tactico',
+    'objetivo_fisico','objetivo_psico','estado'] as const)
+    .forEach(k => { if (cambios[k] !== undefined) permitido[k] = cambios[k]; });
+  if (!Object.keys(permitido).length) return true;
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/microciclos?id=eq.${encodeURIComponent(id)}`,
+      { method: 'PATCH', headers: HDR_MC(), body: JSON.stringify(permitido) }
+    );
+    return res.ok;
+  } catch (e) { console.error('[db] guardarMicrociclo:', e); return false; }
+}
+
+/** Guarda un día del microciclo (lo edita el formador). */
+export async function guardarMicrocicloDia(diaId: string, cambios: Partial<MicrocicloDia>): Promise<boolean> {
+  if (!diaId) return false;
+  const permitido: Record<string, unknown> = {};
+  (['tipo_dia','carga','escenario','hora','componentes','objetivo_dia','contenidos',
+    'fase_inicial','fase_central','fase_final',
+    'pizarra_inicial','pizarra_central','pizarra_final','observaciones'] as const)
+    .forEach(k => { if (cambios[k] !== undefined) permitido[k] = cambios[k]; });
+  if (!Object.keys(permitido).length) return true;
+
+  /* Columnas que llegaron después (ampliación del 22/08/2026). Si la base aún
+     no las tiene, no se pierde TODO lo que el formador escribió: se reintenta
+     guardando el resto y se avisa qué quedó por fuera. */
+  const COLS_NUEVAS = ['escenario', 'hora', 'componentes'] as const;
+
+  const enviar = async (cuerpo: Record<string, unknown>) => fetch(
+    `${SUPABASE_URL}/rest/v1/microciclo_dias?id=eq.${encodeURIComponent(diaId)}`,
+    { method: 'PATCH', headers: HDR_MC(), body: JSON.stringify(cuerpo) },
+  );
+
+  try {
+    const res = await enviar(permitido);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+
+      /* La base no tiene las tres columnas propias. En vez de perder el dato,
+         se reintenta metiéndolo empacado en `pizarra_inicial`, que sí existe.
+         Para el formador esto es invisible: guarda y queda guardado. */
+      const faltanNuevas = /PGRST204|schema cache/i.test(txt)
+        && COLS_NUEVAS.some(c => c in permitido);
+      if (faltanNuevas) {
+        const resto: Record<string, unknown> = { ...permitido };
+        COLS_NUEVAS.forEach(c => { delete resto[c]; });
+        resto[COL_EXTRAS] = empacarExtras(
+          String(cambios.escenario ?? ''),
+          String(cambios.hora ?? ''),
+          Array.isArray(cambios.componentes) ? cambios.componentes : [],
+        );
+        const res2 = await enviar(resto);
+        if (res2.ok) {
+          _ultimoErrorMicrociclo = '';
+          return true;   // guardado completo, solo que por el camino alterno
+        }
+        // Si tampoco pasó, se guarda al menos el resto y se avisa.
+        delete resto[COL_EXTRAS];
+        if (Object.keys(resto).length) {
+          const res3 = await enviar(resto);
+          if (res3.ok) {
+            _ultimoErrorMicrociclo = `SOLO_FALTAN_NUEVAS|${txt.slice(0, 200)}`;
+            console.warn('[db] microciclo: guardado parcial (sin escenario/hora/componentes)');
+            return false;
+          }
+        }
+      }
+      // PGRST204 = la columna no existe todavía (falta correr el SQL).
+      _ultimoErrorMicrociclo = /PGRST204|schema cache|column/i.test(txt)
+        ? 'FALTAN_COLUMNAS'
+        : `HTTP ${res.status} · ${txt.slice(0, 300)}`;
+      console.error('[db] guardarMicrocicloDia:', _ultimoErrorMicrociclo);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    _ultimoErrorMicrociclo = String(e).slice(0, 300);
+    console.error('[db] guardarMicrocicloDia:', e);
+    return false;
+  }
+}
+
+/** Borra el microciclo completo (los días caen por cascada). */
+export async function eliminarMicrociclo(id: string): Promise<boolean> {
+  if (!id) return false;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/microciclos?id=eq.${encodeURIComponent(id)}`,
+      { method: 'DELETE', headers: HDR_MC() }
+    );
+    return res.ok;
+  } catch { return false; }
+}
+
+// ── ASISTENCIA LEÍDA POR EL MICROCICLO (solo lectura) ──────────
+
+/** Presente: asistió o estaba compitiendo. */
+const MC_PRESENTE = ['A', 'C'];
+/** Falta con motivo — el motivo es el propio estado del formato de asistencia. */
+export const MC_MOTIVO: Record<string, string> = {
+  'F':  'Faltó',
+  'S':  'Salud',
+  'ES': 'Estudio',
+  'FA': 'Familia',
+  'NQ': 'No quizo',
+};
+
+export interface FaltanteDia {
+  id:     string;
+  nombre: string;
+  codigo: string;
+  motivo: string;   // Salud, Estudio, Familia, No quizo, Faltó
+}
+
+export interface ResumenAsistenciaDia {
+  fecha:       string;
+  convocados:  number;
+  asistentes:  number;
+  faltantes:   number;
+  porcentaje:  number;         // 0-100
+  cancelado:   boolean;        // el formador marcó CAN (sesión cancelada)
+  sinRegistro: boolean;        // el formador todavía no llenó el formato
+  lista:       FaltanteDia[];  // faltantes con su motivo
+}
+
+/**
+ * Resumen de asistencia de un proyecto entre dos fechas.
+ * Lee EXCLUSIVAMENTE la tabla `asistencia` — el microciclo no escribe nada allí.
+ * Devuelve { 'YYYY-MM-DD': ResumenAsistenciaDia }.
+ */
+export async function getResumenAsistencia(
+  proyecto: string, desde: string, hasta: string
+): Promise<Record<string, ResumenAsistenciaDia>> {
+  const p = (proyecto ?? '').trim();
+  const out: Record<string, ResumenAsistenciaDia> = {};
+  if (!p || !desde || !hasta) return out;
+
+  let filas: any[] = [];
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/asistencia?select=deportista_id,fecha,estado` +
+      `&proyecto=eq.${encodeURIComponent(p)}&fecha=gte.${desde}&fecha=lte.${hasta}&limit=5000`,
+      { headers: HDR_MC() }
+    );
+    if (res.ok) filas = await res.json();
+  } catch { /* sin conexión → se devuelve vacío */ }
+
+  if (!Array.isArray(filas) || !filas.length) return out;
+
+  // Nombres y códigos para la lista de faltantes
+  const nombres: Record<string, { nombre: string; codigo: string }> = {};
+  try {
+    const deps = await getDeportistas();
+    deps.forEach(d => {
+      const cols = d._columnas ?? {};
+      const kCod = Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim()));
+      nombres[d.id] = { nombre: d._nombre, codigo: kCod ? (cols[kCod] ?? '') : '' };
+    });
+  } catch { /* seguimos sin nombres */ }
+
+  for (const r of filas) {
+    const fecha  = String(r.fecha ?? '');
+    const estado = String(r.estado ?? '');
+    if (!fecha) continue;
+
+    if (!out[fecha]) {
+      out[fecha] = { fecha, convocados: 0, asistentes: 0, faltantes: 0,
+                     porcentaje: 0, cancelado: false, sinRegistro: false, lista: [] };
+    }
+    const dia = out[fecha];
+
+    if (estado === 'CAN') { dia.cancelado = true; continue; }
+    if (estado === 'SE' || estado === '') continue;
+
+    if (MC_PRESENTE.includes(estado)) {
+      dia.convocados++; dia.asistentes++;
+    } else if (MC_MOTIVO[estado]) {
+      dia.convocados++; dia.faltantes++;
+      const info = nombres[r.deportista_id] ?? { nombre: r.deportista_id, codigo: '' };
+      dia.lista.push({ id: r.deportista_id, nombre: info.nombre, codigo: info.codigo, motivo: MC_MOTIVO[estado] });
+    }
+  }
+
+  Object.values(out).forEach(d => {
+    d.porcentaje = d.convocados ? Math.round((d.asistentes / d.convocados) * 100) : 0;
+    d.sinRegistro = d.convocados === 0 && !d.cancelado;
+    d.lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  });
+
   return out;
 }

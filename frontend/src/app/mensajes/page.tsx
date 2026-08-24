@@ -51,6 +51,7 @@ export default function MensajesPage() {
   const [convActiva, setConvActiva] = useState<string | null>(null);
   const [nuevoMsg,   setNuevoMsg]   = useState('');
   const [busqueda,   setBusqueda]   = useState('');
+  const [soloPendientes, setSoloPendientes] = useState(false);
   const [enviando,   setEnviando]   = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -149,6 +150,32 @@ export default function MensajesPage() {
   const soyEmisor = (m: Mensaje) =>
     esCalidoso ? m.de === 'calidoso' : esProfe ? m.de === 'profesor' : m.de === 'admin';
 
+  /* ── PENDIENTES POR RESPONDER ─────────────────────────────────
+     Una conversación está pendiente cuando el ÚLTIMO mensaje lo escribió
+     el calidoso y todavía nadie le contestó. Ojo: abrir la conversación NO
+     la quita de pendientes; solo se quita cuando de verdad se responde. */
+  const ultimoDe = (c: Conv): Mensaje | undefined =>
+    visibles
+      .filter(m => up(m.codigo) === up(c.codigo) && m.para === c.para)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
+
+  const clavesPendientes = useMemo(() => {
+    const s = new Set<string>();
+    conversaciones.forEach(c => {
+      const u = visibles
+        .filter(m => up(m.codigo) === up(c.codigo) && m.para === c.para)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
+      if (u && u.de === 'calidoso') s.add(c.key);
+    });
+    return s;
+  }, [conversaciones, visibles]);
+
+  const totalPendientes = clavesPendientes.size;
+  const totalSinLeer = useMemo(
+    () => visibles.filter(m => m.de === 'calidoso' && !m.leido).length,
+    [visibles]
+  );
+
   /* ── No leídos por conversación ── */
   const noLeidosDe = (c: Conv): number => {
     if (esCalidoso) {
@@ -185,12 +212,13 @@ export default function MensajesPage() {
     else alert('No se pudo enviar el mensaje. Revisa la conexión.');
   }
 
-  /* ── Filtro de búsqueda (profe / institución) ── */
-  const convsFiltradas = conversaciones.filter(c =>
-    !busqueda.trim() ||
-    c.titulo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.codigo.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  /* ── Filtro de búsqueda + "solo pendientes" (profe / institución) ── */
+  const convsFiltradas = conversaciones.filter(c => {
+    if (soloPendientes && !clavesPendientes.has(c.key)) return false;
+    const t = busqueda.trim().toLowerCase();
+    if (!t) return true;
+    return c.titulo.toLowerCase().includes(t) || c.codigo.toLowerCase().includes(t);
+  });
 
   const tituloRol = esCalidoso ? 'Escríbele a tu profesor o a la institución'
     : esProfe ? 'Mensajes de tus deportistas'
@@ -210,9 +238,26 @@ export default function MensajesPage() {
           <p className="font-bold text-white leading-tight">Mensajes</p>
           <p className="text-white/70 text-[11px] leading-tight truncate">{tituloRol}</p>
         </div>
-        <div className="ml-auto text-right leading-tight hidden sm:block">
-          <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-          <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
+        {/* CONTADOR DE PENDIENTES POR RESPONDER */}
+        <div className="ml-auto flex items-center gap-3">
+          {totalPendientes > 0 ? (
+            <div className="bg-amber-400 text-[#064e1e] rounded-xl px-3 py-1.5 leading-tight text-center shadow">
+              <p className="font-black text-xl">{totalPendientes}</p>
+              <p className="text-[10px] font-black uppercase">
+                {esCalidoso ? 'esperando respuesta' : 'por responder'}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white/20 text-white rounded-xl px-3 py-1.5 leading-tight text-center">
+              <p className="text-[11px] font-black uppercase">
+                {esCalidoso ? 'Sin pendientes' : 'Todo respondido'}
+              </p>
+            </div>
+          )}
+          <div className="text-right leading-tight hidden lg:block">
+            <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
+            <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
+          </div>
         </div>
       </header>
 
@@ -222,7 +267,7 @@ export default function MensajesPage() {
           {/* Lista de conversaciones */}
           <div className={cn('border-r border-gray-100 flex flex-col flex-shrink-0 w-full sm:w-72', conv && 'hidden sm:flex')}>
             {!esCalidoso && (
-              <div className="p-3 border-b border-gray-100">
+              <div className="p-3 border-b border-gray-100 space-y-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
@@ -232,23 +277,50 @@ export default function MensajesPage() {
                     className="w-full pl-9 pr-3 py-2 bg-gray-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
                   />
                 </div>
+                {/* Resumen: cuántas faltan por responder y cuántas no se han leído */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => setSoloPendientes(v => !v)}
+                    title="Mostrar solo las conversaciones que faltan por responder"
+                    className={cn(
+                      'text-[11px] font-black px-2.5 py-1 rounded-full border transition',
+                      soloPendientes
+                        ? 'bg-amber-400 border-amber-400 text-[#064e1e]'
+                        : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                    )}
+                  >
+                    {totalPendientes} por responder
+                  </button>
+                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                    {totalSinLeer} sin leer
+                  </span>
+                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                    {conversaciones.length} en total
+                  </span>
+                </div>
+                {soloPendientes && (
+                  <p className="text-[11px] text-amber-700 font-semibold">
+                    Viendo solo pendientes. Vuelve a tocar el botón para ver todas.
+                  </p>
+                )}
               </div>
             )}
             <div className="overflow-y-auto flex-1">
               {convsFiltradas.length === 0 && (
                 <div className="p-6 text-center text-gray-400 text-sm">
-                  {esProfe ? 'Aún no tienes mensajes de tus deportistas.' : 'Aún no hay mensajes.'}
+                  {soloPendientes ? '¡No queda ninguna conversación por responder!'
+                    : esProfe ? 'Aún no tienes mensajes de tus deportistas.' : 'Aún no hay mensajes.'}
                 </div>
               )}
               {convsFiltradas.map(c => {
                 const nl = noLeidosDe(c);
-                const ultimo = visibles
-                  .filter(m => up(m.codigo) === up(c.codigo) && m.para === c.para)
-                  .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
+                const ultimo = ultimoDe(c);
+                const pend = clavesPendientes.has(c.key);
                 return (
                   <button key={c.key} onClick={() => abrir(c.key)}
                     className={cn(
                       'w-full p-4 flex items-start gap-3 text-left hover:bg-gray-50 transition border-b border-gray-50',
+                      pend && 'border-l-4 border-l-amber-400',
                       convActiva === c.key && 'bg-[#E8F5E9]'
                     )}>
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#064e1e] to-[#16a34a] flex items-center justify-center flex-shrink-0">
@@ -261,7 +333,15 @@ export default function MensajesPage() {
                         <p className="text-sm font-semibold text-gray-900 truncate">{c.titulo}</p>
                         {ultimo && <span className="text-[10px] text-gray-400 flex-shrink-0">{horaCorta(ultimo.createdAt)}</span>}
                       </div>
+                      {!esCalidoso && c.codigo && (
+                        <p className="text-[10px] font-bold text-[#16a34a] mt-0.5 truncate">Código {c.codigo}</p>
+                      )}
                       <p className="text-xs text-gray-400 truncate mt-0.5">{ultimo ? ultimo.texto : c.subtitulo}</p>
+                      {pend && (
+                        <span className="inline-block mt-1 bg-amber-400 text-[#064e1e] text-[10px] font-black px-2 py-0.5 rounded-full">
+                          {esCalidoso ? 'ESPERANDO RESPUESTA' : 'FALTA RESPONDER'}
+                        </span>
+                      )}
                     </div>
                     {nl > 0 && (
                       <span className="w-5 h-5 bg-[#16a34a] text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0">{nl}</span>
@@ -287,6 +367,11 @@ export default function MensajesPage() {
                   <p className="font-semibold text-gray-900 text-sm truncate">{conv.titulo}</p>
                   <p className="text-xs text-gray-400 truncate">{conv.subtitulo}</p>
                 </div>
+                {clavesPendientes.has(conv.key) && (
+                  <span className="ml-auto bg-amber-400 text-[#064e1e] text-[10px] font-black px-2.5 py-1 rounded-full flex-shrink-0">
+                    {esCalidoso ? 'ESPERANDO RESPUESTA' : 'FALTA RESPONDER'}
+                  </span>
+                )}
               </div>
 
               {/* Mensajes */}

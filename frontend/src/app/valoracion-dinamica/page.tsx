@@ -3,13 +3,14 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Search, Download } from 'lucide-react';
+import { rutaAnterior } from '@/components/RastreoRuta';
 import { getDeportistas, getFoto, getProfes } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { getCategoriasValoracion } from '@/lib/valoracion-textos';
 import { esSuperAdmin, esDeportivo, esContabilidad } from '@/lib/permisos';
 
-const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
+const SB_URL = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const SB_KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
 const SB_HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
 
 /* ── Niveles ── */
@@ -252,6 +253,17 @@ function ValoracionDinamicaInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const codParam = searchParams.get('cod');
+  const evParam  = searchParams.get('ev');   // informe concreto a mostrar (id)
+  // ?volver=/ruta → de dónde llegó el usuario, para devolverlo allí (ej: Control de Informes)
+  const [volverA, setVolverA] = useState('');
+  useEffect(() => {
+    try {
+      const param = searchParams.get('volver') || '';
+      if (param.startsWith('/')) { setVolverA(param); return; }
+      const prev = rutaAnterior(window.location.pathname);
+      if (prev && !prev.startsWith('/valoracion-dinamica')) setVolverA(prev);
+    } catch { /* noop */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Solo administradores ven el botón de descargar PDF (para probar)
   const [esAdminUI, setEsAdminUI] = useState(false);
@@ -261,6 +273,7 @@ function ValoracionDinamicaInner() {
   const [q, setQ]         = useState('');
   const [sel, setSel]     = useState<Deportista | null>(null);
   const [row, setRow]     = useState<Record<string, any> | null>(null);
+  const [informes, setInformes] = useState<Record<string, any>[]>([]);   // todos los informes del deportista
   const [loading, setLoading] = useState(false);
   const [buscada, setBuscada] = useState(false);
   const [mostrar, setMostrar] = useState(false);
@@ -313,24 +326,27 @@ function ValoracionDinamicaInner() {
     ).slice(0, 8);
   }, [q, deps]);
 
-  async function elegir(dep: Deportista) {
-    setSel(dep); setQ(''); setRow(null); setBuscada(false); setLoading(true);
+  async function elegir(dep: Deportista, evId?: string | null) {
+    setSel(dep); setQ(''); setRow(null); setInformes([]); setBuscada(false); setLoading(true);
     const cod = codigoDe(dep).toUpperCase();
     try {
-      const res = await fetch(`${SB_URL}/rest/v1/evaluaciones?codigo=eq.${encodeURIComponent(cod)}&order=created_at.desc&limit=1`, { headers: SB_HDR });
+      const res = await fetch(`${SB_URL}/rest/v1/evaluaciones?codigo=eq.${encodeURIComponent(cod)}&order=created_at.desc`, { headers: SB_HDR });
       const data = await res.json();
-      setRow(Array.isArray(data) && data[0] ? data[0] : null);
-    } catch { setRow(null); }
+      const arr = Array.isArray(data) ? data : [];
+      setInformes(arr);
+      const elegido = (evId && arr.find(r => String(r.id) === String(evId))) || arr[0] || null;
+      setRow(elegido);
+    } catch { setRow(null); setInformes([]); }
     finally { setLoading(false); setBuscada(true); }
   }
 
-  // Auto-seleccionar por ?cod= desde la ficha
+  // Auto-seleccionar por ?cod= desde la ficha (y ?ev= para un informe concreto)
   useEffect(() => {
     if (!codParam || sel || deps.length === 0) return;
     const t = codParam.trim().toLowerCase();
     const target = deps.find(d => codigoDe(d).toLowerCase() === t) ?? deps.find(d => codigoDe(d).toLowerCase().includes(t));
-    if (target) elegir(target);
-  }, [codParam, deps, sel]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (target) elegir(target, evParam);
+  }, [codParam, evParam, deps, sel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const val = (col: string) => String(row?.[col] ?? '');
 
@@ -412,7 +428,14 @@ function ValoracionDinamicaInner() {
         }
       ` }} />
       <header className="print:hidden bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
-        <button onClick={() => { if (sel?.id) router.push(`/alumnos/${sel.id}`); else router.back(); }} className="text-white/70 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
+        <button
+          title={volverA.startsWith('/control-informes') ? 'Volver a Control de Informes' : 'Volver'}
+          onClick={() => {
+            if (volverA.startsWith('/')) router.push(volverA);
+            else if (sel?.id) router.push(`/alumnos/${sel.id}`);
+            else router.back();
+          }}
+          className="text-white/70 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <div className="flex-1 min-w-0">
           <h1 className="text-white font-black text-lg leading-tight">Valoración Dinámica</h1>
           <p className="text-white/60 text-xs">La valoración deportiva con mejor diseño</p>
@@ -444,6 +467,26 @@ function ValoracionDinamicaInner() {
           )}
           {sel && <p className="mt-2 text-xs text-gray-500">Mostrando: <b className="text-[#16a34a]">{sel._nombre}</b> · Código {codigoDe(sel) || '—'}{loading && ' · cargando…'}</p>}
         </div>
+
+        {/* Selector de informe cuando el deportista tiene más de uno */}
+        {sel && informes.length >= 2 && (
+          <div className="print:hidden bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-3">
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Informe a mostrar</label>
+            <div className="flex flex-wrap gap-2">
+              {informes.map(inf => {
+                const activo = row && String(row.id) === String(inf.id);
+                const num = String(inf.numero_informe ?? '').trim();
+                const fch = String(inf.fecha ?? '').trim();
+                return (
+                  <button key={inf.id} onClick={() => setRow(inf)}
+                    className={`text-[12px] font-black px-3 py-1.5 rounded-full border transition ${activo ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'bg-black/40 text-gray-300 border-white/15 hover:bg-white/5'}`}>
+                    {num ? `Informe ${num}` : 'Informe'}{fch ? ` · ${fch}` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {!sel && (
           <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-8 text-center">

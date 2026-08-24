@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle, XCircle, Eye, Clock, AlertCircle } from 'lucide
 import { getSoportesPendientes, getSoporteDatos, confirmarSoportePago, eliminarSoportePago, getDeportistas } from '@/lib/db';
 import type { SoportePago, Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
+import { abrirSoporte, dataUrlABlobUrl, esPdfDato } from '@/lib/utils';
 
 /* ── Helpers para extraer columnas del deportista ── */
 function sinTildes(s: string): string {
@@ -46,6 +47,7 @@ export default function PagosPendientesPage() {
   const [procesando, setProcesando] = useState(false);
   const [toast,      setToast]      = useState<{ msg: string; ok: boolean } | null>(null);
   const [datosMap,   setDatosMap]   = useState<Record<string, string>>({}); // id -> imagen base64 (carga perezosa)
+  const [urlVista,   setUrlVista]   = useState('');   // URL que se muestra en el visor (blob: si es PDF)
 
   // Cargar las imágenes de a una (sin bloquear la lista ni saturar la red)
   useEffect(() => {
@@ -62,6 +64,19 @@ export default function PagosPendientesPage() {
     return () => { cancel = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soportes]);
+
+  // Dato del soporte que se esta viendo en el visor
+  const datoVista = viendoIdx !== null ? (datosMap[soportes[viendoIdx]?.id || ''] || '') : '';
+
+  /* Un PDF no se puede mostrar con <img> ni abrir con un enlace "data:" — el
+     navegador lo bloquea. Se convierte a archivo temporal (blob:) y ese sí abre. */
+  useEffect(() => {
+    if (!datoVista) { setUrlVista(''); return; }
+    if (!esPdfDato(datoVista)) { setUrlVista(datoVista); return; }
+    const url = dataUrlABlobUrl(datoVista);
+    setUrlVista(url);
+    return () => { if (url.startsWith('blob:')) URL.revokeObjectURL(url); };
+  }, [datoVista]);
 
   const mostrarToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -270,11 +285,12 @@ export default function PagosPendientesPage() {
                             </span>
                           </button>
                         ) : (
-                          <a href={img} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-red-600 text-xs font-semibold hover:underline">
-                            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>
-                            PDF
-                          </a>
+                          <button onClick={() => setViendoIdx(idx)}
+                            title="Ver el soporte en PDF"
+                            className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition cursor-pointer">
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>
+                            <span className="text-[9px] font-black">PDF</span>
+                          </button>
                         );
                       })()}
                     </td>
@@ -317,13 +333,32 @@ export default function PagosPendientesPage() {
         <div
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
           onClick={() => setViendoIdx(null)}>
-          <div className="relative max-w-2xl w-full" onClick={e => e.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={datosMap[soportes[viendoIdx].id] || ''}
-              alt="Soporte de pago"
-              className="w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl bg-white"
-            />
+          <div className={`relative w-full ${esPdfDato(datoVista) ? 'max-w-4xl' : 'max-w-2xl'}`} onClick={e => e.stopPropagation()}>
+            {esPdfDato(datoVista) ? (
+              /* PDF: se muestra dentro del visor del navegador. En celulares que no
+                 saben mostrarlo, el boton de abajo lo abre o lo descarga. */
+              <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+                <iframe src={urlVista} title="Soporte de pago en PDF"
+                  className="w-full h-[75vh] border-0 bg-gray-100" />
+                <div className="flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 border-t border-gray-200">
+                  <p className="text-xs font-black text-gray-600 truncate">
+                    📄 {soportes[viendoIdx].nombre || 'Soporte en PDF'}
+                  </p>
+                  <button
+                    onClick={() => abrirSoporte(datoVista, soportes[viendoIdx].nombre || 'soporte')}
+                    className="whitespace-nowrap px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] transition">
+                    Abrir / descargar ↗
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={urlVista}
+                alt="Soporte de pago"
+                className="w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl bg-white"
+              />
+            )}
             <button
               onClick={() => setViendoIdx(null)}
               className="absolute -top-3 -right-3 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 hover:text-red-500 transition text-lg font-black">

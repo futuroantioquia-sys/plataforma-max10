@@ -12,9 +12,10 @@
  * Permite que db.ts distinga "0 resultados" de "fallo de RPC".
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { rolDeSolicitud, estaAutenticado } from '@/lib/auth-guard';
 
-const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
+const SB_URL = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const SB_KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
 
 // FIX Bug F: Removido 'Prefer: return=representation' que no es estándar para llamadas RPC
 // y puede causar respuestas inesperadas según la firma de la función PostgreSQL.
@@ -25,10 +26,14 @@ const HDRS = {
 };
 
 export async function GET(request: NextRequest) {
+  // BLINDAJE: esta ruta devolvía TODOS los datos personales de un deportista a
+  // cualquiera que probara códigos (21185, 21186, 21187...). El ingreso de
+  // calidosos ya no la usa: ahora se verifica en /api/auth/calidoso.
+  const rol = await rolDeSolicitud(request);
+  if (!estaAutenticado(rol)) return NextResponse.json([], { status: 403 });
+
   const { searchParams } = new URL(request.url);
   const codigo = (searchParams.get('codigo') ?? '').trim().toUpperCase();
-
-  console.log('[calidoso-login] Iniciando búsqueda, código:', codigo);
 
   if (!codigo) return NextResponse.json([]);
 

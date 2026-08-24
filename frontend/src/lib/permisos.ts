@@ -20,21 +20,21 @@ export function getSesion(): string {
 }
 
 export function esContabilidad(): boolean {
-  if (getSesion() === 'contabilidad') return true;
-  try { return localStorage.getItem('futuro-rol') === 'contabilidad'; } catch { return false; }
+  // BLINDAJE: el rol se lee SOLO de la cookie emitida por el servidor.
+  // Antes bastaba con escribir localStorage.setItem('futuro-rol','contabilidad')
+  // en la consola del navegador para desbloquear botones de otro rol.
+  return getSesion() === 'contabilidad';
 }
 
 /** Administrador deportivo: acceso total EXCEPTO finanzas. */
 export function esDeportivo(): boolean {
-  if (getSesion() === 'deportivo') return true;
-  try { return localStorage.getItem('futuro-rol') === 'deportivo'; } catch { return false; }
+  return getSesion() === 'deportivo';
 }
 
 /** Super-administrador (ADMON) — único que gestiona administradores. */
 export function esSuperAdmin(): boolean {
   const s = getSesion();
-  if (s === '1' || s === 'administracion') return true;
-  try { return localStorage.getItem('futuro-rol') === 'administracion'; } catch { return false; }
+  return s === '1' || s === 'administracion';
 }
 
 /** ¿La ruta actual pertenece a Finanzas? (incluye subrutas como /pagos/importar-valores) */

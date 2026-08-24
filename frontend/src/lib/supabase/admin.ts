@@ -11,7 +11,7 @@
 //  anterior hasta que activemos el blindaje).
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
+export const SB_URL = 'https://fykdyalpuydkwfjqguip.supabase.co';
 
 const SERVICE_KEY =
   (typeof process !== 'undefined' && process.env && process.env.SUPABASE_SERVICE_ROLE_KEY) || '';

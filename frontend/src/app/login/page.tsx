@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Shield, AlertCircle, Loader2, Users, Star, UserPlus } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
-import { getVistaContable, buscarPorCodigo } from '@/lib/db';
+// Blindaje: el ingreso de calidosos ya no consulta la base desde el navegador.
 
 type Tab = 'admin' | 'profe' | 'calidoso' | 'nuevo';
 
@@ -111,142 +111,54 @@ export default function LoginPage() {
           } catch {}
           router.push('/mis-proyectos');
         } else {
-          setErrLocal('Usuario o contraseña incorrectos');
+          // Se muestra el motivo técnico en pequeñito: si la falla no es la clave
+          // sino la base de datos, hay que verlo para poder arreglarlo.
+          const motivo = data?.motivo ? ` (${data.motivo})` : '';
+          setErrLocal('Usuario o contraseña incorrectos' + motivo);
         }
         return;
       }
 
-      /* ── CALIDOSO ─── */
+      /* ── CALIDOSO ───────────────────────────────────────────────────────
+         BLINDAJE (agosto 2026): la comprobación del código y el documento ya
+         NO se hace en el navegador. Se envía al servidor (/api/auth/calidoso),
+         que verifica contra la base de datos y solo entonces entrega la sesión.
+         Así el navegador nunca descarga datos de otros deportistas para
+         compararlos, y nadie puede saltarse el ingreso desde la consola.       */
       if (tab === 'calidoso') {
-        // FIX Bug E: normDoc ahora también:
-        //   • elimina NBSP ( ) que Excel introduce en algunos campos
-        //   • convierte a MAYÚSCULAS → comparación case-insensitive
-        const normDoc = (v: string) =>
-          v.replace(/[\s .,\-]/g, '').toUpperCase();
-
-        const cNorm  = normDoc(c);
-        const RX_DOC = /num.*doc|^doc|doc|c[eé]dul|c\.c|identif|nit|no.*doc|cc\b/i;
-
-        async function sesionDeportista(dep: { id: string; _nombre?: string } | undefined) {
-          // El servidor emite la cookie de sesión firmada de rol 'deportista'.
-          try {
-            await fetch('/api/auth/calidoso', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ codigo: u }),
-            });
-          } catch {}
-          try {
-            if (dep?.id)      localStorage.setItem('futuro-calidoso-id',     dep.id);
-            if (dep?._nombre) localStorage.setItem('futuro-calidoso-nombre', dep._nombre);
-            localStorage.setItem('futuro-calidoso-codigo', u);
-            // Guardar credenciales → próximos ingresos son instantáneos sin red
-            const credsRaw = localStorage.getItem('futuro_calidoso_credenciales');
-            const creds: Record<string, string> = credsRaw ? JSON.parse(credsRaw) : {};
-            creds[u] = c.trim();
-            localStorage.setItem('futuro_calidoso_credenciales', JSON.stringify(creds));
-          } catch {}
-          useAuthStore.setState({
-            usuario: {
-              id:       dep?.id ?? 'calidoso-' + u,
-              email:    u.toLowerCase() + '@calidoso.com',
-              nombre:   dep?._nombre ?? u,
-              apellido: '',
-              rol:      'padre' as any,
-              activo:   true,
-              academia: { id: '1', nombre: 'Futuro Antioquia' },
-            },
-            cargando: false, error: null,
-          });
-          router.push(dep?.id ? `/alumnos/${dep.id}` : '/alumnos');
-        }
-
-        // ── 1. Caché de credenciales — acceso instantáneo sin red ──
-        try {
-          const rawCred = localStorage.getItem('futuro_calidoso_credenciales');
-          if (rawCred) {
-            const creds: Record<string, string> = JSON.parse(rawCred);
-            const docGuardado = creds[u] ?? '';
-            if (docGuardado && normDoc(docGuardado) === cNorm) {
-              // Buscamos solo este deportista (1 fila en Supabase)
-              const candidatos = await buscarPorCodigo(u);
-              const dep = candidatos[0];
-              await sesionDeportista(dep);
-              return;
-            }
-          }
-        } catch {}
-
-        // ── 2. Búsqueda rápida por código (1 query, no 1.139 filas) ──
-        const candidatos = await buscarPorCodigo(u);
-
-        // Logging de diagnóstico — visible en DevTools → Console del navegador
-        console.log('[login:calidoso] código:', u, '| candidatos encontrados:', candidatos.length);
-        if (candidatos.length > 0) {
-          const colKeys = Object.keys(candidatos[0]._columnas ?? {});
-          console.log('[login:calidoso] columnas keys:', colKeys.join(' | '));
-        } else {
-          console.warn('[login:calidoso] buscarPorCodigo devolvió 0 resultados — RPC o SDK fallaron');
-        }
-
-        // Helper: encontrar la clave de número de documento del deportista.
-        // Excluye: "TIPO DE DOCUMENTO" (es RC/CC/TI, no el número)
-        //          claves con "ACUD" (son del acudiente/padre, no del deportista)
-        function findDocKey(cols: Record<string, string>): string | undefined {
-          return Object.keys(cols).find(k => {
-            const kn = k.trim().normalize('NFC');
-            if (/tipo/i.test(kn) || /acud/i.test(kn)) return false;
-            return RX_DOC.test(kn) &&
-              cols[k] != null &&
-              String(cols[k]).trim() !== '';
-          });
-        }
-
-        const dep = candidatos.find(d => {
-          const cols   = d._columnas ?? {};
-          const docKey = findDocKey(cols);
-          // FIX Bug E: normDoc aplica a AMBOS lados → case-insensitive + sin separadores
-          const docAlmacenado = docKey ? normDoc(String(cols[docKey])) : '';
-          return docAlmacenado === cNorm;
+        const r = await fetch('/api/auth/calidoso', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ codigo: u, documento: c }),
         });
+        const data = await r.json().catch(() => ({}));
 
-        // Log post-find sin PII — solo indica si hubo coincidencia y cuál clave usó
-        const logDocKey = candidatos[0] ? (findDocKey(candidatos[0]._columnas ?? {}) ?? 'ninguna') : 'N/A';
-        console.log('[login:calidoso] resultado:', dep ? 'OK ✓' : 'sin coincidencia',
-          '| docKey usado:', logDocKey);
-
-        if (dep) {
-          await sesionDeportista(dep);
+        if (!r.ok || !data?.ok) {
+          setErrLocal(data?.error || 'Código o documento incorrecto');
           return;
         }
 
-        // ── 3. Fallback: vista contable ──
-        let vcData: Record<string, string>[] = [];
         try {
-          const raw = localStorage.getItem('futuro_vista_contable');
-          if (raw) vcData = JSON.parse(raw);
+          if (data.id)     localStorage.setItem('futuro-calidoso-id',     data.id);
+          if (data.nombre) localStorage.setItem('futuro-calidoso-nombre', data.nombre);
+          localStorage.setItem('futuro-calidoso-codigo', u);
+          // Ya NO se guarda el número de documento del menor en el navegador.
+          localStorage.removeItem('futuro_calidoso_credenciales');
         } catch {}
-        if (!vcData.length) vcData = await getVistaContable();
 
-        const vcRow = vcData.find(fila => {
-          const cod = String(fila.codigo ?? '').trim().toUpperCase();
-          const doc = normDoc(String(fila.documento ?? '').trim());
-          return cod === u && doc === cNorm;
+        useAuthStore.setState({
+          usuario: {
+            id:       data.id || 'calidoso-' + u,
+            email:    u.toLowerCase() + '@calidoso.com',
+            nombre:   data.nombre || u,
+            apellido: '',
+            rol:      'padre' as any,
+            activo:   true,
+            academia: { id: '1', nombre: 'Futuro Antioquia' },
+          },
+          cargando: false, error: null,
         });
-
-        if (vcRow) {
-          // Usar candidatos ya cargados (sin re-fetch)
-          const depVC = candidatos[0];
-          await sesionDeportista(depVC ?? { id: '', _nombre: vcRow.nombre ?? u });
-          return;
-        }
-
-        // Log final para diagnóstico (visible en DevTools)
-        console.error('[login:calidoso] Login fallido. Código:', u,
-          '| candidatos:', candidatos.length,
-          '| vcData filas:', vcData.length,
-          '| cNorm:', cNorm);
-
-        setErrLocal('Código o documento incorrecto');
+        router.push(data.id ? `/alumnos/${data.id}` : '/alumnos');
         return;
       }
 
@@ -270,6 +182,16 @@ export default function LoginPage() {
     }
   }
 
+  /* La plataforma es una sola: el color NO cambia según el perfil.
+     Gris oscuro de fondo y el verde institucional como único acento. */
+  const LIENZO = '#333F50';
+  const PANEL  = '#3C4759';
+  const CAMPO  = '#2B3547';
+  const BORDE  = '#4A5568';
+  const VERDE  = '#00B050';
+
+  const ANILLO = 'focus:border-[#00B050]';
+
   const config = {
     admin: {
       titulo:       'Administrador',
@@ -277,9 +199,7 @@ export default function LoginPage() {
       placeholderU: 'ADMON',
       labelClave:   'Contraseña',
       placeholderC: '••••',
-      grad:         'from-[#064e1e] to-[#22c55e]',
-      ring:         'focus:border-green-400',
-      tabActive:    'text-[#064e1e]',
+      ring:         ANILLO,
     },
     profe: {
       titulo:       'Profesor',
@@ -287,9 +207,7 @@ export default function LoginPage() {
       placeholderU: 'Ej: CASTRO',
       labelClave:   'Contraseña (cédula)',
       placeholderC: 'Tu número de cédula',
-      grad:         'from-[#1e3a8a] to-[#3b82f6]',
-      ring:         'focus:border-blue-400',
-      tabActive:    'text-[#1e3a8a]',
+      ring:         ANILLO,
     },
     calidoso: {
       titulo:       'Calidoso',
@@ -297,9 +215,7 @@ export default function LoginPage() {
       placeholderU: 'Tu código de deportista',
       labelClave:   'Documento de identidad',
       placeholderC: 'Tu número de documento',
-      grad:         'from-[#92400e] to-[#f97316]',
-      ring:         'focus:border-orange-400',
-      tabActive:    'text-[#9a3412]',
+      ring:         ANILLO,
     },
     nuevo: {
       titulo:       'Nuevo Deportista',
@@ -307,29 +223,18 @@ export default function LoginPage() {
       placeholderU: '',
       labelClave:   'Código de Acceso',
       placeholderC: 'Ingresa el código',
-      grad:         'from-[#7c3aed] to-[#a855f7]',
-      ring:         'focus:border-purple-400',
-      tabActive:    'text-[#7c3aed]',
+      ring:         ANILLO,
     },
   };
 
   const cfg     = tab ? config[tab] : null;
   const ocupado = enviando || cargando;
 
-  /* Gradiente de fondo según tab */
-  const fondoMap: Record<Tab, string> = {
-    admin:    'from-[#064e1e] via-[#0a6628] to-[#22c55e]',
-    profe:    'from-[#0f172a] via-[#1e3a8a] to-[#3b82f6]',
-    calidoso: 'from-[#431407] via-[#92400e] to-[#f97316]',
-    nuevo:    'from-[#2e1065] via-[#7c3aed] to-[#a855f7]',
-  };
-  const fondo = tab ? fondoMap[tab] : 'from-[#064e1e] via-[#0a6628] to-[#22c55e]';
-
   return (
-    <div className={cn(
-      'relative min-h-screen bg-gradient-to-br flex items-center justify-center p-4 overflow-hidden transition-all duration-500',
-      fondo,
-    )}>
+    <div
+      className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden"
+      style={{ background: LIENZO }}
+    >
       {/* Patrón de balones */}
       <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
         <svg className="absolute inset-0 w-full h-full opacity-[0.08]" xmlns="http://www.w3.org/2000/svg">
@@ -365,14 +270,27 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-sm animate-fade-up">
 
-        {/* Logo */}
+        {/* Escudo grande, suelto — sin recuadro */}
         <div className="text-center mb-7">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-white/15 backdrop-blur rounded-2xl shadow-2xl border border-white/30 mb-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/ESCUDO%20F.A%202020.png" alt="Futuro Antioquia" className="w-14 h-14 object-contain drop-shadow-lg" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/ESCUDO%20F.A%202020.png"
+            alt="Futuro Antioquia"
+            className="w-36 h-36 object-contain mx-auto mb-4 drop-shadow-2xl"
+          />
           <h1 className="text-2xl font-black text-white tracking-tight">Futuro Antioquia</h1>
-          <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mt-1">Plataforma Deportiva · 2026</p>
+          <p className="text-white text-xs font-bold uppercase tracking-widest mt-1">
+            Plataforma Deportiva · 2026
+          </p>
+
+          {/* Marca MAX 10 SPORT */}
+          <div className="flex flex-col items-center gap-1 mt-5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-9 w-auto object-contain" />
+            <p className="text-[10px] font-bold tracking-[.2em] uppercase" style={{ color: VERDE }}>
+              Conecta · Gestiona · Gana
+            </p>
+          </div>
         </div>
 
         {/* Selector de rol (dropdown) */}
@@ -383,34 +301,36 @@ export default function LoginPage() {
           <select
             value={tab ?? ''}
             onChange={e => cambiarTab((e.target.value as Tab) || null)}
-            className="w-full appearance-none bg-white/15 backdrop-blur-sm border border-white/30 rounded-xl pl-8 pr-7 py-2 text-white font-black text-xs focus:outline-none focus:border-white/60 focus:bg-white/22 transition-all cursor-pointer"
-            style={{ WebkitAppearance: 'none' }}
+            className="w-full appearance-none rounded-xl pl-8 pr-7 py-2.5 text-white font-black text-xs
+                       border focus:outline-none transition-all cursor-pointer"
+            style={{ WebkitAppearance: 'none', background: CAMPO, borderColor: BORDE }}
           >
-            <option value="" className="bg-gray-900 text-gray-400">— Selecciona tu perfil —</option>
-            <option value="admin"    className="bg-gray-900 text-white font-bold">Admin</option>
-            <option value="profe"    className="bg-gray-900 text-white font-bold">Profe</option>
-            <option value="calidoso" className="bg-gray-900 text-white font-bold">Calidoso</option>
-            <option value="nuevo"    className="bg-gray-900 text-white font-bold">Nuevo deportista</option>
+            <option value="" className="bg-[#2B3547] text-white">— Selecciona tu perfil —</option>
+            <option value="admin"    className="bg-[#2B3547] text-white font-bold">Admin</option>
+            <option value="profe"    className="bg-[#2B3547] text-white font-bold">Profe</option>
+            <option value="calidoso" className="bg-[#2B3547] text-white font-bold">Calidoso</option>
+            <option value="nuevo"    className="bg-[#2B3547] text-white font-bold">Nuevo deportista</option>
           </select>
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 pointer-events-none text-[10px]">▼</span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white pointer-events-none text-[10px]">▼</span>
         </div>
 
         {/* Tarjeta — solo visible cuando hay rol seleccionado */}
         {tab && cfg && (
-        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in">
+        <div className="rounded-3xl shadow-2xl overflow-hidden animate-scale-in border"
+             style={{ background: PANEL, borderColor: BORDE }}>
 
-          {/* Franja superior de color */}
-          <div className={cn('h-1.5 w-full bg-gradient-to-r', cfg.grad)} />
+          {/* Franja superior — igual para todos los perfiles */}
+          <div className="h-1.5 w-full" style={{ background: VERDE }} />
 
           <div className="p-7">
-            <h2 className="text-xl font-black text-gray-900 mb-0.5">{cfg.titulo}</h2>
-            <p className="text-sm text-gray-400 mb-6">Ingresa tus datos para continuar</p>
+            <h2 className="text-xl font-black text-white mb-0.5">{cfg.titulo}</h2>
+            <p className="text-sm text-white mb-6">Ingresa tus datos para continuar</p>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Campo usuario (oculto para nuevos) */}
               {tab !== 'nuevo' && (
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold text-white uppercase tracking-wider mb-1.5">
                   {cfg.labelUser}
                 </label>
                 <input
@@ -421,17 +341,18 @@ export default function LoginPage() {
                   autoComplete="username"
                   placeholder={cfg.placeholderU}
                   className={cn(
-                    'w-full px-4 py-3 border-2 border-gray-100 rounded-xl text-sm bg-gray-50',
-                    'focus:outline-none focus:bg-white transition-all duration-200 uppercase',
+                    'w-full px-4 py-3 border-2 rounded-xl text-sm text-white uppercase',
+                    'placeholder:text-[#8C94A0] focus:outline-none transition-all duration-200',
                     cfg.ring,
                   )}
+                  style={{ background: CAMPO, borderColor: BORDE }}
                 />
               </div>
               )}
 
               {/* Campo clave */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold text-white uppercase tracking-wider mb-1.5">
                   {cfg.labelClave}
                 </label>
                 <div className="relative">
@@ -443,15 +364,16 @@ export default function LoginPage() {
                     autoComplete="current-password"
                     placeholder={mostrarPass ? cfg.placeholderC : '••••••••'}
                     className={cn(
-                      'w-full px-4 py-3 pr-12 border-2 border-gray-100 rounded-xl text-sm bg-gray-50',
-                      'focus:outline-none focus:bg-white transition-all duration-200',
+                      'w-full px-4 py-3 pr-12 border-2 rounded-xl text-sm text-white',
+                      'placeholder:text-[#8C94A0] focus:outline-none transition-all duration-200',
                       cfg.ring,
                     )}
+                    style={{ background: CAMPO, borderColor: BORDE }}
                   />
                   <button
                     type="button"
                     onClick={() => setMostrarPass(!mostrarPass)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white hover:opacity-70 transition-opacity"
                   >
                     {mostrarPass ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                   </button>
@@ -460,9 +382,10 @@ export default function LoginPage() {
 
               {/* Error */}
               {errLocal && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 animate-fade-in">
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                  <p className="text-sm text-red-700 font-medium">{errLocal}</p>
+                <div className="flex items-center gap-2 rounded-xl p-3 animate-fade-in border"
+                     style={{ background: 'rgba(192,80,77,.18)', borderColor: '#C0504D' }}>
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" style={{ color: '#FF9B98' }} />
+                  <p className="text-sm text-white font-medium">{errLocal}</p>
                 </div>
               )}
 
@@ -470,9 +393,9 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={ocupado}
+                style={{ background: VERDE }}
                 className={cn(
                   'w-full py-3.5 rounded-xl font-black text-white text-sm',
-                  'bg-gradient-to-r', cfg.grad,
                   'shadow-lg transition-all duration-200',
                   'hover:opacity-95 hover:-translate-y-0.5 hover:shadow-xl',
                   'active:translate-y-0',
@@ -490,7 +413,7 @@ export default function LoginPage() {
         </div>
         )}
 
-        <p className="text-center text-white/30 text-xs mt-6 font-medium">
+        <p className="text-center text-white text-xs mt-6 font-medium">
           © 2026 Futuro Antioquia · Medellín, Colombia
         </p>
       </div>

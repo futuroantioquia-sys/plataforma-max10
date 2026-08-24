@@ -4,15 +4,29 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Users, DollarSign, Calendar,
-  Star, MessageCircle, Clipboard, Activity, ClipboardList, UserPlus, LayoutList,
+  Star, MessageCircle, Clipboard, ClipboardList, UserPlus, LayoutList,
   Link2, Copy, Check, QrCode, BarChart3, Trophy, Upload, FolderKanban,
-  LogOut, Zap, Shield, Dumbbell, HardHat, Clock, UserCog, Calculator,
+  LogOut, Zap, Shield, Dumbbell, HardHat, Clock, UserCog, Calculator, Cake, CalendarDays,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { esSuperAdmin, esDeportivo } from '@/lib/permisos';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
-import { getDeportistas, countSoportesPendientes, countLibroPagos, getResumenVisitas, getVisitasPorDia } from '@/lib/db';
+import { getDeportistas, countSoportesPendientes, countSolicitudesFacturaPendientes, countLibroPagos, getResumenVisitas, getVisitasPorDia } from '@/lib/db';
+
+// ── PALETA ───────────────────────────────────────────────────────
+//  La misma del consolidado de asistencias (arte aprobado 22/08/2026),
+//  para que el tablero de inicio y los módulos se sientan una sola cosa.
+const LIENZO     = '#2B3547';   // fondo del tablero: el mismo gris oscuro de los
+                                // módulos. Quien resalta es la caja de sección,
+                                // que va más clara encima (22/08/2026)
+const SECCION    = '#3C4759';   // caja grande que agrupa cada categoría
+const PANEL      = '#2B3547';   // los módulos, más oscuros que su caja
+const CAMPO      = '#232B39';   // superficies internas: cifras
+const BORDE      = '#3E4859';   // borde suave, apenas insinuado
+const VERDE      = '#00B050';   // acento y todo lo que está al día
+const ROJO       = '#C0504D';   // avisos pendientes
+const GRIS_VACIO = '#717985';   // apagado / sin datos
 
 // ── CARD DE ACCESO RÁPIDO ────────────────────────────────────────
 function AccesoCard({
@@ -21,25 +35,32 @@ function AccesoCard({
   titulo: string; icono: React.ElementType; href: string; descripcion: string; color?: string; badge?: number; disabled?: boolean;
 }) {
   const router = useRouter();
+  const [encima, setEncima] = useState(false);
 
-  const colorMap: Record<string, { icon: string; border: string; text: string }> = {
-    verde:  { icon: 'bg-green-100 text-green-700 group-hover:bg-[#16a34a] group-hover:text-white', border: 'hover:border-green-300',  text: 'group-hover:text-[#16a34a]' },
-    azul:   { icon: 'bg-blue-100  text-blue-700  group-hover:bg-blue-600   group-hover:text-white', border: 'hover:border-blue-300',   text: 'group-hover:text-blue-600'  },
-    dorado: { icon: 'bg-amber-100 text-amber-700 group-hover:bg-amber-500  group-hover:text-white', border: 'hover:border-amber-300', text: 'group-hover:text-amber-600' },
-    purple: { icon: 'bg-purple-100 text-purple-700 group-hover:bg-purple-600 group-hover:text-white', border: 'hover:border-purple-300', text: 'group-hover:text-purple-600' },
-    teal:   { icon: 'bg-teal-100 text-teal-700 group-hover:bg-teal-600 group-hover:text-white', border: 'hover:border-teal-300', text: 'group-hover:text-teal-600' },
+  /* Sobre el lienzo oscuro los tonos pastel desaparecen: cada color es un tinte
+     translúcido que al pasar el mouse se enciende a color pleno.
+     22/08/2026 — TODAS las categorías usan 'verde'. Los demás tonos se dejan
+     definidos por si algún día se quiere volver a diferenciar por color. */
+  const colorMap: Record<string, { tinte: string; solido: string }> = {
+    verde:  { tinte: 'rgba(0,176,80,.16)',    solido: VERDE     },
+    azul:   { tinte: 'rgba(96,165,250,.16)',  solido: '#4E8FD6' },
+    dorado: { tinte: 'rgba(245,190,90,.16)',  solido: '#D9A441' },
+    purple: { tinte: 'rgba(167,139,250,.16)', solido: '#8B72D9' },
+    teal:   { tinte: 'rgba(45,212,191,.16)',  solido: '#2FA8A0' },
   };
 
   const c = colorMap[color] ?? colorMap.verde;
 
   if (disabled) {
     return (
-      <div className="group relative bg-gray-50 rounded-xl sm:rounded-2xl border border-gray-200 p-3 sm:p-4 text-left opacity-60 cursor-not-allowed">
-        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-3 bg-gray-100 text-gray-400">
-          <Icono className="w-4 h-4 sm:w-5 sm:h-5" />
+      <div className="group relative rounded-xl border p-2.5 sm:p-3 text-left opacity-50 cursor-not-allowed"
+        style={{ background: CAMPO, borderColor: BORDE }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2"
+          style={{ background: 'rgba(255,255,255,.07)', color: GRIS_VACIO }}>
+          <Icono className="w-4 h-4" />
         </div>
-        <p className="font-bold text-gray-500 text-xs sm:text-sm leading-tight">{titulo}</p>
-        <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 sm:mt-1 leading-tight font-semibold uppercase tracking-wide">{descripcion}</p>
+        <p className="font-bold text-white/60 text-[13px] leading-[1.2]">{titulo}</p>
+        <p className="text-[10px] text-white/35 mt-0.5 leading-[1.25] font-semibold uppercase tracking-wide">{descripcion}</p>
       </div>
     );
   }
@@ -47,28 +68,29 @@ function AccesoCard({
   return (
     <button
       onClick={() => router.push(href)}
+      onMouseEnter={() => setEncima(true)}
+      onMouseLeave={() => setEncima(false)}
       className={cn(
-        'group relative bg-white rounded-xl sm:rounded-2xl border border-gray-100 p-3 sm:p-4 text-left',
-        'transition-all duration-200',
-        'hover:-translate-y-1 hover:shadow-lg',
-        c.border,
+        'group relative rounded-xl border p-2.5 sm:p-3 text-left',
+        'transition-all duration-200 hover:-translate-y-1 hover:shadow-lg',
       )}
+      style={{ background: PANEL, borderColor: encima ? c.solido : BORDE }}
     >
       {badge != null && badge > 0 && (
-        <span className="absolute -top-2.5 -right-2.5 bg-red-500 text-white text-[11px] font-black rounded-full min-w-[24px] h-6 flex items-center justify-center px-1.5 shadow-md z-10">
+        <span className="absolute -top-2.5 -right-2.5 text-white text-[11px] font-black rounded-full min-w-[24px] h-6 flex items-center justify-center px-1.5 shadow-md z-10"
+          style={{ background: ROJO }}>
           {badge}
         </span>
       )}
-      <div className={cn(
-        'w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-3 transition-all duration-200',
-        c.icon,
-      )}>
-        <Icono className="w-4 h-4 sm:w-5 sm:h-5" />
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 transition-all duration-200"
+        style={{ background: encima ? c.solido : c.tinte, color: encima ? '#fff' : c.solido }}>
+        <Icono className="w-4 h-4" />
       </div>
-      <p className={cn('font-bold text-gray-800 text-xs sm:text-sm leading-tight transition-colors', c.text)}>
+      <p className="font-bold text-[13px] leading-[1.2] transition-colors"
+        style={{ color: encima ? c.solido : '#ffffff' }}>
         {titulo}
       </p>
-      <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 sm:mt-1 leading-tight">{descripcion}</p>
+      <p className="text-[10px] text-white/45 mt-0.5 leading-[1.25]">{descripcion}</p>
     </button>
   );
 }
@@ -79,19 +101,10 @@ function CategoriaSection({
 }: {
   emoji: string; titulo: string; color: string; children: React.ReactNode; delay?: number;
 }) {
-  const borderColors: Record<string, string> = {
-    verde:  'border-l-green-500',
-    azul:   'border-l-blue-500',
-    dorado: 'border-l-amber-500',
-    purple: 'border-l-purple-500',
-    teal:   'border-l-teal-500',
-  };
-  const textColors: Record<string, string> = {
-    verde:  'text-green-700',
-    azul:   'text-blue-700',
-    dorado: 'text-amber-700',
-    purple: 'text-purple-700',
-    teal:   'text-teal-700',
+  /* Sobre el oscuro el título va en blanco: quien da el color es la barrita
+     de la izquierda, igual que los títulos de grupo del consolidado. */
+  const barra: Record<string, string> = {
+    verde: VERDE, azul: '#4E8FD6', dorado: '#D9A441', purple: '#8B72D9', teal: '#2FA8A0',
   };
 
   return (
@@ -99,17 +112,20 @@ function CategoriaSection({
       className="animate-fade-up"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <div className={cn(
-        'flex items-center gap-2 mb-3 pl-3 border-l-4',
-        borderColors[color] ?? 'border-l-gray-300',
-      )}>
-        <span className="text-base">{emoji}</span>
-        <h2 className={cn('font-black text-sm uppercase tracking-widest', textColors[color] ?? 'text-gray-600')}>
-          {titulo}
-        </h2>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-2 sm:gap-3">
-        {children}
+      {/* Misma forma que "Visitantes de la plataforma": caja gris con franja de
+          título arriba y el contenido adentro. La barrita de color al borde
+          izquierdo es lo único que distingue una categoría de otra. */}
+      <div className="rounded-2xl border overflow-hidden"
+        style={{ background: SECCION, borderColor: BORDE, borderLeft: `4px solid ${barra[color] ?? GRIS_VACIO}` }}>
+        <div className="px-4 py-3 flex items-center gap-2 border-b" style={{ borderColor: BORDE }}>
+          <span className="text-base">{emoji}</span>
+          <h2 className="font-bold text-[13px] uppercase tracking-wide text-white">
+            {titulo}
+          </h2>
+        </div>
+        <div className="p-3 sm:p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-2 sm:gap-3">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -210,40 +226,26 @@ function AnaliticasVisitantes() {
   const maxV = Math.max(1, ...dias.map(d => d.visitas));
   const fmtDia = (s: string) => { const p = (s || '').split('-'); return p.length === 3 ? `${p[2]}/${p[1]}` : s; };
   return (
-    <div className="rounded-2xl border border-gray-200 shadow-sm bg-white overflow-hidden">
-      <div className="px-4 py-3 flex items-center gap-2 bg-gradient-to-r from-[#064e1e] to-[#16a34a]">
+    <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: SECCION, borderColor: BORDE }}>
+      <div className="px-4 py-3 flex items-center gap-2 border-b" style={{ borderColor: BORDE }}>
         <span className="text-lg">📈</span>
-        <span className="text-white font-black text-sm uppercase tracking-wide flex-1">Visitantes de la plataforma</span>
+        <span className="text-white font-bold text-[13px] uppercase tracking-wide flex-1">Visitantes de la plataforma</span>
       </div>
       <div className="p-4">
         <div className="flex gap-3 mb-4">
-          <div className="flex-1 rounded-xl bg-green-50 border border-green-100 p-3 text-center">
-            <p className="text-2xl font-black text-[#064e1e]">{resumen.total}</p>
-            <p className="text-[11px] font-bold text-green-700 uppercase tracking-wide">Accesos totales</p>
+          <div className="flex-1 rounded-xl border p-3 text-center"
+            style={{ background: PANEL, borderColor: BORDE }}>
+            <p className="text-2xl font-black" style={{ color: VERDE }}>{resumen.total}</p>
+            <p className="text-[11px] font-bold text-white/55 uppercase tracking-wide">Accesos totales</p>
           </div>
-          <div className="flex-1 rounded-xl bg-blue-50 border border-blue-100 p-3 text-center">
-            <p className="text-2xl font-black text-blue-800">{resumen.unicos}</p>
-            <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">Deportistas únicos</p>
+          <div className="flex-1 rounded-xl border p-3 text-center"
+            style={{ background: PANEL, borderColor: BORDE }}>
+            <p className="text-2xl font-black" style={{ color: VERDE }}>{resumen.unicos}</p>
+            <p className="text-[11px] font-bold text-white/55 uppercase tracking-wide">Deportistas únicos</p>
           </div>
         </div>
-        {dias.length > 0 ? (
-          <>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Accesos por día (últimos {dias.length})</p>
-            <div className="flex items-end gap-1 h-28">
-              {dias.map(d => (
-                <div key={d.dia} className="flex-1 flex flex-col items-center justify-end gap-1 group"
-                  title={`${fmtDia(d.dia)}: ${d.visitas} accesos · ${d.visitantes} deportistas`}>
-                  <span className="text-[9px] font-bold text-gray-500 opacity-0 group-hover:opacity-100 transition">{d.visitas}</span>
-                  <div className="w-full rounded-t bg-gradient-to-t from-[#16a34a] to-[#22c55e]"
-                    style={{ height: `${Math.max(4, (d.visitas / maxV) * 100)}%` }} />
-                  <span className="text-[8px] text-gray-400 whitespace-nowrap">{fmtDia(d.dia)}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="text-center text-sm text-gray-400 py-4">Aún no hay accesos registrados. Aparecerán aquí cuando los calidosos empiecen a entrar con su código.</p>
-        )}
+        {/* La gráfica "Accesos por día" se retiró el 22/08/2026: los dos
+            contadores de arriba son lo que de verdad se consulta. */}
       </div>
     </div>
   );
@@ -253,6 +255,7 @@ function DashboardAdmin() {
   const [pendientesAsign,    setPendientesAsign]    = useState(0);
   const [pendientesSoportes, setPendientesSoportes] = useState(0);
   const [pagosCargados,      setPagosCargados]      = useState(0);
+  const [pendientesFacturas, setPendientesFacturas] = useState(0);
   // Rol (se resuelve en cliente para evitar desajustes de hidratación)
   const [esSuper, setEsSuper] = useState(false); // ADMON → gestiona administradores
   const [esDep,   setEsDep]   = useState(false); // deportivo → sin finanzas
@@ -270,6 +273,9 @@ function DashboardAdmin() {
       }).catch(() => {});
 
       countSoportesPendientes().then(n => setPendientesSoportes(n)).catch(() => {});
+
+      // Solicitudes de factura de los acudientes que siguen sin facturar
+      countSolicitudesFacturaPendientes().then(n => setPendientesFacturas(n)).catch(() => {});
 
       // Pagos subidos: contar desde la base (igual para admin y contable, no del localStorage)
       countLibroPagos().then(n => setPagosCargados(n)).catch(() => {});
@@ -296,51 +302,57 @@ function DashboardAdmin() {
 
       {/* Categoría: Deportistas */}
       <CategoriaSection emoji="🏃" titulo="Deportistas" color="verde" delay={100}>
-        <AccesoCard titulo="Consolidado Afiliados"   icono={LayoutList}    href="/general"      descripcion="Todos los deportistas"       color="verde" />
-        <AccesoCard titulo="Programas y Proyectos"   icono={Users}         href="/alumnos"      descripcion="Ver y editar fichas"         color="verde" />
-        <AccesoCard titulo="Formulario de Afiliación" icono={ClipboardList} href="/afiliacion"  descripcion="Registro de deportistas"     color="verde" />
+        <AccesoCard titulo="Total Afiliados"   icono={LayoutList}    href="/general"      descripcion="Todos los deportistas"       color="verde" />
         <AccesoCard titulo="Asignación de Proyectos" icono={UserPlus}      href="/asignacion"   descripcion="Asignar nuevos deportistas"  color="verde" badge={pendientesAsign} />
+        <AccesoCard titulo="Programas y Proyectos"   icono={Users}         href="/alumnos"      descripcion="Ver y editar fichas"         color="verde" />
       </CategoriaSection>
 
-      <div className="divider-fade" />
+
+      {/* Categoría: Seguimiento */}
+      <CategoriaSection emoji="📊" titulo="Seguimiento" color="verde" delay={200}>
+        <AccesoCard titulo="Control de Asistencia"  icono={Clipboard}  href="/asistencia"   descripcion="Registro por proyecto"       color="verde" />
+        <AccesoCard titulo="Valoración Deportiva"   icono={Star}       href="/evaluaciones" descripcion="Registrar evaluaciones"      color="verde" />
+        {/* 22/08/2026 — se retiraron de Seguimiento:
+              · "Sesiones de Entrenamiento" (/sesiones): la reemplaza Microciclo.
+              · "Control de Informes" (/control-informes): sale del tablero.
+            Los módulos siguen en el código; solo dejaron de tener acceso aquí. */}
+        <AccesoCard titulo="Microciclo de Entrenamiento" icono={CalendarDays} href="/microciclo" descripcion="Planeación semanal · lunes a domingo" color="verde" />
+        <AccesoCard titulo="Postpartido"            icono={Trophy}     href="/postpartido"  descripcion="Resultado y desempeño individual" color="verde" />
+        <AccesoCard titulo="Torneos y Estadísticas" icono={Trophy}     href="/torneos"      descripcion="Deportistas por competencia" color="verde" />
+      </CategoriaSection>
 
       {/* Categoría: Finanzas — oculta para el Administrador Deportivo */}
       {!esDep && (
-      <>
-      <CategoriaSection emoji="💰" titulo="Finanzas" color="azul" delay={200}>
-        <AccesoCard titulo="Contabilidad"          icono={Calculator}   href="/contabilidad"            descripcion="Libro dinámico contable"       color="azul" />
-        <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="azul" />
-        <AccesoCard titulo="Subir Libro Contable"  icono={Upload}       href="/pagos/importar-valores"  descripcion="Importar Libro Contable"       color="azul" badge={pagosCargados} />
-        <AccesoCard titulo="Confirmar Pagos"      icono={Clock}        href="/pagos-pendientes"         descripcion="Soportes enviados por padres"  color="azul" badge={pendientesSoportes} />
-        <AccesoCard titulo="Productos"            icono={DollarSign}   href="/productos"                descripcion="Torneos e implementos"         color="azul" />
-        <AccesoCard titulo="Facturas Pendientes"  icono={ClipboardList} href="/facturas"                descripcion="Solicitudes de factura de acudientes" color="azul" />
+      <CategoriaSection emoji="💰" titulo="Finanzas" color="verde" delay={300}>
+        <AccesoCard titulo="Contabilidad"          icono={Calculator}   href="/contabilidad"            descripcion="Libro dinámico contable"       color="verde" />
+        <AccesoCard titulo="Control de Pagos"      icono={DollarSign}   href="/pagos"                   descripcion="Cobros y cartera morosa"       color="verde" />
+        {/* 22/08/2026 — "Subir Libro Contable" salió del tablero: el libro se
+            arma desde Contabilidad (Libro Dinámico) subiendo el extracto. */}
+        <AccesoCard titulo="Confirmar Pagos"      icono={Clock}        href="/pagos-pendientes"         descripcion="Soportes enviados por padres"  color="verde" badge={pendientesSoportes} />
+        <AccesoCard titulo="Facturas Pendientes"  icono={ClipboardList} href="/facturas"                descripcion="Solicitudes de factura de acudientes" color="verde" badge={pendientesFacturas} />
+        <AccesoCard titulo="Nómina y Proveedores" icono={Users}        href="/nomina"                  descripcion="Documento, cuenta y banco" color="verde" />
       </CategoriaSection>
-
-      <div className="divider-fade" />
-      </>
       )}
 
-      {/* Categoría: Seguimiento */}
-      <CategoriaSection emoji="📊" titulo="Seguimiento" color="purple" delay={300}>
-        <AccesoCard titulo="Control de Asistencia"  icono={Clipboard}  href="/asistencia"   descripcion="Registro por proyecto"       color="purple" />
-        <AccesoCard titulo="Consolidado Asistencia" icono={Activity}   href="/consolidado"  descripcion="Feb–Dic por deportista"      color="purple" />
-        <AccesoCard titulo="Valoración Deportiva"   icono={Star}       href="/evaluaciones" descripcion="Registrar evaluaciones"      color="purple" />
-        <AccesoCard titulo="Sesiones de Entrenamiento" icono={Dumbbell} href="/sesiones"    descripcion="Objetivo y ejercicios por sesión" color="purple" />
-        <AccesoCard titulo="Postpartido"            icono={Trophy}     href="/postpartido"  descripcion="Resultado y desempeño individual" color="purple" />
-        <AccesoCard titulo="Torneos y Estadísticas" icono={Trophy}     href="/torneos"      descripcion="Deportistas por competencia" color="purple" />
+
+      {/* Categoría: Comunicaciones — todo lo que le llega a las familias.
+          Creada el 22/08/2026: Mensajes y Cumpleaños estaban sueltos en Gestión,
+          que es donde se administra la plataforma, no donde se habla con la gente. */}
+      <CategoriaSection emoji="💬" titulo="Comunicaciones" color="verde" delay={400}>
+        <AccesoCard titulo="Mensajes"   icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"      color="verde" />
+        <AccesoCard titulo="Cumpleaños" icono={Cake}          href="/cumpleanos" descripcion="Ayer, hoy y mañana · tarjeta" color="verde" />
       </CategoriaSection>
 
-      <div className="divider-fade" />
-
       {/* Categoría: Gestión */}
-      <CategoriaSection emoji="⚙️" titulo="Gestión" color="teal" delay={400}>
+      <CategoriaSection emoji="⚙️" titulo="Gestión" color="verde" delay={500}>
         {esSuper && (
-          <AccesoCard titulo="Administradores" icono={UserCog} href="/administradores" descripcion="Crear y editar administradores" color="teal" />
+          <AccesoCard titulo="Administradores" icono={UserCog} href="/administradores" descripcion="Crear y editar administradores" color="verde" />
         )}
-        <AccesoCard titulo="Info Proyectos y Formadores" icono={Shield} href="/usuarios" descripcion="Profes, sedes y proyectos" color="teal" />
-        <AccesoCard titulo="Gestión de Valoración" icono={Star} href="/gestion-valoracion" descripcion="Editar textos de los niveles" color="teal" />
-        <AccesoCard titulo="Mensajes"            icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"    color="teal" />
-        <AccesoCard titulo="Certificados Asistencia" icono={Clipboard} href="/certificados" descripcion="Quién descargó su certificado" color="teal" />
+        <AccesoCard titulo="Info Proyectos y Formadores" icono={Shield} href="/usuarios" descripcion="Profes, sedes y proyectos" color="verde" />
+        <AccesoCard titulo="Gestión de Valoración" icono={Star} href="/gestion-valoracion" descripcion="Editar textos de los niveles" color="verde" />
+        <AccesoCard titulo="Certificados Asistencia" icono={Clipboard} href="/certificados" descripcion="Quién descargó su certificado" color="verde" />
+        <AccesoCard titulo="Formulario de Afiliación" icono={ClipboardList} href="/afiliacion" descripcion="Registro de deportistas" color="verde" />
+        <AccesoCard titulo="Productos" icono={DollarSign} href="/productos" descripcion="Torneos e implementos" color="verde" />
       </CategoriaSection>
     </div>
   );
@@ -363,10 +375,10 @@ function DashboardProfesor() {
 
   const accesos = [
     { titulo: 'Mis Proyectos',   icono: Clipboard,     href: '/mis-proyectos', descripcion: 'Asistencia y calificación',  color: 'verde'  },
-    { titulo: 'Evaluar Alumnos',  icono: Star,          href: '/evaluaciones', descripcion: 'Técnico y formativo',        color: 'dorado' },
-    { titulo: 'Mis Alumnos',     icono: Users,          href: '/alumnos',      descripcion: 'Fichas y seguimiento',       color: 'azul'   },
-    { titulo: 'Sesiones',        icono: Dumbbell,       href: '/sesiones',     descripcion: 'Planes de entrenamiento',    color: 'purple' },
-    { titulo: 'Postpartido',     icono: Trophy,         href: '/postpartido',  descripcion: 'Resultado y desempeño',      color: 'teal'   },
+    { titulo: 'Evaluar Alumnos',  icono: Star,          href: '/evaluaciones', descripcion: 'Técnico y formativo',        color: 'verde' },
+    { titulo: 'Mis Alumnos',     icono: Users,          href: '/alumnos',      descripcion: 'Fichas y seguimiento',       color: 'verde'   },
+    { titulo: 'Microciclo',      icono: CalendarDays,   href: '/microciclo',   descripcion: 'Planeación semanal',         color: 'verde' },
+    { titulo: 'Postpartido',     icono: Trophy,         href: '/postpartido',  descripcion: 'Resultado y desempeño',      color: 'verde'   },
   ];
 
   return (
@@ -376,29 +388,26 @@ function DashboardProfesor() {
         <div className="animate-fade-up">
           <div className="flex items-center gap-2 mb-3 pl-3 border-l-4 border-l-green-500">
             <span className="text-base">📋</span>
-            <h2 className="font-black text-sm uppercase tracking-widest text-green-700">Mis Proyectos</h2>
+            <h2 className="font-black text-sm uppercase tracking-widest text-white">Mis Proyectos</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {grupos.map((g) => (
               <button
                 key={g}
                 onClick={() => router.push(`/mis-proyectos`)}
-                className="group bg-white rounded-2xl border border-gray-100 p-4 text-left
-                           hover:border-green-300 hover:-translate-y-1 hover:shadow-lg
-                           transition-all duration-200"
+                className="group rounded-2xl border p-4 text-left hover:-translate-y-1 hover:shadow-lg transition-all duration-200"
+                style={{ background: PANEL, borderColor: BORDE }}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-green-100 text-green-700
-                                  group-hover:bg-[#16a34a] group-hover:text-white
-                                  flex items-center justify-center transition-all duration-200 flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0"
+                    style={{ background: 'rgba(0,176,80,.16)', color: VERDE }}>
                     <Users className="w-5 h-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-bold text-gray-800 text-sm leading-tight truncate
-                                  group-hover:text-[#16a34a] transition-colors">{g}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Asistencia · Calificación</p>
+                    <p className="font-bold text-white text-sm leading-tight truncate">{g}</p>
+                    <p className="text-[11px] text-white/45 mt-0.5">Asistencia · Calificación</p>
                   </div>
-                  <Clipboard className="w-4 h-4 text-gray-300 group-hover:text-green-500 ml-auto flex-shrink-0 transition-colors" />
+                  <Clipboard className="w-4 h-4 ml-auto flex-shrink-0" style={{ color: GRIS_VACIO }} />
                 </div>
               </button>
             ))}
@@ -443,10 +452,10 @@ function DashboardPadre() {
 
   const accesos = [
     { titulo: 'Formulario Afiliación', icono: ClipboardList, href: '/afiliacion',    descripcion: 'Actualiza tu ficha',          color: 'verde',  disabled: false },
-    { titulo: 'Ver Evaluaciones',      icono: Star,          href: '/evaluaciones',  descripcion: 'Progreso técnico y formativo', color: 'dorado', disabled: false },
-    { titulo: 'Mis Pagos',            icono: DollarSign,    href: '/pagos',         descripcion: 'Estado de mensualidades',     color: 'azul',   disabled: false },
-    { titulo: 'Calendario',           icono: Calendar,       href: '/calendario',    descripcion: 'Próximos entrenamientos',     color: 'teal',   disabled: false },
-    { titulo: 'Informes',             icono: HardHat,        href: '/mantenimiento', descripcion: 'EN CONSTRUCCIÓN',             color: 'purple', disabled: false },
+    { titulo: 'Ver Evaluaciones',      icono: Star,          href: '/evaluaciones',  descripcion: 'Progreso técnico y formativo', color: 'verde', disabled: false },
+    { titulo: 'Mis Pagos',            icono: DollarSign,    href: '/pagos',         descripcion: 'Estado de mensualidades',     color: 'verde',   disabled: false },
+    { titulo: 'Calendario',           icono: Calendar,       href: '/calendario',    descripcion: 'Próximos entrenamientos',     color: 'verde',   disabled: false },
+    { titulo: 'Informes',             icono: HardHat,        href: '/mantenimiento', descripcion: 'EN CONSTRUCCIÓN',             color: 'verde', disabled: false },
   ];
   return (
     <div className="space-y-6">
@@ -486,7 +495,7 @@ function DashboardHeader({ usuario }: { usuario: any }) {
   }
 
   return (
-    <header className="sticky top-0 z-20 bg-gradient-to-r from-[#064e1e] via-[#0a6628] to-[#16a34a] shadow-lg">
+    <header className="sticky top-0 z-20 bg-gradient-to-r from-[#333F50] to-[#0EA142] shadow-lg">
       {/* Patrón sutil */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.06]">
         <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -568,14 +577,15 @@ function WelcomeBar({ usuario }: { usuario: any }) {
     <div className="mb-5 animate-fade-up">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-black text-gray-900 truncate">
-            {saludo}, <span className="text-[#16a34a]">{usuario.nombre}</span> 👋
+          <h1 className="text-xl sm:text-2xl font-black text-white truncate">
+            {saludo}, <span style={{ color: VERDE }}>{usuario.nombre}</span> 👋
           </h1>
-          <p className="text-gray-400 text-xs sm:text-sm mt-0.5 capitalize">{fecha}</p>
+          <p className="text-white/45 text-xs sm:text-sm mt-0.5 capitalize">{fecha}</p>
         </div>
-        <div className="hidden sm:flex items-center gap-2 bg-white border border-gray-100 rounded-xl px-3 py-1.5 shadow-sm flex-shrink-0">
-          <Zap className="w-3.5 h-3.5 text-amber-500" />
-          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Activa</span>
+        <div className="hidden sm:flex items-center gap-2 border rounded-xl px-3 py-1.5 shadow-sm flex-shrink-0"
+          style={{ background: PANEL, borderColor: BORDE }}>
+          <Zap className="w-3.5 h-3.5" style={{ color: VERDE }} />
+          <span className="text-xs font-bold text-white/70 uppercase tracking-wide">Activa</span>
         </div>
       </div>
     </div>
@@ -598,7 +608,7 @@ class DashboardErrorBoundary extends React.Component<
   render() {
     if (this.state.error) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: LIENZO }}>
           <div className="bg-white rounded-2xl shadow-lg p-6 max-w-lg w-full">
             <h2 className="text-xl font-black text-red-600 mb-3">⚠️ Error en el Dashboard</h2>
             <pre className="bg-gray-100 rounded-lg p-3 text-xs overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ maxHeight: 240 }}>
@@ -671,7 +681,7 @@ function DashboardInner() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f0f7ff]">
+    <div className="min-h-screen" style={{ background: LIENZO }}>
       {/* Panel de error (Promise rejection) */}
       {errorMsg && (
         <div className="fixed inset-0 bg-black/70 z-[999] flex items-center justify-center p-4">

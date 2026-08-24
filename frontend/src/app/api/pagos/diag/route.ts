@@ -1,10 +1,13 @@
 // /api/pagos/diag — Diagnóstico temporal de la portería. NO expone la llave.
 // Sirve para confirmar si la llave maestra quedó bien cargada y si el servidor
 // puede leer los soportes. Devuelve solo indicadores, ningún dato personal.
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { rolDeSolicitud, esAdminContable } from '@/lib/auth-guard';
 import { SB_URL, headersAdmin, hayLlaveMaestra } from '@/lib/supabase/admin';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rol = await rolDeSolicitud(request);
+  if (!esAdminContable(rol)) return NextResponse.json({ error: 'no-autorizado' }, { status: 403 });
   const hayLlave = hayLlaveMaestra();
   const longitudLlave = ((typeof process !== 'undefined' && process.env?.SUPABASE_SERVICE_ROLE_KEY) || '').length;
   let sbStatus = 0;

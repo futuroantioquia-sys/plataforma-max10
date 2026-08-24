@@ -7,25 +7,57 @@
   - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 1810ms
- ✓ Compiled /src/middleware in 113ms (75 modules)
- ✓ Compiled /api/pagos/soportes in 202ms (53 modules)
- ✓ Compiled (58 modules)
- GET /api/deportistas 200 in 448ms
- GET /api/pagos/soportes?solo=count 502 in 452ms
- GET /api/deportistas 200 in 136ms
- GET /api/pagos/soportes?solo=count 502 in 147ms
- GET /api/deportistas 200 in 136ms
- GET /api/pagos/soportes?solo=count 502 in 140ms
- GET /api/deportistas 200 in 129ms
- GET /api/pagos/soportes?solo=count 502 in 133ms
- GET /api/deportistas 200 in 167ms
- GET /api/pagos/soportes?solo=count 502 in 171ms
- ✓ Compiled /api/auth/logout in 321ms (60 modules)
- POST /api/auth/logout 200 in 433ms
- GET /api/deportistas 200 in 285ms
- GET /api/pagos/soportes?solo=count 502 in 291ms
+ ✓ Ready in 1579ms
+ ○ Compiling /src/middleware ...
+ ✓ Compiled /src/middleware in 734ms (75 modules)
  ○ Compiling /login ...
- ✓ Compiled /login in 6.8s (1352 modules)
- ✓ Compiled in 353ms (662 modules)
- GET /login 200 in 167ms
+ ✓ Compiled /login in 8.6s (1321 modules)
+ GET /login 200 in 9269ms
+ ✓ Compiled in 771ms (664 modules)
+ ○ Compiling /api/auth/login ...
+ ⨯ ./src/app/api/auth/login/route.ts:20:1
+Module not found: Can't resolve 'bcryptjs'
+[0m [90m 18 |[39m [90m// ─────────────────────────────────────────────────────────────────────────────[39m[0m
+[0m [90m 19 |[39m [36mimport[39m { [33mNextRequest[39m[33m,[39m [33mNextResponse[39m } [36mfrom[39m [32m'next/server'[39m[33m;[39m[0m
+[0m[31m[1m>[22m[39m[90m 20 |[39m [36mimport[39m bcrypt [36mfrom[39m [32m'bcryptjs'[39m[33m;[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 21 |[39m [36mimport[39m { crearFirma[33m,[39m [33mCOOKIE_LEGIBLE[39m[33m,[39m [33mCOOKIE_FIRMA[39m[33m,[39m [33mDUR_SEG[39m } [36mfrom[39m [32m'@/lib/session'[39m[33m;[39m[0m
+[0m [90m 22 |[39m [36mimport[39m { headersAdmin[33m,[39m hayLlaveMaestra } [36mfrom[39m [32m'@/lib/supabase/admin'[39m[33m;[39m[0m
+[0m [90m 23 |[39m[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/api/auth/login/route.ts:20:1
+Module not found: Can't resolve 'bcryptjs'
+[0m [90m 18 |[39m [90m// ─────────────────────────────────────────────────────────────────────────────[39m[0m
+[0m [90m 19 |[39m [36mimport[39m { [33mNextRequest[39m[33m,[39m [33mNextResponse[39m } [36mfrom[39m [32m'next/server'[39m[33m;[39m[0m
+[0m[31m[1m>[22m[39m[90m 20 |[39m [36mimport[39m bcrypt [36mfrom[39m [32m'bcryptjs'[39m[33m;[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 21 |[39m [36mimport[39m { crearFirma[33m,[39m [33mCOOKIE_LEGIBLE[39m[33m,[39m [33mCOOKIE_FIRMA[39m[33m,[39m [33mDUR_SEG[39m } [36mfrom[39m [32m'@/lib/session'[39m[33m;[39m[0m
+[0m [90m 22 |[39m [36mimport[39m { headersAdmin[33m,[39m hayLlaveMaestra } [36mfrom[39m [32m'@/lib/supabase/admin'[39m[33m;[39m[0m
+[0m [90m 23 |[39m[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/api/auth/login/route.ts:20:1
+Module not found: Can't resolve 'bcryptjs'
+[0m [90m 18 |[39m [90m// ─────────────────────────────────────────────────────────────────────────────[39m[0m
+[0m [90m 19 |[39m [36mimport[39m { [33mNextRequest[39m[33m,[39m [33mNextResponse[39m } [36mfrom[39m [32m'next/server'[39m[33m;[39m[0m
+[0m[31m[1m>[22m[39m[90m 20 |[39m [36mimport[39m bcrypt [36mfrom[39m [32m'bcryptjs'[39m[33m;[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 21 |[39m [36mimport[39m { crearFirma[33m,[39m [33mCOOKIE_LEGIBLE[39m[33m,[39m [33mCOOKIE_FIRMA[39m[33m,[39m [33mDUR_SEG[39m } [36mfrom[39m [32m'@/lib/session'[39m[33m;[39m[0m
+[0m [90m 22 |[39m [36mimport[39m { headersAdmin[33m,[39m hayLlaveMaestra } [36mfrom[39m [32m'@/lib/supabase/admin'[39m[33m;[39m[0m
+[0m [90m 23 |[39m[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/api/auth/login/route.ts:20:1
+Module not found: Can't resolve 'bcryptjs'
+[0m [90m 18 |[39m [90m// ─────────────────────────────────────────────────────────────────────────────[39m[0m
+[0m [90m 19 |[39m [36mimport[39m { [33mNextRequest[39m[33m,[39m [33mNextResponse[39m } [36mfrom[39m [32m'next/server'[39m[33m;[39m[0m
+[0m[31m[1m>[22m[39m[90m 20 |[39m [36mimport[39m bcrypt [36mfrom[39m [32m'bcryptjs'[39m[33m;[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 21 |[39m [36mimport[39m { crearFirma[33m,[39m [33mCOOKIE_LEGIBLE[39m[33m,[39m [33mCOOKIE_FIRMA[39m[33m,[39m [33mDUR_SEG[39m } [36mfrom[39m [32m'@/lib/session'[39m[33m;[39m[0m
+[0m [90m 22 |[39m [36mimport[39m { headersAdmin[33m,[39m hayLlaveMaestra } [36mfrom[39m [32m'@/lib/supabase/admin'[39m[33m;[39m[0m
+[0m [90m 23 |[39m[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ POST /api/auth/login 500 in 5350ms
+ GET /login 500 in 56ms

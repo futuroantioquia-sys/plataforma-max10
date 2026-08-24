@@ -4,12 +4,18 @@
  * Sin ?proyecto= devuelve TODOS los deportistas paginando de 1000 en 1000.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { rolDeSolicitud, estaAutenticado } from '@/lib/auth-guard';
 
-const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
+const SB_URL = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const SB_KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
 const PAGE = 1000;
 
 export async function GET(request: NextRequest) {
+  // BLINDAJE: antes cualquiera podía descargar los 1.165 deportistas sin entrar.
+  const rol = await rolDeSolicitud(request);
+  if (!estaAutenticado(rol)) {
+    return NextResponse.json({ error: 'no-autorizado' }, { status: 403 });
+  }
   try {
     const { searchParams } = new URL(request.url);
     const proyecto = searchParams.get('proyecto');

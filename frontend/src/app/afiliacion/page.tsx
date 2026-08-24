@@ -35,6 +35,26 @@ const CAMPOS_CUENTAS: { key: string; label: string; tipo: string; seccion?: stri
   { key: 'CUENTA_PAGO_2', label: 'Cuenta 2 #', tipo: 'text' },
 ];
 
+/* ── NOMBRE EXACTO DE LAS COLUMNAS DE AFILIACIÓN ──────────────
+   Así se llaman en los más de 1.100 deportistas que ya están en la
+   plataforma. Hay que escribirlas IGUALITO (con tilde y espacios) o
+   la fecha se guarda en una columna aparte y no la ve nadie. */
+const COL_FECHA_AFIL = 'FECHA DE AFILIACIÓN';
+const COL_TIPO_AFIL  = 'TIPO DE AFILIACIÓN';
+/* Nombre OFICIAL de la columna del código — con tilde.
+   Antes convivían tres nombres para el mismo dato ("CÓDIGO", "CODIGO" y
+   "CÓDIGO DEL DEPORTISTA"), y por eso un deportista podía "desaparecer" de una
+   búsqueda. Ya se unificaron todos en la base; aquí se guarda siempre así. */
+const COL_CODIGO = 'CÓDIGO';
+
+/** Fecha de hoy en formato día/mes/año — 17/08/2026 */
+function fechaHoyCorta(): string {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
 // Campos base para deportistas nuevos — divididos en secciones
 const CAMPOS_NUEVO: { key: string; label: string; tipo: string; seccion?: string; seccionDesc?: string }[] = [
   // ── SECCIÓN 1: DATOS DE AFILIACIÓN ─────────────────────────
@@ -90,6 +110,17 @@ const CAMPOS_NUEVO: { key: string; label: string; tipo: string; seccion?: string
   { key: 'HERMANOS_CLUB',   label: '¿Tienes hermanos en el club?',        tipo: 'select' },
   { key: 'NOMBRE_HERMANO',  label: 'Nombre de tu hermano',                tipo: 'text'   },
   { key: 'OBSERVACIONES',   label: '¿Qué espera recibir del proyecto y si tiene algún comentario de mejora para la institución?', tipo: 'text', seccion: 'TU OPINIÓN ES MUY IMPORTANTE PARA NOSOTROS' },
+];
+
+/* ── Campos mínimos obligatorios para afiliar a un NUEVO deportista ──
+   Sin estos datos el registro no sirve: no se puede identificar al
+   deportista, ni contactar al acudiente, ni cruzar sus pagos. */
+const CAMPOS_OBLIGATORIOS: { key: string; label: string }[] = [
+  { key: 'NOMBRE_COMPLETO', label: 'Nombre del deportista' },
+  { key: 'DOCUMENTO',       label: 'Número de documento' },
+  { key: 'PROGRAMA',        label: 'Programa' },
+  { key: 'ACUDIENTE',       label: 'Nombre del acudiente' },
+  { key: 'TEL_ACUDIENTE',   label: 'Teléfono del acudiente' },
 ];
 
 function labelDe(k: string) {
@@ -486,15 +517,70 @@ export default function AfiliacionPage() {
     }
     setError('');
     setCampos(CAMPOS_NUEVO);
-    const hoy = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    setValores({ FECHA_AFILIACION: hoy });
+    // La fecha de afiliación la pone el sistema al guardar (fechaHoyCorta).
+    setValores({});
     setDepId(null);
     setPaso('formulario');
   }
 
   // ── Validar código único (solo para nuevos) ──────────────────
+  /** REGLAS DEL CÓDIGO DEL DEPORTISTA
+   *
+   *  1) ANTIGUOS de 4 dígitos: valen si empiezan en 2,3,4,5,6,7,8 o 9.
+   *     Ejemplos reales: 3456, 9401, 2013. (No valen los que empiezan en 0 o 1.)
+   *
+   *  2) CÓDIGOS DE 5 DÍGITOS: los dos primeros son el AÑO en que el deportista
+   *     llegó a la institución, así que solo valen 21, 22, 23, 24, 25 y 26.
+   *     Ejemplos: 21015, 24120, 26401.
+   *
+   *  3) BECADOS: la letra B seguida de 3 dígitos. Ejemplos: B601, B666.
+   *
+   *  4) ESTE AÑO (26): NUNCA se acepta un código que empiece en 26 con menos de
+   *     5 dígitos. Un "26" o un "264" sueltos rompen el cruce de pagos: el libro
+   *     nunca encuentra al deportista y la plataforma lo ordena mal.
+   *     (Esto ya pasó: un afiliado quedó guardado con el código "26".)
+   */
+  const CODIGO_OK = (v: string) => {
+    const d = String(v ?? '').trim().toUpperCase();
+    if (/^B\d{3}$/.test(d))      return true;             // regla 3: becados
+    if (/^26/.test(d))           return /^26\d{3}$/.test(d);  // regla 4: 26 exige 5 dígitos
+    if (/^2[1-5]\d{3}$/.test(d)) return true;             // regla 2: 21xxx … 25xxx
+    if (/^[2-9]\d{3}$/.test(d))  return true;             // regla 1: antiguos de 4 dígitos
+    return false;
+  };
+  /** Deja solo la B inicial (becados) y dígitos; corta en 5 caracteres.
+   *  No inventa prefijos: lo que no encaja simplemente no se escribe. */
+  const normalizarCodigo = (v: string) => {
+    const s = String(v ?? '').toUpperCase();
+    if (/^B/.test(s)) return ('B' + s.slice(1).replace(/\D/g, '')).slice(0, 4);
+    return s.replace(/\D/g, '').slice(0, 5);
+  };
+  /** Mensaje corto que explica por qué un código no sirve. */
+  const MOTIVO_CODIGO = (v: string) => {
+    const s = String(v ?? '').trim().toUpperCase();
+    if (/^B/.test(s))
+      return '⚠ Los códigos de becado son la letra B seguida de 3 dígitos. Ejemplo: B601.';
+    const d = s.replace(/\D/g, '');
+    if (/^26/.test(d) && d.length !== 5)
+      return `⚠ Los códigos de este año empiezan en 26 y son de 5 dígitos (escribiste ${d.length}). Ejemplo: 26401.`;
+    if (d.length === 5)
+      return '⚠ Un código de 5 dígitos debe empezar en 21, 22, 23, 24, 25 o 26 — son los dos dígitos del año en que llegó a la institución.';
+    if (d.length === 4)
+      return '⚠ Un código de 4 dígitos debe empezar en 2, 3, 4, 5, 6, 7, 8 o 9. Ejemplo: 3456.';
+    return '⚠ El código debe ser: 4 dígitos (antiguos, ej. 3456), 5 dígitos empezando en 21…26 (ej. 26401) o B + 3 dígitos si es becado (ej. B601).';
+  };
+
+  /** Etiquetas de los campos obligatorios que aún están vacíos (solo para nuevos). */
+  const FALTANTES_OBLIG = depId
+    ? []
+    : CAMPOS_OBLIGATORIOS.filter(o => !String(valores[o.key] ?? '').trim()).map(o => o.label);
+
   function validarCodigoUnico(val: string) {
     if (!val.trim()) { setCodigoError(''); return; }
+    if (!CODIGO_OK(val)) {
+      setCodigoError(MOTIVO_CODIGO(val));
+      return;
+    }
     const lista: Deportista[] = _deps;
     const norm = (s: string) => s.toLowerCase().replace(/[\s.-]/g, '');
     const existe = lista.some(d => {
@@ -543,6 +629,25 @@ export default function AfiliacionPage() {
     // Revalidar código antes de guardar (para nuevos)
     if (!depId) {
       const codVal = valores['CODIGO'] ?? '';
+      if (!CODIGO_OK(codVal)) {
+        setCodigoError(MOTIVO_CODIGO(codVal) + ' Sin un código válido sus pagos no se pueden cruzar.');
+        return;
+      }
+
+      /* ── Campos mínimos obligatorios ───────────────────────────
+         El 15/08/2026 alguien envió el formulario COMPLETAMENTE vacío
+         y quedó creado un deportista "NUEVO DEPORTISTA" sin ningún dato.
+         Sin estos campos el registro no sirve para nada, así que se
+         bloquea el envío antes de guardar. */
+      const faltan = CAMPOS_OBLIGATORIOS.filter(o => !String(valores[o.key] ?? '').trim());
+      if (faltan.length) {
+        setError(
+          'Faltan datos obligatorios para poder afiliar al deportista: ' +
+          faltan.map(f => f.label).join(', ') + '.'
+        );
+        return;
+      }
+      setError('');
       const lista: Deportista[] = _deps;
       const norm = (s: string) => s.toLowerCase().replace(/[\s.-]/g, '');
       const existe = lista.some(d => {
@@ -567,25 +672,18 @@ export default function AfiliacionPage() {
           campos.forEach(c => { cols[c.key] = valores[c.key] ?? ''; });
 
           // ── Marcar como AFILIADO ACTIVO ──────────────────────────
-          // Buscar columna de tipo de afiliación / estado
-          const keyEstado = Object.keys(cols).find(k => /^estado|tipo.*afil|afil.*tipo/i.test(k.trim()));
-          if (keyEstado) {
-            // Solo sobrescribir si está vacío o sin afiliación
-            const actual = (cols[keyEstado] ?? '').trim().toLowerCase();
-            if (!actual || /sin.*afil|sin\s*afil|^-+$/.test(actual)) {
-              cols[keyEstado] = 'Antiguo';
-            }
-          } else {
-            cols['TIPO_AFILIACION'] = 'Antiguo';
-          }
+          /* Se busca la columna de TIPO DE AFILIACIÓN de verdad. Antes el
+             buscador cogía primero la columna "ESTADO" y escribía ahí,
+             dejando el tipo de afiliación vacío. */
+          const keyTipo = Object.keys(cols).find(k => /tipo.*afil|afil.*tipo/i.test(k.trim()))
+                        ?? COL_TIPO_AFIL;
+          const actual = (cols[keyTipo] ?? '').trim().toLowerCase();
+          if (!actual || /sin.*afil|^-+$/.test(actual)) cols[keyTipo] = 'Antiguo';
+
           // Registrar fecha de afiliación si no la tiene
-          const keyFecha = Object.keys(cols).find(k => /^fecha.*afil|^afil.*fecha/i.test(k.trim()));
-          const hoy = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-          if (keyFecha) {
-            if (!cols[keyFecha]?.trim()) cols[keyFecha] = hoy;
-          } else {
-            cols['FECHA_AFILIACION'] = hoy;
-          }
+          const keyFecha = Object.keys(cols).find(k => /fecha.*afil|afil.*fecha/i.test(k.trim()))
+                         ?? COL_FECHA_AFIL;
+          if (!(cols[keyFecha] ?? '').trim()) cols[keyFecha] = fechaHoyCorta();
 
           return { ...d, _nombre: (valores['_nombre'] || d._nombre).toUpperCase(), _columnas: cols };
         });
@@ -593,9 +691,26 @@ export default function AfiliacionPage() {
         _setDeps(act);
       } else {
         // Nuevo deportista — pendiente de asignación
-        const cols: Record<string, string> = { ESTADO: '1. Nuevo' };
+        const cols: Record<string, string> = { ESTADO: 'Nuevo' };
         CAMPOS_NUEVO.forEach(c => { cols[c.key] = valores[c.key] ?? ''; });
         cols['DOCUMENTO_INGRESO'] = valores['DOCUMENTO'] ?? '';
+        if (!(cols['ESTADO'] ?? '').trim()) cols['ESTADO'] = 'Nuevo';
+
+        /* El código se guarda SIEMPRE bajo el nombre oficial "CÓDIGO" (con tilde),
+           que es el que usa el resto de la plataforma. Así el deportista aparece
+           en las búsquedas y sus pagos se cruzan desde el primer día. */
+        cols[COL_CODIGO] = (cols['CODIGO'] ?? '').trim().toUpperCase();
+        delete cols['CODIGO'];
+
+        /* ── FECHA Y TIPO DE AFILIACIÓN ───────────────────────────
+           ESTO FALTABA: al inscribirse por el formulario nuevo, el
+           deportista quedaba SIN fecha de afiliación y por eso no se
+           podían organizar sus pagos. Se escriben con el MISMO nombre
+           de columna que usa toda la plataforma y en el mismo formato
+           (día/mes/año), para que cuadre con los demás deportistas. */
+        cols[COL_FECHA_AFIL] = fechaHoyCorta();
+        cols[COL_TIPO_AFIL]  = (cols['ESTADO'] ?? 'Nuevo').trim() || 'Nuevo';
+
         const nuevo: Deportista = {
           id: `nuevo_${Date.now()}`,
           _nombre: (valores['NOMBRE_COMPLETO'] || 'Nuevo deportista').toUpperCase(),
@@ -969,6 +1084,9 @@ export default function AfiliacionPage() {
                   <div key={c.key} className={esLargo ? 'sm:col-span-2' : ''}>
                     <label className="block text-[13px] font-bold text-gray-600 mb-1.5 uppercase tracking-wide">
                       {labelShow}
+                      {!depId && (/^CODIGO$/i.test(c.key) || CAMPOS_OBLIGATORIOS.some(o => o.key === c.key)) && (
+                        <span className="text-red-500 ml-1" title="Campo obligatorio">*</span>
+                      )}
                     </label>
 
                     {dropdown ? (
@@ -1014,8 +1132,11 @@ export default function AfiliacionPage() {
                           type={c.tipo}
                           value={valores[c.key] ?? ''}
                           onChange={e => {
-                            setValores(v => ({ ...v, [c.key]: e.target.value }));
-                            if (!depId && /^CODIGO$/i.test(c.key)) setCodigoError('');
+                            // CÓDIGO: solo números, prefijo 26 obligatorio y máximo 5 dígitos
+                            const esCodigo = /^CODIGO$/i.test(c.key);
+                            const val = esCodigo ? normalizarCodigo(e.target.value) : e.target.value;
+                            setValores(v => ({ ...v, [c.key]: val }));
+                            if (!depId && esCodigo) setCodigoError('');
                           }}
                           onBlur={e => {
                             if (!depId && /^CODIGO$/i.test(c.key)) validarCodigoUnico(e.target.value);
@@ -1027,6 +1148,11 @@ export default function AfiliacionPage() {
                               : 'border-gray-200 focus:ring-[#16a34a]'
                           )}
                           placeholder={labelShow} />
+                        {!depId && /^CODIGO$/i.test(c.key) && !codigoError && !CODIGO_OK(valores[c.key] ?? '') && (
+                          <p className="text-[11px] font-semibold text-gray-400 mt-1.5">
+                            Nuevos de 2026: 26 + 3 dígitos (ej. 26401) · Antiguos: 4 dígitos (ej. 3456) o 21…25 + 3 (ej. 24120) · Becados: B + 3 dígitos (ej. B601)
+                          </p>
+                        )}
                         {!depId && /^CODIGO$/i.test(c.key) && codigoError && (
                           <div className="flex items-start gap-2 mt-2 bg-red-50 border border-red-300 rounded-xl px-3 py-2.5">
                             <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
@@ -1044,7 +1170,27 @@ export default function AfiliacionPage() {
 
             {error && <ErrorBox msg={error} />}
 
-            <button type="submit" disabled={enviando || !auth.every(Boolean) || !!codigoError}
+            {!depId && FALTANTES_OBLIG.length > 0 && (
+              <div className="flex items-start gap-2 mb-3 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 font-semibold">
+                  Para enviar el formulario faltan estos datos obligatorios: {FALTANTES_OBLIG.join(', ')}.
+                </p>
+              </div>
+            )}
+
+            <button type="submit"
+              title={
+                !depId && !CODIGO_OK(valores['CODIGO'] ?? '')
+                  ? MOTIVO_CODIGO(valores['CODIGO'] ?? '')
+                  : !depId && FALTANTES_OBLIG.length
+                    ? 'Faltan datos obligatorios: ' + FALTANTES_OBLIG.join(', ')
+                    : undefined
+              }
+              disabled={
+                enviando || !auth.every(Boolean) || !!codigoError ||
+                (!depId && (!CODIGO_OK(valores['CODIGO'] ?? '') || FALTANTES_OBLIG.length > 0))
+              }
               className="w-full bg-[#16a34a] hover:bg-[#064e1e] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition flex items-center justify-center gap-2 text-sm">
               {enviando ? <Spinner /> : <CheckCircle className="w-4 h-4" />}
               {enviando ? 'Guardando...' : 'Enviar formulario'}

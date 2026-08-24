@@ -10,7 +10,7 @@
   --azul-oscuro:    #1e3a8a;
   --azul-medio:     #2563eb;
   --dorado:         #f59e0b;
-  --fondo:          #f0f7ff;
+  --fondo:          #333F50;   /* gris oscuro del nuevo diseño */
   --card:           #ffffff;
   --texto:          #111827;
   --texto-suave:    #6b7280;
@@ -41,10 +41,10 @@ body {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #4A5568;
   border-radius: 99px;
 }
-::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+::-webkit-scrollbar-thumb:hover { background: #00B050; }
 
 /* ── ANIMACIONES ─────────────────────────────────────────────── */
 @keyframes fadeUp {

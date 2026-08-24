@@ -6,9 +6,17 @@ import { ArrowLeft, Search, Users } from 'lucide-react';
 import { getDeportistas, getPagos } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
 
-const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
+/* ── OJO: esta página apuntaba al proyecto Supabase VIEJO
+   (gsovtgtrsqzoruvgmhed), que quedó fuera de servicio con la mudanza del
+   18/08/2026. Como los dos fetch de abajo tienen .catch(() => []), fallaban
+   EN SILENCIO: la cartera mostraba la lista de productos vacía y ningún
+   "otro pago" pendiente, sin dar ningún error.
+   Ahora usa la misma conexión que el resto de la plataforma, para que no
+   pueda volver a quedarse apuntando a un proyecto muerto. */
+const SB_URL = SUPABASE_URL;
+const SB_KEY = SUPABASE_ANON_KEY;
 const SB_HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
 const DEP_ESTADOS_KEY = 'futuro_dep_estados';
 

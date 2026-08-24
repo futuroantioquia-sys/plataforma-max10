@@ -22,23 +22,29 @@ export function BotonInicioFlotante() {
   if (ocultar) return null;
 
   return (
-    <div className="flex gap-3 justify-end px-4 py-5 print:hidden">
+    <div className="fixed z-40 bottom-20 right-4 sm:right-6 flex flex-col gap-3 items-end print:hidden">
+      {/* INICIO — solo ícono; al pasar el mouse se expande y aparece la palabra */}
       <button
         onClick={() => router.push('/dashboard')}
-        title="Volver al inicio"
-        className="flex items-center gap-2 bg-gradient-to-r from-[#064e1e] to-[#16a34a] hover:opacity-90 text-white text-xs font-black px-4 py-2.5 rounded-2xl shadow-md transition-all duration-200 border border-white/20"
+        title="Inicio"
+        className="group flex items-center h-[52px] w-[52px] hover:w-[132px] rounded-full overflow-hidden whitespace-nowrap shadow-md hover:shadow-lg transition-all duration-300 border border-white/20 bg-gradient-to-r from-[#064e1e] to-[#16a34a] text-white"
       >
-        <Home className="w-3.5 h-3.5" />
-        Inicio
+        <span className="flex-none w-[52px] flex items-center justify-center">
+          <Home className="w-5 h-5" />
+        </span>
+        <span className="font-black text-sm pr-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">Inicio</span>
       </button>
 
+      {/* SALIR */}
       <button
         onClick={() => cerrarSesion(router)}
-        title="Cerrar sesión"
-        className="flex items-center gap-2 bg-white hover:bg-red-50 text-red-500 hover:text-red-600 text-xs font-black px-4 py-2.5 rounded-2xl shadow-md transition-all duration-200 border border-red-100"
+        title="Salir"
+        className="group flex items-center h-[52px] w-[52px] hover:w-[132px] rounded-full overflow-hidden whitespace-nowrap shadow-md hover:shadow-lg transition-all duration-300 border border-red-100 bg-white text-red-500 hover:text-red-600"
       >
-        <LogOut className="w-3.5 h-3.5" />
-        Salir
+        <span className="flex-none w-[52px] flex items-center justify-center">
+          <LogOut className="w-5 h-5" />
+        </span>
+        <span className="font-black text-sm pr-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">Salir</span>
       </button>
     </div>
   );

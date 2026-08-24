@@ -17,7 +17,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server';
 import { SB_URL, headersAdmin, hayLlaveMaestra } from '@/lib/supabase/admin';
-import { rolDeSolicitud, esAdminContable, estaAutenticado } from '@/lib/auth-guard';
+import { rolDeSolicitud, sesionDeSolicitud, esAdminContable, estaAutenticado } from '@/lib/auth-guard';
+
+/* ── BLINDAJE (22/08/2026) ────────────────────────────────────────────────────
+   Antes, CUALQUIER sesión válida —incluida la de un padre— podía pedir los
+   comprobantes de pago (con la foto de la transferencia bancaria) de cualquier
+   deportista, con solo enviar su id. Ahora, si quien pregunta es un calidoso,
+   el servidor ignora los ids que manda el navegador y usa ÚNICAMENTE el
+   deportista al que pertenece su sesión.
+
+   Devuelve la lista de ids que esta sesión puede consultar, o null si no puede. */
+async function idsPermitidos(request: any, rol: string | null, pedidos: string): Promise<string | null> {
+  if (esAdminContable(rol) || rol === 'profesor') return pedidos;   // gestión: sin cambio
+  if (rol !== 'deportista') return null;
+  const ses = await sesionDeSolicitud(request);
+  // Sesión antigua (emitida antes del blindaje): no sabemos de quién es.
+  if (!ses?.sub) return null;
+  return ses.sub;
+}
 
 const SIN_LLAVE = () => NextResponse.json({ ok: false, sinLlave: true }, { status: 503 });
 const NO_AUT = () => NextResponse.json({ ok: false, error: 'no-autorizado' }, { status: 403 });
@@ -41,7 +58,9 @@ export async function GET(request: NextRequest) {
   const depIds = searchParams.get('deportistaIds');
   if (depIds) {
     if (!estaAutenticado(rol)) return NO_AUT();
-    const inl = inList(depIds);
+    const permitidos = await idsPermitidos(request, rol, depIds);
+    if (!permitidos) return NO_AUT();
+    const inl = inList(permitidos);
     if (!inl) return NextResponse.json({ ok: true, soportes: [] });
     const res = await fetch(
       `${SB_URL}/rest/v1/soportes_pago?select=${COLS_FULL}&deportista_id=in.(${encodeURIComponent(inl)})&confirmado=eq.false&order=created_at.desc`,
@@ -90,6 +109,10 @@ export async function POST(request: NextRequest) {
   const fecha  = String(body?.fecha ?? '');
   const meses  = Array.isArray(body?.meses) ? body.meses : [];
   if (!deportistaId || !datos) return NextResponse.json({ ok: false, error: 'faltan-datos' }, { status: 400 });
+
+  // Un calidoso solo puede subir comprobantes de SU propio deportista.
+  const permitidoPost = await idsPermitidos(request, rol, deportistaId);
+  if (!permitidoPost || (rol === 'deportista' && permitidoPost !== deportistaId)) return NO_AUT();
 
   const res = await fetch(`${SB_URL}/rest/v1/soportes_pago`, {
     method: 'POST',
@@ -141,7 +164,9 @@ export async function DELETE(request: NextRequest) {
   } else if (depIds && nombre) {
     // Borrar el propio soporte no confirmado (uno o varios ids) → cualquier sesión válida
     if (!estaAutenticado(rol)) return NO_AUT();
-    const inl = inList(depIds);
+    const permitidos = await idsPermitidos(request, rol, depIds);
+    if (!permitidos) return NO_AUT();
+    const inl = inList(permitidos);
     if (!inl) return NextResponse.json({ ok: false, error: 'faltan-parametros' }, { status: 400 });
     url = `${SB_URL}/rest/v1/soportes_pago?deportista_id=in.(${encodeURIComponent(inl)})&nombre=eq.${encodeURIComponent(nombre)}&confirmado=eq.false`;
   } else {

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { BotonInicioFlotante } from '@/components/BotonInicioFlotante';
+import { AvisoMantenimiento } from '@/components/AvisoMantenimiento';
+import { RastreoRuta } from '@/components/RastreoRuta';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], preload: false, display: 'swap' });
@@ -15,8 +17,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <body className={inter.className}>
+        <RastreoRuta />
         {children}
         <BotonInicioFlotante />
+        <AvisoMantenimiento />
       </body>
     </html>
   );

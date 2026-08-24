@@ -89,15 +89,8 @@ interface ProyRow {
   profeClave: string;
 }
 
-const PROFES_INICIALES: Omit<Profe, 'id'>[] = [
-  { usuario: 'CASTRO',   clave: '1214734807', proyectos: [] },
-  { usuario: 'MEJIA',    clave: '1152192324', proyectos: [] },
-  { usuario: 'RAMIREZ',  clave: '1017258984', proyectos: [] },
-  { usuario: 'SAMUEL',   clave: '1000415036', proyectos: [] },
-  { usuario: 'TABARES',  clave: '1000084856', proyectos: [] },
-  { usuario: 'CHALARCA', clave: '1128389946', proyectos: [] },
-  { usuario: 'RIOS',     clave: '1036639022', proyectos: [] },
-];
+// BLINDAJE (22/08/2026): se eliminó la lista con las cédulas de los formadores.
+// Estaba dentro del JavaScript que descarga cualquier visitante.
 
 export default function UsuariosPage() {
   const router = useRouter();
@@ -123,14 +116,13 @@ export default function UsuariosPage() {
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set()); // programas desplegados (vacío = todos plegados)
   const [modoConteo, setModoConteo] = useState<'act' | 'tot'>('act'); // 'act' = activos (por defecto), 'tot' = todos
   const [aniosProy, setAniosProy] = useState<Record<string, string[]>>({}); // años de nacimiento por proyecto
+  const [cargando,   setCargando]   = useState(true);
+  const [errorCarga, setErrorCarga] = useState('');
 
   useEffect(() => {
     Promise.all([getProfes(), getDeportistas()]).then(([listaProfes, deps]) => {
-      const inicial = listaProfes.length
-        ? listaProfes
-        : PROFES_INICIALES.map(p => ({ ...p, id: uuid() }));
-      if (!listaProfes.length) saveProfes(inicial).catch(() => {});
-      setProfes(inicial);
+      // Si la base no responde, no se inventan formadores: la lista queda vacía.
+      setProfes(listaProfes);
 
       // Construir filas de proyectos desde deportistas
       const map: Record<string, Set<string>> = {};
@@ -151,7 +143,13 @@ export default function UsuariosPage() {
         .sort(([a], [b]) => ordenProg(a) - ordenProg(b))
         .forEach(([programa, proySet]) => {
           [...proySet].sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })).forEach(proyecto => {
-            const profe = inicial.find(p => p.proyectos.includes(proyecto));
+            // ANTES decía `inicial`, una lista de formadores escrita a mano que se
+            // eliminó el 22/08/2026 por seguridad (traía las cédulas). Al quitarla
+            // quedó esta línea apuntando a una variable que ya no existe: el módulo
+            // reventaba justo aquí, después de pintar los formadores y antes de
+            // construir los proyectos. De ahí el "0 proyectos · 25 formadores".
+            // Los datos nunca se perdieron. — 22/08/2026
+            const profe = listaProfes.find(p => p.proyectos.includes(proyecto));
             rows.push({
               programa,
               proyecto,
@@ -168,6 +166,12 @@ export default function UsuariosPage() {
         const raw = localStorage.getItem(PROYECTOS_META_KEY);
         if (raw) setMeta(JSON.parse(raw));
       } catch {}
+      setCargando(false);
+    }).catch((e: any) => {
+      // Sin este catch, cualquier error dejaba la pantalla vacía sin decir nada.
+      console.error('[usuarios] no se pudo armar la lista de proyectos:', e);
+      setErrorCarga(String(e?.message ?? e));
+      setCargando(false);
     });
   }, []);
 
@@ -429,7 +433,7 @@ export default function UsuariosPage() {
     <div className="min-h-screen bg-gray-50">
 
       {/* Header */}
-      <header className="relative bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
+      <header className="relative bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
         <div className="absolute inset-0 pointer-events-none select-none" aria-hidden>
           <svg className="absolute inset-0 w-full h-full opacity-[0.08]" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -619,7 +623,23 @@ export default function UsuariosPage() {
         {/* Tabla por programa */}
         {gruposDisplay.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
-            <p className="text-gray-400 font-semibold text-sm">No hay proyectos cargados.<br/>Importa el Excel de deportistas primero.</p>
+            {cargando ? (
+              <p className="text-gray-400 font-semibold text-sm">Cargando proyectos…</p>
+            ) : errorCarga ? (
+              <div className="space-y-3">
+                <p className="text-red-600 font-black text-sm">No se pudo cargar la lista de proyectos.</p>
+                <p className="text-gray-500 text-xs max-w-md mx-auto break-words">{errorCarga}</p>
+                <button onClick={() => window.location.reload()}
+                  className="bg-[#16a34a] text-white font-black text-xs px-4 py-2 rounded-lg hover:bg-[#15803d] transition">
+                  Reintentar
+                </button>
+              </div>
+            ) : (
+              <p className="text-gray-400 font-semibold text-sm">
+                Se leyeron los deportistas, pero ninguno tiene proyecto asignado.<br/>
+                Revisa la columna PROY en el consolidado de afiliados.
+              </p>
+            )}
           </div>
         ) : gruposDisplay.map(([programa, filas]) => {
           const pc = conteos.prog[programa]?.[modoConteo] ?? 0;
@@ -644,13 +664,14 @@ export default function UsuariosPage() {
                 <thead>
                   <tr>
                     {[
-                      { h: 'PROYECTO',         w: 150 },
+                      { h: 'PROYECTO',         w: 64  },
+                      { h: '# DEP',            w: 80  },
                       { h: 'SEDE',             w: 120 },
+                      { h: 'EDAD',             w: 120 },
                       { h: 'DÍAS ENTRENO',     w: 180 },
                       { h: 'NOMBRE FORMADOR',  w: 140 },
                       { h: 'USUARIO',          w: 100 },
                       { h: 'CONTRASEÑA',       w: 110 },
-                      { h: 'EDAD',             w: 120 },
                     ].map(({ h, w }) => (
                       <th key={h} style={{ border: BW, minWidth: w, background: G, position: 'sticky', top: 0, zIndex: 2 }}
                         className="px-3 py-2 text-left text-white font-black text-[10px] uppercase tracking-wider whitespace-nowrap">
@@ -671,14 +692,31 @@ export default function UsuariosPage() {
                     return (
                       <tr key={row.proyecto} style={{ background: '#f1f5f9', borderTop: BW }}>
 
-                        {/* PROYECTO */}
-                        <td style={{ border: BW, padding: '8px 12px' }}>
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-[#111827] text-[11px]">{row.proyecto}</span>
-                            <span className="flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-1.5 py-0.5 rounded-full whitespace-nowrap" title="Deportistas en el grupo">
-                              <Users className="w-3 h-3" /> {conteos.proy[`${row.programa}::${row.proyecto}`]?.[modoConteo] ?? 0}
-                            </span>
-                          </div>
+                        {/* PROYECTO — solo el código, recuadro verde con letra blanca */}
+                        <td style={{ border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 58, height: 34, padding: 0,
+                            background: '#16a34a', color: '#fff',
+                            fontWeight: 900, fontSize: '1.1rem', lineHeight: 1,
+                            borderRadius: 9, boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {row.proyecto}
+                          </span>
+                        </td>
+
+                        {/* # DEP — cantidad de deportistas, recuadro naranja, número blanco grande */}
+                        <td style={{ border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                          <span title="Deportistas en el grupo" style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            minWidth: 42, height: 34, padding: '0 10px',
+                            background: '#f97316', color: '#fff',
+                            fontWeight: 900, fontSize: '1.1rem', lineHeight: 1,
+                            borderRadius: 9, boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                          }}>
+                            {conteos.proy[`${row.programa}::${row.proyecto}`]?.[modoConteo] ?? 0}
+                          </span>
                         </td>
 
                         {/* SEDE */}
@@ -690,6 +728,13 @@ export default function UsuariosPage() {
                             <option value="">— Sede —</option>
                             {SEDES.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
+                        </td>
+
+                        {/* EDAD — años de nacimiento de los deportistas del proyecto (automático) */}
+                        <td style={{ border: BW, padding: '4px 6px' }}>
+                          <span style={{ fontWeight: 800, fontSize: '0.72rem', color: '#111827', whiteSpace: 'nowrap' }}>
+                            {(aniosProy[row.proyecto] && aniosProy[row.proyecto].length) ? aniosProy[row.proyecto].join(' / ') : '—'}
+                          </span>
                         </td>
 
                         {/* DÍAS ENTRENO */}
@@ -737,6 +782,8 @@ export default function UsuariosPage() {
                                 type={visible ? 'text' : 'password'}
                                 value={getProfeVal(row, 'clave')}
                                 onChange={e => setProfeEdit(row, 'clave', e.target.value)}
+                                placeholder="•••• (vacío = no cambiar)"
+                                title="Por seguridad la contraseña no se muestra. Escribe una nueva solo si quieres cambiarla."
                                 className={`flex-1 bg-transparent outline-none font-semibold text-[11px] px-1.5 py-1 rounded hover:bg-gray-100 focus:bg-gray-100 transition text-[#111827]`}
                               />
                               <button onClick={() => setClaveVis(v => ({ ...v, [idVis]: !v[idVis] }))}
@@ -747,13 +794,6 @@ export default function UsuariosPage() {
                           ) : (
                             <span className="text-gray-300 text-[10px] italic px-1.5">—</span>
                           )}
-                        </td>
-
-                        {/* EDAD — años de nacimiento de los deportistas del proyecto (automático) */}
-                        <td style={{ border: BW, padding: '4px 6px' }}>
-                          <span style={{ fontWeight: 800, fontSize: '0.72rem', color: '#111827', whiteSpace: 'nowrap' }}>
-                            {(aniosProy[row.proyecto] && aniosProy[row.proyecto].length) ? aniosProy[row.proyecto].join(' / ') : '—'}
-                          </span>
                         </td>
                       </tr>
                     );

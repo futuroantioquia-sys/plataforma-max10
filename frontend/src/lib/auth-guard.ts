@@ -3,11 +3,17 @@
 //  sepan quién hace la solicitud, leyendo la cookie firmada de la Fase 1.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { NextRequest } from 'next/server';
-import { validarFirma, COOKIE_FIRMA } from './session';
+import { validarFirma, validarSesion, COOKIE_FIRMA } from './session';
 
 /** Devuelve el rol validado ('1' | 'contabilidad' | 'profesor' | 'deportista') o null. */
 export async function rolDeSolicitud(req: NextRequest): Promise<string | null> {
   return validarFirma(req.cookies.get(COOKIE_FIRMA)?.value);
+}
+
+/** Devuelve rol + sujeto ('sub'). Para un calidoso, `sub` es el id de su
+ *  deportista; es null en sesiones antiguas, anteriores al blindaje. */
+export async function sesionDeSolicitud(req: NextRequest): Promise<{ rol: string; sub: string | null } | null> {
+  return validarSesion(req.cookies.get(COOKIE_FIRMA)?.value);
 }
 
 /** Administración o contabilidad (quienes gestionan pagos). */

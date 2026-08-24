@@ -5,8 +5,9 @@ import { PADRES_VEN_VALORACION } from '@/lib/config';
 // Rutas que no requieren autenticación
 const RUTAS_PUBLICAS = ['/login', '/afiliacion', '/api'];
 
-// Rutas permitidas para el rol profesor — asistencia + portal propio + vista alumnos
-const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/sesiones', '/postpartido', '/mis-proyectos', '/alumnos'];
+// Rutas permitidas para el rol profesor — asistencia + portal propio + vista alumnos + valoración dinámica
+// '/sesiones' salió el 22/08/2026: lo reemplaza el microciclo.
+const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/microciclo', '/postpartido', '/mis-proyectos', '/alumnos', '/valoracion-dinamica'];
 
 // Rutas permitidas para deportista (calidoso) — SOLO su perfil y secciones propias.
 // IMPORTANTE: NO incluye /evaluaciones ni /valoracion-dinamica → las valoraciones
@@ -62,7 +63,7 @@ export async function middleware(request: NextRequest) {
 
   // Administrador DEPORTIVO: acceso total EXCEPTO Finanzas
   if (rol === 'deportivo') {
-    const finanzas = ['/pagos', '/pagos-pendientes', '/productos', '/contabilidad', '/facturas'];
+    const finanzas = ['/pagos', '/pagos-pendientes', '/productos', '/contabilidad', '/facturas', '/nomina', '/proveedores'];
     const esFinanzas = finanzas.some(r => pathname === r || pathname.startsWith(r + '/'));
     if (esFinanzas) {
       return NextResponse.redirect(new URL('/dashboard', request.url));

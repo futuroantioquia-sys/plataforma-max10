@@ -7,16 +7,27 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Users, Search, FileSpreadsheet, Trash2,
   ChevronRight, ArrowLeft, Camera, GraduationCap,
-  LayoutGrid, TableProperties, ChevronDown, Download, Loader2, ClipboardList, Home,
+  LayoutGrid, TableProperties, ChevronDown, Download, Loader2, ClipboardList, Home, CalendarDays,
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getDeportistasPorProyecto, saveDeportistas, getCodigosConAcceso, getFotosDeportistas, getResumenDocumentos, getEvaluaciones } from '@/lib/db';
+import { getDeportistas, getDeportistasPorProyecto, saveDeportistas, getCodigosConAcceso, getFotosDeportistas, getResumenDocumentos, getEvaluacionesResumen, saveFoto, getCalificaciones } from '@/lib/db';
 import { useSoloLectura } from '@/lib/permisos';
 import type { Deportista } from '@/lib/db';
 
 const FOTOS_PROFE_KEY = 'futuro_fotos_profes';
 const CAL_OPTIONS = ['', ...Array.from({ length: 46 }, (_, i) => ((i + 5) / 10).toFixed(1))];
+
+// ── PALETA (la del consolidado de asistencias) ───────────────
+const LIENZO = '#2B3547';   // fondo del módulo: el gris más oscuro
+const PANEL  = '#3C4759';   // filas y tarjetas
+const CAMPO  = '#2B3547';   // superficies hundidas
+const BORDE  = '#4A5568';
+const VERDE  = '#00B050';
+/* Todas las tarjetas de programa comparten el mismo degradado oscuro —el que
+   tenía "Progresión"— para que ninguna pese más que otra. 22/08/2026 */
+const GRAD_TARJETA  = 'from-[#1B2430] to-[#3C4759]';
+const BORDE_TARJETA = '#4A5568';
 
 // ── Posición virtual ──────────────────────────────────────────
 const VPOS = '__POSICION__';
@@ -107,10 +118,11 @@ function CeldaPosicion({ depId, valor, onChange, readOnly = false }: {
     : null;
 
   return (
-    <div style={{ position: 'relative', minWidth: 110 }}>
+    <div style={{ position: 'relative', minWidth: 210 }}>
       <button ref={btnRef} type="button" onClick={handleToggle}
-        className="w-full text-left text-[10px] font-semibold text-[#111827] hover:text-[#16a34a] transition py-0.5">
-        {sel.length > 0 ? sel.join(', ') : <span className="text-gray-300 font-normal">—</span>}
+        title={sel.join(', ')}
+        className="w-full text-left text-[10px] font-semibold text-white hover:text-[#00B050] transition py-0.5 whitespace-nowrap truncate">
+        {sel.length > 0 ? sel.join(', ') : <span className="text-white/30 font-normal">—</span>}
       </button>
       {menu}
     </div>
@@ -147,6 +159,23 @@ function colorCompite(valor: string): string {
   return 'bg-gray-200 text-gray-600';
 }
 
+/* Color del CÓDIGO según tipo de afiliación.
+
+   Estaba declarada DENTRO de DashboardProyecto, asi que la vista
+   "Sin proyecto" (que vive en otro componente del mismo archivo) la
+   invocaba sin tenerla a la vista y reventaba con
+   "colorCodigo is not defined". Al subirla a nivel de modulo, las dos
+   vistas la comparten. */
+function colorCodigo(afil: string): string {
+  const v = afil.toLowerCase();
+  if (v.includes('nuevo'))     return '#f97316'; // Naranja
+  if (v.includes('antigu'))    return '#16a34a'; // Verde
+  if (v.includes('reingreso')) return '#2563eb'; // Azul
+  if (v.includes('mb instit')) return '#374151'; // Gris oscuro
+  if (v.includes('b instit'))  return '#7c3aed'; // Morado
+  return '#6b7280'; // gris por defecto
+}
+
 function getCol(dep: Deportista, regex: RegExp) {
   const key = Object.keys(dep._columnas ?? {}).find(k => regex.test(k));
   return key ? dep._columnas[key] : '';
@@ -178,6 +207,13 @@ const esSinProy    = (d: Deportista) => !esRetirado(d) && (colProy(d) === 'Sin p
 const RETIRADOS_KEY  = '__RETIRADOS__';
 const SIN_PROY_KEY   = '__SIN_PROYECTO__';
 const colCal      = (d: Deportista) => getCol(d, /^cal$/i)    || '';
+
+/** Nombre del programa como se le muestra a la gente.
+ *  En la base algunos vienen numerados para que ordenen bien ("3. Formación").
+ *  Ese número es para el orden, no para leerlo: aquí se quita. — 22/08/2026 */
+function mostrarPrograma(n: string) {
+  return String(n ?? '').replace(/^\s*\d+\s*[.)-]\s*/, '').trim() || String(n ?? '');
+}
 
 function iniciales(nombre: string) {
   if (!nombre || typeof nombre !== 'string') return '?';
@@ -234,26 +270,28 @@ function TarjetaProyecto({
 
   return (
     <div onClick={onClick}
-      className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer overflow-hidden group">
-      {/* Barra de color superior más gruesa */}
-      <div className={cn('bg-gradient-to-r h-2', pal.grad)} />
+      className={cn('rounded-2xl border shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer overflow-hidden group bg-gradient-to-br', GRAD_TARJETA)}
+      style={{ borderColor: BORDE_TARJETA }}>
+      {/* Barra verde superior: lo único con color en la tarjeta */}
+      <div className="h-2" style={{ background: VERDE }} />
       <div className="p-5">
         {/* Chip de programa */}
-        <span className={cn('inline-block text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wide mb-3', pal.chip)}>
-          {programa}
+        <span className="inline-block text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wide mb-3 text-white"
+          style={{ background: VERDE }}>
+          {mostrarPrograma(programa)}
         </span>
 
         {/* Nombre del proyecto — protagonista */}
         <div className="mb-4">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Proyecto</p>
-          <p className="font-black text-gray-900 text-xl leading-tight">{nombre}</p>
+          <p className="text-[10px] font-bold text-white/45 uppercase tracking-widest mb-1">Proyecto</p>
+          <p className="font-black text-white text-xl leading-tight">{nombre}</p>
         </div>
 
         {/* Entrenador */}
         <div className="flex items-center gap-3 mb-4">
           <div className={cn(
             'w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0',
-            fotoP ? '' : `bg-gradient-to-br ${pal.grad}`
+            fotoP ? '' : 'bg-[#00B050]'
           )}>
             {fotoP
               ? <img src={fotoP} alt={profe} className="w-full h-full object-cover" />
@@ -263,23 +301,24 @@ function TarjetaProyecto({
           <div className="flex-1 min-w-0">
             {profe ? (
               <>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Entrenador</p>
-                <p className="font-bold text-gray-800 text-sm leading-tight truncate">{profe}</p>
+                <p className="text-[10px] text-white/45 font-bold uppercase tracking-widest">Entrenador</p>
+                <p className="font-bold text-white text-sm leading-tight truncate">{profe}</p>
                 {profes.length > 1 && (
-                  <p className="text-[11px] text-gray-400 truncate">{profes.slice(1).join(', ')}</p>
+                  <p className="text-[11px] text-white/40 truncate">{profes.slice(1).join(', ')}</p>
                 )}
               </>
             ) : (
-              <p className="text-sm text-gray-300 italic">Sin entrenador asignado</p>
+              <p className="text-sm text-white/35 italic">Sin entrenador asignado</p>
             )}
           </div>
           {profe && (
             <>
               <button
                 onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
-                className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center hover:bg-gray-200 transition flex-shrink-0"
+                className="w-7 h-7 rounded-full flex items-center justify-center hover:brightness-125 transition flex-shrink-0"
+                style={{ background: '#2B3547' }}
                 title="Subir foto del profe">
-                <Camera className="w-3.5 h-3.5 text-gray-500" />
+                <Camera className="w-3.5 h-3.5 text-white/60" />
               </button>
               <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFoto} />
             </>
@@ -287,9 +326,9 @@ function TarjetaProyecto({
         </div>
 
         {/* Pie: contador + flecha */}
-        <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
-          <span className="text-sm font-bold text-gray-500">{lista.length} deportistas</span>
-          <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-600 group-hover:translate-x-0.5 transition-all" />
+        <div className="border-t pt-3 flex items-center justify-between" style={{ borderColor: BORDE_TARJETA }}>
+          <span className="text-sm font-bold text-white/60">{lista.length} deportistas</span>
+          <ChevronRight className="w-4 h-4 text-white/35 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
         </div>
       </div>
     </div>
@@ -320,7 +359,7 @@ function DashboardProyecto({
   fotosProfe: Record<string, string>;
   esProfe: boolean;
   accesos: Set<string>;
-  resumen: { conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> };
+  resumen: { conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string>; conFoto: Set<string> };
   onFotoProfe: (profe: string, b64: string) => void;
   onVerPerfil: (id: string) => void;
   onPosicion: (depId: string, val: string) => void;
@@ -348,16 +387,25 @@ function DashboardProyecto({
   })();
   const calStorageKey = `futuro_cal_${proy}_${mesKey}`;
   const comStorageKey = `futuro_com_${proy}_${mesKey}`;
-  const [calMap, setCalMap] = useState<Record<string, string>>(() => {
-    // Semilla: datos del jugador en _columnas (falllback si localStorage está vacío)
-    const fromCols: Record<string, string> = {};
-    lista.forEach(d => { const v = getCol(d, /^cal$/i); if (v) fromCols[d.id] = v; });
-    try {
-      const raw = localStorage.getItem(`futuro_cal_${proy}_${(() => { const n = new Date(); return `${n.getFullYear()}_${String(n.getMonth()+1).padStart(2,'0')}`; })()}`);
-      const stored = raw ? JSON.parse(raw) : {};
-      return { ...fromCols, ...stored }; // localStorage tiene prioridad sobre columnas
-    } catch { return fromCols; }
-  });
+  /* La nota arranca VACÍA y solo se llena con lo que traiga la tabla
+     `calificaciones`, que es donde escribe Asistencia.
+     Antes se sembraba con la columna CAL del Excel y con una copia guardada en
+     el navegador. Eran tres orígenes para el mismo dato y se contradecían entre
+     sí. Desde el 23/08/2026 hay uno solo. */
+  const [calMap, setCalMap] = useState<Record<string, string>>({});
+  /* LA NOTA VIENE DE ASISTENCIA.
+     El formador la pone en el módulo de asistencia y allí se guarda en la tabla
+     `calificaciones`, con la llave (deportista, mes). Aquí solo se muestra: por
+     eso se lee de la misma fuente y no se edita. — 22/08/2026 */
+  useEffect(() => {
+    const ids = lista.map(d => d.id);
+    if (!ids.length) return;
+    getCalificaciones(ids, mesKey)
+      .then(data => { if (Object.keys(data).length) setCalMap(prev => ({ ...prev, ...data })); })
+      .catch(e => console.error('[alumnos] cargar CAL:', e));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proy, mesKey, lista.length]);
+
   const [comMap, setComMap] = useState<Record<string, string>>(() => {
     // Semilla: datos del jugador en _columnas (columna COM del Excel)
     const fromCols: Record<string, string> = {};
@@ -368,11 +416,12 @@ function DashboardProyecto({
       return { ...fromCols, ...stored };
     } catch { return fromCols; }
   });
-  // ── Estado de INFORMES de valoración por código (INF1/INF2/INF3) — solo admin ──
+  // ── Estado de INFORMES de valoración por código (INF1/INF2/INF3) — admin y profe ──
   const [infMap, setInfMap] = useState<Record<string, Set<string>>>({});
   useEffect(() => {
-    if (esProfe) return; // solo el admin carga/ve el estado de informes
-    getEvaluaciones().then(evs => {
+    // Resumen liviano (codigo + numero de informe). Antes se traia la
+    // valoracion COMPLETA de cada deportista, fotos incluidas.
+    getEvaluacionesResumen().then(evs => {
       const m: Record<string, Set<string>> = {};
       evs.forEach((ev: any) => {
         const c = String(ev.codigo ?? '').trim().toUpperCase();
@@ -383,6 +432,48 @@ function DashboardProyecto({
       setInfMap(m);
     }).catch(() => {});
   }, [esProfe]);
+
+  // ── Subir foto del deportista desde el listado (profe/admin) ──
+  const [fotosLocal,   setFotosLocal]   = useState<Record<string, string>>({});
+  const [subiendoFoto, setSubiendoFoto] = useState<string | null>(null);
+  const fotoInputRef  = useRef<HTMLInputElement>(null);
+  const fotoTargetId  = useRef<string>('');
+  function pedirFotoDep(depId: string) { fotoTargetId.current = depId; fotoInputRef.current?.click(); }
+  function comprimirFoto(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const maxW = 700;
+          const scale = Math.min(1, maxW / (img.width || maxW));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          const ctx = c.getContext('2d');
+          if (!ctx) { resolve(String(r.result)); return; }
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL('image/jpeg', 0.82));
+        };
+        img.onerror = reject;
+        img.src = String(r.result);
+      };
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+  async function onFotoElegida(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; e.target.value = '';
+    const depId = fotoTargetId.current;
+    if (!file || !depId) return;
+    setSubiendoFoto(depId);
+    try {
+      const b64 = await comprimirFoto(file);
+      await saveFoto(depId, b64);
+      setFotosLocal(prev => ({ ...prev, [depId]: b64 }));
+    } catch { alert('No se pudo subir la foto. Intenta de nuevo.'); }
+    setSubiendoFoto(null);
+  }
 
   function setCal(depId: string, value: string) {
     setCalMap(prev => {
@@ -401,15 +492,26 @@ function DashboardProyecto({
     onCom(depId, value); // persistir en Supabase vía _columnas
   }
 
-  // Migración única: si hay datos en localStorage que no están en _columnas,
-  // los sube a Supabase para que el admin también los vea.
+  /* Antes aquí había una migración que subía a la nube las notas guardadas en
+     el navegador. Se retiró el 23/08/2026: al limpiar las calificaciones,
+     habría vuelto a escribir las viejas. COM conserva su migración. */
   useEffect(() => {
-    const pendCal = lista.filter(d => calMap[d.id] && d._columnas?.['CAL'] !== calMap[d.id]);
     const pendCom = lista.filter(d => comMap[d.id] && d._columnas?.['COM'] !== comMap[d.id]);
-    pendCal.forEach(d => onCal(d.id, calMap[d.id]));
     pendCom.forEach(d => onCom(d.id, comMap[d.id]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // solo al montar
+
+  /* Limpieza única: se borra la copia de notas que quedó en este navegador,
+     para que no reaparezcan las de antes del corte. */
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('futuro_cal_purgado_20260823')) return;
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('futuro_cal_'))
+        .forEach(k => localStorage.removeItem(k));
+      localStorage.setItem('futuro_cal_purgado_20260823', '1');
+    } catch { /* noop */ }
+  }, []);
 
   // ── Descarga PDF tamaño carta ─────────────────────────────────
   async function descargar() {
@@ -534,17 +636,6 @@ function DashboardProyecto({
   const mbInst    = lista.filter(d => colAfil(d).toLowerCase().includes('mb instit')).length;
   const bInst     = lista.filter(d => colAfil(d).toLowerCase().includes('b instit')).length;
 
-  // Color del CÓDIGO según tipo de afiliación
-  function colorCodigo(afil: string): string {
-    const v = afil.toLowerCase();
-    if (v.includes('nuevo'))     return '#f97316'; // Naranja
-    if (v.includes('antigu'))    return '#16a34a'; // Verde
-    if (v.includes('reingreso')) return '#2563eb'; // Azul
-    if (v.includes('mb instit')) return '#374151'; // Gris oscuro
-    if (v.includes('b instit'))  return '#7c3aed'; // Morado
-    return '#6b7280'; // gris por defecto
-  }
-
   // Helpers celda — declarados antes del sort para que el hoisting los tenga disponibles
   function getRK(dep: Deportista, rx: RegExp) { return Object.keys(dep._columnas ?? {}).find(k => rx.test(k)) ?? ''; }
   function val(dep: Deportista, key: string): string {
@@ -644,8 +735,18 @@ function DashboardProyecto({
     ...(hasDia    ? [{ key:'dia',        label:'DÍA',           minW:50, center:true }] : []),
   ];
 
+  // SOLO el NOMBRE queda fijo a la izquierda (left: 0). Estado, afiliación y código
+  // se deslizan y se ocultan detrás del nombre; el # también se desliza.
+  const stickyLeft: Record<string, number> = {
+    nombre: 0,
+  };
+  void leftCod; void leftNombre; // (offsets antiguos; ya no se usan)
+
   return (
     <div className="space-y-3" ref={printRef}>
+
+      {/* Input oculto para subir la foto del deportista desde el listado */}
+      <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={onFotoElegida} />
 
       {/* ── Hero profe + stats ── */}
       <div className={cn('rounded-2xl shadow-sm bg-gradient-to-br', pal.grad)}>
@@ -667,7 +768,7 @@ function DashboardProyecto({
             <div className="flex-1">
               <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest">Entrenador</p>
               <p className="text-white font-black text-base leading-tight">{profe||'Sin asignar'}</p>
-              <p className="text-white/70 text-xs font-semibold">{proy} · {programa}</p>
+              <p className="text-white/70 text-xs font-semibold">{proy} · {mostrarPrograma(programa)}</p>
             </div>
             <div className="flex gap-3 text-center flex-shrink-0 flex-wrap">
               <div><p className="text-xl font-black">{lista.length}</p><p className="text-white/60 text-[10px]">Total</p></div>
@@ -682,17 +783,18 @@ function DashboardProyecto({
       </div>
 
       {/* ── Barra búsqueda + toggle ── */}
-      <div className="bg-white rounded-xl border border-gray-200 px-3 py-2.5 flex items-center gap-2 shadow-sm">
+      <div className="rounded-xl border px-3 py-2.5 flex items-center gap-2 shadow-sm" style={{ background: PANEL, borderColor: BORDE }}>
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300"/>
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40"/>
           <input type="text" placeholder="Buscar deportista..." value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-[#16a34a] placeholder:text-gray-300"/>
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs text-white border focus:outline-none focus:ring-1 focus:ring-[#00B050] placeholder:text-white/35"
+            style={{ background: CAMPO, borderColor: BORDE }}/>
         </div>
         {busqueda && (
-          <button onClick={() => setBusqueda('')} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+          <button onClick={() => setBusqueda('')} className="text-xs text-white/50 hover:text-white">✕</button>
         )}
-        <span className="text-xs text-gray-400 font-bold flex-shrink-0">{filtrada.length}/{lista.length}</span>
+        <span className="text-xs text-white/50 font-bold flex-shrink-0">{filtrada.length}/{lista.length}</span>
       </div>
 
       {/* ── Vista tarjetas ── */}
@@ -729,65 +831,54 @@ function DashboardProyecto({
       {vistaTabla && (
         <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
 
-          {/* Encabezado PROYECTO / FORMADOR */}
-          <table className="text-xs border-collapse w-auto">
-            <tbody>
-              <tr>
-                <td className="border border-white px-4 py-1.5 font-black text-white bg-[#4b5563] w-28 uppercase text-[11px]">PROYECTO</td>
-                <td className="border border-white px-4 py-1.5 font-bold text-gray-800 min-w-[200px]">{proy}</td>
-              </tr>
-              <tr>
-                <td className="border border-white px-4 py-1.5 font-black text-white bg-[#4b5563] uppercase text-[11px]">FORMADOR</td>
-                <td className="border border-white px-4 py-1.5 font-bold text-gray-800">{profe || '—'}</td>
-              </tr>
-            </tbody>
-          </table>
+          {/* Encabezado: PROGRAMA · PROYECTO · FORMADOR, en una sola franja verde.
+              Antes era una tablita de dos filas que partía el bloque en dos. */}
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-1 rounded-xl px-4 py-2.5"
+            style={{ background: VERDE }}>
+            <span className="flex items-baseline gap-2">
+              <span className="text-white/60 font-black uppercase text-[10px] tracking-widest">Programa</span>
+              <span className="text-white font-black text-[13px]">{mostrarPrograma(programa) || '—'}</span>
+            </span>
+            <span className="flex items-baseline gap-2">
+              <span className="text-white/60 font-black uppercase text-[10px] tracking-widest">Proyecto</span>
+              <span className="text-white font-black text-[13px]">{proy}</span>
+            </span>
+            <span className="flex items-baseline gap-2">
+              <span className="text-white/60 font-black uppercase text-[10px] tracking-widest">Formador</span>
+              <span className="text-white font-black text-[13px]">{profe || '—'}</span>
+            </span>
+          </div>
 
           {/* Tabla */}
-          <div ref={tableScrollRef} style={{ maxHeight: '65vh', overflowY: 'auto', overflowX: 'auto' }}>
-            <table className="text-xs border-collapse" style={{ minWidth: '100%' }}>
+          <div ref={tableScrollRef} style={{ maxHeight: '70vh', overflowY: 'auto', overflowX: 'auto' }}>
+            <table className="text-xs border-collapse" style={{ width: '100%' }}>
               <thead className="sticky top-0 z-20">
-                <tr style={{ background: '#16a34a' }}>
+                <tr style={{ background: VERDE }}>
                   {/* # — sticky izquierda */}
-                  <th className="border border-[#16375a] px-2 py-2 text-[10px] text-white/40 select-none text-center"
-                    style={{ position: 'sticky', left: 0, zIndex: 25, background: '#16a34a', width: W_NUM, minWidth: W_NUM }}>#</th>
+                  <th className="border border-white px-2 py-2 text-[10px] text-white/40 select-none text-center"
+                    style={{ background: VERDE, width: W_NUM, minWidth: W_NUM }}>#</th>
                   {cols.map(c => (
                     <th key={c.key}
-                      className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap"
+                      className="border border-white px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap"
                       style={{
                         minWidth: c.minW,
                         textAlign: c.center ? 'center' : 'left',
-                        // solo # es sticky; código y nombre scrollean libremente
+                        ...(stickyLeft[c.key] !== undefined
+                          ? { position: 'sticky', left: stickyLeft[c.key], zIndex: 26, background: VERDE, boxShadow: '6px 0 8px -6px rgba(0,0,0,0.25)' }
+                          : {}),
                       }}>
                       {c.label}
                     </th>
                   ))}
-                  {/* Estado de cargue: FOTO / DOCUMENTO / EPS / CALIFICACIONES */}
-                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center" style={{ minWidth: 52, background: '#0f766e' }} title="¿Subió la foto?">FOTO</th>
-                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center" style={{ minWidth: 52, background: '#0f766e' }} title="¿Subió el documento de identidad (TI/RC)?">DOC</th>
-                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center" style={{ minWidth: 52, background: '#0f766e' }} title="¿Subió el certificado de EPS?">EPS</th>
-                  <th className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center" style={{ minWidth: 60, background: '#0f766e' }} title="¿Subió las calificaciones escolares?">CALIF</th>
-                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left" style={{ minWidth: 130 }}>
+                  {/* VAL — la valoración del mes, de solo lectura. Se llamaba
+                      CAL y se confundía con las calificaciones escolares. La
+                      pone el formador en Asistencia. — 23/08/2026 */}
+                  <th className="border border-white px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center" style={{ minWidth: 74 }}>
+                    VAL
+                  </th>
+                  <th className="border border-white px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left" style={{ minWidth: 230, width: '100%' }}>
                     POSICIÓN <span className="text-white/40 font-normal normal-case">(máx. 3)</span>
                   </th>
-                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center"
-                    style={{ minWidth: 90, background: '#7c3aed' }}
-                    title="Calificación del mes actual">
-                    CAL
-                  </th>
-                  <th className="border border-[#16375a] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center"
-                    style={{ minWidth: 80, background: '#1d4ed8' }}
-                    title="Competencia en torneo">
-                    COM
-                  </th>
-                  {/* INF1 / INF2 / INF3 — estado de informes de valoración (solo admin) */}
-                  {!esProfe && ['INF1', 'INF2', 'INF3'].map(h => (
-                    <th key={h} className="border border-[#16375a] px-2 py-2 font-black text-white text-[10px] tracking-wide text-center"
-                      style={{ minWidth: 52, background: '#b45309' }}
-                      title={`¿Está hecho el ${h.replace('INF', 'Informe ')} de la valoración del deportista?`}>
-                      {h}
-                    </th>
-                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -795,13 +886,13 @@ function DashboardProyecto({
                   const estado  = val(dep, 'estado');
                   const esN = estado.toLowerCase().includes('nuevo');
                   const esA = estado.toLowerCase().includes('antigu');
-                  const bg  = '#f1f5f9';
+                  const bg  = PANEL;
 
                   return (
                     <tr key={dep.id} style={{ background: bg }} className="hover:brightness-95 transition-all">
                       {/* # sticky */}
                       <td className="border border-white px-2 py-1.5 text-center text-[10px] font-bold select-none"
-                        style={{ color: '#111827', background: bg, position: 'sticky', left: 0, zIndex: 10 }}>{i + 1}</td>
+                        style={{ color: '#ffffff', background: bg }}>{i + 1}</td>
 
                       {cols.map(c => {
                         const v = val(dep, c.key);
@@ -819,44 +910,49 @@ function DashboardProyecto({
                         return (
                           <td key={c.key}
                             className={cn('border border-white px-2 py-1.5', c.key !== 'afiliacion' && 'whitespace-nowrap')}
-                            style={{ textAlign: c.center ? 'center' : 'left', verticalAlign: 'middle' }}>
+                            style={{
+                              textAlign: c.center ? 'center' : 'left', verticalAlign: 'middle',
+                              ...(stickyLeft[c.key] !== undefined
+                                ? { position: 'sticky', left: stickyLeft[c.key], zIndex: 15, background: bg, boxShadow: '6px 0 8px -6px rgba(0,0,0,0.18)' }
+                                : {}),
+                            }}>
 
                             {c.key === 'nombre' ? (
-                              <span className="font-bold text-[#111827] underline decoration-dotted underline-offset-2 cursor-pointer"
+                              <span className="font-bold text-white cursor-pointer hover:text-[#00B050] hover:underline transition-colors"
                                 onClick={() => onVerPerfil(dep.id)}>{dep._nombre}</span>
                             ) : c.key === 'afiliacion' ? (
-                              v ? <span className="text-[10px] font-semibold text-[#111827]">{v}</span>
-                                : <span className="text-gray-300">—</span>
+                              v ? <span className="text-[10px] font-semibold text-white">{v}</span>
+                                : <span className="text-white/30">—</span>
                             ) : c.key === 'estado' ? (
-                              v ? <span className={cn('text-[11px] font-bold px-2 py-0.5 rounded-full',
-                                    esN ? 'bg-green-200 text-green-900' :
-                                    esA ? 'bg-gray-300 text-gray-800' : 'bg-gray-200 text-gray-600')}>{v}</span>
-                                : <span className="text-gray-300">—</span>
+                              v ? <span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white"
+                                    style={{ background: esN ? VERDE : CAMPO }}>{v}</span>
+                                : <span className="text-white/30">—</span>
                             ) : c.key === 'compite' ? (
                               v ? <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold', colorCompite(v))}>{v}</span>
                                 : <span className="text-gray-300">—</span>
                             ) : (
-                              <span className="text-gray-900 font-medium">{v || <span className="text-gray-300">—</span>}</span>
+                              <span className="text-white font-medium">{v || <span className="text-white/30">—</span>}</span>
                             )}
                           </td>
                         );
                       })}
-                      {/* ── Estado de cargue: FOTO / DOC / EPS / CALIF ── */}
-                      {(() => {
-                        const chk = (ok: boolean) => ok
-                          ? <span className="text-green-600 font-black text-sm">✓</span>
-                          : <span className="text-gray-300 font-black text-sm">—</span>;
-                        return (
-                          <>
-                            <td className="border border-white px-1 py-1.5 text-center" style={{ background: '#f0fdfa' }}>{chk(!!fotos[dep.id])}</td>
-                            <td className="border border-white px-1 py-1.5 text-center" style={{ background: '#f0fdfa' }}>{chk(resumen.conDoc.has(dep.id))}</td>
-                            <td className="border border-white px-1 py-1.5 text-center" style={{ background: '#f0fdfa' }}>{chk(resumen.conEps.has(dep.id))}</td>
-                            <td className="border border-white px-1 py-1.5 text-center" style={{ background: '#f0fdfa' }}>{chk(resumen.conEsc.has(dep.id))}</td>
-                          </>
-                        );
-                      })()}
+                      {/* ── VAL — solo lectura; se pone en Asistencia ── */}
+                      <td className="border border-white px-1 py-1" style={{ background: PANEL, verticalAlign: 'middle' }}>
+                        {(() => {
+                          const nota = calMap[dep.id] ?? '';
+                          return (
+                            <div
+                              title={nota ? 'Valoración puesta en Asistencia' : 'Sin valoración este mes · se pone en Asistencia'}
+                              className="flex items-center justify-center rounded-md py-1 text-[12px] font-black text-white"
+                              style={{ background: nota ? VERDE : '#C0504D', minHeight: 24 }}>
+                              {nota || <span className="text-white/30">—</span>}
+                            </div>
+                          );
+                        })()}
+                      </td>
+
                       {/* ── POSICIÓN ── */}
-                      <td className="border border-white px-2 py-1.5" style={{ overflow: 'visible', position: 'relative', verticalAlign: 'middle' }}>
+                      <td className="border border-white px-2 py-1.5" style={{ overflow: 'visible', position: 'relative', verticalAlign: 'middle', background: PANEL }}>
                         <CeldaPosicion
                           depId={dep.id}
                           valor={dep._columnas?.[VPOS] ?? ''}
@@ -864,62 +960,21 @@ function DashboardProyecto({
                           readOnly={!esProfe}
                         />
                       </td>
-                      {/* ── CAL ── */}
-                      <td className="border border-white px-0.5 py-1 text-center" style={{ background: '#f5f3ff', minWidth: 90 }}>
-                        <select value={calMap[dep.id] ?? ''}
-                          onChange={e => { if (esProfe) setCal(dep.id, e.target.value); }}
-                          disabled={!esProfe}
-                          title={esProfe ? 'Calificación del deportista' : 'Solo el formador puede editar'}
-                          style={{ fontSize: '13px', fontWeight: 900, width: '72px', textAlign: 'center',
-                            background: 'transparent', border: 'none', outline: 'none',
-                            color: '#111827', cursor: esProfe ? 'pointer' : 'default' }}>
-                          {CAL_OPTIONS.map(v2 => <option key={v2} value={v2}>{v2 || '—'}</option>)}
-                        </select>
-                      </td>
-                      {/* ── COM ── */}
-                      <td className="border border-white px-0.5 py-1 text-center" style={{ background: '#eff6ff', minWidth: 80 }}>
-                        <select value={comMap[dep.id] ?? ''}
-                          onChange={e => { if (esProfe) setCom(dep.id, e.target.value); }}
-                          disabled={!esProfe}
-                          title={esProfe ? '¿Compite en torneo?' : 'Solo el formador puede editar'}
-                          style={{ fontSize: '12px', fontWeight: 900, width: '64px', textAlign: 'center',
-                            background: 'transparent', border: 'none', outline: 'none',
-                            color: '#111827', cursor: esProfe ? 'pointer' : 'default' }}>
-                          <option value="">—</option>
-                          <option value="SI">SI</option>
-                          <option value="N.Q">N.Q</option>
-                          <option value="N.A">N.A</option>
-                          <option value="ESP">ESP</option>
-                          <option value="INV">INV</option>
-                        </select>
-                      </td>
-                      {/* ── INF1 / INF2 / INF3 — ✓ si el informe ya está hecho, — si no (solo admin) ── */}
-                      {!esProfe && (() => {
-                        const codDep = val(dep, 'codigo').trim().toUpperCase();
-                        const hechos = infMap[codDep];
-                        return ['1', '2', '3'].map(n => (
-                          <td key={n} className="border border-white px-1 py-1.5 text-center" style={{ background: '#fffbeb' }}>
-                            {hechos?.has(n)
-                              ? <span className="text-green-600 font-black text-sm">✓</span>
-                              : <span className="text-gray-300 font-black text-sm">—</span>}
-                          </td>
-                        ));
-                      })()}
                     </tr>
                   );
                 })}
                 {filtrada.length === 0 && (
-                  <tr><td colSpan={cols.length + 7 + (esProfe ? 0 : 3)} className="py-10 text-center text-sm text-gray-400 border border-white">Sin resultados</td></tr>
+                  <tr><td colSpan={cols.length + 3} className="py-10 text-center text-sm text-white/45 border border-white" style={{ background: PANEL }}>Sin resultados</td></tr>
                 )}
               </tbody>
             </table>
           </div>
 
           {/* Barra inferior */}
-          <div className="bg-[#f1f5f9] border-t border-white px-4 py-1.5 flex items-center gap-4 text-[10px] font-semibold text-[#111827]">
+          <div className="border-t border-white px-4 py-1.5 flex items-center gap-4 text-[10px] font-semibold text-white" style={{ background: CAMPO }}>
             <span>ADMON 2026</span>
             <span>{filtrada.length} registros · Nuevos: {nuevos} · Antiguos: {antiguos}</span>
-            <span className="ml-auto text-[#4b5563]">Clic en el nombre para ver el perfil completo</span>
+            <span className="ml-auto text-white/50">Clic en el nombre para ver el perfil completo</span>
           </div>
         </div>
       )}
@@ -944,7 +999,7 @@ function AlumnosPageContent() {
   const [accesos,     setAccesos]     = useState<Set<string>>(new Set());
   useEffect(() => { getCodigosConAcceso().then(setAccesos).catch(() => {}); }, []);
   // Resumen de cargue: qué deportistas tienen documento (TI/RC), EPS y calificaciones escolares
-  const [resumen, setResumen] = useState<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string> }>({ conDoc: new Set(), conEps: new Set(), conEsc: new Set() });
+  const [resumen, setResumen] = useState<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string>; conFoto: Set<string> }>({ conDoc: new Set(), conEps: new Set(), conEsc: new Set(), conFoto: new Set() });
   useEffect(() => { getResumenDocumentos().then(setResumen).catch(() => {}); }, []);
   const soloLectura = useSoloLectura(); // contabilidad: solo ver
   // Fotos desde la nube: para que el admin/profe vea TODAS las fotos subidas,
@@ -1164,7 +1219,7 @@ function AlumnosPageContent() {
     if (proyParam) {
       // Mientras carga → spinner
       if (cargando) return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
+        <div style={{ background: LIENZO }} className="min-h-screen flex flex-col items-center justify-center gap-4">
           <BalonCargando />
           <p className="text-sm font-semibold text-gray-500 text-center px-6">
             Cargando proyecto <strong className="text-[#064e1e]">{proyParam}</strong>…
@@ -1173,7 +1228,7 @@ function AlumnosPageContent() {
       );
       // Datos cargando o auto-nav aún no corrió → mantener spinner
       if (deportistas.length > 0) return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
+        <div style={{ background: LIENZO }} className="min-h-screen flex flex-col items-center justify-center gap-4">
           <BalonCargando />
           <p className="text-sm font-semibold text-gray-500 text-center px-6">
             Cargando proyecto <strong className="text-[#064e1e]">{proyParam}</strong>…
@@ -1182,7 +1237,7 @@ function AlumnosPageContent() {
       );
       // Cargó pero vacío → error de conexión con detalle real
       return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <div style={{ background: LIENZO }} className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
           <div className="w-20 h-20 bg-orange-50 rounded-3xl flex items-center justify-center mb-1">
             <Users className="w-10 h-10 text-orange-300" />
           </div>
@@ -1210,8 +1265,8 @@ function AlumnosPageContent() {
   }
 
   if (!programa) return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+    <div style={{ background: LIENZO }} className="min-h-screen">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/dashboard')}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition">
@@ -1256,11 +1311,11 @@ function AlumnosPageContent() {
           <BalonCargando />
         ) : deportistas.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center mb-5">
-              <Users className="w-10 h-10 text-gray-300" />
+            <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5" style={{ background: '#3C4759' }}>
+              <Users className="w-10 h-10 text-white/30" />
             </div>
-            <h2 className="text-lg font-black text-gray-700">Sin deportistas</h2>
-            <p className="text-gray-400 text-sm mt-1 mb-6">Importa tu Excel para ver los programas</p>
+            <h2 className="text-lg font-black text-white">Sin deportistas</h2>
+            <p className="text-white/45 text-sm mt-1 mb-6">Importa tu Excel para ver los programas</p>
             <button onClick={() => router.push('/alumnos/importar')}
               className="flex items-center gap-2 bg-[#16a34a] text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-[#064e1e] transition">
               <FileSpreadsheet className="w-4 h-4" /> Importar Excel
@@ -1274,9 +1329,9 @@ function AlumnosPageContent() {
                 { label: 'Programas',   v: programasSorted.length },
                 { label: 'Proyectos',   v: Object.values(porPrograma).reduce((s, l) => s + new Set(l.map(d => colProy(d))).size, 0) },
               ].map(s => (
-                <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-                  <p className="text-2xl font-black text-gray-900">{s.v}</p>
-                  <p className="text-xs text-gray-400 font-medium mt-0.5">{s.label}</p>
+                <div key={s.label} className="rounded-2xl shadow-sm p-4 text-center" style={{ background: VERDE }}>
+                  <p className="text-2xl font-black text-white">{s.v}</p>
+                  <p className="text-xs text-white/70 font-bold mt-0.5">{s.label}</p>
                 </div>
               ))}
             </div>
@@ -1286,15 +1341,16 @@ function AlumnosPageContent() {
                 return (
                   <button key={nombre}
                     onClick={() => { setPrograma(nombre); setProy(null); setBusqueda(''); }}
-                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 text-left group overflow-hidden">
-                    <div className={cn('bg-gradient-to-r p-5', pal.grad)}>
+                    className="rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 text-left group overflow-hidden border"
+                    style={{ borderColor: BORDE_TARJETA }}>
+                    <div className={cn('bg-gradient-to-r p-5', GRAD_TARJETA)}>
                       <div className="flex items-center justify-between">
                         <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
                           <GraduationCap className="w-5 h-5 text-white" />
                         </div>
                         <ChevronRight className="w-5 h-5 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                       </div>
-                      <h3 className="text-white font-black text-xl mt-4 leading-tight">{nombre}</h3>
+                      <h3 className="text-white font-black text-xl mt-4 leading-tight">{mostrarPrograma(nombre)}</h3>
                       <div className="flex items-center gap-3 mt-2">
                         <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full">
                           {lista.length} deportistas
@@ -1304,9 +1360,6 @@ function AlumnosPageContent() {
                         </span>
                       </div>
                     </div>
-                    <div className="p-4">
-                      <AvatarStack lista={lista} fotos={fotos} grad={pal.grad} />
-                    </div>
                   </button>
                 );
               })}
@@ -1315,8 +1368,9 @@ function AlumnosPageContent() {
               {sinProy.length > 0 && (
                 <button
                   onClick={() => { setPrograma(SIN_PROY_KEY); setProy(null); setBusqueda(''); }}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 text-left group overflow-hidden">
-                  <div className="bg-gradient-to-r from-[#064e1e] to-[#16a34a] p-5">
+                  className="rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 text-left group overflow-hidden border"
+                  style={{ borderColor: BORDE_TARJETA }}>
+                  <div className={cn('bg-gradient-to-r p-5', GRAD_TARJETA)}>
                     <div className="flex items-center justify-between">
                       <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
                         <Users className="w-5 h-5 text-white" />
@@ -1330,9 +1384,6 @@ function AlumnosPageContent() {
                       </span>
                     </div>
                   </div>
-                  <div className="p-4">
-                    <AvatarStack lista={sinProy} fotos={fotos} grad="from-[#064e1e] to-[#16a34a]" />
-                  </div>
                 </button>
               )}
 
@@ -1340,8 +1391,9 @@ function AlumnosPageContent() {
               {retirados.length > 0 && (
                 <button
                   onClick={() => { setPrograma(RETIRADOS_KEY); setProy(null); setBusqueda(''); }}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 text-left group overflow-hidden">
-                  <div className="bg-gradient-to-r from-gray-600 to-gray-500 p-5">
+                  className="rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 text-left group overflow-hidden border"
+                  style={{ borderColor: BORDE_TARJETA }}>
+                  <div className={cn('bg-gradient-to-r p-5', GRAD_TARJETA)}>
                     <div className="flex items-center justify-between">
                       <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
                         <Users className="w-5 h-5 text-white" />
@@ -1355,9 +1407,6 @@ function AlumnosPageContent() {
                       </span>
                     </div>
                   </div>
-                  <div className="p-4">
-                    <AvatarStack lista={retirados} fotos={fotos} grad="from-gray-600 to-gray-500" />
-                  </div>
                 </button>
               )}
             </div>
@@ -1369,8 +1418,8 @@ function AlumnosPageContent() {
 
   // ══ NIVEL SIN PROYECTO (tabla directa) ══════════════════════
   if (programa === SIN_PROY_KEY) return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
+    <div style={{ background: LIENZO }} className="min-h-screen">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
         <button onClick={() => setPrograma(null)}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
           <ArrowLeft className="w-4 h-4" />
@@ -1399,7 +1448,7 @@ function AlumnosPageContent() {
           <div className="overflow-x-auto" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
             <table className="text-xs border-collapse w-full">
               <thead className="sticky top-0 z-10">
-                <tr style={{ background: '#16a34a' }}>
+                <tr style={{ background: VERDE }}>
                   <th className="border border-white px-2 py-2 text-[10px] text-white/60 w-9 text-center select-none">#</th>
                   {['CÓDIGO','DEPORTISTA','PROGRAMA','AÑO','MES','DÍA','ESTADO'].map(h => (
                     <th key={h} className="border border-white px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left">{h}</th>
@@ -1430,7 +1479,7 @@ function AlumnosPageContent() {
                           <span className="font-bold text-[#111827] cursor-pointer hover:underline"
                             onClick={() => router.push(`/alumnos/${dep.id}`)}>{dep._nombre}</span>
                         </td>
-                        <td className="border border-white px-2 py-1.5 text-[#111827] text-[11px]">{prog}</td>
+                        <td className="border border-white px-2 py-1.5 text-white text-[11px]">{mostrarPrograma(prog)}</td>
                         <td className="border border-white px-2 py-1.5 text-center text-[#111827]">{anio || '—'}</td>
                         <td className="border border-white px-2 py-1.5 text-[#111827]">{mes || '—'}</td>
                         <td className="border border-white px-2 py-1.5 text-center text-[#111827]">{dia || '—'}</td>
@@ -1479,8 +1528,8 @@ function AlumnosPageContent() {
 
   // ══ NIVEL RETIRADOS (tabla directa, sin proyectos) ═══════════
   if (programa === RETIRADOS_KEY) return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
+    <div style={{ background: LIENZO }} className="min-h-screen">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
         <button onClick={() => setPrograma(null)}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
           <ArrowLeft className="w-4 h-4" />
@@ -1564,8 +1613,8 @@ function AlumnosPageContent() {
   // ══ NIVEL 2: PROYECTOS ═══════════════════════════════════════
   const palProg = palIdx(programa, programasSorted);
   if (!proy) return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+    <div style={{ background: LIENZO }} className="min-h-screen">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-2 min-w-0">
           <button onClick={() => (esProfe || !!searchParams.get('proyecto')) ? router.push('/mis-proyectos') : setPrograma(null)}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0">
@@ -1573,7 +1622,7 @@ function AlumnosPageContent() {
           </button>
           <span className="text-xs text-white/60 font-medium hidden sm:block flex-shrink-0">{(esProfe || !!searchParams.get('proyecto')) ? 'Mis proyectos' : 'Programas'}</span>
           <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block flex-shrink-0" />
-          <span className={cn('text-xs font-black px-3 py-1.5 rounded-full flex-shrink-0', palProg.chip)}>{programa}</span>
+          <span className={cn('text-xs font-black px-3 py-1.5 rounded-full flex-shrink-0', palProg.chip)}>{mostrarPrograma(programa)}</span>
         </div>
         <span className="text-sm font-bold text-white/70">{depPrograma.length} deportistas</span>
       </header>
@@ -1606,19 +1655,20 @@ function AlumnosPageContent() {
           let cardIdx = 0;
           return (
             <div className="space-y-8">
-              <p className="text-sm font-semibold text-gray-400">
-                {proysSorted.length} proyectos en <strong className="text-gray-600">{programa}</strong> · {sedesSorted.length} sedes
+              <p className="text-sm font-semibold text-white/45">
+                {proysSorted.length} proyectos en <strong className="text-white">{mostrarPrograma(programa)}</strong> · {sedesSorted.length} sedes
               </p>
               {sedesSorted.map(([sede, proyDeSede]) => (
                 <section key={sede}>
                   {/* Encabezado de sede */}
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="h-px flex-1 bg-gray-200" />
-                    <span className="text-xs font-black uppercase tracking-widest text-gray-500 bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">
+                    <div className="h-px flex-1" style={{ background: BORDE_TARJETA }} />
+                    <span className="text-xs font-black uppercase tracking-widest text-white px-4 py-1.5 rounded-full border"
+                      style={{ background: '#3C4759', borderColor: BORDE_TARJETA }}>
                       📍 {sede}
                     </span>
-                    <span className="text-xs text-gray-400 font-semibold">{proyDeSede.reduce((s, [, l]) => s + l.length, 0)} deportistas</span>
-                    <div className="h-px flex-1 bg-gray-200" />
+                    <span className="text-xs text-white/45 font-semibold">{proyDeSede.reduce((s, [, l]) => s + l.length, 0)} deportistas</span>
+                    <div className="h-px flex-1" style={{ background: BORDE_TARJETA }} />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                     {proyDeSede.map(([nombre, lista]) => {
@@ -1652,8 +1702,8 @@ function AlumnosPageContent() {
   const listaProy = porProy[proy] ?? [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
+    <div style={{ background: LIENZO }} className="min-h-screen">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
         <button onClick={() => (esProfe || !!searchParams.get('proyecto')) ? router.push('/mis-proyectos') : setProy(null)}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0"
           title="Atrás">
@@ -1666,20 +1716,34 @@ function AlumnosPageContent() {
             <Home className="w-4 h-4" />
           </button>
         )}
-        <span className="text-xs text-white/60 hidden sm:block">{programa}</span>
+        <span className="text-xs text-white/60 hidden sm:block">{mostrarPrograma(programa)}</span>
         <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block" />
         <span className={cn('text-xs font-black px-2.5 py-1 rounded-full', palProy.chip)}>{proy}</span>
         {(esProfe || !!searchParams.get('proyecto')) && proy && (
-          <button
-            onClick={() => router.push(`/asistencia?proyecto=${encodeURIComponent(proy)}`)}
-            className="ml-auto flex items-center gap-1.5 bg-white text-[#16a34a] px-3 py-1.5 rounded-xl text-xs font-black hover:bg-green-50 transition shadow-sm whitespace-nowrap">
-            <ClipboardList className="w-3.5 h-3.5" />
-            GESTIONAR ASISTENCIA
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => router.push(`/asistencia?proyecto=${encodeURIComponent(proy)}`)}
+              className="flex items-center gap-1.5 bg-white text-[#16a34a] px-3 py-1.5 rounded-xl text-xs font-black hover:bg-green-50 transition shadow-sm whitespace-nowrap">
+              <ClipboardList className="w-3.5 h-3.5" />
+              GESTIONAR ASISTENCIA
+            </button>
+            {/* El formador arma aquí su microciclo de la semana. */}
+            <button
+              onClick={() => router.push(
+                `/microciclo?proyecto=${encodeURIComponent(proy)}`
+                + `&programa=${encodeURIComponent(programa ?? '')}`
+              )}
+              className="flex items-center gap-1.5 bg-white text-[#16a34a] px-3 py-1.5 rounded-xl text-xs font-black hover:bg-green-50 transition shadow-sm whitespace-nowrap">
+              <CalendarDays className="w-3.5 h-3.5" />
+              MICROCICLOS
+            </button>
+          </div>
         )}
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-5">
+      {/* Ancho amplio: con CAL y POSICIÓN la tabla ya no cabe en 5xl y salía
+          la barra horizontal. 22/08/2026 */}
+      <main className="max-w-[1500px] mx-auto px-4 sm:px-6 py-5">
         <DashboardProyecto
           proy={proy}
           lista={listaProy}

@@ -8,7 +8,7 @@ import {
   ChevronRight, User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getPagos } from '@/lib/db';
+import { getDeportistas, getPagos, updateColumnasDeportista } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -19,6 +19,17 @@ type PagoRow = {
 type AllPagos = Record<string, PagoRow[]>;
 type DepEstado = 'ACTIVO' | 'PAUSO' | 'RETIRADO';
 const DEP_ESTADOS_KEY = 'futuro_dep_estados';
+
+// OBSERVACIÓN: nota libre de cartera (compromisos de pago, acuerdos, razón de la
+// mora…). Se guarda dentro de las columnas del deportista, así que la ve todo el
+// que entre a la plataforma, no solo el computador donde se escribió.
+const COL_OBS = 'OBSERVACIÓN PAGOS';
+const esColObs = (k: string) => /^observaci[oó]n\s*pagos$/i.test(k.trim());
+function leerObs(dep: Deportista): string {
+  const cols = dep._columnas ?? {};
+  const k = Object.keys(cols).find(esColObs);
+  return k ? String((cols as any)[k] ?? '') : '';
+}
 
 function codigoDe(dep: Deportista): string {
   const k = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k));
@@ -44,6 +55,21 @@ const DETALLE_ROWS = [
   'FEBRERO 2026','MARZO 2026','ABRIL 2026','MAYO 2026','JUNIO 2026',
   'JULIO 2026','AGOSTO 2026','SEPTIEMBRE 2026','OCTUBRE 2026','NOVIEMBRE 2026','DICIEMBRE 2026',
 ];
+/* Nombres viejos guardados sin el año → nombre actual. El estado de cuenta ya
+   hacía esta traducción y esta pantalla NO, así que una matrícula guardada como
+   "MATRÍCULA" (sin 2026) aquí no se encontraba y el deportista salía debiendo. */
+const MIGRAR_DET: Record<string, string> = {
+  'MATRÍCULA': 'MATRÍCULA 2026', 'MATRICULA': 'MATRÍCULA 2026',
+  'FEBRERO': 'FEBRERO 2026', 'MARZO': 'MARZO 2026', 'ABRIL': 'ABRIL 2026',
+  'MAYO': 'MAYO 2026', 'JUNIO': 'JUNIO 2026', 'JULIO': 'JULIO 2026',
+  'AGOSTO': 'AGOSTO 2026', 'SEPTIEMBRE': 'SEPTIEMBRE 2026', 'OCTUBRE': 'OCTUBRE 2026',
+  'NOVIEMBRE': 'NOVIEMBRE 2026', 'DICIEMBRE': 'DICIEMBRE 2026',
+};
+const normDet = (d: any): string => {
+  const t = String(d ?? '').trim();
+  return MIGRAR_DET[t.toUpperCase()] ?? t;
+};
+
 const MES_NUM: Record<string, number> = {
   'MATRÍCULA 2026':0,
   'FEBRERO 2026':2,'MARZO 2026':3,'ABRIL 2026':4,'MAYO 2026':5,'JUNIO 2026':6,
@@ -71,6 +97,17 @@ function fmtFecha(v: string): string {
   const iso = v.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
   return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : v;
 }
+/** dd/mm/aaaa (o serie de Excel) → aaaa-mm-dd, que es lo que pide <input type="date">. */
+function aISO(v: string): string {
+  const m = fmtFecha(String(v ?? '')).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : '';
+}
+/** aaaa-mm-dd → dd/mm/aaaa, el formato con el que se guarda en la ficha. */
+function deISO(iso: string): string {
+  const m = String(iso ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}
+
 function getMesAfil(cols: Record<string, string>): number {
   const k = Object.keys(cols).find(k => /fecha.*afil|afil.*fecha/i.test(k));
   if (!k) return 1;
@@ -92,14 +129,18 @@ function PagosInner() {
   const [filtroCodigo,     setFiltroCodigo]     = useState(() => searchParams.get('cod')   ?? '');
   const [filtroPrograma,   setFiltroPrograma]   = useState(() => searchParams.get('prog')  ?? '');
   const [filtroProyecto,   setFiltroProyecto]   = useState(() => searchParams.get('proy')  ?? '');
+  // Filtro de CARTERA: mostrar solo quienes deben un mes específico (abreviatura: FEB, MAR…)
+  const [filtroMes,        setFiltroMes]        = useState(() => searchParams.get('mes') ?? '');
 
   // Sincronizar filtros → URL (replace para no apilar historial)
-  const syncURL = useCallback((q: string, cod: string, prog: string, proy: string) => {
+  // Incluye 'mes' para que al ver una cuenta y volver, se regrese al mismo mes filtrado.
+  const syncURL = useCallback((q: string, cod: string, prog: string, proy: string, mes: string) => {
     const p = new URLSearchParams();
     if (q)    p.set('q',    q);
     if (cod)  p.set('cod',  cod);
     if (prog) p.set('prog', prog);
     if (proy) p.set('proy', proy);
+    if (mes)  p.set('mes',  mes);
     const qs = p.toString();
     router.replace(qs ? `/pagos?${qs}` : '/pagos', { scroll: false });
   }, [router]);
@@ -107,6 +148,76 @@ function PagosInner() {
   const [pagosListos,      setPagosListos]      = useState(false);
   const [depEstados,       setDepEstados]       = useState<Record<string, DepEstado>>({});
   const [mostrarRetirados, setMostrarRetirados] = useState(false);
+  // OBSERVACIÓN por deportista (texto libre editable en la última columna)
+  const [obs,          setObs]          = useState<Record<string, string>>({});
+  const [editObs,      setEditObs]      = useState<string | null>(null);
+  const [textoObs,     setTextoObs]     = useState('');
+  const [guardandoObs, setGuardandoObs] = useState<string | null>(null);
+  // FECHA DE INGRESO editable (con confirmación antes de guardar)
+  const [editFecha,      setEditFecha]      = useState<string | null>(null);
+  const [nuevaFecha,     setNuevaFecha]     = useState('');
+  const [guardandoFecha, setGuardandoFecha] = useState<string | null>(null);
+
+  // Al cargar (o recargar) los deportistas, refrescamos las observaciones
+  useEffect(() => {
+    const m: Record<string, string> = {};
+    deportistas.forEach(d => { const t = leerObs(d); if (t) m[d.id] = t; });
+    setObs(m);
+  }, [deportistas]);
+
+  /** Guarda un cambio en las columnas del deportista (base + pantalla). */
+  async function guardarColumnas(dep: Deportista, cols: Record<string, any>): Promise<boolean> {
+    const ok = await updateColumnasDeportista(dep.id, cols);
+    if (ok) setDeportistas(prev => prev.map(d => (d.id === dep.id ? { ...d, _columnas: cols as any } : d)));
+    return ok;
+  }
+
+  /** Cambia la FECHA DE INGRESO (afiliación). Pide confirmación mostrando el
+   *  antes y el después, porque de esta fecha depende desde qué mes se cobra. */
+  async function guardarFecha(dep: Deportista) {
+    const nueva = deISO(nuevaFecha);
+    if (!nueva) { window.alert('Escribe una fecha válida.'); return; }
+    const antes = fmtFecha(getCol(dep, /fecha.*afil|afil.*fecha/i));
+    if (nueva === antes) { setEditFecha(null); return; }
+
+    const cod = codigoDe(dep);
+    const aviso =
+      'CAMBIAR LA FECHA DE INGRESO\n\n' +
+      `${dep._nombre}${cod ? '  (código ' + cod + ')' : ''}\n\n` +
+      `   Antes:    ${antes || '— sin fecha —'}\n` +
+      `   Después:  ${nueva}\n\n` +
+      'De esta fecha depende desde qué mes se le cobra al deportista y el color\n' +
+      'que el libro le pone a sus pagos. Los meses ya cargados NO se recalculan solos.\n\n' +
+      '¿Aceptar el cambio?';
+    if (!window.confirm(aviso)) return;
+
+    setEditFecha(null);
+    setGuardandoFecha(dep.id);
+    const cols: Record<string, any> = { ...(dep._columnas ?? {}) };
+    const k = Object.keys(cols).find(x => /fecha.*afil|afil.*fecha/i.test(x)) || 'FECHA DE AFILIACIÓN';
+    cols[k] = nueva;
+    const ok = await guardarColumnas(dep, cols);
+    if (!ok) window.alert('No se pudo guardar la fecha. Revisa la conexión e inténtalo de nuevo.');
+    setGuardandoFecha(null);
+  }
+
+  /** Guarda la observación del deportista en su ficha. Si queda vacía, se borra. */
+  async function guardarObs(dep: Deportista, textoCrudo: string) {
+    const texto = String(textoCrudo ?? '').trim();
+    setEditObs(null);
+    if (texto === (obs[dep.id] ?? '')) return;      // no cambió: no se toca la base
+    setGuardandoObs(dep.id);
+    const cols: Record<string, any> = { ...(dep._columnas ?? {}) };
+    const k = Object.keys(cols).find(esColObs) || COL_OBS;
+    if (texto) cols[k] = texto; else delete cols[k];
+    const ok = await guardarColumnas(dep, cols);
+    if (ok) {
+      setObs(prev => { const n = { ...prev }; if (texto) n[dep.id] = texto; else delete n[dep.id]; return n; });
+    } else {
+      window.alert('No se pudo guardar la observación. Revisa la conexión e inténtalo de nuevo.');
+    }
+    setGuardandoObs(null);
+  }
 
   useEffect(() => {
     getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
@@ -116,6 +227,18 @@ function PagosInner() {
       if (raw) setDepEstados(JSON.parse(raw));
     } catch {}
   }, []);
+
+  // Al volver de una cuenta, regresar a la misma posición donde estaba la lista.
+  useEffect(() => {
+    if (cargando || !pagosListos) return;
+    let y = 0;
+    try { y = parseInt(sessionStorage.getItem('futuro_pagos_scroll') || '0', 10); } catch {}
+    if (!y) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      window.scrollTo(0, y);
+      try { sessionStorage.removeItem('futuro_pagos_scroll'); } catch {}
+    }));
+  }, [cargando, pagosListos]);
 
   // Estado DEP es solo lectura en la tabla principal
 
@@ -145,13 +268,15 @@ function PagosInner() {
       if (filtroPrograma && prog !== filtroPrograma) return false;
       if (filtroProyecto && proy !== filtroProyecto) return false;
       if (filtroCodigo && !cod.includes(filtroCodigo.toLowerCase())) return false;
+      // CARTERA por mes: solo quienes tienen ese mes PENDIENTE
+      if (filtroMes && !resumenPago(d).mesesPendientes.includes(filtroMes)) return false;
       if (!q) return true;
       return d._nombre.toLowerCase().includes(q) || cod.includes(q);
     }).sort((a, b) => {
       const ca = codigoDe(a), cb = codigoDe(b);
       return ca.localeCompare(cb, 'es', { numeric: true });
     });
-  }, [deportistas, busqueda, filtroCodigo, filtroPrograma, filtroProyecto, depEstados, mostrarRetirados]);
+  }, [deportistas, busqueda, filtroCodigo, filtroPrograma, filtroProyecto, filtroMes, allPagos, depEstados, mostrarRetirados]);
 
   /* Resumen de pagos por deportista — busca por dep.id Y por todos los códigos numéricos */
   function esBecadoDep(dep: Deportista): boolean {
@@ -192,9 +317,25 @@ function PagosInner() {
         if (digits !== key && !seen.has(digits)) { seen.add(digits); posKeys.push(digits); }
       }
     }
+    /* MISMAS REGLAS QUE EL ESTADO DE CUENTA, para que las dos pantallas digan lo
+       mismo del mismo deportista:
+         1) Base = lo que el libro publicó bajo el CÓDIGO.
+         2) Encima = las ediciones manuales guardadas bajo el ID interno.
+         3) Un PAGÓ real NO lo pisa una fila vieja en PEND/PRÓX (salvo un reverso
+            intencional, que llega marcado con destino 'REVERT').
+       Antes aquí mandaba el código sobre el ID, al revés que en el estado de
+       cuenta: por eso una matrícula marcada a mano se veía pagada en la ficha
+       del deportista y al mismo tiempo aparecía debiendo en este cuadro. */
     const mergeMap = new Map<string, any>();
     for (const key of posKeys) {
-      for (const r of ((allPagos as any)[key] ?? [])) mergeMap.set(r.detalle, r);
+      if (key === dep.id) continue;                       // el ID va después
+      for (const r of ((allPagos as any)[key] ?? [])) mergeMap.set(normDet(r.detalle), r);
+    }
+    for (const r of ((allPagos as any)[dep.id] ?? [])) {
+      const det  = normDet(r.detalle);
+      const prev = mergeMap.get(det);
+      if (prev && prev.estado === 'PAGÓ' && r.estado !== 'PAGÓ' && r.destino !== 'REVERT') continue;
+      mergeMap.set(det, r);
     }
 
     // 2. Generar todas las filas esperadas del año según mes de afiliación
@@ -279,7 +420,7 @@ function PagosInner() {
             <div className="flex-1 min-w-[140px]">
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Programa</label>
               <select value={filtroPrograma}
-                onChange={e => { setFiltroPrograma(e.target.value); setFiltroProyecto(''); syncURL(busqueda, filtroCodigo, e.target.value, ''); }}
+                onChange={e => { setFiltroPrograma(e.target.value); setFiltroProyecto(''); syncURL(busqueda, filtroCodigo, e.target.value, '', filtroMes); }}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                 <option value="">Todos los programas</option>
                 {programas.map(p => <option key={p} value={p}>{p}</option>)}
@@ -287,7 +428,7 @@ function PagosInner() {
             </div>
             <div className="flex-1 min-w-[140px]">
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Proyecto</label>
-              <select value={filtroProyecto} onChange={e => { setFiltroProyecto(e.target.value); syncURL(busqueda, filtroCodigo, filtroPrograma, e.target.value); }}
+              <select value={filtroProyecto} onChange={e => { setFiltroProyecto(e.target.value); syncURL(busqueda, filtroCodigo, filtroPrograma, e.target.value, filtroMes); }}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                 <option value="">Todos los proyectos</option>
                 {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
@@ -301,10 +442,21 @@ function PagosInner() {
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Código</label>
               <input
                 value={filtroCodigo}
-                onChange={e => { setFiltroCodigo(e.target.value); syncURL(busqueda, e.target.value, filtroPrograma, filtroProyecto); }}
+                onChange={e => { setFiltroCodigo(e.target.value); syncURL(busqueda, e.target.value, filtroPrograma, filtroProyecto, filtroMes); }}
                 placeholder="Ej: 2018"
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white"
               />
+            </div>
+            <div className="w-[160px]">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deben el mes</label>
+              <select value={filtroMes} onChange={e => { setFiltroMes(e.target.value); syncURL(busqueda, filtroCodigo, filtroPrograma, filtroProyecto, e.target.value); }}
+                title="Ver solo los deportistas que tienen ese mes pendiente"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+                <option value="">Todos los meses</option>
+                {DETALLE_ROWS.filter(det => MES_NUM[det] <= MES_ACTUAL).map(det => (
+                  <option key={det} value={MES_ABREV[det] ?? det.slice(0, 3)}>{det.replace(' 2026', '')}</option>
+                ))}
+              </select>
             </div>
             <div className="relative flex-1 min-w-[160px]">
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Nombre</label>
@@ -312,7 +464,7 @@ function PagosInner() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   value={busqueda}
-                  onChange={e => { setBusqueda(e.target.value); syncURL(e.target.value, filtroCodigo, filtroPrograma, filtroProyecto); }}
+                  onChange={e => { setBusqueda(e.target.value); syncURL(e.target.value, filtroCodigo, filtroPrograma, filtroProyecto, filtroMes); }}
                   placeholder="Buscar nombre..."
                   className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white"
                 />
@@ -347,7 +499,7 @@ function PagosInner() {
           </div>
         ) : (
           <div className="rounded-2xl overflow-x-auto shadow-sm border border-gray-200">
-            <table className="w-full border-collapse text-sm" style={{ minWidth: 1100 }}>
+            <table className="w-full border-collapse text-sm" style={{ minWidth: 1360 }}>
               <thead>
                 <tr>
                   {[
@@ -363,6 +515,7 @@ function PagosInner() {
                     { h: 'MESES PENDIENTES',      align: 'left'   },
                     { h: 'ESTADO PAGO',           align: 'center' },
                     { h: 'VER CUENTA',            align: 'center' },
+                    { h: 'OBSERVACIÓN',           align: 'left'   },
                   ].map(({ h, align }) => (
                     <th key={h} style={{
                       background: '#16a34a', color: 'white',
@@ -385,7 +538,7 @@ function PagosInner() {
 
                   return (
                     <tr key={dep.id}
-                      onClick={() => router.push(`/alumnos/${dep.id}/estado-cuenta?edit=1`)}
+                      onClick={() => { try { sessionStorage.setItem('futuro_pagos_scroll', String(window.scrollY)); } catch {} router.push(`/alumnos/${dep.id}/estado-cuenta?edit=1`); }}
                       className="hover:brightness-95 transition-all cursor-pointer">
 
                       {/* ESTADO DEP — solo lectura */}
@@ -405,11 +558,45 @@ function PagosInner() {
                       </td>
 
                       {/* FECHA DE AFILIACIÓN */}
-                      <td style={{
-                        background: bg, color: '#374151', border: '1px solid white',
-                        padding: '8px 10px', textAlign: 'center',
-                        fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
-                      }}>{fmtFecha(getCol(dep, /fecha.*afil|afil.*fecha/i)) || '—'}</td>
+                      <td
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                          background: bg, color: '#374151', border: '1px solid white',
+                          padding: '6px 8px', textAlign: 'center',
+                          fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer',
+                        }}>
+                        {editFecha === dep.id ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <input
+                              type="date" autoFocus
+                              value={nuevaFecha}
+                              onChange={e => setNuevaFecha(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') { e.preventDefault(); guardarFecha(dep); }
+                                if (e.key === 'Escape') { e.preventDefault(); setEditFecha(null); }
+                              }}
+                              style={{ fontSize: 11, fontWeight: 700, border: '1px solid #16a34a', borderRadius: 6, padding: '3px 5px', background: '#fff' }}
+                            />
+                            <button onClick={() => guardarFecha(dep)}
+                              className="bg-[#16a34a] hover:bg-[#064e1e] text-white text-[10px] font-black px-2 py-1 rounded-lg transition">
+                              Aceptar
+                            </button>
+                            <button onClick={() => setEditFecha(null)} title="Cancelar"
+                              className="text-gray-400 hover:text-red-500 text-[11px] font-black px-1 transition">
+                              ✕
+                            </button>
+                          </div>
+                        ) : guardandoFecha === dep.id ? (
+                          <span className="text-[10px] font-black text-gray-400">guardando…</span>
+                        ) : (
+                          <span
+                            onClick={() => { setNuevaFecha(aISO(getCol(dep, /fecha.*afil|afil.*fecha/i))); setEditFecha(dep.id); }}
+                            title="Clic para corregir la fecha de ingreso"
+                            className="inline-block px-1.5 py-0.5 rounded hover:bg-white hover:ring-1 hover:ring-[#16a34a] transition">
+                            {fmtFecha(getCol(dep, /fecha.*afil|afil.*fecha/i)) || '—'}
+                          </span>
+                        )}
+                      </td>
 
                       {/* CÓDIGO — color por afiliación */}
                       <td style={{
@@ -501,6 +688,66 @@ function PagosInner() {
                         <span className="inline-flex items-center gap-1 bg-[#16a34a] text-white text-[10px] font-black px-3 py-1.5 rounded-lg">
                           Ver <ChevronRight className="w-3 h-3" />
                         </span>
+                      </td>
+
+                      {/* OBSERVACIÓN — texto libre editable (compromisos de pago, acuerdos…).
+                          El clic NO abre el estado de cuenta: se queda aquí para escribir. */}
+                      <td
+                        onClick={e => e.stopPropagation()}
+                        style={{ background: bg, border: '1px solid white', padding: '4px 6px', minWidth: 240, maxWidth: 320, cursor: 'text' }}>
+                        {editObs === dep.id ? (
+                          <div>
+                            <textarea
+                              autoFocus
+                              value={textoObs}
+                              onChange={e => setTextoObs(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Escape') { e.preventDefault(); setEditObs(null); }
+                                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); guardarObs(dep, textoObs); }
+                              }}
+                              rows={3}
+                              placeholder="Compromiso de pago, acuerdo, razón de la mora…"
+                              style={{
+                                width: '100%', fontSize: 11, lineHeight: 1.35, color: '#111827',
+                                border: '1px solid #16a34a', borderRadius: 6, padding: '4px 6px',
+                                resize: 'vertical', background: '#fff', outline: 'none',
+                              }}
+                            />
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <button onClick={() => guardarObs(dep, textoObs)}
+                                className="bg-[#16a34a] hover:bg-[#064e1e] text-white text-[10px] font-black px-2.5 py-1 rounded-lg transition">
+                                Guardar
+                              </button>
+                              <button onClick={() => setEditObs(null)}
+                                className="text-gray-500 hover:text-red-500 text-[10px] font-black px-1.5 py-1 transition">
+                                Cancelar
+                              </button>
+                              <span className="text-[9px] text-gray-300 font-bold ml-auto">Ctrl+Enter guarda · Esc cancela</span>
+                            </div>
+                          </div>
+                        ) : guardandoObs === dep.id ? (
+                          <span className="text-[10px] font-black text-gray-400">guardando…</span>
+                        ) : obs[dep.id] ? (
+                          <div
+                            onClick={() => { setTextoObs(obs[dep.id] ?? ''); setEditObs(dep.id); }}
+                            title={obs[dep.id] + '\n\n(clic para editar)'}
+                            style={{
+                              fontSize: 11, lineHeight: 1.35, color: '#111827', whiteSpace: 'pre-wrap',
+                              display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden', background: '#fff', border: '1px solid #e5e7eb',
+                              borderRadius: 6, padding: '4px 6px', minHeight: 30,
+                            }}>
+                            {obs[dep.id]}
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => { setTextoObs(''); setEditObs(dep.id); }}
+                            title="Clic para escribir una observación"
+                            className="text-[10px] font-black text-gray-300 hover:text-[#16a34a] transition"
+                            style={{ padding: '6px 4px' }}>
+                            + observación
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

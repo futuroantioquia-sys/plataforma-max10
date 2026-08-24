@@ -47,7 +47,8 @@ export default function AdministradoresPage() {
   }
 
   async function guardar(a: Admin) {
-    if (!a.usuario.trim() || !a.clave.trim()) { flash('Usuario y contraseña son obligatorios'); return; }
+    // La contraseña ya no se muestra: si se deja vacía, se conserva la actual (no se borra).
+    if (!a.usuario.trim()) { flash('El usuario es obligatorio'); return; }
     setGuardando(a.id);
     const r = await saveAdmin(a);
     setGuardando(null);
@@ -88,7 +89,7 @@ export default function AdministradoresPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/dashboard')}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition">
@@ -172,7 +173,7 @@ export default function AdministradoresPage() {
                 <div>
                   <label className={labelCls}>Contraseña</label>
                   <div className="relative">
-                    <input type={vis ? 'text' : 'password'} value={a.clave} onChange={e => editar(a.id, 'clave', e.target.value)} className={inputCls + ' pr-9'} placeholder="Contraseña" />
+                    <input type={vis ? 'text' : 'password'} value={a.clave} onChange={e => editar(a.id, 'clave', e.target.value)} className={inputCls + ' pr-9'} placeholder="•••• (vacío = no cambiar)" title="Por seguridad la contraseña no se muestra. Escribe una nueva solo si quieres cambiarla." />
                     <button type="button" onClick={() => setVerClave(p => ({ ...p, [a.id]: !p[a.id] }))}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
                       {vis ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

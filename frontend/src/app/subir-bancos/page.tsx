@@ -355,6 +355,10 @@ export default function SubirBancosPage() {
 
   const cntOk  = lineas.filter(l => l.estado === 'PAGÓ').length;
   const cntErr = lineas.filter(l => l.estado === 'ERROR').length;
+  // Estos dos faltaban y hacían que la pantalla final quedara en blanco
+  // con el error "cntD10 is not defined".
+  const cntD10 = lineas.filter(l => l.estado === 'PAGÓ CON 10%').length;
+  const cntVer = lineas.filter(l => l.estado === 'PEND').length;
 
   const G   = '#16a34a';
   const ROW = '#f1f5f9';

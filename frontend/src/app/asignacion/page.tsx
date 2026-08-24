@@ -11,6 +11,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle, UserPlus, AlertCircle, Search } from 'lucide-react';
 import { getDeportistas, saveDeportistas } from '@/lib/db';
+import { createClient } from '@/lib/supabase/client';
 import type { Deportista } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import { useSoloLectura } from '@/lib/permisos';
@@ -159,6 +160,8 @@ export default function AsignacionPage() {
 
   const [todos,      setTodos]      = useState<Deportista[]>([]);
   const [programas,  setProgramas]  = useState<Record<string, string[]>>({});
+  // Sede CONFIGURADA de cada proyecto (jornadas_proyecto) — más confiable que la de los miembros
+  const [sedePorProy, setSedePorProy] = useState<Record<string, string>>({});
   const [busqueda,   setBusqueda]   = useState('');
   const [selected,   setSelected]   = useState<Deportista | null>(null);
   const [form,       setForm]       = useState<AsignForm>({ programa: '', proyecto: '', proyNuevo: '' });
@@ -172,6 +175,23 @@ export default function AsignacionPage() {
       setTodos(lista);
       setProgramas(getProgramasExistentes(lista));
     });
+  }, []);
+
+  // Cargar la sede configurada de cada proyecto (para sugerir bien aunque los
+  // deportistas del grupo no tengan la sede llena en su ficha).
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await createClient().from('jornadas_proyecto').select('proyecto,sede');
+        const m: Record<string, string> = {};
+        (data ?? []).forEach((r: any) => {
+          const p = String(r.proyecto ?? '').trim();
+          const s = String(r.sede ?? '').trim();
+          if (p && s) m[p] = s;
+        });
+        setSedePorProy(m);
+      } catch { /* noop */ }
+    })();
   }, []);
 
   const sinProyectoLista = useMemo(() =>
@@ -207,13 +227,22 @@ export default function AsignacionPage() {
       if (!anioDep) return true;
       return g.anios.some(a => { const n = parseInt(a, 10); return !!n && Math.abs(n - anioDep) <= 1; });
     };
-    const base = (prog && sede)
-      ? gruposInfo.filter(g => up(g.programa) === up(prog) && up(g.sede) === up(sede) && anioCerca(g))
+    // Comparación sin tildes ni dobles espacios (BELLO NIQUÍA == BELLO NIQUIA)
+    const norm = (s: string) => s.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+    // Sede del grupo: primero la CONFIGURADA del proyecto; si no, la de los miembros.
+    const sedeDe = (g: Grupo) => (sedePorProy[g.proy] || g.sede || '').trim();
+    const base0 = (prog && sede)
+      ? gruposInfo.filter(g => {
+          const gSede = sedeDe(g);
+          return norm(g.programa) === norm(prog) && !!gSede && norm(gSede) === norm(sede) && anioCerca(g);
+        })
       : [];
-    const exactos = base.filter(g => jor && up(g.jornada) === up(jor));
-    const otros   = base.filter(g => !(jor && up(g.jornada) === up(jor)));
+    // Mostrar la sede configurada en la tarjeta del grupo
+    const base = base0.map(g => ({ ...g, sede: sedeDe(g) }));
+    const exactos = base.filter(g => jor && norm(g.jornada) === norm(jor));
+    const otros   = base.filter(g => !(jor && norm(g.jornada) === norm(jor)));
     return { prog, sede, jor, anio: anioTxt, exactos, otros, total: base.length };
-  }, [selected, gruposInfo]);
+  }, [selected, gruposInfo, sedePorProy]);
 
   // Al elegir un grupo sugerido, se autocompleta el formulario (solo falta confirmar).
   function elegirGrupo(g: Grupo) {
@@ -263,7 +292,7 @@ export default function AsignacionPage() {
     <div className="min-h-screen bg-gray-50">
 
       {/* Header */}
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
         <button onClick={() => router.push('/dashboard')}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition">
           <ArrowLeft className="w-4 h-4" />

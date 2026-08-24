@@ -5,7 +5,7 @@ import { COOKIE_LEGIBLE, COOKIE_FIRMA } from '@/lib/session';
 
 export async function POST() {
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(COOKIE_LEGIBLE, '', { path: '/', maxAge: 0 });
-  res.cookies.set(COOKIE_FIRMA,   '', { path: '/', maxAge: 0, httpOnly: true });
+  res.cookies.set(COOKIE_LEGIBLE, '', { path: '/', maxAge: 0, secure: true });
+  res.cookies.set(COOKIE_FIRMA,   '', { path: '/', maxAge: 0, httpOnly: true, secure: true });
   return res;
 }

@@ -10,27 +10,74 @@ import {
   getMapeoIndex, guardarMapeo, guardarMovimientos, getMovimientos, ultimoSaldo,
   hashesExistentes, contarMapeo, sembrarDiccionario, contarMovimientos, importarHistorico,
   getConceptos, guardarConcepto, borrarConcepto, actualizarMovimiento, asignarCodigoBulk,
-  getMapeoRows, borrarMapeo, getMesesPorCodigo,
+  getMapeoRows, borrarMapeo, getMesesPorCodigo, borrarMovimiento,
   type MapeoIdx, type MovCont, type Concepto,
 } from '@/lib/contabilidad';
 
-const BANCOS = ['Bancolombia 613', 'Bancolombia 908', 'Bancolombia 382'];
+// La cuenta "ST 823" queda SIEMPRE de última (se completa manualmente por ahora,
+// mientras se sube su extracto). El resto conserva su orden.
+const BANCOS = ['Bancolombia 613', 'Bancolombia 908', 'Bancolombia 382', 'Bancolombia 069', 'ST 823'];
+
+// Regla: los movimientos con concepto INSTITUCIONAL se consideran SIEMPRE confirmados
+// (chulo VERDE) y NO cuentan como pendientes/por orientar. Estos no suben a ningún
+// estado de cuenta (no están ligados a un deportista).
+const esInstitucional = (m: any) => String(m?.concepto ?? '').trim().toUpperCase().includes('INSTITUCIONAL');
+
+// INTERESES DE AHORRO y demás ingresos financieros del banco (ABONO INTERESES
+// AHORROS, INTERESES, RENDIMIENTOS…). NO son el pago de ningún deportista:
+// nunca llevan código ni mes, no se pintan de ningún color y no cuentan como
+// pendientes ni como "por orientar". La celda del mes queda VACÍA, sin letrero.
+const esIngresoFinanciero = (m: any) =>
+  String(m?.concepto ?? '').trim().toUpperCase() === 'INGRESO FINANCIERO' ||
+  /ABONO\s*INTERES|INTERESES|RENDIMIENT/i.test(String(m?.descripcion ?? ''));
+
+// Movimientos que NO van a ningún estado de cuenta: los institucionales y los
+// intereses del banco. Se tratan igual en el semáforo, el chulo y los conteos.
+const esNoAplica = (m: any) => esInstitucional(m) || esIngresoFinanciero(m);
+
+// ── Empleados de NÓMINA (cédula → nombre) ──
+// Al escribir la CÉDULA en la columna Código de un egreso, el nombre del empleado
+// se autocompleta (igual que un deportista). La contabilidad los verifica/edita.
+const EMPLEADOS_NOMINA: Record<string, string> = {
+  '1063278765': 'JAIRO LUIS TOVIOS OVIEDO',
+  '1214734807': 'ALEJANDRO CASTRO ESTRADA',
+  '1152192324': 'OSCAR FREDY MEJIA FLOREZ',
+  '1017258984': 'CRISTIAN CAMILO RAMIREZ AGUDELO',
+  '1000415036': 'SAMUEL COLORADO SERNA',
+  '1000084856': 'ALEXANDER TABARES GUTIERREZ',
+  '1128389946': 'ANDRES FELIPE CHALARCA ROJAS',
+  '1036639022': 'JULIAN RIOS HERRERA',
+  '1003404311': 'JESUS DAVID CASTILLO GONZALEZ',
+  '1013458275': 'MARTIN MORA CARDENAS',
+  '1017192180': 'MARLON CASTAÑO RIOS',
+  '1020464354': 'FREDY ALEXANDER RAMIREZ RIVAS',
+  '1003050289': 'JHON FREDY DORIA CORONADO',
+  '1034776238': 'JUAN MANUEL MUÑOZ HERNANDEZ',
+  '1033180115': 'FELIPE ALVAREZ ALVAREZ',
+  '1002066215': 'JAVIER DUVAN RIOS OSPINA',
+  '1127792656': 'MIGUEL ANGEL BUILES GIRALDO',
+  '1005372826': 'NICOLAS BARRIOS SAAVEDRA',
+  '1000870631': 'KAREN LIZETH BERRIO TORO',
+  '1193081477': 'MARIA CAMILA QUINTERO LOPEZ',
+  '1036864427': 'JUAN ANDRES JIMENEZ',
+  '1000203538': 'SEBASTIÁN GUZMAN MUÑOZ',
+};
 
 // Columnas del Libro (para anchos ajustables por el usuario). El orden DEBE
 // coincidir con el orden en que se pintan las celdas en el cuerpo de la tabla.
 const COLS_LIBRO: { key: string; label: string; def: number }[] = [
-  { key: 'acciones',   label: '',            def: 54 },
-  { key: 'num',        label: 'N°',          def: 70 },
-  { key: 'cuenta',     label: 'CUENTA',      def: 42 },
-  { key: 'fecha',      label: 'FECHA',       def: 114 },
-  { key: 'desc',       label: 'DESCRIPCIÓN', def: 96 },
-  { key: 'debito',     label: 'DÉBITO',      def: 82 },
-  { key: 'credito',    label: 'CRÉDITO',     def: 82 },
-  { key: 'saldo',      label: 'SALDO',       def: 82 },
-  { key: 'concepto',   label: 'CONCEPTO',    def: 104 },
-  { key: 'codigo',     label: 'CÓDIGO',      def: 94 },
-  { key: 'deportista', label: 'DEPORTISTA',  def: 210 },
-  { key: 'detalle',    label: 'DETALLE',     def: 124 },
+  { key: 'acciones',   label: '',            def: 88 },
+  { key: 'num',        label: 'N°',          def: 74 },
+  { key: 'cuenta',     label: 'CUENTA',      def: 62 },
+  { key: 'fecha',      label: 'FECHA',       def: 102 },
+  { key: 'desc',       label: 'DESCRIPCIÓN', def: 354 },
+  { key: 'debito',     label: 'DÉBITO',      def: 86 },
+  { key: 'credito',    label: 'CRÉDITO',     def: 90 },
+  { key: 'saldo',      label: 'SALDO',       def: 100 },
+  { key: 'concepto',   label: 'CONCEPTO',    def: 252 },
+  { key: 'codigo',     label: 'CÓDIGO',      def: 88 },
+  { key: 'deportista', label: 'DEPORTISTA',  def: 252 },
+  { key: 'detalle',    label: 'DETALLE',     def: 212 },
 ];
 
 // Caché en memoria del libro: al volver del estado de cuenta NO se recarga de la nube
@@ -77,6 +124,89 @@ function pick(obj: any, ...cands: string[]): any {
   for (const c of cands) { const k = keys.find(k => normNombre(k).includes(normNombre(c))); if (k) return obj[k]; }
   return '';
 }
+/* ── SEMÁFORO DE PAGOS ────────────────────────────────────────
+   Compara lo que entró en el extracto contra lo que el deportista
+   DEBÍA pagar y le pone color a cada fila:
+     VERDE    valor exacto (mensualidad o mensualidad menos 10%)
+     AMARILLO el mes falta o está repetido
+     ROJO     el valor no cuadra (abonó de menos o pagó de más)
+     MORADO   el diccionario no reconoce la cuenta (sin código)
+   NADA se publica solo: el semáforo únicamente pinta y cuenta.
+   ──────────────────────────────────────────────────────────── */
+const sinTildes = (t: string) =>
+  String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+/** Mensualidad segun programa y sede — misma tabla del estado de cuenta. */
+function calcTarifaNum(programa: string, sede: string): number {
+  const p = sinTildes(programa), s = sinTildes(sede);
+  if (s.includes('niqu')) {
+    if (p.includes('estimul')) return 70000;
+    if (p.includes('formac'))  return 115000;
+    return 138000;
+  }
+  if (p.includes('estimul')) return 80000;
+  return 138000;
+}
+
+function colDeportista(d: Deportista, rx: RegExp): string {
+  const cols = (d as any)._columnas ?? {};
+  const k = Object.keys(cols).find(c => rx.test(c.trim()));
+  return k ? String(cols[k] ?? '').trim() : '';
+}
+
+/** Codigos que empiezan por B (y no MB) son BECADOS: no pagan mensualidad. */
+function esBecado(cod: string): boolean {
+  const c = String(cod ?? '').trim();
+  return /^b/i.test(c) && !/^mb/i.test(c);
+}
+
+const pesosCO = (n: number) => '$' + Math.round(n).toLocaleString('es-CO');
+
+/** "AGOSTO 2026" → 8 · "MATRÍCULA 2026" → 0 · desconocido → -1 */
+function mesNumDeDetalle(det: string): number {
+  const t = sinTildes(det);
+  if (/matricul|inscrip/.test(t)) return 0;
+  const nombres = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  for (let i = 0; i < 12; i++) if (t.includes(nombres[i])) return i + 1;
+  return -1;
+}
+
+/** Mes (1-12) en que se afilió el deportista. 0 si no se puede saber. */
+function mesDeAfiliacion(valor: string): number {
+  const s = String(valor ?? '').trim();
+  if (!s) return 0;
+  // dd/mm/aaaa
+  let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+  if (m) return Number(m[2]) || 0;
+  // aaaa-mm-dd
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return Number(m[2]) || 0;
+  // número de serie de Excel
+  const n = Number(s);
+  if (!isNaN(n) && n > 40000 && n < 60000) {
+    const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    return d.getUTCMonth() + 1;
+  }
+  return 0;
+}
+
+type ColorSem = 'verde' | 'amarillo' | 'rojo' | 'morado' | 'na';
+
+/** Colores PASTEL para sombrear la celda del mes (DETALLE), con letra negra. */
+const PASTEL_SEM: Record<string, { bg: string; borde: string }> = {
+  verde:    { bg: '#bbf7d0', borde: '#16a34a' },   // verde pastel
+  amarillo: { bg: '#fef08a', borde: '#eab308' },   // amarillo pastel
+  rojo:     { bg: '#fecaca', borde: '#ef4444' },   // rojo pastel
+  morado:   { bg: '#e9d5ff', borde: '#9333ea' },   // morado pastel
+};
+
+const COLOR_SEM: Record<string, { et: string; cls: string; act: string }> = {
+  verde:    { et: 'Verde',    cls: 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100',       act: 'bg-green-600 text-white border-green-600' },
+  amarillo: { et: 'Amarillo', cls: 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100',       act: 'bg-amber-500 text-white border-amber-500' },
+  rojo:     { et: 'Rojo',     cls: 'text-red-700 bg-red-50 border-red-200 hover:bg-red-100',               act: 'bg-red-600 text-white border-red-600' },
+  morado:   { et: 'Morado',   cls: 'text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100',   act: 'bg-purple-600 text-white border-purple-600' },
+};
+
 function getCod(d: Deportista): string {
   const cols = (d as any)._columnas ?? {};
   const k = Object.keys(cols).find(c => /^c[oó]d/i.test(c.trim()));
@@ -159,13 +289,27 @@ export default function ContabilidadPage() {
   const [filDebounced, setFilDebounced] = useState({ banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', codigo: '', deportista: '', detalle: '' });
   // Ver solo "transacciones por orientar" (pagos recibidos sin código/deportista)
   const [soloPorOrientar, setSoloPorOrientar] = useState(false);
+  // Filtros de trabajo pendiente: filas a las que aún les falta llenar CONCEPTO o DETALLE.
+  // Son independientes: si prendes los dos, muestra las filas que no tienen ninguno de los dos.
+  const [soloSinConcepto, setSoloSinConcepto] = useState(false);
+  const [soloSinDetalle,  setSoloSinDetalle]  = useState(false);
   // Filtro por el chulo (estado de confirmación): 'todos' | 'verde' (confirmado) | 'rojo' (pendiente)
   const [filChulo, setFilChulo] = useState<'todos' | 'verde' | 'rojo'>('todos');
+  const [filSem, setFilSem] = useState<'todos' | 'verde' | 'amarillo' | 'rojo' | 'morado'>('todos');
+  const [publicandoVerdes, setPublicandoVerdes] = useState(false);
+  // Modo de búsqueda en la columna CÓDIGO:
+  //   'exacto'   → para códigos de deportista (evita cruces con cifras que contienen esos dígitos)
+  //   'contiene' → para números de cuenta de proveedores/empleados (busca por parte del número)
+  const [filCodModo, setFilCodModo] = useState<'exacto' | 'contiene'>('exacto');
   // Editor por movimiento (para editar y dividir una cifra en varias filas)
   const [editRow, setEditRow] = useState<{ orig: MovCont; filas: MovCont[] } | null>(null);
   const [guardandoEd, setGuardandoEd] = useState(false);
+  // Alta MANUAL de una fila nueva en el libro (movimiento que no vino del Excel del banco)
+  type FilaManual = { banco: string; fecha: string; descripcion: string; debito: string; credito: string; concepto: string; codigo: string; deportista: string; detalle: string };
+  const [nuevaFila, setNuevaFila] = useState<FilaManual | null>(null);
+  const [guardandoManual, setGuardandoManual] = useState(false);
   // Celda del libro que se está editando (para no dibujar 300 desplegables a la vez)
-  const [editCell, setEditCell] = useState<{ id: string; campo: 'concepto' | 'detalle' | 'codigo' } | null>(null);
+  const [editCell, setEditCell] = useState<{ id: string; campo: 'concepto' | 'detalle' | 'codigo' | 'deportista' } | null>(null);
   // Cambios pendientes del libro (NO se guardan hasta pulsar "Guardar ahora")
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
   const [guardandoCambios, setGuardandoCambios] = useState(false);
@@ -178,6 +322,10 @@ export default function ContabilidadPage() {
   const [hoverId, setHoverId] = useState<string | null>(null);
   // Pagos ya publicados en esta sesión (clave código|mes) → el chulito se pone verde
   const [publicadas, setPublicadas] = useState<Set<string>>(new Set());
+  // Borrado de filas basura del libro (por N° de fila)
+  const [borrandoFilas, setBorrandoFilas] = useState(false);
+  // Publicación de MATRÍCULAS al estado de cuenta
+  const [publicandoMatr, setPublicandoMatr] = useState(false);
   // Estado de cuenta abierto EN VENTANA sobre el libro (el libro no se mueve)
   const [estadoCuentaUrl, setEstadoCuentaUrl] = useState<string | null>(null);
   // Anchos ajustables de las columnas del Libro (se guardan en el navegador)
@@ -214,11 +362,24 @@ export default function ContabilidadPage() {
   // Cambiar concepto/detalle/código en una celda del libro. NO guarda: queda PENDIENTE
   // hasta pulsar "Guardar ahora". Al cambiar el código, se actualiza el deportista
   // (y si se deja vacío, se "des-orienta" el pago: código y deportista quedan en blanco).
-  function cambiarCampoLibro(m: MovCont, campo: 'concepto' | 'detalle' | 'codigo', val: string) {
+  function cambiarCampoLibro(m: MovCont, campo: 'concepto' | 'detalle' | 'codigo' | 'deportista', val: string) {
     setLibro(prev => prev.map(x => {
       if (x.id !== m.id) return x;
       const next: MovCont = { ...x, [campo]: val };
-      if (campo === 'codigo') { next.deportista = val ? (codMap[val] || '') : ''; }
+      if (campo === 'codigo') {
+        // Si el código es de un deportista, autollenar su nombre.
+        // Si es la cédula de un empleado de nómina, autollenar su nombre (y concepto NÓMINA).
+        // Si se deja vacío, limpiar el nombre.
+        // Si es un código/cédula que NO conocemos (proveedor en un egreso), se CONSERVA
+        // el nombre que ya tenga (para poder escribirlo a mano).
+        const clave = val.trim();
+        if (!clave) next.deportista = '';
+        else if (codMap[clave]) next.deportista = codMap[clave];
+        else if (EMPLEADOS_NOMINA[clave]) {
+          next.deportista = EMPLEADOS_NOMINA[clave];
+          if (!String(next.concepto ?? '').trim()) next.concepto = 'NOMINA';
+        }
+      }
       return next;
     }));
     setDirtyIds(prev => { const n = new Set(prev); if (m.id) n.add(m.id); return n; });
@@ -259,6 +420,109 @@ export default function ContabilidadPage() {
     cargarLibro();
   }
   // Publicar MANUALMENTE los pagos verificados del libro al estado de cuenta de los deportistas
+  /** Publica al estado de cuenta UNICAMENTE las filas verdes del semaforo.
+   *  Verde = el valor coincide exacto con la mensualidad o con la mensualidad
+   *  menos el 10%. No toca amarillos, rojos ni morados. */
+  async function confirmarVerdes() {
+    const filas = verdesPendientes;
+    if (!filas.length) { flash('No hay pagos verdes pendientes por confirmar.'); return; }
+
+    const total = filas.reduce((a, m) => a + (Number(m.credito) || 0), 0);
+    const muestra = filas.slice(0, 8)
+      .map(m => `  · ${m.codigo}  ${m.detalle}  ${pesosCO(Number(m.credito) || 0)}  ${String(m.deportista || '').slice(0, 22)}`)
+      .join('\n');
+
+    const aviso =
+      'CONFIRMAR PAGOS VERDES\n\n' +
+      `Se van a publicar ${filas.length} pagos por ${pesosCO(total)}.\n\n` +
+      'Todos tienen el valor EXACTO de la mensualidad (o la mensualidad menos el 10%).\n' +
+      'NO se tocan los amarillos, ni los rojos, ni los morados.\n\n' +
+      muestra + (filas.length > 8 ? `\n  … y ${filas.length - 8} mas` : '') +
+      '\n\n¿Confirmar?';
+    if (!window.confirm(aviso)) return;
+
+    setPublicandoVerdes(true);
+    flash(`Publicando ${filas.length} pagos verdes…`);
+    try {
+      // Se agrupa por deportista + mes, igual que lo hace el boton general.
+      const acc: Record<string, { sum: number; banco: string; fecha: string; cod: string; det: string }> = {};
+      for (const m of filas) {
+        const cod = String(m.codigo ?? '').trim(), det = String(m.detalle ?? '').trim();
+        const k = cod + '|' + det;
+        const cur = acc[k] || { sum: 0, banco: '', fecha: '', cod, det };
+        cur.sum += Number(m.credito) || 0;
+        if ((m.fecha ?? '') >= cur.fecha) { cur.fecha = m.fecha ?? ''; cur.banco = m.banco ?? cur.banco; }
+        acc[k] = cur;
+      }
+      const rows = Object.values(acc).map(v => ({
+        deportista_id: v.cod,
+        detalle: v.det,
+        vPagado: '$ ' + Math.round(v.sum).toLocaleString('es-CO'),
+        destino: v.banco,
+        fecha: v.fecha,
+      }));
+      const r = await publicarPagosEstado(rows);
+      if (r.ok) {
+        setPublicadas(prev => { const n = new Set(prev); for (const x of rows) n.add(x.deportista_id + '|' + x.detalle); return n; });
+        flash(`✓ ${r.n.toLocaleString('es-CO')} pagos verdes publicados al estado de cuenta`);
+      } else flash('⚠ Error al publicar: ' + (r.msg || ''));
+    } catch (e: any) {
+      flash('⚠ Error al publicar: ' + (e?.message || e));
+    }
+    setPublicandoVerdes(false);
+  }
+
+  /** Publica al estado de cuenta las MATRÍCULAS pendientes (una por deportista y
+   *  concepto). Igual que los verdes: muestra qué se va a publicar y solo actúa
+   *  cuando una persona confirma. No toca mensualidades. */
+  async function confirmarMatriculas() {
+    const filas = matriculasPendientes;
+    if (!filas.length) { flash('No hay matrículas pendientes por confirmar.'); return; }
+
+    const total = filas.reduce((a, m) => a + (Number(m.credito) || 0), 0);
+    const muestra = filas.slice(0, 8)
+      .map(m => `  · ${m.codigo}  ${m.detalle}  ${pesosCO(Number(m.credito) || 0)}  ${String(m.deportista || '').slice(0, 22)}`)
+      .join('\n');
+
+    const aviso =
+      'CONFIRMAR MATRÍCULAS\n\n' +
+      `Se van a publicar ${filas.length} matrícula(s) por ${pesosCO(total)}.\n\n` +
+      'La matrícula no se compara contra la mensualidad: se publica el valor tal\n' +
+      'como entró al banco. Revisa la lista antes de aceptar.\n\n' +
+      muestra + (filas.length > 8 ? `\n  … y ${filas.length - 8} mas` : '') +
+      '\n\n¿Confirmar?';
+    if (!window.confirm(aviso)) return;
+
+    setPublicandoMatr(true);
+    flash(`Publicando ${filas.length} matrícula(s)…`);
+    try {
+      const acc: Record<string, { sum: number; banco: string; fecha: string; cod: string; det: string }> = {};
+      for (const m of filas) {
+        const cod = String(m.codigo ?? '').trim(), det = String(m.detalle ?? '').trim();
+        const k = cod + '|' + det;
+        const cur = acc[k] || { sum: 0, banco: '', fecha: '', cod, det };
+        cur.sum += Number(m.credito) || 0;
+        if ((m.fecha ?? '') >= cur.fecha) { cur.fecha = m.fecha ?? ''; cur.banco = m.banco ?? cur.banco; }
+        acc[k] = cur;
+      }
+      const rows = Object.values(acc).map(v => ({
+        deportista_id: v.cod,
+        detalle: v.det,
+        vPagado: '$ ' + Math.round(v.sum).toLocaleString('es-CO'),
+        destino: v.banco,
+        fecha: v.fecha,
+      }));
+      const r = await publicarPagosEstado(rows);
+      if (r.ok) {
+        setPublicadas(prev => { const n = new Set(prev); for (const x of rows) n.add(x.deportista_id + '|' + x.detalle); return n; });
+        flash(`✓ ${r.n.toLocaleString('es-CO')} matrícula(s) publicadas al estado de cuenta`);
+      } else flash('⚠ Error al publicar: ' + (r.msg || ''));
+    } catch (e: any) {
+      flash('⚠ Error al publicar: ' + (e?.message || e));
+    }
+    setPublicandoMatr(false);
+  }
+
   async function actualizarEstadosCuenta() {
     // Si hay cambios en amarillo sin guardar, los guardamos automáticamente antes de
     // publicar (así no te bloquea y lo que se publica es lo último que editaste).
@@ -369,6 +633,10 @@ export default function ContabilidadPage() {
       const asignadosBatch: Record<string, Set<string>> = {};
 
       const out: MovCont[] = [];
+      // Cuenta de OCURRENCIAS por huella base: si el extracto trae varios movimientos
+      // idénticos el mismo día (misma descripción, referencia y valor — p. ej. 2
+      // "CORRESPONSAL" de 138.000), evita que se pierdan por deduplicación.
+      const ocurrencias: Record<string, number> = {};
       for (const f of filas) {
         const fecha = fechaISO(pick(f, 'FECHA'));
         const descripcion = String(pick(f, 'DESCRIPCION', 'DESCRIPCIÓN') || '').trim();
@@ -397,6 +665,10 @@ export default function ContabilidadPage() {
         let concepto = '';
         let deportista = '';
         let detalle = '';
+        // INTERESES DE AHORRO / ingreso financiero: aunque la referencia se parezca
+        // a una cuenta ya cruzada en el diccionario, NO es de ningún deportista.
+        // Se le quita el código para que quede sin código y sin mes.
+        if (clas.concepto === 'INGRESO FINANCIERO') { codigo = ''; via = ''; }
         if (codigo) {
           deportista = codMap[codigo] || '';
           const esMatricula = /MATRICUL|INSCRIP/i.test(descripcion);
@@ -419,7 +691,13 @@ export default function ContabilidadPage() {
         const pendiente = !codigo && !clas.concepto;
 
         saldo = saldo + credito - debito;
-        const hash = hashMov({ banco, fecha, descripcion, referencia, debito, credito });
+        // Huella por OCURRENCIA: la 1.ª conserva la huella original (compatibilidad con lo
+        // ya guardado y para que re-subir el MISMO extracto no duplique); las repetidas
+        // reciben #1, #2, … #199 para que TODAS se suban tal cual el extracto, sin deducir.
+        const baseHash = hashMov({ banco, fecha, descripcion, referencia, debito, credito });
+        const nOcc = ocurrencias[baseHash] ?? 0;
+        ocurrencias[baseHash] = nOcc + 1;
+        const hash = nOcc === 0 ? baseHash : `${baseHash}#${nOcc}`;
         out.push({
           banco, fecha, descripcion, referencia, debito, credito, saldo,
           concepto, codigo, deportista, detalle,
@@ -492,10 +770,326 @@ export default function ContabilidadPage() {
   }
   useEffect(() => { if (vista === 'libro') cargarLibro(); /* eslint-disable-next-line */ }, [vista, libroBanco]);
 
+  // ── Alta MANUAL de una fila nueva en el libro ──
+  /** Interpreta lo que se escribe en el aviso: "11775-11780", "11775 11776",
+   *  "11775, 11776" o cualquier mezcla. Devuelve la lista de numeros de fila. */
+  function leerNumerosDeFila(texto: string): number[] {
+    const out = new Set<number>();
+    for (const trozo of String(texto || '').split(/[,;\s]+/)) {
+      const t = trozo.trim();
+      if (!t) continue;
+      const rango = t.match(/^(\d+)\s*[-–a]\s*(\d+)$/i);
+      if (rango) {
+        let a = parseInt(rango[1]), b = parseInt(rango[2]);
+        if (a > b) { const x = a; a = b; b = x; }
+        if (b - a > 500) continue;            // rango absurdo: se ignora
+        for (let n = a; n <= b; n++) out.add(n);
+        continue;
+      }
+      const n = parseInt(t.replace(/\D/g, ''));
+      if (n > 0) out.add(n);
+    }
+    return Array.from(out).sort((x, y) => x - y);
+  }
+
+  /** ELIMINA filas del libro por su N° (la columna gris de la izquierda).
+   *  Muestra exactamente lo que se va a borrar antes de tocar nada y guarda una
+   *  copia en la "papelera" del navegador por si hubo un error. */
+  async function eliminarFilasPorNumero() {
+    if (borrandoFilas) return;
+    if (!libro.length) { flash('El libro aún no está cargado.'); return; }
+
+    const texto = window.prompt(
+      'ELIMINAR FILAS DEL LIBRO\n\n' +
+      'Escribe el N° de las filas (la columna gris de la izquierda).\n' +
+      'Ejemplos:  11775-11780   ·   11775 11776 11777\n\n' +
+      'OJO: el N° corresponde a la cuenta que tienes seleccionada arriba (' +
+      (libroBanco === 'TODAS' ? 'TODAS las cuentas' : libroBanco) + ').',
+      '',
+    );
+    if (texto === null) return;
+    const nums = leerNumerosDeFila(texto);
+    if (!nums.length) { flash('No se entendió ningún número de fila.'); return; }
+
+    // N° → movimiento (numFila ya tiene el mapa al revés)
+    const porNum: Record<number, MovCont> = {};
+    for (const m of libro) { const n = numFila[m.id || '']; if (n) porNum[n] = m; }
+
+    const filas = nums.map(n => porNum[n]).filter(Boolean) as MovCont[];
+    const faltan = nums.filter(n => !porNum[n]);
+    if (!filas.length) {
+      window.alert('No se encontró ninguna de esas filas en el libro que tienes abierto.\n\n' +
+        'Revisa que arriba esté seleccionada la misma cuenta con la que viste los números.');
+      return;
+    }
+
+    const detalle = filas.map(m => {
+      const n = numFila[m.id || ''];
+      const val = Number(m.credito) > 0 ? '+' + pesosCO(Number(m.credito)) : '-' + pesosCO(Number(m.debito) || 0);
+      const conf = confirmadas.has(String(m.codigo ?? '').trim() + '|' + String(m.detalle ?? '').trim()) ? '  ⚠ YA CONFIRMADO' : '';
+      return `  N° ${n}  ${m.fecha || ''}  ${String(m.banco || '').slice(0, 18)}  ${val}  ${String(m.descripcion || '').slice(0, 40)}${conf}`;
+    }).join('\n');
+
+    const yaConfirmadas = filas.filter(m =>
+      confirmadas.has(String(m.codigo ?? '').trim() + '|' + String(m.detalle ?? '').trim())).length;
+
+    const aviso =
+      'SE VAN A ELIMINAR ' + filas.length + ' FILA(S) DEL LIBRO\n' +
+      'Esto NO se puede deshacer desde la pantalla.\n\n' +
+      detalle + '\n' +
+      (faltan.length ? `\nNo se encontraron: ${faltan.join(', ')}\n` : '') +
+      (yaConfirmadas
+        ? `\n⚠ ${yaConfirmadas} de estas filas YA están confirmadas en un estado de cuenta.\n` +
+          '   Borrarlas del libro NO les quita el pago al deportista: eso hay que\n' +
+          '   corregirlo aparte en su estado de cuenta.\n'
+        : '') +
+      '\nSe guardará una copia en la papelera del navegador.\n\n¿Eliminar?';
+    if (!window.confirm(aviso)) return;
+
+    setBorrandoFilas(true);
+    flash(`Eliminando ${filas.length} fila(s)…`);
+
+    // Papelera: copia de seguridad local por si se borró algo por error
+    try {
+      const previo = JSON.parse(localStorage.getItem('cont_papelera') || '[]');
+      const nuevo = [...filas.map(m => ({ ...m, _borrado: new Date().toISOString() })), ...previo].slice(0, 200);
+      localStorage.setItem('cont_papelera', JSON.stringify(nuevo));
+    } catch { /* si el navegador no deja guardar, se sigue igual */ }
+
+    const borrados: string[] = [];
+    const fallaron: number[] = [];
+    for (const m of filas) {
+      const ok = m.id ? await borrarMovimiento(m.id) : false;
+      if (ok) borrados.push(m.id as string); else fallaron.push(numFila[m.id || ''] || 0);
+    }
+
+    if (borrados.length) {
+      const quedan = libro.filter(m => !borrados.includes(m.id || ''));
+      setLibro(quedan);
+      libroCache = { key: libroBanco === 'TODAS' ? '__TODAS__' : libroBanco, data: quedan };
+      contarMovimientos().then(setMovCount).catch(() => {});
+    }
+    setBorrandoFilas(false);
+    flash(fallaron.length
+      ? `✓ ${borrados.length} eliminada(s) · ⚠ no se pudo con: ${fallaron.join(', ')}`
+      : `✓ ${borrados.length} fila(s) eliminada(s) del libro`);
+  }
+
+  function abrirNuevaFila() {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const bancoDef = libroBanco === 'TODAS' ? BANCOS[0] : libroBanco;
+    setNuevaFila({ banco: bancoDef, fecha: hoy, descripcion: '', debito: '', credito: '', concepto: '', codigo: '', deportista: '', detalle: '' });
+  }
+
+  function editarNuevaFila<K extends keyof FilaManual>(campo: K, valor: FilaManual[K]) {
+    setNuevaFila(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, [campo]: valor };
+      // Al escribir el código, autocompletar el nombre del deportista si lo conocemos
+      if (campo === 'codigo') {
+        const nom = codMap[String(valor).trim()];
+        if (nom) next.deportista = nom;
+      }
+      return next;
+    });
+  }
+
+  async function guardarNuevaFila() {
+    if (!nuevaFila) return;
+    const deb = numVal(nuevaFila.debito) || 0;
+    const cre = numVal(nuevaFila.credito) || 0;
+    if (!nuevaFila.fecha) { flash('⚠ Falta la fecha del movimiento'); return; }
+    if (!deb && !cre) { flash('⚠ Ingresa un valor en Débito o en Crédito'); return; }
+    setGuardandoManual(true);
+    try {
+      const saldoPrev = await ultimoSaldo(nuevaFila.banco);
+      const base = {
+        banco: nuevaFila.banco,
+        fecha: nuevaFila.fecha,
+        descripcion: nuevaFila.descripcion.trim() || 'MOVIMIENTO MANUAL',
+        referencia: '',
+        debito: deb,
+        credito: cre,
+      };
+      // Hash único (con sufijo aleatorio) para que dos filas manuales idénticas NO se fusionen
+      const hash = hashMov(base) + '_m' + Math.random().toString(36).slice(2, 7);
+      const fila: MovCont = {
+        ...base,
+        saldo: saldoPrev + cre - deb,
+        concepto: nuevaFila.concepto.trim(),
+        codigo: nuevaFila.codigo.trim(),
+        deportista: nuevaFila.deportista.trim(),
+        detalle: nuevaFila.detalle.trim(),
+        origen: 'manual',
+        hash,
+      };
+      const r = await guardarMovimientos([fila]);
+      if (r.ok) {
+        libroCache = null;
+        const bancoNuevo = nuevaFila.banco;
+        setNuevaFila(null);
+        // Si estabas viendo otra cuenta, cambia a la de la fila para que la veas;
+        // el cambio de libroBanco dispara la recarga. Si ya coincide (o es TODAS), recarga aquí.
+        if (libroBanco !== 'TODAS' && libroBanco !== bancoNuevo) {
+          setLibroBanco(bancoNuevo);
+        } else {
+          await cargarLibro(true);
+        }
+        contarMovimientos().then(setMovCount);
+        flash('✔ Fila agregada al libro');
+      } else {
+        flash('Error al agregar la fila: ' + (r.msg || ''));
+      }
+    } catch (e: any) {
+      flash('Error al agregar la fila: ' + (e?.message ?? e));
+    } finally {
+      setGuardandoManual(false);
+    }
+  }
+
   // Libro filtrado por columnas. La "cifra" busca dentro de débito o crédito;
   // el "código" trae todos los movimientos de ese deportista aunque estén en
   // cuentas distintas (porque el libro está pegado con las tres cuentas).
   const esTodas = libroBanco === 'TODAS';
+  /* ── Tarifa esperada de cada deportista (codigo → pesos) ── */
+  const tarifaPorCod = useMemo(() => {
+    const m: Record<string, number> = {};
+    deportistas.forEach(d => {
+      const c = getCod(d); if (!c) return;
+      const manual = colDeportista(d, /^cuota_?manual$/i).replace(/[^0-9]/g, '');
+      if (manual && Number(manual) > 0) { m[c] = Number(manual); return; }
+      m[c] = calcTarifaNum(colDeportista(d, /^program/i), colDeportista(d, /^sede/i));
+    });
+    return m;
+  }, [deportistas]);
+
+  /* ── Mes en que se afilió cada deportista (código → 1..12) ── */
+  const mesAfilPorCod = useMemo(() => {
+    const m: Record<string, number> = {};
+    deportistas.forEach(d => {
+      const c = getCod(d); if (!c) return;
+      m[c] = mesDeAfiliacion(colDeportista(d, /fecha.*afil|afil.*fecha/i));
+    });
+    return m;
+  }, [deportistas]);
+
+  /* ── Pagos YA CONFIRMADOS en el estado de cuenta (clave codigo|MES) ──
+     `publicadas` viene de pagos_estado y puede traer la llave con el UUID del
+     deportista (cuando el estado de cuenta se edito a mano) o con su codigo
+     (cuando se publico desde el libro) — la DOBLE LLAVE. Aqui se normaliza todo
+     a codigo|MES para que el semaforo y el chulo reconozcan ambas por igual. */
+  const confirmadas = useMemo(() => {
+    const uuid2cod: Record<string, string> = {};
+    deportistas.forEach(d => { const c = getCod(d); if (c && (d as any).id) uuid2cod[String((d as any).id)] = c; });
+    const out = new Set<string>();
+    publicadas.forEach(k => {
+      const i = k.indexOf('|'); if (i < 0) return;
+      out.add(k);
+      const c = uuid2cod[k.slice(0, i)];
+      if (c) out.add(c + '|' + k.slice(i + 1));
+    });
+    return out;
+  }, [publicadas, deportistas]);
+
+  /* ── Color de cada fila del libro ── */
+  const semaforo = useMemo(() => {
+    // Meses repetidos del mismo deportista (para el amarillo)
+    const veces: Record<string, number> = {};
+    for (const m of libro) {
+      const cod = String(m.codigo ?? '').trim(), det = String(m.detalle ?? '').trim();
+      if (!cod || !det || !(Number(m.credito) > 0)) continue;
+      const k = cod + '|' + det; veces[k] = (veces[k] || 0) + 1;
+    }
+
+    const out: Record<string, { color: ColorSem; motivo: string }> = {};
+    for (const m of libro) {
+      const id  = m.id || '';
+      const cre = Number(m.credito) || 0;
+      const cod = String(m.codigo ?? '').trim();
+      const det = String(m.detalle ?? '').trim();
+
+      if (cre <= 0 || esNoAplica(m)) { out[id] = { color: 'na', motivo: '' }; continue; }
+      if (!cod) { out[id] = { color: 'morado', motivo: 'Sin codigo: el diccionario no reconoce esta cuenta' }; continue; }
+
+      const esMatr = /MATR[IÍ]CUL|INSCRIP/i.test(det) || /MATR[IÍ]CUL|INSCRIP/i.test(String(m.concepto ?? ''));
+      if (esMatr) { out[id] = { color: 'na', motivo: 'Matricula o inscripcion (no aplica mensualidad)' }; continue; }
+      if (esBecado(cod)) { out[id] = { color: 'na', motivo: 'Deportista becado' }; continue; }
+
+      if (!det) { out[id] = { color: 'amarillo', motivo: 'Falta asignar el mes' }; continue; }
+      if ((veces[cod + '|' + det] || 0) > 1) {
+        out[id] = { color: 'amarillo', motivo: `Mes repetido: hay ${veces[cod + '|' + det]} pagos de "${det}" para el mismo deportista` };
+        continue;
+      }
+
+      // YA CONFIRMADO: el pago ya esta publicado en el estado de cuenta.
+      // El color se apaga — el semaforo solo señala lo que falta por revisar.
+      // (El chulo verde de la primera columna sigue mostrando que quedo confirmado.)
+      // Va DESPUES del mes repetido a proposito: un mes duplicado sigue en amarillo
+      // aunque este confirmado, porque al publicarse los valores se suman.
+      if (confirmadas.has(cod + '|' + det)) { out[id] = { color: 'na', motivo: 'Ya confirmado en el estado de cuenta' }; continue; }
+
+      const tarifa = tarifaPorCod[cod];
+      if (!tarifa) { out[id] = { color: 'morado', motivo: 'El codigo no corresponde a ningun deportista' }; continue; }
+
+      // AMARILLO: el mes es ANTERIOR a la afiliacion del deportista.
+      // Ejemplo: se afilio el 21/03/2026 y le asignaron FEBRERO 2026.
+      const mesDet  = mesNumDeDetalle(det);
+      const mesAfil = mesAfilPorCod[cod] || 0;
+      if (mesDet > 0 && mesAfil > 0 && mesDet < mesAfil) {
+        const NOM = ['','ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+        out[id] = { color: 'amarillo', motivo: `Ese mes NO le corresponde: el deportista se afilio en ${NOM[mesAfil]} y este pago quedo como ${det}` };
+        continue;
+      }
+
+      const conDto = Math.round(tarifa * 0.9);
+      if (cre === tarifa) { out[id] = { color: 'verde', motivo: `Mensualidad completa (${pesosCO(tarifa)})` }; continue; }
+      if (cre === conDto) { out[id] = { color: 'verde', motivo: `Mensualidad con 10% de descuento (${pesosCO(conDto)})` }; continue; }
+
+      const falta = tarifa - cre;
+      out[id] = falta > 0
+        ? { color: 'rojo', motivo: `Abono ${pesosCO(cre)} de ${pesosCO(tarifa)} — faltan ${pesosCO(falta)}` }
+        : { color: 'rojo', motivo: `Pago ${pesosCO(cre)} y la mensualidad es ${pesosCO(tarifa)} — sobran ${pesosCO(-falta)}` };
+    }
+    return out;
+  }, [libro, tarifaPorCod, mesAfilPorCod, confirmadas]);
+
+  const cuentaSem = useMemo(() => {
+    const c: Record<string, number> = { verde: 0, amarillo: 0, rojo: 0, morado: 0 };
+    for (const m of libro) {
+      const sm = semaforo[m.id || '']; if (!sm || sm.color === 'na') continue;
+      c[sm.color] = (c[sm.color] || 0) + 1;
+    }
+    return c;
+  }, [libro, semaforo]);
+
+  /** Verdes que todavia NO se han publicado al estado de cuenta. */
+  const verdesPendientes = useMemo(
+    () => libro.filter(m => {
+      const sm = semaforo[m.id || '']; if (!sm || sm.color !== 'verde') return false;
+      const cod = String(m.codigo ?? '').trim(), det = String(m.detalle ?? '').trim();
+      return !!cod && !!det && !confirmadas.has(cod + '|' + det);
+    }),
+    [libro, semaforo, confirmadas],
+  );
+
+  /** MATRÍCULAS con código que todavía NO están en el estado de cuenta.
+   *  El botón de los verdes NO las toca: la matrícula no se compara contra la
+   *  mensualidad, así que el semáforo la deja sin color y se quedaba sin publicar.
+   *  Por eso a los recién afiliados les aparecía la matrícula en el libro pero
+   *  seguía en PEND en su estado de cuenta. */
+  const matriculasPendientes = useMemo(
+    () => libro.filter(m => {
+      if (!(Number(m.credito) > 0) || esNoAplica(m)) return false;
+      const cod = String(m.codigo ?? '').trim();
+      const det = String(m.detalle ?? '').trim();
+      if (!cod || !det) return false;
+      const esMatr = /MATR[IÍ]CUL|INSCRIP/i.test(det) || /MATR[IÍ]CUL|INSCRIP/i.test(String(m.concepto ?? ''));
+      if (!esMatr) return false;
+      return !confirmadas.has(cod + '|' + det);
+    }),
+    [libro, confirmadas],
+  );
+
   const libroFiltrado = useMemo(() => {
     const f = filDebounced;
     const inc = (v: any, q: string) => String(v ?? '').toLowerCase().includes(q.trim().toLowerCase());
@@ -509,31 +1103,66 @@ export default function ContabilidadPage() {
       if (f.credito && !incDig(m.credito, f.credito)) return false;
       if (f.saldo && !incDig(m.saldo, f.saldo)) return false;
       if (f.concepto && !inc(m.concepto, f.concepto)) return false;
-      // CÓDIGO = coincidencia EXACTA (no trae códigos donde el número aparezca dentro de otra cifra)
-      if (f.codigo && String(m.codigo ?? '').trim() !== f.codigo.trim()) return false;
+      // CÓDIGO: 'exacto' evita cruces con cifras que contienen esos dígitos (códigos de deportista);
+      //         'contiene' permite hallar números de cuenta largos de proveedores/empleados por parte.
+      if (f.codigo) {
+        const needle = f.codigo.trim();
+        const hay    = String(m.codigo ?? '').trim();
+        const ok = filCodModo === 'contiene'
+          ? hay.toLowerCase().includes(needle.toLowerCase())
+          : hay === needle;
+        if (!ok) return false;
+      }
       if (f.deportista && !inc(m.deportista, f.deportista)) return false;
       if (f.detalle && !inc(m.detalle, f.detalle)) return false;
       // "Por orientar": pagos (crédito) sin código. Mostramos también los que acabas
       // de orientar (fila con cambios pendientes) para que no desaparezcan hasta guardar.
       if (soloPorOrientar) {
-        const esPorOrientar = (Number(m.credito) > 0) && !String(m.codigo ?? '').trim();
+        const esPorOrientar = (Number(m.credito) > 0) && !String(m.codigo ?? '').trim() && !esNoAplica(m);
         if (!esPorOrientar && !dirtyIds.has(m.id || '')) return false;
       }
+      // "Sin concepto" / "Sin detalle": filas a las que todavía les falta ese dato.
+      // Igual que "Por orientar", se dejan visibles las filas que acabas de editar
+      // (cambios sin guardar) para que no desaparezcan mientras las estás llenando.
+      if (soloSinConcepto && String(m.concepto ?? '').trim() && !dirtyIds.has(m.id || '')) return false;
+      if (soloSinDetalle  && String(m.detalle  ?? '').trim() && !dirtyIds.has(m.id || '')) return false;
       // Filtro por el chulo: verde = ya confirmado en el estado de cuenta;
       // rojo = pago con código y mes pero AÚN sin confirmar (pendiente).
+      if (filSem !== 'todos') {
+        const sm = semaforo[m.id || ''];
+        if (!sm || sm.color !== filSem) return false;
+      }
       if (filChulo !== 'todos') {
         const cod = String(m.codigo ?? '').trim();
         const det = String(m.detalle ?? '').trim();
-        const verde = publicadas.has(cod + '|' + det);
+        const verde = esNoAplica(m) || confirmadas.has(cod + '|' + det);
         const esPago = cod && det && Number(m.credito) > 0;
         if (filChulo === 'verde' && !verde) return false;
         if (filChulo === 'rojo' && !(esPago && !verde)) return false;
       }
       return true;
     });
-  }, [libro, filDebounced, soloPorOrientar, dirtyIds, filChulo, publicadas]);
+  }, [libro, filDebounced, soloPorOrientar, soloSinConcepto, soloSinDetalle, dirtyIds, filChulo, confirmadas, filCodModo, filSem, semaforo]);
+  /** Pagos del libro que ya quedaron confirmados en el estado de cuenta. */
+  const confirmadosCount = useMemo(
+    () => libro.filter(m => {
+      if (!(Number(m.credito) > 0) || esNoAplica(m)) return false;
+      const cod = String(m.codigo ?? '').trim(), det = String(m.detalle ?? '').trim();
+      return !!cod && !!det && confirmadas.has(cod + '|' + det);
+    }).length,
+    [libro, confirmadas],
+  );
   const porOrientarCount = useMemo(
-    () => libro.filter(m => (Number(m.credito) > 0) && !String(m.codigo ?? '').trim()).length,
+    () => libro.filter(m => (Number(m.credito) > 0) && !String(m.codigo ?? '').trim() && !esNoAplica(m)).length,
+    [libro],
+  );
+  /** Filas del libro que todavía no tienen CONCEPTO / DETALLE llenos. */
+  const sinConceptoCount = useMemo(
+    () => libro.filter(m => !String(m.concepto ?? '').trim()).length,
+    [libro],
+  );
+  const sinDetalleCount = useMemo(
+    () => libro.filter(m => !String(m.detalle ?? '').trim()).length,
     [libro],
   );
   // Detección de errores por fila: MISMO deportista con el MISMO mes repetido (duplicado)
@@ -685,7 +1314,7 @@ export default function ContabilidadPage() {
     if (primerResetLimite.current) { primerResetLimite.current = false; return; }
     if (saltarReset.current) { saltarReset.current = false; return; }
     setLimite(100);
-  }, [fil, libroBanco]);
+  }, [fil, libroBanco, soloSinConcepto, soloSinDetalle]);
   // Aplicar el filtro con un pequeño retraso (evita recalcular/redibujar en cada tecla)
   useEffect(() => { const t = setTimeout(() => setFilDebounced(fil), 250); return () => clearTimeout(t); }, [fil]);
   // Guardar el estado de la vista para poder volver exactamente aquí.
@@ -801,7 +1430,7 @@ export default function ContabilidadPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/dashboard')} className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition">
             <ArrowLeft className="w-4 h-4" />
@@ -852,7 +1481,7 @@ export default function ContabilidadPage() {
         </div>
       )}
 
-      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-5 space-y-4">
+      <main className={`${vista === 'libro' ? 'max-w-none' : 'max-w-6xl'} mx-auto px-3 sm:px-6 py-5 space-y-4`}>
 
         {/* Controles */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-end gap-3">
@@ -953,7 +1582,7 @@ export default function ContabilidadPage() {
                 ))}
               </div>
               <p className="font-black text-gray-700 text-sm">
-                {hayFiltro || soloPorOrientar
+                {hayFiltro || soloPorOrientar || soloSinConcepto || soloSinDetalle
                   ? <>{libroFiltrado.length.toLocaleString('es-CO')} <span className="text-gray-400 font-semibold">de {libro.length.toLocaleString('es-CO')}</span></>
                   : <>{libro.length.toLocaleString('es-CO')}</>} movimientos
               </p>
@@ -961,32 +1590,65 @@ export default function ContabilidadPage() {
                 className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloPorOrientar ? 'bg-amber-500 text-white border-amber-500' : 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100'}`}>
                 {soloPorOrientar ? '✓ ' : ''}Por confirmar / orientar ({porOrientarCount.toLocaleString('es-CO')})
               </button>
-              {numProblemas > 0 && (
-                <span className="text-xs font-black text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg" title="Filas en rojo: mismo deportista con el mismo mes repetido. Revísalas y corrige el mes antes de actualizar.">
-                  ⚠ {numProblemas.toLocaleString('es-CO')} con posible error (mes duplicado)
-                </span>
-              )}
-              <button onClick={recalcularMeses} disabled={recalculando}
-                title="Corrige el mes de los pagos del 5 de agosto en adelante al mes pendiente de cada deportista (no toca el estado de cuenta)"
-                className="flex items-center gap-1.5 text-sm font-black text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition disabled:opacity-60">
-                🔁 {recalculando ? 'Recalculando…' : 'Recalcular meses (5-ago+)'}
+              {/* Trabajo pendiente: filas a las que les falta CONCEPTO o DETALLE.
+                  Se pueden prender los dos a la vez (muestra las que no tienen ninguno). */}
+              <button onClick={() => setSoloSinConcepto(v => !v)}
+                title="Filas del libro que todavía no tienen CONCEPTO"
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSinConcepto ? 'bg-sky-600 text-white border-sky-600' : 'text-sky-700 bg-sky-50 border-sky-200 hover:bg-sky-100'}`}>
+                {soloSinConcepto ? '✓ ' : ''}Sin concepto ({sinConceptoCount.toLocaleString('es-CO')})
               </button>
-              {hayFiltro && (
-                <button onClick={() => setFil(filVacio)}
+              <button onClick={() => setSoloSinDetalle(v => !v)}
+                title="Filas del libro que todavía no tienen DETALLE"
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSinDetalle ? 'bg-violet-600 text-white border-violet-600' : 'text-violet-700 bg-violet-50 border-violet-200 hover:bg-violet-100'}`}>
+                {soloSinDetalle ? '✓ ' : ''}Sin detalle ({sinDetalleCount.toLocaleString('es-CO')})
+              </button>
+              {/* ── SEMAFORO ──
+                  Los cuatro contadores de color (verde/amarillo/rojo/morado) se
+                  quitaron el 20/08/2026 por pedido de la dirección. El color se
+                  sigue viendo en la celda del mes de cada fila. */}
+              <span className="w-px h-6 bg-gray-200 mx-1" />
+              {/* Confirmados: ya publicados en el estado de cuenta. Pierden el color
+                  del semaforo; aqui se pueden volver a ver cuando se necesiten. */}
+              <button onClick={() => setFilChulo(v => (v === 'verde' ? 'todos' : 'verde'))}
+                title="Pagos ya confirmados en el estado de cuenta. Se les apaga el color del semaforo."
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${filChulo === 'verde' ? 'bg-gray-700 text-white border-gray-700' : 'text-gray-600 bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                {filChulo === 'verde' ? '✓ ' : ''}Confirmados ({confirmadosCount.toLocaleString('es-CO')})
+              </button>
+              <button onClick={confirmarVerdes} disabled={publicandoVerdes || !verdesPendientes.length}
+                title="Publica al estado de cuenta SOLO los pagos verdes (valor exacto). No toca amarillos, rojos ni morados."
+                className="flex items-center gap-1.5 text-sm font-black text-white bg-green-600 border border-green-600 px-3 py-1.5 rounded-lg hover:bg-green-700 transition disabled:opacity-50">
+                ✓ {publicandoVerdes ? 'Confirmando…' : `Confirmar los ${verdesPendientes.length.toLocaleString('es-CO')} verdes`}
+              </button>
+              <button onClick={confirmarMatriculas} disabled={publicandoMatr || !matriculasPendientes.length}
+                title="Publica al estado de cuenta las MATRÍCULAS que aún no están. El botón de los verdes no las incluye, porque la matrícula no se compara contra la mensualidad."
+                className="flex items-center gap-1.5 text-sm font-black text-white bg-indigo-600 border border-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50">
+                🎓 {publicandoMatr ? 'Confirmando…' : `Confirmar ${matriculasPendientes.length.toLocaleString('es-CO')} matrículas`}
+              </button>
+              <span className="w-px h-6 bg-gray-200 mx-1" />
+              {(hayFiltro || soloSinConcepto || soloSinDetalle) && (
+                <button onClick={() => { setFil(filVacio); setSoloSinConcepto(false); setSoloSinDetalle(false); }}
                   className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition">
                   <X className="w-3.5 h-3.5" /> Limpiar filtros
                 </button>
               )}
-              <button onClick={actualizarEstadosCuenta} disabled={publicando}
-                title="Publica al estado de cuenta de los deportistas los pagos verificados del libro (acción manual)"
-                className="ml-auto flex items-center gap-1.5 text-sm font-black text-white bg-blue-600 border border-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-60">
-                ⬆ {publicando ? 'Publicando…' : 'Actualizar estados de cuenta'}
-              </button>
-              <button onClick={() => setPanelCols(v => !v)} className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${panelCols ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-100'}`}>
+              {/* "Actualizar estados de cuenta" se retiro el 20/08/2026: publicaba
+                  TODOS los movimientos de TODAS las cuentas de un solo golpe, sin
+                  respetar el semaforo. Ahora se publica con "Confirmar verdes",
+                  "Confirmar matriculas" o el chulo de cada fila. */}
+              <button onClick={() => setPanelCols(v => !v)} className={`ml-auto flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${panelCols ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-100'}`}>
                 ⚙ Columnas
               </button>
               <button onClick={exportarLibro} disabled={!libroFiltrado.length} className="flex items-center gap-1.5 text-sm font-black text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 transition disabled:opacity-50">
                 <Download className="w-4 h-4" /> Exportar Excel
+              </button>
+              <button onClick={eliminarFilasPorNumero} disabled={borrandoFilas}
+                title="Eliminar filas basura del libro escribiendo su N° (la columna gris de la izquierda)"
+                className="flex items-center gap-1.5 text-sm font-black text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition disabled:opacity-50">
+                <Trash2 className="w-4 h-4" /> {borrandoFilas ? 'Eliminando…' : 'Eliminar filas'}
+              </button>
+              <button onClick={abrirNuevaFila} title="Agregar un movimiento manualmente al libro (no vino del Excel del banco)"
+                className="flex items-center gap-1.5 text-sm font-black text-white bg-[#16a34a] border border-[#16a34a] px-3 py-1.5 rounded-lg hover:bg-[#064e1e] transition">
+                <Plus className="w-4 h-4" /> Agregar fila
               </button>
             </div>
 
@@ -1014,6 +1676,9 @@ export default function ContabilidadPage() {
             </p>
             <datalist id="codigos-libro">
               {codigosUnicos.map(c => <option key={c} value={c} />)}
+            </datalist>
+            <datalist id="detalle-libro">
+              {DETALLE_OPCIONES.map(o => <option key={o} value={o} />)}
             </datalist>
             <div ref={scrollRef} className="overflow-x-auto" style={{ maxHeight: '72vh' }}>
               <table className="border-collapse text-xs" style={{ tableLayout: 'fixed', width: colsVis.reduce((s, c) => s + (colW[c.key] ?? c.def), 0) }}>
@@ -1048,7 +1713,31 @@ export default function ContabilidadPage() {
                     <th style={thFil}><input value={fil.credito} onChange={e => setFil(f => ({ ...f, credito: e.target.value }))} placeholder="crédito…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.saldo} onChange={e => setFil(f => ({ ...f, saldo: e.target.value }))} placeholder="saldo…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.concepto} onChange={e => setFil(f => ({ ...f, concepto: e.target.value }))} placeholder="concepto…" style={inpFil} /></th>
-                    <th style={thFil}><input list="codigos-libro" value={fil.codigo} onChange={e => setFil(f => ({ ...f, codigo: e.target.value }))} placeholder="exacto: 25450" style={{ ...inpFil, fontWeight: 800 }} /></th>
+                    <th style={thFil}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <input autoComplete="off" value={fil.codigo} onChange={e => setFil(f => ({ ...f, codigo: e.target.value }))}
+                          placeholder={filCodModo === 'contiene' ? 'nº cuenta…' : 'exacto: 25450'}
+                          style={{ ...inpFil, fontWeight: 800 }} />
+                        <div style={{ display: 'flex', gap: 2 }}>
+                          <button type="button" onClick={() => setFilCodModo('exacto')}
+                            title="Buscar el código exacto del deportista"
+                            style={{ flex: 1, fontSize: 9, fontWeight: 800, padding: '1px 0', borderRadius: 4, cursor: 'pointer',
+                              border: '1px solid ' + (filCodModo === 'exacto' ? '#16a34a' : '#d1d5db'),
+                              background: filCodModo === 'exacto' ? '#16a34a' : '#fff',
+                              color: filCodModo === 'exacto' ? '#fff' : '#6b7280' }}>
+                            Código
+                          </button>
+                          <button type="button" onClick={() => setFilCodModo('contiene')}
+                            title="Buscar por parte del número de cuenta (proveedor / empleado)"
+                            style={{ flex: 1, fontSize: 9, fontWeight: 800, padding: '1px 0', borderRadius: 4, cursor: 'pointer',
+                              border: '1px solid ' + (filCodModo === 'contiene' ? '#16a34a' : '#d1d5db'),
+                              background: filCodModo === 'contiene' ? '#16a34a' : '#fff',
+                              color: filCodModo === 'contiene' ? '#fff' : '#6b7280' }}>
+                            Nº cuenta
+                          </button>
+                        </div>
+                      </div>
+                    </th>
                     <th style={thFil}><input value={fil.deportista} onChange={e => setFil(f => ({ ...f, deportista: e.target.value }))} placeholder="nombre…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.detalle} onChange={e => setFil(f => ({ ...f, detalle: e.target.value }))} placeholder="detalle…" style={inpFil} /></th>
                   </tr>
@@ -1062,7 +1751,7 @@ export default function ContabilidadPage() {
                     <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-gray-400 font-semibold">Ningún movimiento coincide con el filtro.</td></tr>
                   ) : visiblesVista.map((m, i) => (
                     <tr key={m.id || i} id={'mov-' + (m.id || '')}
-                      title={filasProblema[m.id || ''] || undefined}
+                      title={semaforo[m.id || '']?.motivo || filasProblema[m.id || ''] || undefined}
                       onMouseEnter={() => setHoverId(m.id || null)}
                       onMouseLeave={() => setHoverId(h => (h === m.id ? null : h))}
                       style={{ background: hoverId === m.id ? '#cfe3ff' : resaltarId === m.id ? '#bbf7d0' : filasProblema[m.id || ''] ? '#fee2e2' : dirtyIds.has(m.id || '') ? '#fef9c3' : (i % 2 ? '#f8fafc' : '#fff'), transition: 'background 0.12s', outline: hoverId === m.id ? '2px solid #3b82f6' : resaltarId === m.id ? '2px solid #16a34a' : filasProblema[m.id || ''] ? '1px solid #ef4444' : undefined }}>
@@ -1072,10 +1761,10 @@ export default function ContabilidadPage() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           {(() => {
-                            const yaPub = publicadas.has(String(m.codigo ?? '').trim() + '|' + String(m.detalle ?? '').trim());
+                            const yaPub = esNoAplica(m) || confirmadas.has(String(m.codigo ?? '').trim() + '|' + String(m.detalle ?? '').trim());
                             return (
-                              <button onClick={() => actualizarPagoFila(m)}
-                                title={yaPub ? 'Confirmado ✓ — ya está en el estado de cuenta (clic para volver a publicar)' : 'Sin confirmar — clic para actualizar este pago en el estado de cuenta'}
+                              <button onClick={() => { if (!esNoAplica(m)) actualizarPagoFila(m); }}
+                                title={esIngresoFinanciero(m) ? 'Interés / rendimiento del banco — no es de ningún deportista, no va a estado de cuenta' : esInstitucional(m) ? 'Confirmado ✓ — INSTITUCIONAL (no va a estado de cuenta)' : yaPub ? 'Confirmado ✓ — ya está en el estado de cuenta (clic para volver a publicar)' : 'Sin confirmar — clic para actualizar este pago en el estado de cuenta'}
                                 className={`p-0.5 rounded transition ${yaPub ? 'text-green-600 hover:text-green-700 hover:bg-green-50' : 'text-red-500 hover:text-red-700 hover:bg-red-50'}`}>
                                 <CheckCircle className="w-3.5 h-3.5" />
                               </button>
@@ -1126,33 +1815,62 @@ export default function ContabilidadPage() {
                                 : <span style={{ color: '#cbd5e1' }}>—</span>)}</span>
                         )}
                       </td>
-                      <td style={{ ...tdC, textAlign: 'left' }} title={m.deportista}>
+                      <td style={{ ...tdC, textAlign: 'left', padding: '2px 4px' }} title={m.deportista}>
                         {(() => {
                           // id por código; si el código no está en la ficha, se busca por nombre
                           const depId = codToId[m.codigo] || (m.deportista ? nombreToId[normNombre(m.deportista)] : '');
-                          return m.deportista && depId ? (
-                            <button onClick={() => setEstadoCuentaUrl(`/alumnos/${depId}/estado-cuenta?edit=1`)}
-                              className="text-left text-green-700 hover:text-green-900 hover:underline font-semibold w-full truncate"
-                              title={`Ver estado de cuenta de ${m.deportista} (se abre en ventana, sin salir del libro)`}>
-                              {m.deportista}
-                            </button>
-                          ) : m.deportista;
+                          // Deportista real (ingreso) → enlace a su estado de cuenta (como antes)
+                          if (m.deportista && depId) {
+                            return (
+                              <button onClick={() => setEstadoCuentaUrl(`/alumnos/${depId}/estado-cuenta?edit=1`)}
+                                className="text-left text-green-700 hover:text-green-900 hover:underline font-semibold w-full truncate"
+                                title={`Ver estado de cuenta de ${m.deportista} (se abre en ventana, sin salir del libro)`}>
+                                {m.deportista}
+                              </button>
+                            );
+                          }
+                          // Sin deportista (egreso: proveedor / empleado / cliente) → NOMBRE editable a mano
+                          return editCell?.id === m.id && editCell.campo === 'deportista' ? (
+                            <input autoFocus defaultValue={m.deportista || ''}
+                              onClick={e => e.stopPropagation()}
+                              onBlur={e => { cambiarCampoLibro(m, 'deportista', e.target.value.trim()); setEditCell(null); }}
+                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditCell(null); }}
+                              placeholder="Nombre (proveedor / empleado)"
+                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff' }} />
+                          ) : (
+                            <span className="block truncate cursor-pointer" title="Clic para escribir el nombre (proveedor / empleado)"
+                              onClick={() => setEditCell({ id: m.id || '', campo: 'deportista' })}>
+                              {m.deportista || <span style={{ color: '#cbd5e1' }}>—</span>}
+                            </span>
+                          );
                         })()}
                       </td>
                       <td style={{ ...tdC, padding: '2px 4px', cursor: 'pointer', textAlign: 'left' }} title={m.detalle}
                         onClick={() => setEditCell({ id: m.id || '', campo: 'detalle' })}>
                         {editCell?.id === m.id && editCell.campo === 'detalle' ? (
-                          <select autoFocus value={m.detalle || ''}
-                            onChange={e => { cambiarCampoLibro(m, 'detalle', e.target.value); setEditCell(null); }}
-                            onBlur={() => setEditCell(null)}
-                            style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 2px', fontSize: 11, background: '#fff' }}>
-                            <option value="">—</option>
-                            {DETALLE_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
-                            {m.detalle && !DETALLE_OPCIONES.includes(m.detalle) && <option value={m.detalle}>{m.detalle}</option>}
-                          </select>
-                        ) : (
-                          <span className="block truncate">{m.detalle || <span style={{ color: '#cbd5e1' }}>—</span>}</span>
-                        )}
+                          <input autoFocus list="detalle-libro" defaultValue={m.detalle || ''}
+                            onClick={e => e.stopPropagation()}
+                            onBlur={e => { cambiarCampoLibro(m, 'detalle', e.target.value.trim()); setEditCell(null); }}
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditCell(null); }}
+                            placeholder="Mes o texto libre (lo que se paga)"
+                            style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff' }} />
+                        ) : (() => {
+                          /* SEMAFORO: el mes se pinta con fondo pastel y letra negra
+                             segun si el valor pagado cuadra con la mensualidad. */
+                          const sm = semaforo[m.id || ''];
+                          const pal = sm && sm.color !== 'na' ? PASTEL_SEM[sm.color] : null;
+                          if (!pal) return <span className="block truncate">{m.detalle || <span style={{ color: '#cbd5e1' }}>—</span>}</span>;
+                          // Sin mes asignado: igual se marca con su color y el aviso
+                          const texto = m.detalle || (sm.color === 'morado' ? 'SIN CODIGO' : 'FALTA MES');
+                          return (
+                            <span className="block truncate" title={sm.motivo}
+                              style={{ background: pal.bg, color: '#111827', fontWeight: 800,
+                                       border: `1px solid ${pal.borde}`, borderRadius: 5,
+                                       padding: '2px 6px', textAlign: 'center' }}>
+                              {texto}
+                            </span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))}
@@ -1294,6 +2012,91 @@ export default function ContabilidadPage() {
                       <Save className="w-4 h-4" /> {guardandoEd ? 'Guardando…' : 'Guardar'}
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Modal: AGREGAR FILA MANUAL al libro ── */}
+      {nuevaFila && (() => {
+        const inp: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' };
+        const lbl = 'block text-[11px] font-black text-gray-500 uppercase tracking-wide mb-1';
+        return (
+          <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4" onClick={() => !guardandoManual && setNuevaFila(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
+                <h3 className="font-black text-gray-800">Agregar fila al libro</h3>
+                <button onClick={() => setNuevaFila(null)} className="text-gray-400 hover:text-gray-700 p-1"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="px-5 py-2 text-[12px] text-gray-500 bg-gray-50 border-b border-gray-100">
+                Movimiento agregado manualmente (no vino del Excel del banco). Ingresa el valor en <b className="text-red-600">Débito</b> (salida) o en <b className="text-green-700">Crédito</b> (entrada).
+              </div>
+              <div className="p-5 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={lbl}>Cuenta</label>
+                    <select value={nuevaFila.banco} onChange={e => editarNuevaFila('banco', e.target.value)} style={inp}>
+                      {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={lbl}>Fecha</label>
+                    <input type="date" value={nuevaFila.fecha} onChange={e => editarNuevaFila('fecha', e.target.value)} style={inp} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={lbl}>Descripción</label>
+                  <input value={nuevaFila.descripcion} onChange={e => editarNuevaFila('descripcion', e.target.value)} placeholder="Ej.: Ajuste, consignación en efectivo, corrección…" style={inp} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={lbl}>Débito (salida)</label>
+                    <input inputMode="numeric" value={nuevaFila.debito} onChange={e => editarNuevaFila('debito', e.target.value)} placeholder="0" style={{ ...inp, textAlign: 'right', color: '#dc2626', fontWeight: 700 }} />
+                  </div>
+                  <div>
+                    <label className={lbl}>Crédito (entrada)</label>
+                    <input inputMode="numeric" value={nuevaFila.credito} onChange={e => editarNuevaFila('credito', e.target.value)} placeholder="0" style={{ ...inp, textAlign: 'right', color: '#16a34a', fontWeight: 700 }} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={lbl}>Concepto</label>
+                  <select value={nuevaFila.concepto} onChange={e => editarNuevaFila('concepto', e.target.value)} style={inp}>
+                    <option value="">—</option>
+                    {conceptos.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                    {nuevaFila.concepto && !conceptos.some(c => c.nombre === nuevaFila.concepto) && <option value={nuevaFila.concepto}>{nuevaFila.concepto}</option>}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={lbl}>Código</label>
+                    <input value={nuevaFila.codigo} onChange={e => editarNuevaFila('codigo', e.target.value)} placeholder="Opcional" style={{ ...inp, fontWeight: 700 }} />
+                  </div>
+                  <div>
+                    <label className={lbl}>Detalle (mes)</label>
+                    <select value={nuevaFila.detalle} onChange={e => editarNuevaFila('detalle', e.target.value)} style={inp}>
+                      <option value="">—</option>
+                      {DETALLE_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
+                      {nuevaFila.detalle && !DETALLE_OPCIONES.includes(nuevaFila.detalle) && <option value={nuevaFila.detalle}>{nuevaFila.detalle}</option>}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={lbl}>Deportista</label>
+                  <input value={nuevaFila.deportista} onChange={e => editarNuevaFila('deportista', e.target.value)} placeholder="Se autocompleta al escribir el código" style={inp} />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button onClick={() => setNuevaFila(null)} disabled={guardandoManual} className="ml-auto text-sm font-bold text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-100 transition disabled:opacity-60">Cancelar</button>
+                  <button onClick={guardarNuevaFila} disabled={guardandoManual} className="flex items-center gap-2 bg-[#16a34a] text-white font-black px-5 py-2 rounded-xl hover:bg-[#064e1e] transition disabled:opacity-60">
+                    <Save className="w-4 h-4" /> {guardandoManual ? 'Guardando…' : 'Agregar al libro'}
+                  </button>
                 </div>
               </div>
             </div>

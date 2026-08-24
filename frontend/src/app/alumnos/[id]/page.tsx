@@ -4,10 +4,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares, enviarMensaje } from '@/lib/db';
-import type { Deportista, CalificacionEscolar } from '@/lib/db';
+import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares, addCalificacionEscolar, renameCalificacionEscolar, deleteCalificacionEscolar, enviarMensaje, getEvaluaciones } from '@/lib/db';
+import type { Deportista, CalificacionEscolar, Evaluacion } from '@/lib/db';
+import { createClient } from '@/lib/supabase/client';
+import { parseValoracionExcel } from '@/lib/valoracionExcel';
 import { useAuthStore } from '@/store/auth.store';
 import { BalonCargando } from '@/components/BalonCargando';
+import { rutaAnterior } from '@/components/RastreoRuta';
 
 const FOTOS_KEY = 'futuro_fotos_deportistas';
 
@@ -155,6 +158,19 @@ function buildPestanaDeportista(cols: Record<string, string>): CampoD[] {
 export default function PerfilDeportista() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  /* ¿A dónde debe devolver el botón "← Volver"?
+     1º  ?volver=/ruta si la pantalla de origen lo pasó explícitamente.
+     2º  la pantalla anterior real (rastreada en la sesión del navegador).
+     Así funciona venga de donde venga: Control de Informes, Cumpleaños, etc. */
+  const [volverA, setVolverA] = useState('');
+  useEffect(() => {
+    try {
+      const param = new URLSearchParams(window.location.search).get('volver') || '';
+      if (param.startsWith('/')) { setVolverA(param); return; }
+      const prev = rutaAnterior(window.location.pathname);
+      if (prev && !prev.startsWith('/alumnos/')) setVolverA(prev);
+    } catch { /* noop */ }
+  }, []);
   const usuario = useAuthStore(s => s.usuario);
   const esPadre    = usuario?.rol === 'padre';
   const esAdmin    = usuario?.rol === 'administracion' || usuario?.rol === 'deportivo';
@@ -183,9 +199,20 @@ export default function PerfilDeportista() {
   const [docEPS, setDocEPS] = useState<DocFile>(null);
   const [docPreview, setDocPreview] = useState<{ name: string; data: string } | null>(null);
   const [califs, setCalifs] = useState<CalificacionEscolar[]>([]);
+  const [subiendoCalif, setSubiendoCalif] = useState(false);
+  // Ventana de INFORMES (historial + cargar 1er informe + nueva valoración)
+  const [showInformes, setShowInformes] = useState(false);
+  const [historialInf, setHistorialInf] = useState<Evaluacion[]>([]);
+  const [cargandoInf, setCargandoInf]   = useState(false);
+  const inputInformeRef = useRef<HTMLInputElement>(null);
+  // Vista Dinámica: elegir qué informe revisar cuando hay más de uno
+  const [showElegirVD, setShowElegirVD] = useState(false);
+  const [vdInformes, setVdInformes]     = useState<Evaluacion[]>([]);
+  const [cargandoVD, setCargandoVD]     = useState(false);
   const inputTIRef  = useRef<HTMLInputElement>(null);
   const inputRCRef  = useRef<HTMLInputElement>(null);
   const inputEPSRef = useRef<HTMLInputElement>(null);
+  const inputCalifRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getDeportistas().then(lista => {
@@ -261,6 +288,49 @@ export default function PerfilDeportista() {
       localStorage.setItem(`futuro_docs_${id}`, JSON.stringify(prev));
     } catch {}
     deleteDocumento(id, tipo).catch(err => console.error('[perfil] deleteDocumento:', err));
+  }
+
+  // ── Calificaciones escolares (boletines) — el acudiente puede subir varias ──
+  function subirCalif(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSubiendoCalif(true);
+    const nombre = file.name.replace(/\.[^.]+$/, '');
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      try {
+        const datos = ev.target?.result as string;
+        const fila = await addCalificacionEscolar(id, nombre, datos);
+        if (fila) {
+          setCalifs(prev => [fila, ...prev]);
+        } else {
+          // Recargar por si el insert respondió sin fila
+          const lista = await getCalificacionesEscolares(id);
+          setCalifs(lista);
+        }
+      } catch (err) {
+        console.error('[perfil] subirCalif:', err);
+      } finally {
+        setSubiendoCalif(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
+  async function renombrarCalif(cal: CalificacionEscolar) {
+    const nuevo = prompt('Nuevo nombre para la calificación:', cal.nombre);
+    if (nuevo == null) return;
+    const limpio = nuevo.trim();
+    if (!limpio || limpio === cal.nombre) return;
+    setCalifs(prev => prev.map(c => c.id === cal.id ? { ...c, nombre: limpio } : c));
+    await renameCalificacionEscolar(cal.id, limpio).catch(err => console.error('[perfil] renombrarCalif:', err));
+  }
+
+  async function eliminarCalif(cal: CalificacionEscolar) {
+    if (!confirm(`¿Eliminar la calificación "${cal.nombre}"?`)) return;
+    setCalifs(prev => prev.filter(c => c.id !== cal.id));
+    await deleteCalificacionEscolar(cal.id).catch(err => console.error('[perfil] eliminarCalif:', err));
   }
 
   async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -352,6 +422,9 @@ export default function PerfilDeportista() {
   const grupos    = agruparColumna(columnas);
   const catVal    = columnas.find(([k]) => /program|categor|proy/i.test(k))?.[1] ?? '';
   const gradiente = gradientePrograma(catVal);
+  // Proyecto del deportista → para que "Volver" lleve al listado de SU proyecto
+  // (evita el bucle de volver al informe con el historial del navegador).
+  const proyectoDep = String(columnas.find(([k]) => /^proy/i.test(k.trim()))?.[1] ?? '').trim();
   const initials  = dep._nombre.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
   /* Campos para el encabezado */
@@ -359,6 +432,62 @@ export default function PerfilDeportista() {
   const programaVal    = getC(/^program/i);
   const proyectoVal    = getC(/^proy/i);
   const codigoVal      = getC(/^c[oó]d/i);
+
+  // ── Ventana de INFORMES ──
+  async function abrirInformes() {
+    setShowInformes(true);
+    const cod = String(codigoVal || '').trim();
+    if (!cod) { setHistorialInf([]); return; }
+    setCargandoInf(true);
+    try { setHistorialInf(await getEvaluaciones(cod)); }
+    catch { setHistorialInf([]); }
+    finally { setCargandoInf(false); }
+  }
+  async function eliminarInf(ev: Evaluacion) {
+    if (!confirm(`¿Eliminar la valoración del ${ev.fecha}? Esta acción no se puede deshacer.`)) return;
+    try { if (ev.id) await createClient().from('evaluaciones').delete().eq('id', ev.id); }
+    catch (e) { console.error('[informes] eliminar:', e); }
+    setHistorialInf(prev => prev.filter(x => x.id !== ev.id));
+  }
+  function editarInf(ev: Evaluacion) {
+    const cod = String(codigoVal || '').trim();
+    router.push(`/evaluaciones?cod=${encodeURIComponent(cod)}&edit=${encodeURIComponent(ev.id || '')}`);
+  }
+  function nuevaInf() {
+    const cod = String(codigoVal || '').trim();
+    router.push(`/evaluaciones?cod=${encodeURIComponent(cod)}&nueva=1`);
+  }
+  // ── VISTA DINÁMICA: elegir qué informe revisar (si hay más de uno) ──
+  function irVistaDinamica(ev?: Evaluacion | null) {
+    const cod = String(codigoVal || '').trim();
+    setShowElegirVD(false);
+    const q = cod ? `?cod=${encodeURIComponent(cod)}` : '';
+    router.push(`/valoracion-dinamica${q}${ev?.id ? `${q ? '&' : '?'}ev=${encodeURIComponent(ev.id)}` : ''}`);
+  }
+  async function abrirVistaDinamica() {
+    const cod = String(codigoVal || '').trim();
+    if (!cod) { irVistaDinamica(); return; }
+    setCargandoVD(true);
+    let lista: Evaluacion[] = [];
+    try { lista = await getEvaluaciones(cod); } catch { lista = []; }
+    setCargandoVD(false);
+    if (lista.length <= 1) { irVistaDinamica(lista[0] ?? null); return; }
+    setVdInformes(lista);
+    setShowElegirVD(true);
+  }
+  async function cargarPrimerInforme(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+    try {
+      const mapped = await parseValoracionExcel(file);
+      sessionStorage.setItem('futuro_valoracion_importada', JSON.stringify(mapped));
+      const cod = String(codigoVal || mapped.codigo || '').trim();
+      router.push(`/evaluaciones?cod=${encodeURIComponent(cod)}&importado=1`);
+    } catch (err: any) {
+      alert('No se pudo leer el Excel: ' + (err?.message || err));
+    }
+  }
 
   // ── Canales de mensaje del padre y envío (queda en la plataforma) ──
   const CANALES_MSG: { titulo: string; boton: string; para: 'institucion' | 'profesor'; prefijo: string; color: string; emoji: string; desc: string }[] = [
@@ -573,6 +702,7 @@ export default function PerfilDeportista() {
         <input ref={inputTIRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'ti')}/>
         <input ref={inputRCRef}  type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'rc')}/>
         <input ref={inputEPSRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => subirDoc(e,'eps')}/>
+        <input ref={inputCalifRef} type="file" accept="image/*,application/pdf" style={{ display:'none' }} onChange={subirCalif}/>
 
         {/* ── TARJETA FOTO ── */}
         <input ref={inputFotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={subirFoto}/>
@@ -777,6 +907,69 @@ export default function PerfilDeportista() {
           })()}
         </div>
 
+        {/* ── TARJETA CALIFICACIONES ESCOLARES (el acudiente sube varias) ── */}
+        <div style={{
+          width: '100%', maxWidth: 500,
+          background: 'linear-gradient(150deg, #0c3d1c 0%, #052a10 55%, #071510 100%)',
+          borderRadius: 22,
+          border: '1.5px solid rgba(22,163,74,0.25)',
+          padding: '18px 16px 16px',
+          boxSizing: 'border-box',
+          boxShadow: '0 4px 28px rgba(0,0,0,0.55)',
+        }}>
+          <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 9, fontWeight: 900, letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 0 6px' }}>
+            📚 Calificaciones escolares ({califs.length})
+          </p>
+          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, fontWeight: 600, margin: '0 0 14px', lineHeight: 1.5 }}>
+            Sube el boletín o las notas del colegio. Puedes agregar varias.
+          </p>
+
+          {/* Lista de calificaciones ya subidas */}
+          {califs.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+              {califs.map(cal => (
+                <div key={cal.id} style={{
+                  background: 'rgba(22,163,74,0.12)',
+                  border: '1.5px solid rgba(22,163,74,0.4)',
+                  borderRadius: 14, padding: '10px 12px',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                  <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✅</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ color: '#fff', fontWeight: 900, fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cal.nombre}</p>
+                    {cal.createdAt && (
+                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '2px 0 0', fontWeight: 600 }}>
+                        {new Date(cal.createdAt).toLocaleDateString('es-CO')}
+                      </p>
+                    )}
+                  </div>
+                  <a href={cal.datos} download={`Calificacion_${(cal.nombre || 'boletin').replace(/[^a-zA-Z0-9]/g,'_')}_${dep._nombre.replace(/\s+/g,'_')}`}
+                    style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '4px 8px', color: '#fff', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0, textDecoration: 'none' }}>
+                    Ver
+                  </a>
+                  <button onClick={() => renombrarCalif(cal)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '4px 8px', color: '#fff', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
+                    Renombrar
+                  </button>
+                  <button onClick={() => eliminarCalif(cal)} style={{ background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 8, padding: '4px 8px', color: '#f87171', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Botón subir nueva */}
+          <button onClick={() => inputCalifRef.current?.click()} disabled={subiendoCalif} style={{
+            width: '100%',
+            background: subiendoCalif ? 'rgba(255,255,255,0.1)' : '#16a34a',
+            border: 'none', borderRadius: 14, padding: '12px',
+            color: '#fff', fontSize: 11, fontWeight: 900, letterSpacing: '0.04em',
+            cursor: subiendoCalif ? 'default' : 'pointer', textTransform: 'uppercase',
+          }}>
+            {subiendoCalif ? 'Subiendo…' : '📎 Subir calificaciones escolares'}
+          </button>
+        </div>
+
       </div>
     );
   }
@@ -788,8 +981,16 @@ export default function PerfilDeportista() {
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-lg">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="text-white/80 hover:text-white text-sm font-bold">
-            ← Volver
+          <button
+            onClick={() => router.push(
+              volverA.startsWith('/')
+                ? volverA
+                : (proyectoDep ? `/alumnos?proyecto=${encodeURIComponent(proyectoDep)}` : '/alumnos')
+            )}
+            className="text-white/80 hover:text-white text-sm font-bold">
+            {volverA === '/cumpleanos' ? '← Volver a Cumpleaños'
+              : volverA.startsWith('/control-informes') ? '← Volver a Control de Informes'
+              : '← Volver'}
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -885,7 +1086,7 @@ export default function PerfilDeportista() {
               { label: 'INFORMES',   href: codigoVal ? `/evaluaciones?cod=${encodeURIComponent(codigoVal)}` : '/evaluaciones', profe: true, padre: false },
               { label: 'MENSAJES',   href: '/mensajes',                     profe: true,  padre: true  },
             ].filter(b => esPadre ? b.padre : (!esProfesor || b.profe)).map(({ label, href }) => (
-              <button key={label} onClick={() => router.push(href)}
+              <button key={label} onClick={() => { if (label === 'INFORMES') abrirInformes(); else router.push(href); }}
                 className="bg-white/10 hover:bg-white/20 border border-white/20 active:bg-white/30 transition rounded-xl py-2.5 text-white font-black text-[10px] tracking-wide">
                 {label}
               </button>
@@ -895,12 +1096,107 @@ export default function PerfilDeportista() {
           {/* VISTA DINÁMICA — vista bonita (admin y profe) */}
           {codigoVal && (esAdmin || esProfesor) && (
             <button
-              onClick={() => router.push(`/valoracion-dinamica?cod=${encodeURIComponent(codigoVal)}`)}
-              className="w-full mt-2 bg-gradient-to-r from-[#16a34a] to-[#064e1e] hover:opacity-90 border border-white/20 active:opacity-80 transition rounded-xl py-2.5 text-white font-black text-[11px] tracking-wide flex items-center justify-center gap-2">
-              📊 VISTA DINÁMICA
+              onClick={abrirVistaDinamica} disabled={cargandoVD}
+              className="w-full mt-2 bg-gradient-to-r from-[#16a34a] to-[#064e1e] hover:opacity-90 border border-white/20 active:opacity-80 transition rounded-xl py-2.5 text-white font-black text-[11px] tracking-wide flex items-center justify-center gap-2 disabled:opacity-70">
+              📊 {cargandoVD ? 'ABRIENDO…' : 'VISTA DINÁMICA'}
             </button>
           )}
         </div>
+
+        {/* Input oculto para cargar el 1er informe (Excel) */}
+        <input ref={inputInformeRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={cargarPrimerInforme} />
+
+        {/* ── VENTANA DE INFORMES ── */}
+        {showInformes && (
+          <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowInformes(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-[#064e1e] to-[#16a34a] text-white">
+                <div className="min-w-0">
+                  <h3 className="font-black text-base leading-tight">Informes del deportista</h3>
+                  <p className="text-[11px] text-white/80 truncate">{dep._nombre} · Código {codigoVal || '—'}</p>
+                </div>
+                <button onClick={() => setShowInformes(false)} className="bg-white/20 rounded-lg w-8 h-8 flex items-center justify-center text-white flex-shrink-0"><X className="w-4 h-4" /></button>
+              </div>
+
+              <div className="p-4">
+                <p className="text-[11px] font-black text-gray-500 uppercase tracking-wide mb-2">Historial de valoraciones ({historialInf.length})</p>
+                {cargandoInf ? (
+                  <p className="text-center text-gray-400 text-sm py-6">Cargando…</p>
+                ) : historialInf.length === 0 ? (
+                  <p className="text-center text-gray-400 text-sm py-6 border border-dashed border-gray-200 rounded-xl">Aún no hay valoraciones guardadas.</p>
+                ) : (
+                  <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+                    {historialInf.map(ev => (
+                      <div key={ev.id} className="flex items-center justify-between gap-2 border border-gray-200 bg-gray-50 rounded-xl px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-bold text-gray-900 truncate">{`Informe ${String((ev as any).numeroInforme ?? '').trim() || '—'} / ${ev.fecha} / ${ev.nombre || dep._nombre}`}</p>
+                          <p className="text-[11px] text-gray-500 truncate">{ev.proyecto || (ev as any).programa || ev.perfil || '—'}</p>
+                        </div>
+                        <div className="flex gap-1.5 flex-shrink-0">
+                          <button onClick={() => editarInf(ev)} className="bg-[#16a34a] text-white text-[11px] font-black px-2.5 py-1.5 rounded-lg">✎ Editar</button>
+                          <button onClick={() => eliminarInf(ev)} title="Eliminar" className="bg-red-50 text-red-700 border border-red-200 text-[11px] font-black px-2.5 py-1.5 rounded-lg">🗑</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(() => {
+                  const ya1er = historialInf.some(ev => String((ev as any).numeroInforme ?? '').trim() === '1');
+                  return (
+                    <>
+                      <div className={`grid ${ya1er ? 'grid-cols-1' : 'grid-cols-2'} gap-2.5 mt-4`}>
+                        {!ya1er && (
+                          <button onClick={() => inputInformeRef.current?.click()} className="flex flex-col items-center gap-1 py-3 rounded-2xl border-[1.5px] border-blue-300 bg-blue-50 text-blue-700 font-black text-[12px] text-center leading-tight">
+                            <span className="text-lg">⬆</span>Cargar 1er informe (Excel)
+                          </button>
+                        )}
+                        <button onClick={nuevaInf} className="flex flex-col items-center gap-1 py-3 rounded-2xl border-[1.5px] border-green-300 bg-green-50 text-green-700 font-black text-[12px] text-center leading-tight">
+                          <span className="text-lg">＋</span>Nueva valoración
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-gray-400 text-center mt-3">
+                        {ya1er
+                          ? 'El 1er informe ya fue cargado. Usa “Nueva valoración” para el siguiente informe.'
+                          : 'Al elegir cualquiera se abre la valoración con el diseño Max 10.'}
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── ELEGIR INFORME PARA VISTA DINÁMICA ── */}
+        {showElegirVD && (
+          <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowElegirVD(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-[#064e1e] to-[#16a34a] text-white">
+                <div className="min-w-0">
+                  <h3 className="font-black text-base leading-tight">¿Cuál informe deseas revisar?</h3>
+                  <p className="text-[11px] text-white/80 truncate">{dep._nombre} · Código {codigoVal || '—'}</p>
+                </div>
+                <button onClick={() => setShowElegirVD(false)} className="bg-white/20 rounded-lg w-8 h-8 flex items-center justify-center text-white flex-shrink-0"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="p-4 flex flex-col gap-2">
+                {vdInformes.map(ev => (
+                  <button key={ev.id} onClick={() => irVistaDinamica(ev)}
+                    className="flex items-center justify-between gap-2 border-[1.5px] border-green-300 bg-green-50 hover:bg-green-100 active:bg-green-200 transition rounded-xl px-4 py-3 text-left">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-black text-green-800 truncate">
+                        {`Informe ${String((ev as any).numeroInforme ?? '').trim() || '—'}`}
+                      </p>
+                      <p className="text-[11px] text-gray-500 truncate">{`${ev.fecha || 's/f'} · ${ev.nombre || dep._nombre}`}</p>
+                    </div>
+                    <span className="text-green-700 text-lg flex-shrink-0">📊</span>
+                  </button>
+                ))}
+                <p className="text-[11px] text-gray-400 text-center mt-1">Se abre la valoración con el diseño Max 10.</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── PESTAÑAS DE SECCIONES ── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

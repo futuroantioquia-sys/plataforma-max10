@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Camera } from 'lucide-react';
 import LoadingBall from '@/components/LoadingBall';
-import { cn } from '@/lib/utils';
+import { cn, abrirSoporte, esPdfDato } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre, updateColumnasDeportista, enviarMensaje } from '@/lib/db';
@@ -14,8 +14,8 @@ import { useAuthStore } from '@/store/auth.store';
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
 const PAGOS_KEY    = 'futuro_pagos_estado';
 
-const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
+const SB_URL = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const SB_KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
 const SB_HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
 
 interface OtroPago { id: string; producto_id: string | null; descripcion: string; tipo: string; valor: number; fecha: string | null; estado: 'PAGÓ' | 'PEND'; }
@@ -1315,6 +1315,20 @@ function EstadoCuentaInner() {
           </div>
         )}
 
+        {/* ── FACTURACIÓN: cuadro aparte, al final (solo calidoso) ── */}
+        {esDeportista && !esReadonly && (
+          <div className="pb-8">
+            <div className="rounded-2xl border-2 border-dashed border-[#0f766e]/50 bg-[#f0fdfa] p-4 text-center">
+              <p className="text-[13px] font-black text-[#0f766e] mb-3">De requerir Factura, solicítala ahora</p>
+              <button type="button" onClick={() => router.push(`/alumnos/${id}/factura`)}
+                className="w-full rounded-xl py-3 text-sm font-black text-white transition active:scale-95 flex items-center justify-center gap-2"
+                style={{ background: '#0f766e' }}>
+                🧾 Solicitar factura
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── MODAL: dejar mensaje al canal elegido ── */}
         {msgDestino && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
@@ -1340,13 +1354,6 @@ function EstadoCuentaInner() {
                     placeholder="Ej: 3001234567"
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 mb-4"
                     style={{ ['--tw-ring-color' as any]: msgDestino.color }} />
-                  {msgDestino.titulo === 'Área de Pagos' && (
-                    <button type="button" onClick={() => router.push(`/alumnos/${id}/factura`)}
-                      className="w-full mb-4 rounded-xl py-3 text-sm font-black text-white transition active:scale-95 flex items-center justify-center gap-2"
-                      style={{ background: '#0f766e' }}>
-                      🧾 Solicita tu factura
-                    </button>
-                  )}
                   <div className="flex gap-3">
                     <button onClick={() => setMsgDestino(null)} disabled={enviandoPagos}
                       className="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancelar</button>
@@ -1579,10 +1586,17 @@ function EstadoCuentaInner() {
                     {s.data.startsWith('data:image') ? (
                       <img src={s.data} alt={s.name} className="w-full object-contain max-h-48"/>
                     ) : (
-                      <div className="bg-gray-50 p-4 text-center">
+                      /* PDF: el navegador NO deja abrir un enlace "data:", por eso antes
+                         no pasaba nada al tocarlo. Se abre como archivo temporal. */
+                      <button type="button"
+                        onClick={() => abrirSoporte(s.data, s.name)}
+                        className="w-full bg-gray-50 p-4 text-center hover:bg-gray-100 transition cursor-pointer">
                         <p className="text-2xl mb-1">📄</p>
                         <p className="text-sm font-semibold text-gray-600 truncate">{s.name}</p>
-                      </div>
+                        <p className="text-[11px] font-black text-blue-600 mt-1">
+                          {esPdfDato(s.data) ? 'Toca para abrir el PDF ↗' : 'Toca para abrir el archivo ↗'}
+                        </p>
+                      </button>
                     )}
                     <div className="px-3 pt-2 pb-1 bg-gray-50">
                       <p className="text-[10px] font-black text-gray-700 truncate">{s.name}</p>

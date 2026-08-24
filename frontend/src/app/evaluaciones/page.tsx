@@ -3,11 +3,26 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Download, Save, RefreshCw, Camera, CheckCircle, History } from 'lucide-react';
-import { getDeportistas, getEvaluaciones, saveEvaluacion, getProfes } from '@/lib/db';
+import { getDeportistas, getEvaluaciones, saveEvaluacion, getProfes, getFoto } from '@/lib/db';
 import type { Deportista, Evaluacion, Profe } from '@/lib/db';
+import { createClient } from '@/lib/supabase/client';
 import { getDescripcionesValoracion, getMetaValoracion, type FundMetaEdit } from '@/lib/valoracion-textos';
+import { rutaAnterior } from '@/components/RastreoRuta';
 
 const NIVELES = ['', 'Nivel 1 (Iniciación)', 'Nivel 2 (En Desarrollo)', 'Nivel 3 (Competente)', 'Nivel 4 (Avanzado)', 'Nivel 5 (Dominante)'];
+
+// Cargador del lector de Excel (SheetJS por CDN, igual que en Contabilidad).
+function loadXLSX(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const w = window as any;
+    if (w.XLSX) { resolve(w.XLSX); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    s.onload = () => resolve(w.XLSX);
+    s.onerror = () => reject(new Error('No se pudo cargar el lector de Excel'));
+    document.head.appendChild(s);
+  });
+}
 
 /** Textarea que crece solo con el contenido (sin scroll ni flechas). */
 function AutoTextarea({ value, onChange, placeholder, style }: {
@@ -689,6 +704,10 @@ function ValoracionPageInner() {
   const [encontrado,  setEncontrado]  = useState('');
   const [historial,   setHistorial]   = useState<Evaluacion[]>([]);
   const [verHistorial, setVerHistorial] = useState(false);
+  // Si estamos EDITANDO una valoración del historial, guardamos su id: al guardar,
+  // se reemplaza esa misma (no se crea una duplicada).
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const inputExcelRef = useRef<HTMLInputElement>(null);
   const [nombreEntrenador, setNombreEntrenador] = useState('');
   const [profes, setProfes] = useState<Profe[]>([]);
   const [intentoDescarga,  setIntentoDescarga]  = useState(false);
@@ -779,6 +798,57 @@ function ValoracionPageInner() {
     setData(p => ({ ...p, codigo: cod }));
   }, [codParam]);
 
+  // ── Entrada desde la ventana de INFORMES (perfil): importado / nueva / editar ──
+  const modoInfAplicado = useRef(false);
+  const editAplicado    = useRef(false);
+  useEffect(() => {
+    if (modoInfAplicado.current) return;
+    const cod = (codParam ?? '').trim().toUpperCase();
+    const nueva     = searchParams.get('nueva');
+    const importado = searchParams.get('importado');
+
+    // CARGAR 1er INFORME: datos del Excel dejados en sessionStorage por la ventana de Informes
+    if (importado) {
+      try {
+        const rawd = sessionStorage.getItem('futuro_valoracion_importada');
+        if (rawd) {
+          const mapped = JSON.parse(rawd);
+          sessionStorage.removeItem('futuro_valoracion_importada');
+          modoInfAplicado.current = true;
+          if (cod) autoCargadoCod.current = cod;    // no precargar la última
+          textosManual.current = true;
+          setEditandoId(null);
+          setData(prev => ({ ...INICIAL, ...prev, ...mapped } as typeof prev));
+          return;
+        }
+      } catch { /* noop */ }
+    }
+
+    // NUEVA VALORACIÓN en blanco para ese código
+    if (nueva && cod) {
+      modoInfAplicado.current = true;
+      autoCargadoCod.current = cod;      // que NO precargue la última valoración
+      textosManual.current = false;
+      setEditandoId(null);
+      setData(p => ({ ...INICIAL, fecha: new Date().toLocaleDateString('es-CO'), codigo: cod }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codParam]);
+
+  // EDITAR una valoración concreta del historial (?edit=<id>)
+  useEffect(() => {
+    if (editAplicado.current) return;
+    const eid = searchParams.get('edit');
+    if (!eid || !historial.length) return;
+    const ev = historial.find(h => h.id === eid);
+    if (ev) {
+      editAplicado.current = true;
+      autoCargadoCod.current = data.codigo.trim().toUpperCase();   // no pisar con la última
+      cargarDeHistorial(ev);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historial]);
+
   // Auto-cargar la ÚLTIMA evaluación guardada del deportista para que NO aparezca en blanco.
   // saveEvaluacion siempre inserta, así que editar y guardar crea un nuevo informe (el historial se conserva).
   // La numeración de la valoración es automática: = cantidad de valoraciones ya guardadas del deportista.
@@ -827,6 +897,11 @@ function ValoracionPageInner() {
           p.proyectos.some(pr => pr.trim().toUpperCase() === proyecto.trim().toUpperCase())
         );
         if (profe) setNombreEntrenador((profe.nombre && profe.nombre.trim()) ? profe.nombre.trim() : profe.usuario);
+      }
+      // Traer la FOTO del deportista (se guarda aparte, en fotos_deportistas).
+      // Solo se pone si el formulario aún no tiene foto propia.
+      if (dep.id) {
+        getFoto(dep.id).then(f => { if (f) setData(p => (p.foto ? p : { ...p, foto: f })); }).catch(() => {});
       }
       setEncontrado(dep._nombre ?? '');
       setTimeout(() => setEncontrado(''), 3000);
@@ -929,6 +1004,8 @@ function ValoracionPageInner() {
     setGuardando(true);
     try {
       await saveEvaluacion(data);
+      // Si venía de "Editar", reemplaza la valoración anterior (borra la vieja) para no duplicar.
+      if (editandoId) { await borrarEvaluacionPorId(editandoId); setEditandoId(null); }
       setGuardado(true);
       setTimeout(() => setGuardado(false), 2000);
       getEvaluaciones(data.codigo).then(setHistorial);
@@ -940,24 +1017,40 @@ function ValoracionPageInner() {
   const limpiar = () => {
     if (confirm('¿Limpiar el formulario? (el historial guardado en Supabase no se borra)')) {
       setData({ ...INICIAL, fecha: new Date().toLocaleDateString('es-CO') });
+      setEditandoId(null);
     }
   };
 
-  // Volver a la FICHA del deportista (no al listado de proyectos), para poder ver sus otras secciones.
+  /* Volver a la FICHA del deportista, para poder ver sus otras secciones.
+
+     OJO con el caso sin codigo: si el formulario esta en blanco, `cod` queda
+     vacio y la busqueda por codigo terminaba coincidiendo con CUALQUIER ficha
+     que tuviera el codigo vacio (por ejemplo un borrador "NUEVO DEPORTISTA"),
+     llevando al usuario a una ficha que no tiene nada que ver.
+     Ahora, sin codigo, se regresa a la pantalla de la que vino. */
   const volverAlDeportista = () => {
     const cod = data.codigo.trim().toUpperCase();
-    const dep = deportistas.find(d =>
-      Object.entries(d._columnas ?? {}).some(([k, v]) =>
-        /^c[oó]d/i.test(k.trim()) && String(v).trim().toUpperCase() === cod
-      )
-    );
-    if (dep?.id) router.push(`/alumnos/${dep.id}`);
-    else router.back();
+    const dep = cod
+      ? deportistas.find(d =>
+          Object.entries(d._columnas ?? {}).some(([k, v]) =>
+            /^c[oó]d/i.test(k.trim()) && String(v ?? '').trim().toUpperCase() === cod
+          )
+        )
+      : undefined;
+    if (dep?.id) { router.push(`/alumnos/${dep.id}`); return; }
+
+    const prev = rutaAnterior(typeof window !== 'undefined' ? window.location.pathname : '/evaluaciones');
+    if (prev && !prev.startsWith('/evaluaciones')) { router.push(prev); return; }
+    router.push('/dashboard');
   };
+
+  // Sin codigo no hay "deportista" al cual volver: la etiqueta lo refleja.
+  const etiquetaVolver = data.codigo.trim() ? '← Volver al deportista' : '← Volver';
 
   // Inicia una NUEVA valoración conservando la identidad del deportista y numerándola automáticamente.
   const nuevaValoracion = () => {
     if (historial.length > 0 && !confirm('¿Crear una NUEVA valoración en blanco para este deportista? Las anteriores quedan guardadas en el historial.')) return;
+    setEditandoId(null);            // deja de editar: la próxima será nueva
     textosManual.current = false;   // permitir auto-generar en la nueva
     setData(p => ({
       ...INICIAL,
@@ -1094,8 +1187,110 @@ function ValoracionPageInner() {
 
   const cargarDeHistorial = (ev: Evaluacion) => {
     const { id, ...resto } = ev;
-    setData(resto);
+    // FUSIONAR sobre los valores por defecto y los actuales: la valoración guardada no
+    // trae TODOS los campos (p. ej. "programa"), así que si reemplazáramos todo quedarían
+    // campos en undefined y fallaría la validación al guardar.
+    setData(prev => ({ ...INICIAL, ...prev, ...resto } as typeof prev));
+    setEditandoId(id ?? null);   // al guardar, se ACTUALIZA esta valoración (no se duplica)
     setVerHistorial(false);
+  };
+
+  // Borra una valoración por id (Supabase). Devuelve true si salió bien.
+  const borrarEvaluacionPorId = async (id?: string): Promise<boolean> => {
+    if (!id) return false;
+    try {
+      const { error } = await createClient().from('evaluaciones').delete().eq('id', id);
+      if (error) { console.error('[evaluaciones] borrar:', error.message); return false; }
+      return true;
+    } catch (e) { console.error('[evaluaciones] borrar:', e); return false; }
+  };
+
+  // ── Importar la 1ª valoración desde el Excel (plantilla por deportista) ──
+  async function importarExcel(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+    try {
+      const XLSX = await loadXLSX();
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) { alert('El Excel no tiene datos legibles.'); return; }
+      const raw = (addr: string) => { const c = ws[addr]; return c == null ? '' : c.v; };
+      const str = (addr: string) => { const v = raw(addr); return v == null ? '' : String(v).trim(); };
+      const nvl = (addr: string) => str(addr); // los niveles ya vienen como "Nivel N (…)"
+      // Fecha (puede venir como Date)
+      let fecha = '';
+      const f = raw('E7');
+      if (f instanceof Date) {
+        const dd = String(f.getDate()).padStart(2, '0'), mm = String(f.getMonth() + 1).padStart(2, '0');
+        fecha = `${dd}/${mm}/${f.getFullYear()}`;
+      } else fecha = str('E7');
+      const edad = (str('E11').match(/\d+/)?.[0]) ?? str('E11');
+      const mapped: Partial<Valoracion> = {
+        fecha, codigo: str('E8'), nombre: str('E10'), edad,
+        proyecto: str('E12'), perfil: str('E13'), posicion: str('E14'),
+        torneos: str('C16'), partJugados: str('F16'),
+        tarjAmarillas: str('C17'), partTitular: str('F17'),
+        tarjRojas: str('C18'), minutosJugados: str('F18'),
+        goles: str('C19'), calificacion: str('F19'),
+        // Condicionales
+        fuerzaNivel: nvl('F25'), fuerzaDesc: str('A26'),
+        velocidadNivel: nvl('F31'), velocidadDesc: str('A32'),
+        resistenciaNivel: nvl('F37'), resistenciaDesc: str('A38'),
+        // Técnica  (Control Orientado→control · Control y Pase→pase · Cond. y Dribbling→conducción y dribling)
+        controlNivel: nvl('F57'), controlDesc: str('A58'),
+        paseNivel: nvl('F46'), paseDesc: str('A47'),
+        conductaNivel: nvl('F52'), conductaDesc: str('A53'),
+        driblingNivel: nvl('F52'), driblingDesc: str('A53'),
+        remataNivel: nvl('F63'), remataDesc: str('A64'),
+        // El 1.er informe no evalúa Cabeceo ni Quite → "No Aplica" (el profe puede cambiarlo)
+        cabeceoNivel: 'No Aplica', cabeceoDesc: '',
+        quiteNivel: 'No Aplica', quiteDesc: '',
+        proteccionNivel: nvl('F69'), proteccionDesc: str('A70'),
+        // Táctica
+        posicionNivel: nvl('F76'), posicionDesc: str('A77'),
+        visionNivel: nvl('F82'), visionDesc: str('A83'),
+        defensaNivel: nvl('F88'), defensaDesc: str('A89'),
+        amplitudNivel: nvl('F94'), amplitudDesc: str('A95'),
+        transicionNivel: nvl('F99'), transicionDesc: str('A100'),
+        superioridadNivel: nvl('F105'), superioridadDesc: str('A106'),
+        basculacionNivel: nvl('F112'), basculacionDesc: str('A113'),
+        // Socio-afectiva
+        trabajoNivel: nvl('F120'), trabajoDesc: str('A121'),
+        disciplinaNivel: nvl('F125'), disciplinaDesc: str('A126'),
+        actitudNivel: nvl('F131'), actitudDesc: str('A132'),
+        // Colectivo
+        identidadNivel: nvl('F141'), identidadDesc: str('A142'),
+        bloqueNivel: nvl('F147'), bloqueDesc: str('A148'),
+        climaNivel: nvl('F153'), climaDesc: str('A154'),
+        gestionCompNivel: nvl('F159'), gestionCompDesc: str('A160'),
+        // Textos
+        logrosTrimestre: str('A165'), objetivosTrimestre: str('A169'),
+        // Comportamental
+        responsabilidad: str('F175'), puntualidad: str('F177'),
+        disciplinaComp: str('F179'), respeto: str('F181'),
+        tolerancia: str('F183'), companerismo: str('F185'),
+        liderazgo: str('F187'), trabajoEquipoComp: str('F189'),
+        sentidoPertenencia: str('F191'),
+        numeroInforme: '1',
+      };
+      textosManual.current = true;               // respetar los textos del Excel (no autogenerar)
+      setData(prev => ({ ...prev, ...mapped }));
+      setEditandoId(null);                        // es una NUEVA valoración
+      alert(`✔ Valoración de ${mapped.nombre || mapped.codigo || 'deportista'} cargada desde el Excel.\nRevisa los campos y pulsa "Guardar".`);
+    } catch (err: any) {
+      alert('No se pudo leer el Excel: ' + (err?.message || err));
+    }
+  }
+
+  // Botón "Eliminar" del historial.
+  const eliminarDeHistorial = async (ev: Evaluacion) => {
+    if (!confirm(`¿Eliminar la valoración del ${ev.fecha}? Esta acción no se puede deshacer.`)) return;
+    const ok = await borrarEvaluacionPorId(ev.id);
+    if (!ok) { alert('No se pudo eliminar la valoración. Intenta de nuevo.'); return; }
+    setHistorial(prev => prev.filter(x => x.id !== ev.id));
+    if (editandoId === ev.id) setEditandoId(null);
   };
 
   const onFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1136,7 +1331,7 @@ function ValoracionPageInner() {
 
         {/* ===== ESCRITORIO: barra completa siempre ===== */}
         <div className="hidden sm:flex" style={{ alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 16px' }}>
-          <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>← Volver al deportista</button>
+          <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>{etiquetaVolver}</button>
           <span style={{ fontWeight: 800, color: '#111', flex: 1, fontSize: 15 }}>Valoración del Deportista</span>
           {historial.length > 0 && (
             <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
@@ -1144,6 +1339,8 @@ function ValoracionPageInner() {
             </button>
           )}
           <button onClick={nuevaValoracion} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>＋ Nueva valoración</button>
+          {/* La 1ª valoración se carga SOLO desde la ventana de Informes (perfil), una única vez. Se mantiene el input oculto para el importador. */}
+          <input ref={inputExcelRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importarExcel} />
           <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}><RefreshCw size={13} /> Limpiar</button>
           <button onClick={() => { textosManual.current = false; generarTextos(); }} title="Rellena Logros, Retos y Logros y Retos del Equipo según la valoración" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}><RefreshCw size={13} /> Regenerar textos</button>
           <button onClick={() => { const c = data.codigo.trim(); if (!c) { alert('Ingresa el código del deportista.'); return; } router.push(`/valoracion-dinamica?cod=${encodeURIComponent(c)}`); }} title="Ver la valoración en Vista Dinámica" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>📊 Vista Dinámica</button>
@@ -1157,7 +1354,7 @@ function ValoracionPageInner() {
             /* Completa y organizada (arriba) */
             <div style={{ padding: '8px 12px 10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>← Volver al deportista</button>
+                <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>{etiquetaVolver}</button>
                 <span style={{ fontWeight: 900, color: '#111', fontSize: 14 }}>· Valoración</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
@@ -1192,11 +1389,26 @@ function ValoracionPageInner() {
           <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Evaluaciones anteriores de {data.nombre || data.codigo}:</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto' }}>
             {historial.map(ev => (
-              <button key={ev.id} onClick={() => cargarDeHistorial(ev)}
-                style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12 }}>
-                <span>{ev.fecha}</span>
-                <span style={{ color: '#6b7280' }}>{ev.proyecto || ev.programa || ev.perfil || '—'}</span>
-              </button>
+              <div key={ev.id}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 6, border: editandoId === ev.id ? '1.5px solid #16a34a' : '1px solid #e5e7eb', background: editandoId === ev.id ? '#ecfdf5' : '#f9fafb', fontSize: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span style={{ fontWeight: 700, color: '#111827' }}>
+                    {`Informe ${((ev as any).numeroInforme ?? '').toString().trim() || '—'} / ${ev.fecha} / ${ev.nombre || data.nombre || ev.codigo}`}
+                    {editandoId === ev.id ? '  · (editando)' : ''}
+                  </span>
+                  <span style={{ color: '#6b7280' }}>{ev.proyecto || ev.programa || ev.perfil || '—'}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => cargarDeHistorial(ev)}
+                    style={{ padding: '5px 12px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                    ✎ Editar
+                  </button>
+                  <button onClick={() => eliminarDeHistorial(ev)}
+                    style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fee2e2', color: '#b91c1c', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                    🗑 Eliminar
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>
