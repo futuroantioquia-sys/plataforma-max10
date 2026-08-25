@@ -389,3 +389,90 @@
  ✓ Compiled /evaluaciones in 529ms (736 modules)
  GET /api/profes 200 in 2321ms
  GET /api/profes 200 in 2831ms
+ ○ Compiling /asistencia ...
+ ✓ Compiled /asistencia in 647ms (699 modules)
+ ✓ Compiled /api/profes in 212ms (731 modules)
+ ✓ Compiled /api/auth/login in 299ms (737 modules)
+ POST /api/auth/login 200 in 3670ms
+ GET /api/profes 403 in 31ms
+ GET /api/profes 403 in 41ms
+ GET /api/profes 200 in 18391ms
+ GET /api/profes 200 in 19353ms
+ GET /api/profes 200 in 21581ms
+ GET /api/profes 200 in 21269ms
+ POST /api/auth/login 200 in 432ms
+ GET /api/profes 403 in 25ms
+ GET /api/profes 403 in 26ms
+ ○ Compiling / ...
+ ✓ Compiled / in 991ms (1525 modules)
+ GET / 307 in 1213ms
+ GET /login 200 in 189ms
+ ✓ Compiled in 2.2s (1525 modules)
+ POST /api/auth/login 200 in 501ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 678ms (765 modules)
+ ✓ Compiled /api/pagos/soportes in 274ms (767 modules)
+ ✓ Compiled in 1ms (769 modules)
+ ✓ Compiled in 1ms (769 modules)
+ ✓ Compiled in 1ms (769 modules)
+ GET /api/deportistas 403 in 1144ms
+ GET /api/deportistas 403 in 1138ms
+ GET /api/pagos/soportes?solo=count 403 in 1389ms
+ GET /api/pagos/soportes?solo=count 403 in 1384ms
+ ○ Compiling /general ...
+ ✓ Compiled /general in 902ms (767 modules)
+ GET /api/profes 403 in 26ms
+ GET /api/profes 403 in 33ms
+ POST /api/auth/login 200 in 1070ms
+ ○ Compiling /mis-proyectos ...
+ ✓ Compiled /mis-proyectos in 705ms (749 modules)
+ ✓ Compiled /api/profes in 368ms (752 modules)
+ ✓ Compiled (754 modules)
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 1118ms
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 1388ms
+ GET /api/profes 200 in 6382ms
+ POST /api/auth/login 200 in 414ms
+ ✓ Compiled /api/pagos/soportes in 212ms (747 modules)
+ GET /api/pagos/soportes?solo=count 403 in 276ms
+ GET /api/pagos/soportes?solo=count 403 in 284ms
+ GET /api/profes 200 in 7036ms
+ GET /api/pagos/soportes?solo=count 403 in 23ms
+ GET /api/pagos/soportes?solo=count 403 in 37ms
+ GET /api/pagos/soportes?solo=count 403 in 29ms
+ GET /api/pagos/soportes?solo=count 403 in 29ms
+ GET /api/pagos/soportes?solo=count 403 in 26ms
+ GET /api/pagos/soportes?solo=count 403 in 25ms
+ GET /api/pagos/soportes?solo=count 403 in 22ms
+ GET /api/profes 403 in 28ms
+ GET /api/profes 403 in 29ms
+ ✓ Compiled in 1020ms (785 modules)
+ GET /api/pagos/soportes?solo=count 403 in 48ms
+ GET /api/pagos/soportes?solo=count 403 in 51ms
+ GET /api/profes 403 in 28ms
+ GET /api/profes 403 in 35ms
+ ✓ Compiled in 2.8s (1490 modules)
+ ✓ Compiled /api/profes in 254ms (737 modules)
+ GET /api/profes 403 in 487ms
+ GET /api/profes 403 in 359ms
+ GET /general 200 in 465ms
+ ✓ Compiled /api/deportistas in 311ms (739 modules)
+ GET /api/profes 403 in 630ms
+ GET /api/profes 403 in 619ms
+ GET /api/deportistas 403 in 656ms
+ GET /api/deportistas 403 in 642ms
+ GET /general 200 in 176ms
+ GET /api/deportistas 403 in 30ms
+ GET /api/deportistas 403 in 31ms
+ GET /api/profes 403 in 37ms
+ GET /api/profes 403 in 38ms
+ GET /general 200 in 56ms
+ GET /api/deportistas 403 in 32ms
+ GET /api/deportistas 403 in 32ms
+ GET /api/profes 403 in 37ms
+ GET /api/profes 403 in 37ms
+ ✓ Compiled /api/pagos/soportes in 373ms (738 modules)
+ GET /api/pagos/soportes?solo=count 403 in 435ms
+ GET /api/pagos/soportes?solo=count 403 in 459ms
+ ✓ Compiled /api/profes in 168ms (740 modules)
+ GET /api/profes 403 in 215ms
+ GET /api/profes 403 in 215ms
