@@ -5,8 +5,9 @@ import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DollarSign, Search,
-  User,
+  ChevronRight, User,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { getDeportistas, getPagos, updateColumnasDeportista } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
@@ -18,21 +19,6 @@ type PagoRow = {
 type AllPagos = Record<string, PagoRow[]>;
 type DepEstado = 'ACTIVO' | 'PAUSO' | 'RETIRADO';
 const DEP_ESTADOS_KEY = 'futuro_dep_estados';
-
-// ── PALETA DE LA PLATAFORMA ──────────────────────────────────────
-// La misma de Asistencia y Microciclo: gris azulado oscuro de fondo, tarjetas
-// un poco más claras, campos en el gris hondo, verde institucional como único
-// color de botón y el rojo SOLO donde hay plata pendiente.
-const LIENZO    = '#333F50';   // fondo de la pantalla
-const PANEL     = '#3C4759';   // tarjetas y filas de la tabla
-const CAMPO     = '#2B3547';   // desplegables, buscador, cuadros de texto
-const BORDE     = '#4A5568';
-const VERDE     = '#00B050';   // verde institucional
-const ROJO      = '#C0504D';   // lo que se debe
-const ROJO_OSC  = '#9E403D';
-const AMBAR     = '#E0A33A';
-const GRIS_BECA = '#5A6478';   // becados: gris apagado, sin morado
-const GRIS_VACIO= '#7C879A';   // guiones y casillas sin dato
 
 // OBSERVACIÓN: nota libre de cartera (compromisos de pago, acuerdos, razón de la
 // mora…). Se guarda dentro de las columnas del deportista, así que la ve todo el
@@ -53,18 +39,14 @@ function getCol(dep: Deportista, rx: RegExp): string {
   const k = Object.keys(dep._columnas ?? {}).find(k => rx.test(k));
   return k ? dep._columnas[k] : '';
 }
-/** Color del código según el tipo de afiliación.
- *  Los BECADOS salieron del morado: van en gris apagado para que la pantalla
- *  no se vea tan colorida. Nuevo / antiguo / reingreso conservan su color
- *  porque el usuario los distingue por ahí. */
 function colorCodigo(afil: string): string {
   const v = afil.toLowerCase();
-  if (v.includes('nuevo'))     return '#E07B39';    // nuevo
-  if (v.includes('antigu'))    return VERDE;        // antiguo
-  if (v.includes('reingreso')) return '#4E8FD6';    // reingreso
-  if (v.includes('mb instit')) return '#3E4859';    // media beca
-  if (v.includes('b instit'))  return GRIS_BECA;    // becado
-  return GRIS_BECA;
+  if (v.includes('nuevo'))     return '#f97316';
+  if (v.includes('antigu'))    return '#16a34a';
+  if (v.includes('reingreso')) return '#2563eb';
+  if (v.includes('mb instit')) return '#374151';
+  if (v.includes('b instit'))  return '#7c3aed';
+  return '#6b7280';
 }
 
 /* ── Filas del año (mismas que estado-cuenta) ── */
@@ -252,14 +234,6 @@ function PagosInner() {
   const [pagosListos,      setPagosListos]      = useState(false);
   const [depEstados,       setDepEstados]       = useState<Record<string, DepEstado>>({});
   const [mostrarRetirados, setMostrarRetirados] = useState(false);
-  /* COLA DE COBRO — las casillitas de la izquierda. WhatsApp no deja mandarle
-     a varios de un solo golpe (solo tiene un chat abierto a la vez), así que
-     lo que se hace es una FILA: usted marca varios y la plataforma lo va
-     llevando de uno en uno, abriendo el chat con el mensaje ya escrito. */
-  const [sel,         setSel]         = useState<Set<string>>(new Set());
-  const [colaOn,      setColaOn]      = useState(false);   // ventana de la cola abierta
-  const [colaIdx,     setColaIdx]     = useState(0);       // en cuál va
-  const [colaAbierto, setColaAbierto] = useState(false);   // ya se abrió el chat de este
   // OBSERVACIÓN por deportista (texto libre editable en la última columna)
   const [obs,          setObs]          = useState<Record<string, string>>({});
   const [editObs,      setEditObs]      = useState<string | null>(null);
@@ -487,126 +461,57 @@ function PagosInner() {
     return { cargados, pagados, pendientes, proximos, total: fullRows.length, mesesPendientes, mesesPendFull };
   }
 
-  const BL = '#FFFFFF';
+  const BL = '#4b5563';
+  const G  = '#16a34a';
 
   /* ── COBRO POR WHATSAPP ────────────────────────────────────────────────
-     Devuelve null cuando NO hay nada que cobrar. Hay dos tonos:
-
-       'atrasado' (ROJO · COBRAR AHORA) — debe dos o más meses, o debe un mes
-                  viejo que ya se pasó. Aquí el cobro va en serio.
-       'aldia'    (ROJO · COBRAR UNO)   — solo debe el mes en curso. No está
-                  atrasado: es un recordatorio amable para que no se le junte
-                  con el próximo.
-
-     En los dos casos se abre WhatsApp con el mensaje YA ESCRITO. No se envía
-     nada solo: el envío lo hace una persona después de leerlo. */
+     Devuelve null cuando NO hay que cobrar. Solo hay que cobrar si el
+     deportista debe el mes en curso Y por lo menos un mes anterior. */
   function cobroDe(dep: Deportista, mesesPendFull: string[], becado?: boolean) {
     if (becado || !mesesPendFull?.length) return null;
 
     // La MATRÍCULA no es un mes: se menciona aparte y no multiplica la tarifa.
     const soloMeses = mesesPendFull.filter(d => (MES_NUM[d] ?? 0) > 0);
     const debeMatricula = mesesPendFull.some(d => (MES_NUM[d] ?? 0) === 0);
-    if (!soloMeses.length) return null;
+
+    const debeEsteMes   = soloMeses.some(d => MES_NUM[d] === MES_ACTUAL);
+    const debeAnteriores = soloMeses.some(d => MES_NUM[d] < MES_ACTUAL);
+    if (!debeEsteMes || !debeAnteriores) return null;
 
     const nombre = dep._nombre || '';
     // La CUOTA MANUAL del deportista, si existe, manda sobre la tabla de tarifas.
     const manual = Number(getCol(dep, /^cuota_?manual$/i).replace(/[^0-9]/g, '')) || 0;
     const tarifa = manual > 0 ? manual : tarifaMensual(getCol(dep, /^program/i), getCol(dep, /^sede/i));
-    const n      = soloMeses.length;
-    const total  = tarifa * n;
+    const total  = tarifa * soloMeses.length;
     const meses  = listaBonita(soloMeses.map(mesBonito));
 
-    const cuentaEnLineas = `${CUENTA_COBRO.banco}\n${CUENTA_COBRO.numero}\n${CUENTA_COBRO.titular}\n${CUENTA_COBRO.nit}`;
-    const cuentaEnUnaLinea = `${CUENTA_COBRO.banco} ${CUENTA_COBRO.numero} ${CUENTA_COBRO.titular} ${CUENTA_COBRO.nit}`;
-    const claridad =
+    const texto =
+      `Un saludo especial.\n\n` +
+      `Adjuntamos Estado de Cuenta Plataforma MAX 10, del deportista ${nombre}.\n\n` +
       `Si tiene alguna razón, duda, reclamo o comentario, le agradecemos hacerlo a la mayor brevedad. ` +
-      `Lo importante es dar claridad.`;
-
-    /* ¿Va el mensaje suave? Solo si debe UN mes, ese mes es el de ahora, y no
-       tiene la matrícula pendiente. Si no, el mensaje es el de atrasado. */
-    const soloEsteMes = n === 1 && MES_NUM[soloMeses[0]] === MES_ACTUAL && !debeMatricula;
-
-    const texto = soloEsteMes
-      ? `Un saludo especial.\n\n` +
-        `Valoramos muchísimo su cumplimiento en los pagos.\n\n` +
-        `Solo tiene pendiente este mes y la idea es que no se les junte con el próximo.\n\n` +
-        `Adjuntamos Estado de Cuenta Plataforma MAX 10.\n\n` +
-        `${claridad}\n\n` +
-        /* El mes sale solo del mes que está debiendo: en agosto dice AGOSTO,
-           en septiembre dirá SEPTIEMBRE. No hay que cambiarlo a mano. */
-        `El Deportista ${nombre} tiene pendiente el pago de ${meses.toUpperCase()} por ${pesos(tarifa)}\n\n` +
-        `${cuentaEnUnaLinea}\n\n` +
-        `Gracias por su compromiso.`
-      : `Un saludo especial.\n\n` +
-        `Adjuntamos Estado de Cuenta Plataforma MAX 10, del deportista ${nombre}.\n\n` +
-        `${claridad}\n\n` +
-        `El Deportista ${nombre} tiene pendiente ` +
-        (n === 1 ? `el pago de ${meses}. ${pesos(tarifa)}` : `los pagos de ${meses}. ${pesos(tarifa)} x ${n}. Total: ${pesos(total)}`) +
-        (debeMatricula ? `, más la MATRÍCULA pendiente` : '') + `.\n\n` +
-        `${cuentaEnLineas}\n\n` +
-        `Ingrese a nuestra APP ${URL_APP} y suba los soportes correspondientes.\n\n` +
-        `Contamos con su compromiso.`;
+      `Lo importante es dar claridad.\n\n` +
+      `El Deportista ${nombre} tiene pendiente los pagos de ${meses}. ` +
+      `${pesos(tarifa)} x ${soloMeses.length}. Total: ${pesos(total)}` +
+      (debeMatricula ? `, más la MATRÍCULA pendiente` : '') + `.\n\n` +
+      `${CUENTA_COBRO.banco}\n${CUENTA_COBRO.numero}\n${CUENTA_COBRO.titular}\n${CUENTA_COBRO.nit}\n\n` +
+      `Ingrese a nuestra APP ${URL_APP} y suba los soportes correspondientes.\n\n` +
+      `Contamos con su compromiso.`;
 
     const tel = aWhatsApp(telefonoDe(dep));
-    /* Se va DERECHO a WhatsApp Web (web.whatsapp.com), no por wa.me.
-       wa.me es la página intermedia que pregunta "¿abrir en la aplicación o
-       en WhatsApp Web?" — ese es el permiso que había que dar cada vez.
-       Yendo directo a web.whatsapp.com, si ya tiene WhatsApp Web abierto,
-       cae de una en el chat de esa persona con el mensaje ya escrito.
-       Con teléfono abre el chat de esa persona; sin teléfono abre WhatsApp
-       con el mensaje listo para que usted escoja el contacto a mano. */
+    // Con teléfono, abre el chat de esa persona. Sin teléfono, abre WhatsApp
+    // con el mensaje listo para que usted escoja el contacto a mano.
     const url = tel
-      ? `https://web.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}`
+      ? `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`
       : `https://web.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
 
-    return {
-      url, tel, texto, meses, total, tarifa, n,
-      tono: soloEsteMes ? 'aldia' : 'atrasado',
-      etiqueta: soloEsteMes ? 'COBRAR UNO' : 'COBRAR AHORA',
-    };
-  }
-
-  /* ── LA COLA ────────────────────────────────────────────────────────────
-     Los que HOY tienen algo que cobrar, en el mismo orden de la tabla (o sea,
-     respetando los filtros que usted tenga puestos). De ahí salen las
-     casillitas: solo la tiene el que se le puede cobrar. */
-  const cobrables = filtrados
-    .map(dep => {
-      const r = resumenPago(dep) as any;
-      const c = cobroDe(dep, r.mesesPendFull, r.becado);
-      return c ? { dep, cobro: c } : null;
-    })
-    .filter((x): x is { dep: Deportista; cobro: any } => x !== null);
-
-  const idsCobrables = cobrables.map(x => x.dep.id);
-  const todosMarcados = idsCobrables.length > 0 && idsCobrables.every(id => sel.has(id));
-  const cola = cobrables.filter(x => sel.has(x.dep.id));
-
-  function toggleSel(id: string) {
-    setSel(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  }
-  function marcarTodos() { setSel(todosMarcados ? new Set() : new Set(idsCobrables)); }
-
-  function abrirCola() {
-    if (!cola.length) return;
-    setColaIdx(0); setColaAbierto(false); setColaOn(true);
-  }
-  /** Abre (o vuelve a abrir) el chat de esta persona, siempre en la MISMA pestaña. */
-  function abrirWhatsApp(url: string) {
-    window.open(url, 'whatsapp_max10');
-    setColaAbierto(true);
-  }
-  /** Pasa al siguiente de la fila. Si era el último, cierra y borra las marcas. */
-  function siguienteCobro() {
-    if (colaIdx + 1 >= cola.length) { setColaOn(false); setSel(new Set()); setColaIdx(0); }
-    else { setColaIdx(colaIdx + 1); setColaAbierto(false); }
+    return { url, tel, texto, meses, total, tarifa, n: soloMeses.length };
   }
 
   return (
-    <div className="min-h-screen" style={{ background: LIENZO }}>
+    <div className="min-h-screen bg-gray-50">
 
       {/* HEADER */}
-      <header className="relative bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
+      <header className="relative bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
         <div className="absolute inset-0 pointer-events-none select-none" aria-hidden>
           <svg className="absolute inset-0 w-full h-full opacity-[0.08]" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -618,16 +523,16 @@ function PagosInner() {
             <rect width="100%" height="100%" fill="url(#sp-pag)"/>
           </svg>
         </div>
-        <button onClick={() => router.push('/dashboard')} className="relative text-white hover:opacity-80 transition font-bold text-sm">
+        <button onClick={() => router.push('/dashboard')} className="relative text-white/70 hover:text-white transition">
           ← Volver
         </button>
         <div className="relative flex-1">
           <h1 className="text-white font-black text-lg">Control de Pagos</h1>
-          <p className="text-white text-xs">{deportistas.length} deportistas registrados</p>
+          <p className="text-white/60 text-xs">{deportistas.length} deportistas registrados</p>
         </div>
         <div className="relative text-right leading-tight border-l border-white/30 pl-3">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-          <p className="text-white text-[11px]">Conecta, Gestiona, Gana</p>
+          <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 
@@ -635,30 +540,27 @@ function PagosInner() {
 
         {/* TÍTULO SECCIÓN */}
         <div className="flex items-center gap-2 pt-1">
-          <DollarSign className="w-5 h-5" style={{ color: VERDE }} />
-          <h2 className="font-black text-white text-base">Estado de Cuenta por Deportista</h2>
+          <DollarSign className="w-5 h-5 text-[#16a34a]" />
+          <h2 className="font-black text-[#111827] text-base">Estado de Cuenta por Deportista</h2>
         </div>
 
         {/* FILTROS */}
-        <div className="rounded-2xl p-4 space-y-3 shadow-sm border"
-             style={{ background: PANEL, borderColor: BORDE }}>
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 shadow-sm">
           {/* Fila 1: PROGRAMA + PROYECTO */}
           <div className="flex gap-3 flex-wrap">
             <div className="flex-1 min-w-[140px]">
-              <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Programa</label>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Programa</label>
               <select value={filtroPrograma}
                 onChange={e => { setFiltroPrograma(e.target.value); setFiltroProyecto(''); syncURL(busqueda, filtroCodigo, e.target.value, '', filtroMes); }}
-                className="w-full rounded-xl px-3 py-2 text-sm text-white border focus:outline-none focus:ring-2 focus:ring-[#00B050]"
-                style={{ background: CAMPO, borderColor: BORDE }}>
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                 <option value="">Todos los programas</option>
                 {programas.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div className="flex-1 min-w-[140px]">
-              <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Proyecto</label>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Proyecto</label>
               <select value={filtroProyecto} onChange={e => { setFiltroProyecto(e.target.value); syncURL(busqueda, filtroCodigo, filtroPrograma, e.target.value, filtroMes); }}
-                className="w-full rounded-xl px-3 py-2 text-sm text-white border focus:outline-none focus:ring-2 focus:ring-[#00B050]"
-                style={{ background: CAMPO, borderColor: BORDE }}>
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                 <option value="">Todos los proyectos</option>
                 {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -668,21 +570,19 @@ function PagosInner() {
           {/* Fila 2: CÓDIGO + NOMBRE */}
           <div className="flex gap-3 flex-wrap">
             <div className="w-[130px]">
-              <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Código</label>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Código</label>
               <input
                 value={filtroCodigo}
                 onChange={e => { setFiltroCodigo(e.target.value); syncURL(busqueda, e.target.value, filtroPrograma, filtroProyecto, filtroMes); }}
                 placeholder="Ej: 2018"
-                className="w-full rounded-xl px-3 py-2 text-sm text-white border placeholder:text-[#8C94A0] focus:outline-none focus:ring-2 focus:ring-[#00B050]"
-                style={{ background: CAMPO, borderColor: BORDE }}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white"
               />
             </div>
             <div className="w-[160px]">
-              <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Deben el mes</label>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deben el mes</label>
               <select value={filtroMes} onChange={e => { setFiltroMes(e.target.value); syncURL(busqueda, filtroCodigo, filtroPrograma, filtroProyecto, e.target.value); }}
                 title="Ver solo los deportistas que tienen ese mes pendiente"
-                className="w-full rounded-xl px-3 py-2 text-sm text-white border focus:outline-none focus:ring-2 focus:ring-[#00B050]"
-                style={{ background: CAMPO, borderColor: BORDE }}>
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                 <option value="">Todos los meses</option>
                 {DETALLE_ROWS.filter(det => MES_NUM[det] <= MES_ACTUAL).map(det => (
                   <option key={det} value={MES_ABREV[det] ?? det.slice(0, 3)}>{det.replace(' 2026', '')}</option>
@@ -690,100 +590,67 @@ function PagosInner() {
               </select>
             </div>
             <div className="relative flex-1 min-w-[160px]">
-              <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Nombre</label>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Nombre</label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   value={busqueda}
                   onChange={e => { setBusqueda(e.target.value); syncURL(e.target.value, filtroCodigo, filtroPrograma, filtroProyecto, filtroMes); }}
                   placeholder="Buscar nombre..."
-                  className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white border placeholder:text-[#8C94A0] focus:outline-none focus:ring-2 focus:ring-[#00B050]"
-                  style={{ background: CAMPO, borderColor: BORDE }}
+                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white"
                 />
               </div>
             </div>
             <div className="flex items-end gap-2 pb-0.5">
-              <span className="text-sm font-black" style={{ color: VERDE }}>{filtrados.length} deportistas</span>
+              <span className="text-sm font-black text-[#16a34a]">{filtrados.length} deportistas</span>
               <button
                 onClick={() => setMostrarRetirados(v => !v)}
-                className="text-[10px] font-black px-2 py-1 rounded-lg border transition text-white"
-                style={mostrarRetirados
-                  ? { background: ROJO,  borderColor: ROJO }
-                  : { background: CAMPO, borderColor: BORDE }}>
+                className={cn(
+                  'text-[10px] font-black px-2 py-1 rounded-lg border transition',
+                  mostrarRetirados
+                    ? 'bg-red-100 text-red-600 border-red-300'
+                    : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'
+                )}>
                 {mostrarRetirados ? '← Activos' : 'RETIRADOS'}
               </button>
             </div>
           </div>
         </div>
 
-        {/* BARRA DE MARCADOS — solo aparece cuando hay alguien marcado */}
-        {cola.length > 0 && (
-          <div className="flex items-center gap-3 flex-wrap rounded-2xl px-4 py-3 border"
-               style={{ background: PANEL, borderColor: VERDE }}>
-            <span className="text-white font-black text-sm">
-              {cola.length} marcado{cola.length === 1 ? '' : 's'} para cobrar
-            </span>
-            <button onClick={abrirCola}
-              style={{ background: VERDE, minHeight: 44 }}
-              className="text-white font-black text-sm px-5 rounded-xl hover:opacity-90 transition">
-              COBRAR SELECCIONADOS
-            </button>
-            <button onClick={() => setSel(new Set())}
-              style={{ minHeight: 44 }}
-              className="text-white text-xs font-bold px-3 hover:opacity-70 transition">
-              Quitar marcas
-            </button>
-            {cola.length > 30 && (
-              <span className="text-[11px] font-bold" style={{ color: AMBAR }}>
-                Van {cola.length}. Le sugiero tandas de 20 a 30 y descansar un rato entre una y otra,
-                para que WhatsApp no le bloquee el número.
-              </span>
-            )}
-          </div>
-        )}
-
         {/* LISTA DE DEPORTISTAS */}
         {cargando || !pagosListos ? (
           <BalonCargando />
         ) : deportistas.length === 0 ? (
-          <div className="rounded-2xl border shadow-sm p-12 text-center"
-               style={{ background: PANEL, borderColor: BORDE }}>
-            <User className="w-12 h-12 mx-auto mb-3" style={{ color: GRIS_VACIO }} />
-            <p className="text-white font-semibold text-sm">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+            <User className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 font-semibold text-sm">
               No hay deportistas cargados.<br/>
               Importa el archivo en <strong>Vista General</strong> primero.
             </p>
           </div>
         ) : (
-          <div className="rounded-2xl overflow-x-auto shadow-sm border" style={{ borderColor: BORDE }}>
-            <table className="w-full border-collapse text-sm" style={{ minWidth: 950 }}>
+          <div className="rounded-2xl overflow-x-auto shadow-sm border border-gray-200">
+            <table className="w-full border-collapse text-sm" style={{ minWidth: 1500 }}>
               <thead>
                 <tr>
-                  {/* Casilla de arriba: marca (o desmarca) a TODOS los que deben */}
-                  <th style={{
-                    background: VERDE, border: '1px solid white',
-                    padding: '10px 6px', textAlign: 'center', width: 44,
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={todosMarcados}
-                      disabled={idsCobrables.length === 0}
-                      onChange={marcarTodos}
-                      title="Marcar todos los que deben"
-                      style={{ width: 20, height: 20, accentColor: '#232B39', cursor: 'pointer' }}
-                    />
-                  </th>
                   {[
                     { h: 'ESTADO DEP',            align: 'center' },
                     { h: 'FECHA AFILIACIÓN',      align: 'center' },
                     { h: 'CÓDIGO',                align: 'center' },
                     { h: 'NOMBRE DEL DEPORTISTA', align: 'left'   },
+                    { h: 'PROGRAMA',              align: 'center' },
+                    { h: 'CARGADOS',              align: 'center' },
+                    { h: 'PAGADOS',               align: 'center' },
+                    { h: 'PENDIENTES',            align: 'center' },
+                    { h: 'PRÓXIMOS',              align: 'center' },
                     { h: 'MESES PENDIENTES',      align: 'left'   },
+                    { h: 'ESTADO PAGO',           align: 'center' },
+                    { h: 'VER CUENTA',            align: 'center' },
                     { h: 'COBRAR',                align: 'center' },
                     { h: 'OBSERVACIÓN',           align: 'left'   },
                   ].map(({ h, align }) => (
                     <th key={h} style={{
-                      background: VERDE, color: 'white',
+                      background: '#16a34a', color: 'white',
                       border: '1px solid white',
                       padding: '10px 8px',
                       textAlign: align as any,
@@ -794,48 +661,28 @@ function PagosInner() {
                 </tr>
               </thead>
               <tbody>
-                {filtrados.map((dep) => {
-                  const bg  = PANEL;
+                {filtrados.map((dep, idx) => {
+                  const bg  = '#f1f5f9';
                   const cod = codigoDe(dep);
-                  const { pendientes, total, mesesPendientes, mesesPendFull, becado } = resumenPago(dep) as any;
+                  const prog = getCol(dep, /^program/i);
+                  const { cargados, pagados, pendientes, proximos, total, mesesPendientes, mesesPendFull, becado } = resumenPago(dep) as any;
                   const cobro = cobroDe(dep, mesesPendFull, becado);
                   const tieneDatos = total > 0;
 
                   return (
                     <tr key={dep.id}
                       onClick={() => { try { sessionStorage.setItem('futuro_pagos_scroll', String(window.scrollY)); } catch {} router.push(`/alumnos/${dep.id}/estado-cuenta?edit=1`); }}
-                      className="hover:brightness-125 transition-all cursor-pointer">
-
-                      {/* CASILLA — solo la tiene quien tiene algo que cobrarle.
-                          El clic aquí NO abre el estado de cuenta. */}
-                      <td onClick={e => e.stopPropagation()}
-                        style={{
-                          background: bg, border: '1px solid white', padding: '10px 6px', textAlign: 'center',
-                          /* Filo rojo al borde izquierdo: marca de un vistazo la fila que debe. */
-                          boxShadow: pendientes > 0 ? `inset 5px 0 0 0 ${ROJO}` : undefined,
-                        }}>
-                        {cobro && (
-                          <input
-                            type="checkbox"
-                            checked={sel.has(dep.id)}
-                            onChange={() => toggleSel(dep.id)}
-                            title={`Marcar a ${dep._nombre} para cobrarle`}
-                            style={{ width: 20, height: 20, accentColor: VERDE, cursor: 'pointer' }}
-                          />
-                        )}
-                      </td>
+                      className="hover:brightness-95 transition-all cursor-pointer">
 
                       {/* ESTADO DEP — solo lectura */}
-                      <td style={{
-                        background: bg, border: '1px solid white', padding: '4px 6px', textAlign: 'center',
-                      }}>
+                      <td style={{ background: bg, border: '1px solid white', padding: '4px 6px', textAlign: 'center' }}>
                         {(() => {
                           const est: DepEstado = /retirad/i.test(getCol(dep, /^estado$/i) || '')
                             ? 'RETIRADO' : (depEstados[dep.id] ?? 'ACTIVO');
                           const colors: Record<DepEstado, string> = {
-                            ACTIVO:   VERDE,
-                            PAUSO:    AMBAR,
-                            RETIRADO: ROJO,
+                            ACTIVO:   '#16a34a',
+                            PAUSO:    '#f59e0b',
+                            RETIRADO: '#ef4444',
                           };
                           return (
                             <span style={{ color: colors[est], fontWeight: 900, fontSize: 10 }}>{est}</span>
@@ -847,7 +694,7 @@ function PagosInner() {
                       <td
                         onClick={e => e.stopPropagation()}
                         style={{
-                          background: bg, color: '#FFFFFF', border: '1px solid white',
+                          background: bg, color: '#374151', border: '1px solid white',
                           padding: '6px 8px', textAlign: 'center',
                           fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer',
                         }}>
@@ -861,25 +708,24 @@ function PagosInner() {
                                 if (e.key === 'Enter') { e.preventDefault(); guardarFecha(dep); }
                                 if (e.key === 'Escape') { e.preventDefault(); setEditFecha(null); }
                               }}
-                              style={{ fontSize: 11, fontWeight: 700, border: `1px solid ${VERDE}`, borderRadius: 6, padding: '3px 5px', background: CAMPO, color: '#fff' }}
+                              style={{ fontSize: 11, fontWeight: 700, border: '1px solid #16a34a', borderRadius: 6, padding: '3px 5px', background: '#fff' }}
                             />
                             <button onClick={() => guardarFecha(dep)}
-                              style={{ background: VERDE }}
-                              className="hover:opacity-85 text-white text-[10px] font-black px-2 py-1 rounded-lg transition">
+                              className="bg-[#16a34a] hover:bg-[#064e1e] text-white text-[10px] font-black px-2 py-1 rounded-lg transition">
                               Aceptar
                             </button>
                             <button onClick={() => setEditFecha(null)} title="Cancelar"
-                              className="text-white hover:opacity-70 text-[11px] font-black px-1 transition">
+                              className="text-gray-400 hover:text-red-500 text-[11px] font-black px-1 transition">
                               ✕
                             </button>
                           </div>
                         ) : guardandoFecha === dep.id ? (
-                          <span className="text-[10px] font-black text-white">guardando…</span>
+                          <span className="text-[10px] font-black text-gray-400">guardando…</span>
                         ) : (
                           <span
                             onClick={() => { setNuevaFecha(aISO(getCol(dep, /fecha.*afil|afil.*fecha/i))); setEditFecha(dep.id); }}
                             title="Clic para corregir la fecha de ingreso"
-                            className="inline-block px-1.5 py-0.5 rounded hover:ring-1 hover:ring-[#00B050] transition">
+                            className="inline-block px-1.5 py-0.5 rounded hover:bg-white hover:ring-1 hover:ring-[#16a34a] transition">
                             {fmtFecha(getCol(dep, /fecha.*afil|afil.*fecha/i)) || '—'}
                           </span>
                         )}
@@ -892,74 +738,110 @@ function PagosInner() {
                         fontWeight: 900, fontSize: 13,
                       }}>{cod || '—'}</td>
 
-                      {/* NOMBRE — es la puerta de entrada: al oprimirlo se abre el
-                          estado de cuenta del deportista (el clic lo maneja la fila). */}
+                      {/* NOMBRE */}
                       <td style={{
                         background: bg, color: BL, border: '1px solid white',
                         padding: '8px 12px', fontWeight: 700, fontSize: 13,
-                        whiteSpace: 'nowrap', cursor: 'pointer',
-                      }}>
-                        <span className="hover:underline" title="Abrir el estado de cuenta">{dep._nombre}</span>
+                        whiteSpace: 'nowrap',
+                      }}>{dep._nombre}</td>
+
+                      {/* PROGRAMA */}
+                      <td style={{
+                        background: bg, color: '#374151', border: '1px solid white',
+                        padding: '8px 10px', textAlign: 'center',
+                        fontSize: 11, whiteSpace: 'nowrap',
+                      }}>{prog || '—'}</td>
+
+                      {/* CARGADOS */}
+                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
+                        <span className="font-black text-gray-600 text-sm">{cargados}</span>
                       </td>
 
-                      {/* MESES PENDIENTES — aquí se dice TODO de una vez:
-                          los meses que debe, o AL DÍA, o BECADO. */}
+                      {/* PAGADOS */}
+                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
+                        <span className="font-black text-green-600 text-sm">{pagados || '—'}</span>
+                      </td>
+
+                      {/* PENDIENTES */}
                       <td style={{
-                        background: bg,
+                        background: pendientes > 0 ? '#fef2f2' : bg,
+                        border: '1px solid white', padding: '6px 8px', textAlign: 'center',
+                      }}>
+                        <span className={cn('font-black text-sm', pendientes > 0 ? 'text-red-500' : 'text-gray-300')}>
+                          {pendientes > 0 ? pendientes : '—'}
+                        </span>
+                      </td>
+
+                      {/* PRÓXIMOS */}
+                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
+                        <span className={cn('font-black text-sm', proximos > 0 ? 'text-blue-500' : 'text-gray-300')}>
+                          {proximos || '—'}
+                        </span>
+                      </td>
+
+                      {/* MESES PENDIENTES hasta mes actual */}
+                      <td style={{
+                        background: mesesPendientes.length > 0 ? '#fef2f2' : bg,
                         border: '1px solid white', padding: '4px 8px',
-                        maxWidth: 220,
+                        maxWidth: 180,
                       }}>
                         {mesesPendientes.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {mesesPendientes.map((m: string) => (
+                            {mesesPendientes.map(m => (
                               <span key={m} style={{
-                                background: ROJO, color: 'white',
+                                background: '#ef4444', color: 'white',
                                 fontSize: 9, fontWeight: 900,
                                 padding: '2px 5px', borderRadius: 4,
                                 whiteSpace: 'nowrap',
                               }}>{m}</span>
                             ))}
                           </div>
-                        ) : becado ? (
-                          <span className="text-white text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap"
-                                style={{ background: GRIS_BECA }}>BECADO</span>
-                        ) : tieneDatos ? (
-                          <span className="text-white text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap"
-                                style={{ background: VERDE }}>AL DÍA</span>
                         ) : (
-                          <span className="text-xs font-black" style={{ color: GRIS_VACIO }}>—</span>
+                          <span className="text-gray-300 text-xs font-black">—</span>
                         )}
                       </td>
 
-                      {/* COBRAR — botón rojo de WhatsApp. Dice COBRAR AHORA cuando
-                          está atrasado y COBRAR UNO cuando solo debe el mes en
-                          curso (ahí el mensaje es más suave). Abre WhatsApp con el
-                          texto ya escrito; el envío lo hace una persona. */}
+                      {/* ESTADO chip */}
+                      <td style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
+                        {becado
+                          ? <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap">BECADO</span>
+                          : pendientes === 0 && tieneDatos
+                            ? <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap">AL DÍA</span>
+                            : pendientes > 0
+                              ? <span className="bg-red-100 text-red-500 text-[10px] font-black px-2 py-0.5 rounded-full">PEND</span>
+                              : <span className="text-gray-300 text-xs">—</span>
+                        }
+                      </td>
+
+                      {/* BOTÓN */}
+                      <td style={{
+                        background: bg, border: '1px solid white',
+                        padding: '6px 10px', textAlign: 'center',
+                      }}>
+                        <span className="inline-flex items-center gap-1 bg-[#16a34a] text-white text-[10px] font-black px-3 py-1.5 rounded-lg">
+                          Ver <ChevronRight className="w-3 h-3" />
+                        </span>
+                      </td>
+
+                      {/* COBRAR AHORA — solo cuando debe el mes en curso Y alguno
+                          anterior. Abre WhatsApp con el mensaje ya escrito; el
+                          envío lo hace una persona, nunca el sistema. */}
                       <td onClick={e => e.stopPropagation()}
-                        style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
+                        style={{ background: cobro ? '#fef2f2' : bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
                         {cobro ? (
-                          /* target con nombre fijo: todos los cobros usan la MISMA
-                             pestaña de WhatsApp. Así no se le llena el navegador de
-                             pestañas y, si ya la tiene abierta, solo cambia de chat. */
-                          <a href={cobro.url} target="whatsapp_max10" rel="noopener noreferrer"
-                            title={(cobro.tono === 'aldia'
-                                ? `Solo debe el mes en curso — ${cobro.meses} · ${pesos(cobro.total)}. Recordatorio amable, para que no se le junte con el próximo. `
-                                : `Atrasado — ${cobro.meses} · ${pesos(cobro.total)}. `) +
-                              (cobro.tel
-                                ? `Abre WhatsApp con ${cobro.tel} y el mensaje listo. Usted revisa y le da enviar.`
-                                : `Sin CELULAR DEL ACUDIENTE en la ficha: se abre WhatsApp con el mensaje listo para que escoja el contacto a mano.`)}
-                            style={{ background: ROJO }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = ROJO_OSC; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ROJO; }}
-                            className="inline-flex items-center gap-1.5 text-white text-[10px] font-black px-3 py-1.5 rounded-lg whitespace-nowrap transition shadow-sm">
+                          <a href={cobro.url} target="_blank" rel="noopener noreferrer"
+                            title={cobro.tel
+                              ? `Abre WhatsApp con ${cobro.tel} y el mensaje listo — ${cobro.meses} · ${pesos(cobro.total)}. Usted revisa y le da enviar.`
+                              : `Sin CELULAR DEL ACUDIENTE en la ficha. Se abre WhatsApp con el mensaje listo para que escoja el contacto a mano — ${cobro.meses} · ${pesos(cobro.total)}.`}
+                            className="inline-flex items-center gap-1.5 bg-[#dc2626] hover:bg-[#991b1b] text-white text-[10px] font-black px-3 py-1.5 rounded-lg whitespace-nowrap transition shadow-sm">
                             <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
                               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                             </svg>
-                            {cobro.etiqueta}
+                            COBRAR AHORA
                             {!cobro.tel && <span title="Sin CELULAR DEL ACUDIENTE en la ficha">⚠</span>}
                           </a>
                         ) : (
-                          <span className="text-xs font-black" style={{ color: GRIS_VACIO }}>—</span>
+                          <span className="text-gray-300 text-xs font-black">—</span>
                         )}
                       </td>
 
@@ -981,34 +863,33 @@ function PagosInner() {
                               rows={3}
                               placeholder="Compromiso de pago, acuerdo, razón de la mora…"
                               style={{
-                                width: '100%', fontSize: 11, lineHeight: 1.35, color: '#FFFFFF',
-                                border: `1px solid ${VERDE}`, borderRadius: 6, padding: '4px 6px',
-                                resize: 'vertical', background: CAMPO, outline: 'none',
+                                width: '100%', fontSize: 11, lineHeight: 1.35, color: '#111827',
+                                border: '1px solid #16a34a', borderRadius: 6, padding: '4px 6px',
+                                resize: 'vertical', background: '#fff', outline: 'none',
                               }}
                             />
                             <div className="flex items-center gap-1.5 mt-1">
                               <button onClick={() => guardarObs(dep, textoObs)}
-                                style={{ background: VERDE }}
-                                className="hover:opacity-85 text-white text-[10px] font-black px-2.5 py-1 rounded-lg transition">
+                                className="bg-[#16a34a] hover:bg-[#064e1e] text-white text-[10px] font-black px-2.5 py-1 rounded-lg transition">
                                 Guardar
                               </button>
                               <button onClick={() => setEditObs(null)}
-                                className="text-white hover:opacity-70 text-[10px] font-black px-1.5 py-1 transition">
+                                className="text-gray-500 hover:text-red-500 text-[10px] font-black px-1.5 py-1 transition">
                                 Cancelar
                               </button>
-                              <span className="text-[9px] font-bold ml-auto" style={{ color: GRIS_VACIO }}>Ctrl+Enter guarda · Esc cancela</span>
+                              <span className="text-[9px] text-gray-300 font-bold ml-auto">Ctrl+Enter guarda · Esc cancela</span>
                             </div>
                           </div>
                         ) : guardandoObs === dep.id ? (
-                          <span className="text-[10px] font-black text-white">guardando…</span>
+                          <span className="text-[10px] font-black text-gray-400">guardando…</span>
                         ) : obs[dep.id] ? (
                           <div
                             onClick={() => { setTextoObs(obs[dep.id] ?? ''); setEditObs(dep.id); }}
                             title={obs[dep.id] + '\n\n(clic para editar)'}
                             style={{
-                              fontSize: 11, lineHeight: 1.35, color: '#FFFFFF', whiteSpace: 'pre-wrap',
+                              fontSize: 11, lineHeight: 1.35, color: '#111827', whiteSpace: 'pre-wrap',
                               display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden', background: CAMPO, border: `1px solid ${BORDE}`,
+                              overflow: 'hidden', background: '#fff', border: '1px solid #e5e7eb',
                               borderRadius: 6, padding: '4px 6px', minHeight: 30,
                             }}>
                             {obs[dep.id]}
@@ -1017,8 +898,8 @@ function PagosInner() {
                           <div
                             onClick={() => { setTextoObs(''); setEditObs(dep.id); }}
                             title="Clic para escribir una observación"
-                            className="text-[10px] font-black hover:text-[#00B050] transition"
-                            style={{ padding: '6px 4px', color: GRIS_VACIO }}>
+                            className="text-[10px] font-black text-gray-300 hover:text-[#16a34a] transition"
+                            style={{ padding: '6px 4px' }}>
                             + observación
                           </div>
                         )}
@@ -1031,82 +912,6 @@ function PagosInner() {
           </div>
         )}
       </main>
-
-      {/* ── VENTANA DE LA COLA DE COBRO ─────────────────────────────────────
-          Va de uno en uno. En cada persona: se abre su chat de WhatsApp con el
-          mensaje ya escrito, usted le da ENVIAR allá, vuelve y oprime SIGUIENTE.
-          La plataforma NUNCA envía sola: el envío siempre lo hace una persona. */}
-      {colaOn && cola[colaIdx] && (() => {
-        const { dep, cobro } = cola[colaIdx];
-        const esUltimo = colaIdx + 1 >= cola.length;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-               style={{ background: 'rgba(0,0,0,0.65)' }}>
-            <div className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
-                 style={{ background: PANEL, borderColor: BORDE }}>
-
-              <div className="px-5 py-3 flex items-center justify-between" style={{ background: '#232B39' }}>
-                <p className="text-white font-black text-sm tracking-wide">
-                  COBRO {colaIdx + 1} DE {cola.length}
-                </p>
-                <button onClick={() => setColaOn(false)}
-                  title="Cerrar (las marcas se quedan)"
-                  className="text-white font-black text-lg px-2 hover:opacity-70 transition">✕</button>
-              </div>
-
-              <div className="px-5 py-4 space-y-3">
-                <p className="text-white font-black text-lg leading-tight">{dep._nombre}</p>
-                <p className="text-white text-xs">
-                  Código {codigoDe(dep) || '—'} · Debe {cobro.meses} · {pesos(cobro.total)}
-                </p>
-                {cobro.tel
-                  ? <p className="text-white text-xs">Celular del acudiente: {cobro.tel}</p>
-                  : <p className="text-xs font-bold" style={{ color: AMBAR }}>
-                      ⚠ Esta ficha no tiene CELULAR DEL ACUDIENTE. Se abre WhatsApp con el mensaje
-                      listo para que usted escoja el contacto a mano.
-                    </p>}
-
-                {!colaAbierto ? (
-                  <button onClick={() => abrirWhatsApp(cobro.url)}
-                    style={{ background: VERDE, minHeight: 48 }}
-                    className="w-full text-white font-black text-sm rounded-xl hover:opacity-90 transition">
-                    ABRIR WHATSAPP Y ESCRIBIRLE
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-white text-xs leading-relaxed">
-                      Ya le abrí el chat con el mensaje escrito. Déle <strong>enviar</strong> allá en
-                      WhatsApp y vuelva acá.
-                    </p>
-                    <button onClick={siguienteCobro}
-                      style={{ background: VERDE, minHeight: 48 }}
-                      className="w-full text-white font-black text-sm rounded-xl hover:opacity-90 transition">
-                      {esUltimo ? 'TERMINAR' : 'SIGUIENTE →'}
-                    </button>
-                    <button onClick={() => abrirWhatsApp(cobro.url)}
-                      className="w-full text-white text-[11px] font-bold py-1 hover:opacity-70 transition">
-                      volver a abrir el chat
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="px-5 py-3 flex items-center justify-between border-t" style={{ borderColor: BORDE }}>
-                <button onClick={siguienteCobro}
-                  style={{ minHeight: 44 }}
-                  className="text-white text-[11px] font-bold hover:opacity-70 transition">
-                  Saltar este
-                </button>
-                <button onClick={() => setColaOn(false)}
-                  style={{ minHeight: 44 }}
-                  className="text-white text-[11px] font-black hover:opacity-70 transition">
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }

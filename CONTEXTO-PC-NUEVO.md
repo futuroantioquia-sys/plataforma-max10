@@ -1,5 +1,5 @@
 # Futuro Antioquia — Contexto para continuar en el PC nuevo
-*(Generado el 24 de agosto de 2026)*
+*(Generado el 24 de agosto de 2026 · actualizado el 24 de agosto por la tarde)*
 
 ## Qué es
 Plataforma web de gestión deportiva para **Futuro Antioquia / MAX 10**:
@@ -10,6 +10,16 @@ deportistas, pagos, asistencia, evaluaciones, contabilidad y microciclo.
 - **Base de datos:** Supabase (PostgreSQL, vía `fetch()` directo)
 - **Deploy:** Vercel, auto-deploy desde GitHub
 - **Repo:** `https://github.com/futuroantioquia-sys/plataforma-max10` — rama `main`
+
+## Las DOS cuentas de Supabase (ojo con esto)
+
+| Cuenta | Proyecto | Plan | Estado |
+|---|---|---|---|
+| `futuroantioquia-sys` | `fykdyalpuydkwfjqguip` | **PRO** | **EN USO** — es el bueno |
+| `futuroantioquia-max10` | `gsovtgtrsqzoruvgmhed` | Gratis | Viejo. Pendiente de apagar |
+
+Son cuentas distintas, no dos proyectos de la misma cuenta. Por eso las
+herramientas conectadas a una no ven el proyecto de la otra.
 
 ## Carpeta del proyecto (PC nuevo)
 ```
@@ -25,11 +35,14 @@ C:\Users\futur\Claude\Projects\Plataforma max 100\
 | Para qué | Archivo |
 |---|---|
 | Prender la plataforma local | `PRENDER-LOCAL.bat` |
-| Subir cambios a GitHub/Vercel | `push2.vbs` |
+| Subir cambios a GitHub/Vercel | `SUBIR-AHORA.bat` |
 | Bajar cambios del otro PC | `ACTUALIZAR-DESDE-GITHUB.bat` |
 | Respaldar la base de datos | `RESPALDO-AHORA.bat` |
 
 Todos usan rutas relativas: funcionan en cualquier computador.
+
+> `SUBIR-AHORA.bat` reemplaza a `push2.vbs`. Hace lo mismo pero deja ver
+> qué pasó, en vez de dejar una ventana negra vacía cuando algo falla.
 
 ---
 
@@ -44,49 +57,53 @@ Todos usan rutas relativas: funcionan en cualquier computador.
 
 ---
 
-## PENDIENTES — para retomar
+## PENDIENTES
 
-### 1. Subir a GitHub el último arreglo (URGENTE, 1 minuto)
-Los archivos movidos con robocopy y el `npm install` todavía no se han
-registrado. Abrir terminal en la carpeta del proyecto y correr:
-```
-git add -A
-git commit -m "archivos en su sitio + librerias actualizadas"
-git push origin main
-```
+### 1. Subir a GitHub el último arreglo — ✅ HECHO 24/08
+Commit `472e165`. Subió 155 archivos (4,14 MB) y de paso sacó todo lo que
+había quedado metido dentro de `PONER-DENTRO-DE-Plataforma-max-100/`.
 
-### 2. Arreglar el archivo `.env.local` — está MEZCLADO
-Verificado el 24/08: apunta a dos proyectos distintos de Supabase.
+### 2. Arreglar el `.env.local` mezclado — ✅ HECHO 24/08
+Apuntaba a dos proyectos distintos. Quedó así:
 
-| Variable | Apunta a | Debería ser |
+| Variable | Antes | Ahora |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | `gsovtgtrsqzoruvgmhed` (viejo) | el nuevo |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `gsovtgtrsqzoruvgmhed` (viejo) | el nuevo |
-| `SUPABASE_SERVICE_ROLE_KEY` | `fykdyalpuydkwfjqguip` (nuevo) | OK |
+| `NEXT_PUBLIC_SUPABASE_URL` | viejo | `fykdyalpuydkwfjqguip` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | viejo | `fykdyalpuydkwfjqguip` |
+| `SUPABASE_SERVICE_ROLE_KEY` | ya estaba bien | `fykdyalpuydkwfjqguip` |
 
-Por eso el panel "Visitantes de la plataforma" del dashboard marca 0.
-**Qué hace falta:** la clave `anon / public` del proyecto `fykdyalpuydkwfjqguip`
-(Supabase → Settings → API).
+`.env.production` tenía la misma mezcla y también se corrigió.
+Se agregó `SESSION_SECRET` y `LOGIN_DEBUG=0`.
 
-Además faltan variables que se agregaron con el blindaje del 20/08:
-`SESSION_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `DIANA_USER`, `DIANA_PASS`,
-`AFILIACION_CODE`, `LOGIN_DEBUG`. Ver `frontend\.env.example`.
+Las variables de ingreso (`ADMIN_USER`, `ADMIN_PASS`, `DIANA_USER`,
+`DIANA_PASS`, `AFILIACION_CODE`) se dejaron **a propósito sin definir** en
+local: al faltar, la plataforma entra con los valores de siempre. Van en
+Vercel, no aquí. Ver `PASOS-SEGURIDAD.md`, Paso 1.
 
-### 3. Cambio pedido y aún sin aplicar
-En `frontend\src\app\microciclo\page.tsx`: la etiqueta **CONTENIDOS** debe
-decir **OBJETIVOS ESPECÍFICOS**. Aparece en 4 sitios (líneas ~124, ~1248,
-~1336 y ~1548). El campo interno sigue llamándose `contenidos`; solo cambia
-el texto que se ve.
+Comprobado: deportistas y pagos cargan bien.
 
-### 4. Seguridad — pendientes del plan (ver `PASOS-SEGURIDAD.md`)
-- Apagar o borrar el proyecto Supabase viejo `gsovtgtrsqzoruvgmhed`.
-  Sigue encendido, con copia de los datos de 1.163 menores y la tabla
-  `visitas` sin ninguna protección.
-- Verificar que el repo de GitHub esté en PRIVADO.
-- Cambiar las contraseñas de profesores y administradores (hoy son la cédula,
-  cifradas con coste 6, y quedaron escritas dentro del código).
-- Sacar `DEVOLVER-CLAVES.sql` del repositorio (tiene 27 contraseñas cifradas).
-- Guardar la carpeta `RESPALDO/` en un lugar cifrado.
+Copias de los archivos anteriores: `frontend\.env.*.viejo-20260824-1523`.
+El `.gitignore` las cubre con la regla `.env.*`, así que no se suben.
+Se pueden borrar cuando ya no hagan falta.
+
+### 3. CONTENIDOS → OBJETIVOS ESPECÍFICOS — ✅ HECHO 24/08
+En `frontend\src\app\microciclo\page.tsx`, los 4 sitios. También el
+mensaje de aviso al guardar (línea ~1375), que seguía diciendo
+"los contenidos". El campo interno sigue llamándose `contenidos`.
+
+### 4. Seguridad — PENDIENTE (ver `PASOS-SEGURIDAD.md`)
+- [ ] **Apagar o borrar el proyecto Supabase viejo `gsovtgtrsqzoruvgmhed`.**
+      Verificado el 24/08: sigue encendido y con todo adentro —
+      1.163 deportistas, 46.356 registros de asistencia, 844 visitas,
+      11.723 movimientos contables. Última visita registrada: 17/08.
+      La tabla `visitas` sigue sin ninguna protección.
+- [ ] Verificar que el repo de GitHub esté en PRIVADO.
+- [ ] Cambiar las contraseñas de profesores y administradores (hoy son la
+      cédula, cifradas con coste 6, y quedaron escritas dentro del código).
+- [ ] Sacar `DEVOLVER-CLAVES.sql` del repositorio **y de su historial**
+      (tiene 27 contraseñas cifradas). Ya está en `.gitignore`, pero eso
+      no borra lo que ya se subió antes.
+- [ ] Guardar la carpeta `RESPALDO/` en un lugar cifrado.
 
 ---
 
@@ -94,7 +111,7 @@ el texto que se ve.
 Hay dos computadores contra la misma base de datos.
 
 1. **Antes de trabajar:** correr `ACTUALIZAR-DESDE-GITHUB.bat`
-2. **Al terminar el día:** correr `push2.vbs`
+2. **Al terminar el día:** correr `SUBIR-AHORA.bat`
 
-Lo que pasó hoy —dos semanas de trabajo colgando de un solo disco duro—
-no se repite si se cumplen esos dos pasos.
+Lo que pasó el 24 de agosto —dos semanas de trabajo colgando de un solo
+disco duro— no se repite si se cumplen esos dos pasos.

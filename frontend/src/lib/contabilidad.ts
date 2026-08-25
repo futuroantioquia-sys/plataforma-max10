@@ -133,6 +133,50 @@ export async function sembrarDiccionario(arr: { t: string; k: string; c: string 
   return ok;
 }
 
+/* ── TERCEROS · NÓMINA Y PROVEEDORES ──────────────────────────────────────
+   Directorio de la gente y las empresas a las que la institución le paga.
+   Vive en las tablas `nomina` y `proveedores` — las mismas del módulo
+   "Nómina y Proveedores", para que haya UNA sola lista y no dos.
+
+   El Libro Dinámico lo usa para que, al escribir la CÉDULA o el NIT en la
+   columna CÓDIGO, salga solo el nombre completo del tercero.
+
+   Si la columna `tipo` todavía no existe en la base (falta correr el SQL),
+   se vuelve a consultar sin ella: la pantalla sigue funcionando igual y el
+   tipo queda en blanco. Nunca deja la lista vacía por ese motivo. */
+export type TipoTercero = 'PROFESOR' | 'ADMINISTRATIVO' | 'PROVEEDOR' | '';
+export interface Tercero {
+  documento: string;                      // cédula o NIT, solo dígitos
+  nombre: string;
+  tipo: TipoTercero;
+  origen: 'nomina' | 'proveedores';
+}
+
+async function leerDirectorio(tabla: 'nomina' | 'proveedores'): Promise<Tercero[]> {
+  const armar = (rows: any[]): Tercero[] => (rows || [])
+    .map(r => ({
+      documento: soloDigitos(r?.documento),
+      nombre: String(r?.nombre ?? '').trim(),
+      tipo: String(r?.tipo ?? '').trim().toUpperCase() as TipoTercero,
+      origen: tabla,
+    }))
+    .filter(t => t.documento && t.nombre);
+  try {
+    const { data, error } = await sb().from(tabla).select('documento,nombre,tipo');
+    if (!error) return armar(data as any[]);
+    // Reintento sin `tipo`, por si la columna aún no se ha creado.
+    const r2 = await sb().from(tabla).select('documento,nombre');
+    if (r2.error) { console.warn(`[cont] getTerceros ${tabla}`, r2.error.message); return []; }
+    return armar(r2.data as any[]);
+  } catch (e: any) { console.warn(`[cont] getTerceros ${tabla}`, e?.message); return []; }
+}
+
+/** Nómina + proveedores en una sola lista. Nunca lanza: si falla, devuelve []. */
+export async function getTerceros(): Promise<Tercero[]> {
+  const [n, p] = await Promise.all([leerDirectorio('nomina'), leerDirectorio('proveedores')]);
+  return [...n, ...p];
+}
+
 // ── Catálogo de CUENTAS / conceptos (lista desplegable editable) ──
 export interface Concepto { id: string; nombre: string; tipo: string; codcuenta: string; orden: number }
 
@@ -157,18 +201,79 @@ export async function borrarConcepto(id: string): Promise<boolean> {
 }
 
 // ── Conceptos (clasificación por descripción) ──
-const PATRONES: { re: RegExp; concepto: string; tipo: string }[] = [
-  { re: /4\s*X\s*1000|IMPTO GOBIERNO/i,               concepto: '4X1000',             tipo: 'gasto' },
-  { re: /NOMIN/i,                                     concepto: 'NÓMINA',             tipo: 'gasto' },
-  { re: /COMISION|CUOTA MANEJO|GMF|CUOTA DE MANEJO/i, concepto: 'GASTO FINANCIERO',   tipo: 'gasto' },
-  { re: /ABONO INTERES|INTERESES/i,                   concepto: 'INGRESO FINANCIERO', tipo: 'ingreso' },
-  { re: /A NEQUI|TRASLADO|CTA SUC VIRTUAL/i,          concepto: 'TRASLADO',           tipo: 'traslado' },
-  { re: /PAGO QR|PAGO A PROVE|PROVEEDOR/i,            concepto: 'PROVEEDOR',          tipo: 'gasto' },
-  { re: /PAGO PSE|PAGO TARJETA|DAVIVIENDA/i,          concepto: 'PAGO TARJETA',       tipo: 'gasto' },
+/* ── REGLAS DE CLASIFICACION (dictadas por la administracion contable, 19/08/2026) ──
+   EL ORDEN IMPORTA: gana la PRIMERA regla que coincida. Las reglas mas
+   especificas van arriba. Ejemplo critico: "SERVICIO PAGO DE NOMINA" (que es
+   el cobro del banco por dispersar la nomina, un gasto financiero) tiene que ir
+   ANTES que "PAGO A NOMINA" (que si es la nomina), porque las dos contienen
+   la palabra NOMINA y si no, la segunda se lleva las dos.
+   `soloDebito` limita la regla a los movimientos que salen (columna DEBITO). */
+const PATRONES: { re: RegExp; concepto: string; tipo: string; soloDebito?: boolean }[] = [
+  // 1) El cobro del BANCO por dispersar la nomina  →  gasto financiero
+  { re: /SERVICIO\s+PAGO\s+(DE\s+)?NOMINA/i,          concepto: 'GASTO FINANCIERO',        tipo: 'gasto' },
+  // 2) La nomina propiamente dicha  →  nomina
+  { re: /PAGO\s+A\s+NOMINA|NOMIN/i,                   concepto: 'SERVICIO POR FORMACION',  tipo: 'gasto' },
+  // 2b) UBER (y similares de transporte)  →  TRANSPORTE
+  { re: /\bUBER\b/i,                                  concepto: 'TRANSPORTE',              tipo: 'gasto' },
+  // 3) Impuesto 4x1000  →  gasto financiero
+  { re: /4\s*X\s*1000|IMPTO GOBIERNO/i,               concepto: 'GASTO FINANCIERO',        tipo: 'gasto' },
+  // 4) Cuota de manejo, comisiones, GMF  →  gasto financiero
+  { re: /COMISION|CUOTA\s+(DE\s+)?MANEJ|GMF/i,        concepto: 'GASTO FINANCIERO',        tipo: 'gasto' },
+  // 4b) Cobros del banco: COBRO IVA PAGOS AUTOMATICOS, COBRO TRANSF QR,
+  //     IVA COBRO TRANSF QR, etc.  →  gasto financiero
+  { re: /\bCOBRO\b/i,                                 concepto: 'GASTO FINANCIERO',        tipo: 'gasto' },
+  // 4c) Compras de supermercado  →  gastos de representacion
+  { re: /SUPERMU|SUPERMERCADO|PRICESMART|MONTOLIVO|RANCHERITO|DOLLARCITY|MIGUERI/i,
+    concepto: 'GASTOS DE REPRESENTACION', tipo: 'gasto' },
+  // 5) Tarjeta de credito — SOLO cuando el movimiento esta en DEBITO
+  { re: /MORA\s+TARJETA|PAGO\s+AUTOM\w*\s+TC|TARJETA\s+DE\s+CREDITO|PAGO\s+TARJETA|PAGO\s+PSE|DAVIVIENDA/i,
+    concepto: 'PAGO TARJETA DE CREDITO', tipo: 'gasto', soloDebito: true },
+  // 6) Intereses que abona el banco  →  ingreso. El DETALLE queda vacio.
+  { re: /ABONO\s+INTERES|INTERESES/i,                 concepto: 'INTERESES A FAVOR',       tipo: 'ingreso' },
+  // 7) Traslados entre cuentas propias
+  { re: /A NEQUI|TRASLADO|CTA SUC VIRTUAL/i,          concepto: 'TRASLADO',                tipo: 'traslado' },
+  // 8) Proveedores
+  { re: /PAGO QR|PAGO A PROVE|PROVEEDOR/i,            concepto: 'PROVEEDOR',               tipo: 'gasto' },
 ];
-export function clasificarConcepto(descripcion: string): { concepto: string; tipo: string } {
+
+/** Conceptos cuyo DETALLE (el mes) debe quedar SIEMPRE vacio. */
+export const CONCEPTOS_SIN_DETALLE = ['INTERESES A FAVOR'];
+
+/* ── RENOMBRES AUTORIZADOS ────────────────────────────────────────────────
+   Un movimiento que YA tiene concepto puesto (por la contabilidad, a mano)
+   NO se toca. La unica excepcion son estos cambios de nombre, que pidio la
+   direccion expresamente el 24/08/2026. Todo lo demas se respeta:
+   TRANSPORTE, GASTOS DE REPRESENTACION, PROVEEDOR, etc. quedan como estan. */
+const RENOMBRES: Record<string, string> = {
+  '4X1000':             'GASTO FINANCIERO',
+  'INGRESO FINANCIERO': 'INTERESES A FAVOR',
+  'PAGO TARJETA':       'PAGO TARJETA DE CREDITO',
+  'NOMINA':             'SERVICIO POR FORMACION',
+};
+
+/** Si el concepto actual es uno de los que hay que renombrar, devuelve el
+ *  nombre nuevo. Si no, devuelve '' (= no se toca). */
+export function conceptoRenombrado(actual: string): string {
+  const k = String(actual ?? '').trim().toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return RENOMBRES[k] || '';
+}
+
+/** Clasifica por la descripcion. `mov` es opcional: si se pasa, se respetan
+ *  las reglas que solo aplican a debito. */
+export function clasificarConcepto(
+  descripcion: string,
+  mov?: { debito?: number; credito?: number },
+): { concepto: string; tipo: string } {
   const d = String(descripcion || '');
-  for (const p of PATRONES) if (p.re.test(d)) return { concepto: p.concepto, tipo: p.tipo };
+  const deb = Number(mov?.debito ?? 0) > 0;
+  const sabemosColumna = mov !== undefined;
+  for (const p of PATRONES) {
+    if (!p.re.test(d)) continue;
+    // Si la regla es solo para debito y sabemos que este movimiento no lo es, se salta.
+    if (p.soloDebito && sabemosColumna && !deb) continue;
+    return { concepto: p.concepto, tipo: p.tipo };
+  }
   return { concepto: '', tipo: '' };
 }
 

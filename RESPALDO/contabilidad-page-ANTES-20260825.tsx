@@ -11,8 +11,7 @@ import {
   hashesExistentes, contarMapeo, sembrarDiccionario, contarMovimientos, importarHistorico,
   getConceptos, guardarConcepto, borrarConcepto, actualizarMovimiento, asignarCodigoBulk,
   getMapeoRows, borrarMapeo, getMesesPorCodigo, borrarMovimiento, CONCEPTOS_SIN_DETALLE, conceptoRenombrado,
-  getTerceros,
-  type MapeoIdx, type MovCont, type Concepto, type Tercero,
+  type MapeoIdx, type MovCont, type Concepto,
 } from '@/lib/contabilidad';
 
 // La cuenta "ST 823" queda SIEMPRE de última (se completa manualmente por ahora,
@@ -36,96 +35,33 @@ const esIngresoFinanciero = (m: any) =>
 // intereses del banco. Se tratan igual en el semáforo, el chulo y los conteos.
 const esNoAplica = (m: any) => esInstitucional(m) || esIngresoFinanciero(m);
 
-// ── Directorio de TERCEROS de respaldo (documento → nombre y tipo) ──
-// La lista de verdad vive en el módulo "Nómina y Proveedores" (tablas `nomina`
-// y `proveedores` de Supabase). Esta copia queda SOLO como respaldo, para que
-// el Libro siga reconociendo a la gente si la base no responde. Lo que usted
-// cambie en esa pantalla manda sobre lo que diga aquí.
-const EMPLEADOS_NOMINA: Record<string, { nombre: string; tipo: string }> = {
-  '1063278765': { nombre: 'JAIRO LUIS TOVIOS OVIEDO',        tipo: 'ADMINISTRATIVO' },
-  '32183658':   { nombre: 'DIANA FERNANDA CASTRO ESTRADA',   tipo: 'ADMINISTRATIVO' },
-  '811036997':  { nombre: 'SOL MARINA VILLALBA BARRIOS',     tipo: 'ADMINISTRATIVO' },
-  '1214734807': { nombre: 'ALEJANDRO CASTRO ESTRADA',        tipo: 'PROFESOR' },
-  '1152192324': { nombre: 'OSCAR FREDY MEJIA FLOREZ',        tipo: 'PROFESOR' },
-  '1017258984': { nombre: 'CRISTIAN CAMILO RAMIREZ AGUDELO', tipo: 'PROFESOR' },
-  '1000415036': { nombre: 'SAMUEL COLORADO SERNA',           tipo: 'PROFESOR' },
-  '1000084856': { nombre: 'ALEXANDER TABARES GUTIERREZ',     tipo: 'PROFESOR' },
-  '1128389946': { nombre: 'ANDRES FELIPE CHALARCA ROJAS',    tipo: 'PROFESOR' },
-  '1036639022': { nombre: 'JULIAN RIOS HERRERA',             tipo: 'PROFESOR' },
-  '1003404311': { nombre: 'JESUS DAVID CASTILLO GONZALEZ',   tipo: 'PROFESOR' },
-  '1013458275': { nombre: 'MARTIN MORA CARDENAS',            tipo: 'PROFESOR' },
-  '1017192180': { nombre: 'MARLON CASTAÑO RIOS',             tipo: 'PROFESOR' },
-  '1020464354': { nombre: 'FREDY ALEXANDER RAMIREZ RIVAS',   tipo: 'PROFESOR' },
-  '1003050289': { nombre: 'JHON FREDY DORIA CORONADO',       tipo: 'PROFESOR' },
-  '1034776238': { nombre: 'JUAN MANUEL MUÑOZ HERNANDEZ',     tipo: 'PROFESOR' },
-  '1033180115': { nombre: 'FELIPE ALVAREZ ALVAREZ',          tipo: 'PROFESOR' },
-  '1002066215': { nombre: 'JAVIER DUVAN RIOS OSPINA',        tipo: 'PROFESOR' },
-  '1127792656': { nombre: 'MIGUEL ANGEL BUILES GIRALDO',     tipo: 'PROFESOR' },
-  '1005372826': { nombre: 'NICOLAS BARRIOS SAAVEDRA',        tipo: 'PROFESOR' },
-  '1000870631': { nombre: 'KAREN LIZETH BERRIO TORO',        tipo: 'PROFESOR' },
-  // 25/08/2026: la cedula quedo en 1193081467 (la de la tabla `profes`).
-  // Antes estaba 1193081477, que difiere en un digito y era la equivocada.
-  '1193081467': { nombre: 'MARIA CAMILA QUINTERO LOPEZ',     tipo: 'PROFESOR' },
-  '1036864427': { nombre: 'JUAN ANDRES JIMENEZ',             tipo: 'PROFESOR' },
-  '1000203538': { nombre: 'SEBASTIÁN GUZMAN MUÑOZ',          tipo: 'PROFESOR' },
-  // PROVISIONAL (25/08/2026): de EDGAR solo se tiene la cedula de la tabla
-  // `profes`. Falta el nombre completo; cuando la direccion lo confirme, se
-  // reemplaza 'EDGAR' por el nombre y apellidos que van en la nomina.
-  '98539787':   { nombre: 'EDGAR',                           tipo: 'PROFESOR' },
+// ── Empleados de NÓMINA (cédula → nombre) ──
+// Al escribir la CÉDULA en la columna Código de un egreso, el nombre del empleado
+// se autocompleta (igual que un deportista). La contabilidad los verifica/edita.
+const EMPLEADOS_NOMINA: Record<string, string> = {
+  '1063278765': 'JAIRO LUIS TOVIOS OVIEDO',
+  '1214734807': 'ALEJANDRO CASTRO ESTRADA',
+  '1152192324': 'OSCAR FREDY MEJIA FLOREZ',
+  '1017258984': 'CRISTIAN CAMILO RAMIREZ AGUDELO',
+  '1000415036': 'SAMUEL COLORADO SERNA',
+  '1000084856': 'ALEXANDER TABARES GUTIERREZ',
+  '1128389946': 'ANDRES FELIPE CHALARCA ROJAS',
+  '1036639022': 'JULIAN RIOS HERRERA',
+  '1003404311': 'JESUS DAVID CASTILLO GONZALEZ',
+  '1013458275': 'MARTIN MORA CARDENAS',
+  '1017192180': 'MARLON CASTAÑO RIOS',
+  '1020464354': 'FREDY ALEXANDER RAMIREZ RIVAS',
+  '1003050289': 'JHON FREDY DORIA CORONADO',
+  '1034776238': 'JUAN MANUEL MUÑOZ HERNANDEZ',
+  '1033180115': 'FELIPE ALVAREZ ALVAREZ',
+  '1002066215': 'JAVIER DUVAN RIOS OSPINA',
+  '1127792656': 'MIGUEL ANGEL BUILES GIRALDO',
+  '1005372826': 'NICOLAS BARRIOS SAAVEDRA',
+  '1000870631': 'KAREN LIZETH BERRIO TORO',
+  '1193081477': 'MARIA CAMILA QUINTERO LOPEZ',
+  '1036864427': 'JUAN ANDRES JIMENEZ',
+  '1000203538': 'SEBASTIÁN GUZMAN MUÑOZ',
 };
-
-/* ── CONCEPTO SEGÚN EL TIPO DE TERCERO ────────────────────────────────────
-   Cuando el banco dice a quién le pagó, el concepto sale del tipo que esa
-   persona tenga en el módulo "Nómina y Proveedores". Reglas de la dirección
-   (25/08/2026). Si todavía no tiene tipo, se deja en NOMINA, que es lo más
-   conservador: se ve raro en pantalla y alguien lo corrige. */
-const CONCEPTO_POR_TIPO: Record<string, string> = {
-  PROFESOR:       'SERVICIOS POR FORMACIÓN',
-  ADMINISTRATIVO: 'NOMINA',
-  PROVEEDOR:      'PROVEEDOR',
-};
-const conceptoDeTipo = (tipo: any) => CONCEPTO_POR_TIPO[String(tipo ?? '').trim().toUpperCase()] || 'NOMINA';
-
-/* ── RECONOCER AL TERCERO POR LA DESCRIPCIÓN DEL BANCO ────────────────────
-   El banco escribe "PAGO A NOMIN fredy alexander r", "PAGO A PROVE sol marina
-   vill", "TRANSF A Diana Fernan" — el nombre siempre RECORTADO. La idea
-   (dirección, 25/08/2026) es que esto funcione con TODOS los profes y no con
-   una lista escrita a mano, así que:
-
-     1. Se le quita a la descripción el "PAGO A NOMIN / PAGO A PROVE / TRANSF
-        A / PAGO A ..." de adelante, y queda el pedazo de nombre.
-     2. Ese pedazo se compara contra el directorio de Nómina y Proveedores:
-        vale si el nombre del tercero EMPIEZA por ese pedazo.
-     3. Si el pedazo le sirve a DOS personas distintas, NO se asigna nada.
-        Antes de arriesgarse a mandarle la plata a la ficha equivocada, la
-        fila se deja sin código para que alguien la mire.
-
-   Exige al menos 8 letras y dos palabras, para no cruzar por un "JUAN" suelto. */
-const PREFIJOS_BANCO = /^(pago|transf\w*|abono|pse|traslado)\s*(de|a|al|para)?\s*(nomin\w*|prove\w*|tercero\w*)?\s*/;
-const LARGO_MIN_NOMBRE = 8;
-
-function trozoDeNombre(desc: any): string {
-  let d = sinTildes(String(desc ?? '')).replace(/[^a-z0-9ñ ]/g, ' ').replace(/\s+/g, ' ').trim();
-  d = d.replace(PREFIJOS_BANCO, '').trim();
-  return d;
-}
-
-type TerceroLibro = { documento: string; nombre: string; tipo: string };
-
-/** Busca en el directorio a quién le corresponde esta descripción.
- *  Devuelve null si no hay nadie o si hay más de uno posible (ambiguo). */
-function terceroPorDescripcion(desc: any, directorio: TerceroLibro[]): TerceroLibro | null {
-  const trozo = trozoDeNombre(desc);
-  if (trozo.length < LARGO_MIN_NOMBRE || trozo.split(' ').length < 2) return null;
-  const candidatos = directorio.filter(t => {
-    const n = sinTildes(t.nombre).replace(/[^a-z0-9ñ ]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!n) return false;
-    return n.startsWith(trozo) || trozo.startsWith(n);
-  });
-  // Ambiguo (dos personas que empiezan igual) ⇒ mejor no asignar nada.
-  const unicos = new Set(candidatos.map(c => c.documento));
-  return unicos.size === 1 ? candidatos[0] : null;
-}
 
 // Columnas del Libro (para anchos ajustables por el usuario). El orden DEBE
 // coincidir con el orden en que se pintan las celdas en el cuerpo de la tabla.
@@ -157,33 +93,6 @@ const DETALLE_OPCIONES: string[] = (() => {
   arr.push('OTRO');
   return arr;
 })();
-
-/* ── GASTOS DE REPRESENTACIÓN ─────────────────────────────────────────────
-   Regla de la dirección (25/08/2026): en estas filas el DETALLE no es el mes
-   —no se le está pagando la mensualidad a nadie—, sino EN QUÉ SE GASTÓ.
-   Por eso, cuando el CONCEPTO de la fila dice GASTOS DE REPRESENTACIÓN, la
-   casilla DETALLE cambia de lista y ofrece únicamente estas nueve opciones. */
-const GASTOS_REPR_DETALLE = [
-  'SALUD', 'ESTUDIO', 'VIVIENDA', 'SERVICIOS', 'ROPA',
-  'ALIMENTACIÓN', 'REUNIÓN DE TRABAJO', 'ESTÉTICA', 'VIAJES',
-];
-/** ¿El concepto de esta fila es GASTOS DE REPRESENTACIÓN?
- *  Compara sin tildes y sin importar mayúsculas, para que dé igual cómo se haya
- *  escrito (REPRESENTACION / REPRESENTACIÓN, GASTO / GASTOS).
- *  Usa `sinTildes`, que está definido más abajo: no hay problema porque esta
- *  función solo se llama al dibujar la pantalla, nunca al cargar el archivo. */
-const esGastoRepresentacion = (c: any) => /gastos?\s+de\s+representacion/.test(sinTildes(String(c ?? '')));
-/** Lista que le toca a la casilla DETALLE según el concepto de la fila. */
-const opcionesDetalle = (concepto: any) =>
-  esGastoRepresentacion(concepto) ? GASTOS_REPR_DETALLE : DETALLE_OPCIONES;
-
-/* ── PAGOS A TERCEROS (NÓMINA Y PROVEEDORES) ──────────────────────────────
-   Regla de la dirección (25/08/2026): al escribir la CÉDULA o el NIT de un
-   tercero en la columna CÓDIGO del Libro, la fila queda de una vez con el
-   NOMBRE COMPLETO y con este concepto. En DETALLE solo se ofrecen los MESES
-   del año, porque a estas personas se les paga mensual — no llevan matrícula
-   ni inscripción. El directorio sale del módulo "Nómina y Proveedores". */
-const MESES_NOMINA: string[] = MESES_DET.map(m => `${m} 2026`);
 
 function loadXLSX(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -337,8 +246,6 @@ export default function ContabilidadPage() {
   const [banco, setBanco] = useState(BANCOS[0]);
   const [vista, setVista] = useState<'subir' | 'libro' | 'cuentas' | 'desconocidas' | 'diccionario'>('subir');
   const [conceptos, setConceptos] = useState<Concepto[]>([]);
-  // Directorio de NÓMINA Y PROVEEDORES (documento → nombre y tipo)
-  const [terceros, setTerceros] = useState<Tercero[]>([]);
 
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const codMap = useMemo(() => {
@@ -358,31 +265,6 @@ export default function ContabilidadPage() {
     deportistas.forEach(d => { const n = normNombre(d._nombre); if (n) m[n] = d.id; });
     return m;
   }, [deportistas]);
-
-  /* Directorio de TERCEROS: documento (cédula o NIT) → nombre y tipo.
-     Manda lo que esté en el módulo "Nómina y Proveedores"; la lista de
-     EMPLEADOS_NOMINA del código queda solo como respaldo, para que el Libro
-     siga reconociendo a la gente aunque la base no responda. */
-  const tercerosIdx = useMemo(() => {
-    const m: Record<string, { nombre: string; tipo: string }> = {};
-    for (const doc of Object.keys(EMPLEADOS_NOMINA)) m[doc] = { ...EMPLEADOS_NOMINA[doc] };
-    for (const t of terceros) m[t.documento] = { nombre: t.nombre, tipo: t.tipo || '' };
-    return m;
-  }, [terceros]);
-  /** El mismo directorio, en lista, para buscar por el nombre de la descripción. */
-  const tercerosLista = useMemo<TerceroLibro[]>(
-    () => Object.keys(tercerosIdx).map(doc => ({ documento: doc, nombre: tercerosIdx[doc].nombre, tipo: tercerosIdx[doc].tipo })),
-    [tercerosIdx],
-  );
-  /** A quién le corresponde esta descripción del banco (o null si no se sabe). */
-  const terceroDeDesc = (desc: any) => terceroPorDescripcion(desc, tercerosLista);
-  /** Gente de NÓMINA (profesores y administrativos): se les paga MENSUAL, así
-   *  que su DETALLE solo ofrece los meses del año. A un PROVEEDOR no: su
-   *  detalle sigue siendo texto libre, porque una factura no es mensual. */
-  const esNominaMensual = (cod: any) => {
-    const t = tercerosIdx[String(cod ?? '').trim()];
-    return !!t && String(t.tipo ?? '').trim().toUpperCase() !== 'PROVEEDOR';
-  };
 
   const [mapeoCount, setMapeoCount] = useState(0);
   const [idx, setIdx] = useState<MapeoIdx>({ cuenta: {}, nombre: {} });
@@ -405,15 +287,11 @@ export default function ContabilidadPage() {
   const [limite, setLimite] = useState(100);
   // Filtro con retraso: no recalcular en cada tecla (se aplica al dejar de escribir)
   const [filDebounced, setFilDebounced] = useState({ banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', codigo: '', deportista: '', detalle: '' });
-  // Filtros de trabajo pendiente del LIBRO (barra del encabezado).
-  // 25/08/2026 · dirección: se quitaron los botones "Por confirmar / orientar"
-  // (naranja) y "Sin concepto" (azul). En su lugar quedan dos, que separan lo que
-  // falta clasificar por el lado del que sale y el lado del que entra:
-  //   🔴 Egresos sin concepto  = filas con DÉBITO  y la casilla CONCEPTO vacía
-  //   🟢 Ingresos sin concepto = filas con CRÉDITO y la casilla CONCEPTO vacía
-  // Se pueden prender los dos a la vez: ahí se ven todas las filas sin concepto.
-  const [soloEgresoSinConc,  setSoloEgresoSinConc]  = useState(false);
-  const [soloIngresoSinConc, setSoloIngresoSinConc] = useState(false);
+  // Ver solo "transacciones por orientar" (pagos recibidos sin código/deportista)
+  const [soloPorOrientar, setSoloPorOrientar] = useState(false);
+  // Filtros de trabajo pendiente: filas a las que aún les falta llenar CONCEPTO o DETALLE.
+  // Son independientes: si prendes los dos, muestra las filas que no tienen ninguno de los dos.
+  const [soloSinConcepto, setSoloSinConcepto] = useState(false);
   const [soloSinDetalle,  setSoloSinDetalle]  = useState(false);
   const [soloSospechosas, setSoloSospechosas] = useState(false);
   // Filtro por el chulo (estado de confirmación): 'todos' | 'verde' (confirmado) | 'rojo' (pendiente)
@@ -440,7 +318,6 @@ export default function ContabilidadPage() {
   const [publicando, setPublicando] = useState(false);
   const [recalculando, setRecalculando] = useState(false);
   const [reclasificando, setReclasificando] = useState(false);
-  const [aplicandoNomina, setAplicandoNomina] = useState(false);
   // Fila a resaltar al volver del estado de cuenta (la que clicaste)
   const [resaltarId, setResaltarId] = useState<string | null>(null);
   // Fila bajo el mouse (sombreado estilo Excel para saber en qué fila se está trabajando)
@@ -500,17 +377,9 @@ export default function ContabilidadPage() {
         const clave = val.trim();
         if (!clave) next.deportista = '';
         else if (codMap[clave]) next.deportista = codMap[clave];
-        else if (tercerosIdx[clave]) {
-          /* TERCERO de nómina o proveedores (regla de la dirección, 25/08/2026):
-             al escribir la cédula/NIT sale el NOMBRE COMPLETO y el concepto
-             SERVICIOS POR FORMACIÓN. El mes se escoge aparte, en DETALLE.
-             Si el mes que traía no es de la lista mensual, se borra: a estas
-             personas no se les cobra matrícula ni inscripción. */
-          next.deportista = tercerosIdx[clave].nombre;
-          next.concepto = conceptoDeTipo(tercerosIdx[clave].tipo);
-          const detActual = String(next.detalle ?? '').trim().toUpperCase();
-          const esMensual = String(tercerosIdx[clave].tipo ?? '').trim().toUpperCase() !== 'PROVEEDOR';
-          if (esMensual && detActual && !MESES_NOMINA.includes(detActual)) next.detalle = '';
+        else if (EMPLEADOS_NOMINA[clave]) {
+          next.deportista = EMPLEADOS_NOMINA[clave];
+          if (!String(next.concepto ?? '').trim()) next.concepto = 'NOMINA';
         }
       }
       return next;
@@ -717,7 +586,6 @@ export default function ContabilidadPage() {
     contarMapeo().then(setMapeoCount).catch(() => {});
     contarMovimientos().then(setMovCount).catch(() => {});
     getConceptos().then(setConceptos).catch(() => {});
-    getTerceros().then(setTerceros).catch(() => {});
     // Marcar en verde (permanente) lo que ya está pagado en el estado de cuenta
     getPagadosKeys().then(keys => setPublicadas(prev => { const n = new Set(prev); keys.forEach(k => n.add(k)); return n; })).catch(() => {});
   }, []);
@@ -805,15 +673,7 @@ export default function ContabilidadPage() {
         // a una cuenta ya cruzada en el diccionario, NO es de ningún deportista.
         // Se le quita el código para que quede sin código y sin mes.
         if (clas.concepto === 'INGRESO FINANCIERO') { codigo = ''; via = ''; }
-        // TERCERO reconocido por la descripción ("PAGO A NOMIN fredy alexander r",
-        // "PAGO A PROVE sol marina vill", "TRANSF A Diana Fernan"…). Manda sobre
-        // cualquier otro cruce: queda la cédula en CÓDIGO, el nombre completo, y
-        // el concepto que le toque por su tipo. El MES se escoge después a mano.
-        const ter = terceroDeDesc(descripcion);
-        if (ter) {
-          codigo = ter.documento; deportista = ter.nombre;
-          concepto = conceptoDeTipo(ter.tipo); detalle = ''; via = 'tercero';
-        } else if (codigo) {
+        if (codigo) {
           deportista = codMap[codigo] || '';
           const esMatricula = /MATRICUL|INSCRIP/i.test(descripcion);
           concepto = esMatricula ? 'MATRÍCULA' : 'APORTE FORMACIÓN';
@@ -1123,9 +983,6 @@ export default function ContabilidadPage() {
     const c = String(m.codigo ?? '').trim();
     // Mientras la lista de deportistas no haya cargado, no se acusa a nadie.
     if (!c || codigosReales.size === 0) return false;
-    // Las CEDULAS y NIT del directorio de NOMINA Y PROVEEDORES son codigos
-    // legitimos: no son deportistas, pero tampoco son un error. Sin rojo.
-    if (tercerosIdx[c]) return false;
     return !codigosReales.has(c.toUpperCase());
   };
 
@@ -1288,19 +1145,16 @@ export default function ContabilidadPage() {
       }
       if (f.deportista && !inc(m.deportista, f.deportista)) return false;
       if (f.detalle && !inc(m.detalle, f.detalle)) return false;
-      // EGRESOS / INGRESOS SIN CONCEPTO.
-      // Egreso = la fila tiene DÉBITO. Ingreso = la fila tiene CRÉDITO.
-      // Prendidos los dos a la vez, muestra todas las filas sin concepto.
-      // Las filas que usted acaba de editar (cambios sin guardar) se quedan
-      // visibles para que no desaparezcan mientras las está llenando.
-      if (soloEgresoSinConc || soloIngresoSinConc) {
-        const sinConcepto = !String(m.concepto ?? '').trim();
-        const ladoPedido =
-          (soloEgresoSinConc  && Number(m.debito)  > 0) ||
-          (soloIngresoSinConc && Number(m.credito) > 0);
-        if (!(sinConcepto && ladoPedido) && !dirtyIds.has(m.id || '')) return false;
+      // "Por orientar": pagos (crédito) sin código. Mostramos también los que acabas
+      // de orientar (fila con cambios pendientes) para que no desaparezcan hasta guardar.
+      if (soloPorOrientar) {
+        const esPorOrientar = (Number(m.credito) > 0) && !String(m.codigo ?? '').trim() && !esNoAplica(m);
+        if (!esPorOrientar && !dirtyIds.has(m.id || '')) return false;
       }
-      // "Sin detalle": filas a las que todavía les falta ese dato.
+      // "Sin concepto" / "Sin detalle": filas a las que todavía les falta ese dato.
+      // Igual que "Por orientar", se dejan visibles las filas que acabas de editar
+      // (cambios sin guardar) para que no desaparezcan mientras las estás llenando.
+      if (soloSinConcepto && String(m.concepto ?? '').trim() && !dirtyIds.has(m.id || '')) return false;
       if (soloSinDetalle  && String(m.detalle  ?? '').trim() && !dirtyIds.has(m.id || '')) return false;
       // Filtro de SOSPECHOSAS: filas en rojo (codigo que no existe, o pago de mas)
       if (soloSospechosas) {
@@ -1323,7 +1177,7 @@ export default function ContabilidadPage() {
       }
       return true;
     });
-  }, [libro, filDebounced, soloEgresoSinConc, soloIngresoSinConc, soloSinDetalle, soloSospechosas, codigosReales, dirtyIds, filChulo, confirmadas, filCodModo, filSem, semaforo]);
+  }, [libro, filDebounced, soloPorOrientar, soloSinConcepto, soloSinDetalle, soloSospechosas, codigosReales, dirtyIds, filChulo, confirmadas, filCodModo, filSem, semaforo]);
   /** Pagos del libro que ya quedaron confirmados en el estado de cuenta. */
   const confirmadosCount = useMemo(
     () => libro.filter(m => {
@@ -1333,36 +1187,18 @@ export default function ContabilidadPage() {
     }).length,
     [libro, confirmadas],
   );
-  /** Filas del libro a las que todavía les falta el CONCEPTO, separadas por lado.
-   *  Egreso = tiene DÉBITO (plata que salió). Ingreso = tiene CRÉDITO (plata que entró).
-   *  Se cuenta sobre TODO el libro de la cuenta seleccionada, no sobre lo filtrado. */
-  const egresoSinConcCount = useMemo(
-    () => libro.filter(m => Number(m.debito) > 0 && !String(m.concepto ?? '').trim()).length,
+  const porOrientarCount = useMemo(
+    () => libro.filter(m => (Number(m.credito) > 0) && !String(m.codigo ?? '').trim() && !esNoAplica(m)).length,
     [libro],
   );
-  const ingresoSinConcCount = useMemo(
-    () => libro.filter(m => Number(m.credito) > 0 && !String(m.concepto ?? '').trim()).length,
+  /** Filas del libro que todavía no tienen CONCEPTO / DETALLE llenos. */
+  const sinConceptoCount = useMemo(
+    () => libro.filter(m => !String(m.concepto ?? '').trim()).length,
     [libro],
   );
   const sinDetalleCount = useMemo(
     () => libro.filter(m => !String(m.detalle ?? '').trim()).length,
     [libro],
-  );
-  /** Filas cuya DESCRIPCIÓN señala a alguien del directorio de Nómina y
-   *  Proveedores, y que todavía NO están completas: les falta el concepto que
-   *  les toca por su tipo, la cédula/NIT en CÓDIGO, el nombre completo, o
-   *  traen en DETALLE algo que no es un mes. */
-  const nominaDescPendientes = useMemo(
-    () => libro.filter(m => {
-      const r = terceroDeDesc(m.descripcion);
-      if (!r) return false;
-      const det = String(m.detalle ?? '').trim().toUpperCase();
-      return sinTildes(String(m.concepto ?? '')) !== sinTildes(conceptoDeTipo(r.tipo))
-          || String(m.codigo ?? '').trim() !== r.documento
-          || sinTildes(String(m.deportista ?? '')) !== sinTildes(r.nombre)
-          || (!!det && !MESES_NOMINA.includes(det));
-    }),
-    [libro, tercerosLista],
   );
   /* Deteccion de errores por fila (pinta la fila de rojo).
      ANTES: marcaba como error TODO mes repetido. Eso senalaba como duplicados los
@@ -1492,71 +1328,6 @@ export default function ContabilidadPage() {
     setReclasificando(false);
   }
 
-  /* ── TERCEROS POR DESCRIPCIÓN (arreglar lo ya cargado) ────────────────────
-     Recorre el libro, mira a quién señala la descripción del banco y le pone a
-     cada fila: el concepto que le toca por su tipo, la cédula/NIT en CÓDIGO y
-     el nombre completo. El MES que ya estuviera bien puesto NO se toca; solo se
-     borra lo que haya en DETALLE cuando no es un mes del año.
-     Muestra primero el resumen y pide confirmación.
-     NO publica nada al estado de cuenta. */
-  async function aplicarNominaDescripcion() {
-    if (!nominaDescPendientes.length) {
-      flash('Todo lo que se reconoce por la descripción ya está puesto.');
-      return;
-    }
-    /* Se agrupa por persona, y dentro de cada una se separan las filas a las que
-       hay que borrarles el DETALLE de las que ya traen un mes válido. */
-    type Grupo = { doc: string; nombre: string; tipo: string; concepto: string; conMes: string[]; sinMes: string[] };
-    const porPersona: Record<string, Grupo> = {};
-    for (const m of nominaDescPendientes) {
-      const r = terceroDeDesc(m.descripcion);
-      if (!r || !m.id) continue;
-      const g = porPersona[r.documento] = porPersona[r.documento]
-        || { doc: r.documento, nombre: r.nombre, tipo: r.tipo, concepto: conceptoDeTipo(r.tipo), conMes: [], sinMes: [] };
-      const det = String(m.detalle ?? '').trim().toUpperCase();
-      if (det && MESES_NOMINA.includes(det)) g.conMes.push(m.id);
-      else g.sinMes.push(m.id);
-    }
-    const grupos = Object.values(porPersona).sort((a, b) => (b.conMes.length + b.sinMes.length) - (a.conMes.length + a.sinMes.length));
-    const lineas = grupos
-      .map(g => `  ${String(g.conMes.length + g.sinMes.length).padStart(6)}  ${g.nombre}` +
-                `\n           ${g.doc}  ·  ${g.tipo || 'SIN TIPO'}  →  ${g.concepto}`)
-      .join('\n');
-    const aviso =
-      'TERCEROS RECONOCIDOS POR LA DESCRIPCIÓN\n\n' +
-      `Se van a marcar ${nominaDescPendientes.length.toLocaleString('es-CO')} filas:\n\n` +
-      lineas +
-      '\n\nEn cada una queda el CÓDIGO, el NOMBRE COMPLETO y el CONCEPTO\n' +
-      'que le corresponde según su tipo en Nómina y Proveedores.\n\n' +
-      'El MES que ya esté bien puesto NO se toca.\n' +
-      'NO se publica nada al estado de cuenta.\n\n¿Continuar?';
-    if (!window.confirm(aviso)) return;
-
-    setAplicandoNomina(true);
-    flash(`Marcando ${nominaDescPendientes.length} filas…`);
-    try {
-      let ok = true, hechas = 0;
-      for (const g of grupos) {
-        const base = { concepto: g.concepto, codigo: g.doc, deportista: g.nombre };
-        if (g.sinMes.length) {
-          const r = await asignarCodigoBulk(g.sinMes, { ...base, detalle: '' });
-          if (r) hechas += g.sinMes.length; else ok = false;
-        }
-        if (g.conMes.length) {
-          const r = await asignarCodigoBulk(g.conMes, base);   // se le respeta el mes
-          if (r) hechas += g.conMes.length; else ok = false;
-        }
-      }
-      if (ok) flash(`✓ ${hechas.toLocaleString('es-CO')} filas marcadas`);
-      else    flash('⚠ Algunas filas no se pudieron actualizar. Revisa la consola del navegador.');
-      libroCache = null;
-      await cargarLibro();
-    } catch (e: any) {
-      flash('⚠ Error al marcar los terceros: ' + (e?.message || e));
-    }
-    setAplicandoNomina(false);
-  }
-
   async function recalcularMeses() {
     const CUT = '2026-08-05';
     setRecalculando(true);
@@ -1683,7 +1454,7 @@ export default function ContabilidadPage() {
     if (primerResetLimite.current) { primerResetLimite.current = false; return; }
     if (saltarReset.current) { saltarReset.current = false; return; }
     setLimite(100);
-  }, [fil, libroBanco, soloEgresoSinConc, soloIngresoSinConc, soloSinDetalle]);
+  }, [fil, libroBanco, soloSinConcepto, soloSinDetalle]);
   // Aplicar el filtro con un pequeño retraso (evita recalcular/redibujar en cada tecla)
   useEffect(() => { const t = setTimeout(() => setFilDebounced(fil), 250); return () => clearTimeout(t); }, [fil]);
   // Guardar el estado de la vista para poder volver exactamente aquí.
@@ -1951,23 +1722,20 @@ export default function ContabilidadPage() {
                 ))}
               </div>
               <p className="font-black text-gray-700 text-sm">
-                {hayFiltro || soloEgresoSinConc || soloIngresoSinConc || soloSinDetalle || soloSospechosas
+                {hayFiltro || soloPorOrientar || soloSinConcepto || soloSinDetalle || soloSospechosas
                   ? <>{libroFiltrado.length.toLocaleString('es-CO')} <span className="text-gray-400 font-semibold">de {libro.length.toLocaleString('es-CO')}</span></>
                   : <>{libro.length.toLocaleString('es-CO')}</>} movimientos
               </p>
-              {/* Trabajo pendiente por clasificar, separado por lado.
-                  🔴 EGRESOS  = filas con DÉBITO  y sin concepto (plata que salió)
-                  🟢 INGRESOS = filas con CRÉDITO y sin concepto (plata que entró)
-                  Se pueden prender los dos a la vez: ahí salen todas las filas sin concepto. */}
-              <button onClick={() => setSoloEgresoSinConc(v => !v)}
-                title="EGRESOS sin clasificar: filas con DÉBITO (plata que salió) a las que todavía les falta el CONCEPTO"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloEgresoSinConc ? 'bg-red-600 text-white border-red-600' : 'text-red-700 bg-red-50 border-red-200 hover:bg-red-100'}`}>
-                {soloEgresoSinConc ? '✓ ' : '↑ '}Egresos sin concepto ({egresoSinConcCount.toLocaleString('es-CO')})
+              <button onClick={() => setSoloPorOrientar(v => !v)} title="Pagos recibidos que aún no tienen deportista asignado"
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloPorOrientar ? 'bg-amber-500 text-white border-amber-500' : 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100'}`}>
+                {soloPorOrientar ? '✓ ' : ''}Por confirmar / orientar ({porOrientarCount.toLocaleString('es-CO')})
               </button>
-              <button onClick={() => setSoloIngresoSinConc(v => !v)}
-                title="INGRESOS sin clasificar: filas con CRÉDITO (plata que entró) a las que todavía les falta el CONCEPTO"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloIngresoSinConc ? 'bg-emerald-600 text-white border-emerald-600' : 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'}`}>
-                {soloIngresoSinConc ? '✓ ' : '↓ '}Ingresos sin concepto ({ingresoSinConcCount.toLocaleString('es-CO')})
+              {/* Trabajo pendiente: filas a las que les falta CONCEPTO o DETALLE.
+                  Se pueden prender los dos a la vez (muestra las que no tienen ninguno). */}
+              <button onClick={() => setSoloSinConcepto(v => !v)}
+                title="Filas del libro que todavía no tienen CONCEPTO"
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSinConcepto ? 'bg-sky-600 text-white border-sky-600' : 'text-sky-700 bg-sky-50 border-sky-200 hover:bg-sky-100'}`}>
+                {soloSinConcepto ? '✓ ' : ''}Sin concepto ({sinConceptoCount.toLocaleString('es-CO')})
               </button>
               <button onClick={() => setSoloSinDetalle(v => !v)}
                 title="Filas del libro que todavía no tienen DETALLE"
@@ -1986,16 +1754,6 @@ export default function ContabilidadPage() {
                 className="flex items-center gap-1.5 text-sm font-black text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1.5 rounded-lg hover:bg-sky-100 transition disabled:opacity-60">
                 🏷 {reclasificando ? 'Reclasificando…' : 'Reclasificar conceptos'}
               </button>
-              {/* NÓMINA POR DESCRIPCIÓN: las transferencias que el banco siempre
-                  describe igual (p. ej. "TRANSF A Diana Fernan") quedan con
-                  concepto NOMINA, la cédula en CÓDIGO y el nombre del empleado. */}
-              {nominaDescPendientes.length > 0 && (
-                <button onClick={aplicarNominaDescripcion} disabled={aplicandoNomina}
-                  title="Reconoce por la descripción del banco (PAGO A NOMIN fredy alexander r, PAGO A PROVE sol marina vill, TRANSF A Diana Fernan…) a quién le corresponde el pago, según el directorio de Nómina y Proveedores. Le pone la cédula, el nombre completo y el concepto de su tipo. Muestra primero cuántas cambia y pide confirmación. No publica nada."
-                  className="flex items-center gap-1.5 text-sm font-black text-teal-700 bg-teal-50 border border-teal-200 px-3 py-1.5 rounded-lg hover:bg-teal-100 transition disabled:opacity-60">
-                  👤 {aplicandoNomina ? 'Marcando…' : `Nómina y proveedores por descripción (${nominaDescPendientes.length.toLocaleString('es-CO')})`}
-                </button>
-              )}
               {/* ── SEMAFORO ──
                   Los cuatro contadores de color (verde/amarillo/rojo/morado) se
                   quitaron el 20/08/2026 por pedido de la dirección. El color se
@@ -2019,8 +1777,8 @@ export default function ContabilidadPage() {
                 🎓 {publicandoMatr ? 'Confirmando…' : `Confirmar ${matriculasPendientes.length.toLocaleString('es-CO')} matrículas`}
               </button>
               <span className="w-px h-6 bg-gray-200 mx-1" />
-              {(hayFiltro || soloEgresoSinConc || soloIngresoSinConc || soloSinDetalle || soloSospechosas) && (
-                <button onClick={() => { setFil(filVacio); setSoloEgresoSinConc(false); setSoloIngresoSinConc(false); setSoloSinDetalle(false); setSoloSospechosas(false); }}
+              {(hayFiltro || soloSinConcepto || soloSinDetalle || soloSospechosas) && (
+                <button onClick={() => { setFil(filVacio); setSoloSinConcepto(false); setSoloSinDetalle(false); setSoloSospechosas(false); }}
                   className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition">
                   <X className="w-3.5 h-3.5" /> Limpiar filtros
                 </button>
@@ -2249,74 +2007,18 @@ export default function ContabilidadPage() {
                       <td style={{ ...tdC, padding: '2px 4px', cursor: 'pointer', textAlign: 'left' }} title={m.detalle}
                         onClick={() => setEditCell({ id: m.id || '', campo: 'detalle' })}>
                         {editCell?.id === m.id && editCell.campo === 'detalle' ? (
-                          esNominaMensual(m.codigo) ? (
-                            /* NÓMINA / PROVEEDORES: a estas personas se les paga
-                               MENSUAL, así que solo se ofrecen los meses del año.
-                               Nada de matrícula ni inscripción. */
-                            <select autoFocus defaultValue={m.detalle || ''}
-                              onClick={e => e.stopPropagation()}
-                              onChange={e => { cambiarCampoLibro(m, 'detalle', e.target.value); setEditCell(null); }}
-                              onBlur={() => setEditCell(null)}
-                              onKeyDown={e => { if (e.key === 'Escape') setEditCell(null); }}
-                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 3px', fontSize: 11, fontWeight: 700, background: '#fff' }}>
-                              <option value="">— ¿de qué mes? —</option>
-                              {MESES_NOMINA.map(o => <option key={o} value={o}>{o}</option>)}
-                            </select>
-                          ) : esGastoRepresentacion(m.concepto) ? (
-                            /* GASTOS DE REPRESENTACIÓN: aquí el DETALLE no es el mes,
-                               es EN QUÉ SE GASTÓ. Lista cerrada de nueve opciones. */
-                            <select autoFocus defaultValue={m.detalle || ''}
-                              onClick={e => e.stopPropagation()}
-                              onChange={e => { cambiarCampoLibro(m, 'detalle', e.target.value); setEditCell(null); }}
-                              onBlur={() => setEditCell(null)}
-                              onKeyDown={e => { if (e.key === 'Escape') setEditCell(null); }}
-                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 3px', fontSize: 11, fontWeight: 700, background: '#fff' }}>
-                              <option value="">— ¿en qué se gastó? —</option>
-                              {GASTOS_REPR_DETALLE.map(o => <option key={o} value={o}>{o}</option>)}
-                              {/* Si la fila ya traía otro texto, se conserva para no borrárselo sin querer */}
-                              {!!String(m.detalle ?? '').trim() && !GASTOS_REPR_DETALLE.includes(String(m.detalle).trim()) && (
-                                <option value={String(m.detalle).trim()}>{String(m.detalle).trim()} (como estaba)</option>
-                              )}
-                            </select>
-                          ) : (
-                            <input autoFocus list="detalle-libro" defaultValue={m.detalle || ''}
-                              onClick={e => e.stopPropagation()}
-                              onBlur={e => { cambiarCampoLibro(m, 'detalle', e.target.value.trim()); setEditCell(null); }}
-                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditCell(null); }}
-                              placeholder="Mes o texto libre (lo que se paga)"
-                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff' }} />
-                          )
+                          <input autoFocus list="detalle-libro" defaultValue={m.detalle || ''}
+                            onClick={e => e.stopPropagation()}
+                            onBlur={e => { cambiarCampoLibro(m, 'detalle', e.target.value.trim()); setEditCell(null); }}
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditCell(null); }}
+                            placeholder="Mes o texto libre (lo que se paga)"
+                            style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff' }} />
                         ) : (() => {
                           /* SEMAFORO: el mes se pinta con fondo pastel y letra negra
                              segun si el valor pagado cuadra con la mensualidad. */
                           const sm = semaforo[m.id || ''];
                           const pal = sm && sm.color !== 'na' ? PASTEL_SEM[sm.color] : null;
-                          if (!pal) {
-                            /* Pago a un tercero al que todavía no se le puso el mes. */
-                            if (esNominaMensual(m.codigo) && !String(m.detalle ?? '').trim()) {
-                              return (
-                                <span className="block truncate" title="Clic para escoger el mes que se le está pagando"
-                                  style={{ background: '#e0f2fe', color: '#075985', fontWeight: 800,
-                                           border: '1px solid #7dd3fc', borderRadius: 5,
-                                           padding: '2px 6px', textAlign: 'center' }}>
-                                  ¿DE QUÉ MES?
-                                </span>
-                              );
-                            }
-                            /* GASTOS DE REPRESENTACIÓN todavía sin clasificar: se avisa
-                               con un letrero, para que se vea el trabajo que falta. */
-                            if (esGastoRepresentacion(m.concepto) && !String(m.detalle ?? '').trim()) {
-                              return (
-                                <span className="block truncate" title="Clic para escoger en qué se gastó (salud, estudio, vivienda…)"
-                                  style={{ background: '#fef3c7', color: '#92400e', fontWeight: 800,
-                                           border: '1px solid #fcd34d', borderRadius: 5,
-                                           padding: '2px 6px', textAlign: 'center' }}>
-                                  ¿EN QUÉ SE GASTÓ?
-                                </span>
-                              );
-                            }
-                            return <span className="block truncate">{m.detalle || <span style={{ color: '#cbd5e1' }}>—</span>}</span>;
-                          }
+                          if (!pal) return <span className="block truncate">{m.detalle || <span style={{ color: '#cbd5e1' }}>—</span>}</span>;
                           // Sin mes asignado: igual se marca con su color y el aviso
                           const texto = m.detalle || (sm.color === 'morado' ? 'SIN CODIGO' : 'FALTA MES');
                           return (
@@ -2429,12 +2131,10 @@ export default function ContabilidadPage() {
                         <td style={{ ...td, padding: 3 }}><input value={r.codigo || ''} onChange={e => editarSplit(i, 'codigo', e.target.value)} style={{ ...inp, minWidth: 70, fontWeight: 700 }} /></td>
                         <td style={{ ...td, padding: 3 }}><input value={r.deportista || ''} onChange={e => editarSplit(i, 'deportista', e.target.value)} style={{ ...inp, minWidth: 130 }} /></td>
                         <td style={{ ...td, padding: 3 }}>
-                          {/* Si el concepto es GASTOS DE REPRESENTACIÓN, la lista cambia
-                              de meses a "en qué se gastó" (salud, estudio, vivienda…). */}
                           <select value={r.detalle || ''} onChange={e => editarSplit(i, 'detalle', e.target.value)} style={{ ...inp, minWidth: 120 }}>
-                            <option value="">{esGastoRepresentacion(r.concepto) ? '— ¿en qué se gastó? —' : '—'}</option>
-                            {opcionesDetalle(r.concepto).map(o => <option key={o} value={o}>{o}</option>)}
-                            {r.detalle && !opcionesDetalle(r.concepto).includes(r.detalle) && <option value={r.detalle}>{r.detalle}</option>}
+                            <option value="">—</option>
+                            {DETALLE_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
+                            {r.detalle && !DETALLE_OPCIONES.includes(r.detalle) && <option value={r.detalle}>{r.detalle}</option>}
                           </select>
                         </td>
                         <td style={{ ...td, padding: 3 }}><input value={r.debito || ''} onChange={e => editarSplit(i, 'debito', numVal(e.target.value))} style={{ ...inp, textAlign: 'right', color: '#dc2626' }} /></td>
@@ -2537,11 +2237,11 @@ export default function ContabilidadPage() {
                     <input value={nuevaFila.codigo} onChange={e => editarNuevaFila('codigo', e.target.value)} placeholder="Opcional" style={{ ...inp, fontWeight: 700 }} />
                   </div>
                   <div>
-                    <label className={lbl}>{esGastoRepresentacion(nuevaFila.concepto) ? 'Detalle (¿en qué se gastó?)' : 'Detalle (mes)'}</label>
+                    <label className={lbl}>Detalle (mes)</label>
                     <select value={nuevaFila.detalle} onChange={e => editarNuevaFila('detalle', e.target.value)} style={inp}>
                       <option value="">—</option>
-                      {opcionesDetalle(nuevaFila.concepto).map(o => <option key={o} value={o}>{o}</option>)}
-                      {nuevaFila.detalle && !opcionesDetalle(nuevaFila.concepto).includes(nuevaFila.detalle) && <option value={nuevaFila.detalle}>{nuevaFila.detalle}</option>}
+                      {DETALLE_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
+                      {nuevaFila.detalle && !DETALLE_OPCIONES.includes(nuevaFila.detalle) && <option value={nuevaFila.detalle}>{nuevaFila.detalle}</option>}
                     </select>
                   </div>
                 </div>

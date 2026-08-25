@@ -11,7 +11,14 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Trash2, Search } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
-type Fila = { id: string; nombre: string; documento: string; cuenta: string; banco: string };
+type Fila = { id: string; nombre: string; documento: string; cuenta: string; banco: string; tipo: string };
+
+/* TIPO de tercero (dirección, 25/08/2026). Va al frente de cada registro para
+   saber de un vistazo a quién se le está pagando y poder separar después el
+   gasto de formación del administrativo. */
+const TIPOS = ['PROFESOR', 'ADMINISTRATIVO', 'PROVEEDOR'] as const;
+/** Lo que trae por defecto un registro nuevo, según la pestaña en la que esté. */
+const TIPO_POR_DEFECTO = (tabla: 'nomina' | 'proveedores') => (tabla === 'nomina' ? 'PROFESOR' : 'PROVEEDOR');
 
 export function DirectorioFinanzas({
   tabla, titulo, subtitulo, docLabel, pestanas,
@@ -31,24 +38,36 @@ export function DirectorioFinanzas({
   const [busqueda, setBusqueda] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [estadoGuardado, setEstadoGuardado] = useState<'idle' | 'guardando' | 'ok'>('idle');
+  /* ¿La columna TIPO ya existe en la base? Si todavía no se ha corrido el SQL,
+     la tabla se sigue viendo y editando, solo que sin esa columna. */
+  const [hayTipo, setHayTipo] = useState(true);
 
   async function cargar() {
     setCargando(true);
-    const { data, error } = await sb.from(tabla).select('id,nombre,documento,cuenta,banco').order('nombre');
-    if (error) console.error(`[${tabla}] cargar:`, error.message);
-    setFilas((data as Fila[]) ?? []);
+    // Primero con TIPO. Si la columna no existe todavía, se reintenta sin ella
+    // para que la pantalla nunca aparezca vacía por ese motivo.
+    let { data, error } = await sb.from(tabla).select('id,nombre,documento,cuenta,banco,tipo').order('nombre');
+    if (error) {
+      const r2 = await sb.from(tabla).select('id,nombre,documento,cuenta,banco').order('nombre');
+      if (r2.error) console.error(`[${tabla}] cargar:`, r2.error.message);
+      else console.warn(`[${tabla}] cargar: falta la columna TIPO — corra el SQL de Nómina y Proveedores`);
+      data = r2.data as any; error = r2.error as any;
+      setHayTipo(false);
+    } else setHayTipo(true);
+    setFilas(((data as any[]) ?? []).map(f => ({ ...f, tipo: String(f.tipo ?? '') })) as Fila[]);
     setCargando(false);
   }
   useEffect(() => { cargar(); /* eslint-disable-next-line */ }, [tabla]);
 
   async function agregar() {
     setGuardando(true);
-    const { data, error } = await sb.from(tabla)
-      .insert({ nombre: '', documento: '', cuenta: '', banco: '' })
-      .select('id,nombre,documento,cuenta,banco').single();
+    const base: any = { nombre: '', documento: '', cuenta: '', banco: '' };
+    if (hayTipo) base.tipo = TIPO_POR_DEFECTO(tabla);
+    const cols = hayTipo ? 'id,nombre,documento,cuenta,banco,tipo' : 'id,nombre,documento,cuenta,banco';
+    const { data, error } = await sb.from(tabla).insert(base).select(cols).single();
     setGuardando(false);
     if (error) { console.error(`[${tabla}] agregar:`, error.message); return; }
-    if (data) setFilas(prev => [data as Fila, ...prev]);
+    if (data) setFilas(prev => [{ ...(data as any), tipo: String((data as any).tipo ?? '') } as Fila, ...prev]);
   }
 
   function editarLocal(id: string, campo: keyof Fila, val: string) {
@@ -64,6 +83,7 @@ export function DirectorioFinanzas({
     setEstadoGuardado('guardando');
     const payload = filas.map(f => ({
       id: f.id, nombre: f.nombre, documento: f.documento, cuenta: f.cuenta, banco: f.banco,
+      ...(hayTipo ? { tipo: f.tipo || '' } : {}),
     }));
     const { error } = await sb.from(tabla).upsert(payload);
     if (error) { console.error(`[${tabla}] guardarTodo:`, error.message); setEstadoGuardado('idle'); return; }
@@ -81,7 +101,7 @@ export function DirectorioFinanzas({
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return filas;
-    return filas.filter(f => `${f.nombre} ${f.documento} ${f.cuenta} ${f.banco}`.toLowerCase().includes(q));
+    return filas.filter(f => `${f.nombre} ${f.documento} ${f.cuenta} ${f.banco} ${f.tipo}`.toLowerCase().includes(q));
   }, [filas, busqueda]);
 
   const th: React.CSSProperties = { background: '#16a34a', color: '#fff', border: '1px solid #fff', padding: '8px 10px', fontSize: 11, fontWeight: 900, textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', position: 'sticky', top: 0, zIndex: 2 };
@@ -138,18 +158,19 @@ export function DirectorioFinanzas({
             <table className="w-full border-collapse" style={{ minWidth: 720 }}>
               <thead>
                 <tr>
-                  <th style={{ ...th, width: '34%' }}>Nombre</th>
-                  <th style={{ ...th, width: '20%' }}>{docLabel}</th>
-                  <th style={{ ...th, width: '22%' }}>Cuenta</th>
-                  <th style={{ ...th, width: '18%' }}>Banco</th>
+                  <th style={{ ...th, width: hayTipo ? '28%' : '34%' }}>Nombre</th>
+                  <th style={{ ...th, width: hayTipo ? '17%' : '20%' }}>{docLabel}</th>
+                  {hayTipo && <th style={{ ...th, width: '15%' }}>Tipo</th>}
+                  <th style={{ ...th, width: hayTipo ? '19%' : '22%' }}>Cuenta</th>
+                  <th style={{ ...th, width: hayTipo ? '15%' : '18%' }}>Banco</th>
                   <th style={{ ...th, width: '6%', textAlign: 'center' }}></th>
                 </tr>
               </thead>
               <tbody>
                 {cargando ? (
-                  <tr><td colSpan={5} className="text-center py-10 text-gray-400 font-semibold">Cargando…</td></tr>
+                  <tr><td colSpan={hayTipo ? 6 : 5} className="text-center py-10 text-gray-400 font-semibold">Cargando…</td></tr>
                 ) : visibles.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-10 text-gray-400 font-semibold">
+                  <tr><td colSpan={hayTipo ? 6 : 5} className="text-center py-10 text-gray-400 font-semibold">
                     {busqueda ? 'Ningún registro coincide con la búsqueda.' : 'Aún no hay registros. Usa “Agregar”.'}
                   </td></tr>
                 ) : visibles.map((f, i) => (
@@ -166,6 +187,18 @@ export function DirectorioFinanzas({
                         onBlur={e => guardarCampo(f.id, 'documento', e.target.value)}
                         style={tdIn} />
                     </td>
+                    {hayTipo && (
+                      <td style={{ padding: '4px 8px', borderRight: '1px solid #f1f5f9' }}>
+                        {/* PROFESOR · ADMINISTRATIVO · PROVEEDOR. Se guarda al escoger. */}
+                        <select value={f.tipo || ''}
+                          onChange={e => { editarLocal(f.id, 'tipo', e.target.value); guardarCampo(f.id, 'tipo', e.target.value); }}
+                          style={{ ...tdIn, fontWeight: 800, fontSize: 12, cursor: 'pointer',
+                                   color: f.tipo === 'PROVEEDOR' ? '#b45309' : f.tipo === 'ADMINISTRATIVO' ? '#1d4ed8' : '#15803d' }}>
+                          <option value="">— sin definir —</option>
+                          {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </td>
+                    )}
                     <td style={{ padding: '4px 8px', borderRight: '1px solid #f1f5f9' }}>
                       <input value={f.cuenta} placeholder="N° de cuenta o Titular Nequi"
                         onChange={e => editarLocal(f.id, 'cuenta', e.target.value)}
@@ -191,6 +224,12 @@ export function DirectorioFinanzas({
           </div>
         </div>
 
+        {!hayTipo && (
+          <p className="text-[12px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mt-3">
+            ⚠ Falta la columna TIPO en la base. Corra <code>NOMINA-PROVEEDORES-TIPO.sql</code> en
+            Supabase → SQL Editor y recargue esta pantalla. Mientras tanto todo lo demás funciona igual.
+          </p>
+        )}
         <p className="text-[11px] text-gray-400 mt-3">
           💡 Los cambios se guardan solos al salir de cada casilla. La cuenta y el banco sirven para relacionar los pagos del libro dinámico.
         </p>
