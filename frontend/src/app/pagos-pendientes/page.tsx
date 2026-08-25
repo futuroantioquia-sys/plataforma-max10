@@ -38,6 +38,17 @@ interface SoporteEnriquecido extends SoportePago {
   depId: string;
 }
 
+/* ── PALETA OFICIAL DE LA PLATAFORMA ─────────────────────────────
+   La misma de Control de Pagos, Asistencia y Microciclo. Esta pantalla
+   estaba en azul; se pasó al gris verde el 25/08/2026. */
+const LIENZO = '#333F50';   // fondo de la pantalla
+const PANEL  = '#3C4759';   // tarjetas y filas
+const CAMPO  = '#2B3547';   // casillas y recuadros
+const BORDE  = '#4A5568';
+const VERDE  = '#00B050';   // verde institucional
+const ROJO   = '#C0504D';   // lo que se rechaza
+const GRIS   = '#7C879A';   // guiones y casillas sin dato
+
 export default function PagosPendientesPage() {
   const router = useRouter();
   const [soportes,   setSoportes]   = useState<SoporteEnriquecido[]>([]);
@@ -147,10 +158,10 @@ export default function PagosPendientesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: LIENZO }}>
 
       {/* ── Header ── */}
-      <header className="relative bg-gradient-to-r from-[#1d4ed8] via-[#2563eb] to-[#3b82f6] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 shadow overflow-hidden">
+      <header className="relative bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 shadow overflow-hidden">
         <div className="absolute inset-0 pointer-events-none opacity-[0.07]" aria-hidden>
           <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -162,12 +173,12 @@ export default function PagosPendientesPage() {
             <rect width="100%" height="100%" fill="url(#sp-pp)"/>
           </svg>
         </div>
-        <button onClick={() => router.back()} className="relative text-white/70 hover:text-white transition">
+        <button onClick={() => router.back()} className="relative text-white hover:opacity-80 transition">
           <ArrowLeft className="w-5 h-5"/>
         </button>
         <div className="relative flex-1 min-w-0">
           <h1 className="text-white font-black text-base leading-tight">Pagos Pendientes</h1>
-          <p className="text-white/60 text-[11px]">Soportes enviados por padres · MAX 10</p>
+          <p className="text-white text-[11px]">Soportes enviados por padres · MAX 10</p>
         </div>
         {/* Badge de pendientes */}
         {!cargando && soportes.length > 0 && (
@@ -180,7 +191,7 @@ export default function PagosPendientesPage() {
         <div className="relative flex flex-col items-center border-l border-white/30 pl-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/MAX%2010.png" alt="MAX10" className="h-7 object-contain" />
-          <p className="text-white/50 text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
+          <p className="text-white text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 
@@ -195,21 +206,21 @@ export default function PagosPendientesPage() {
 
         {/* ── Sin pendientes ── */}
         {!cargando && soportes.length === 0 && (
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-10 text-center max-w-md mx-auto mt-8">
-            <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-green-500"/>
+          <div className="rounded-3xl shadow-sm border p-10 text-center max-w-md mx-auto mt-8" style={{ background: PANEL, borderColor: BORDE }}>
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: CAMPO }}>
+              <CheckCircle className="w-8 h-8" style={{ color: VERDE }}/>
             </div>
-            <p className="text-gray-800 font-black text-lg">¡Todo al día!</p>
-            <p className="text-gray-400 text-sm mt-1">No hay soportes de pago pendientes de confirmar.</p>
+            <p className="text-white font-black text-lg">¡Todo al día!</p>
+            <p className="text-white text-sm mt-1">No hay soportes de pago pendientes de confirmar.</p>
           </div>
         )}
 
         {/* ── Tabla de soportes ── */}
         {!cargando && soportes.length > 0 && (
-          <div className="overflow-x-auto rounded-2xl shadow-sm border border-gray-200">
+          <div className="overflow-x-auto rounded-2xl shadow-sm border" style={{ borderColor: BORDE }}>
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="bg-[#1d4ed8] text-white text-xs font-black uppercase tracking-wider">
+                <tr className="text-white text-xs font-black uppercase tracking-wider" style={{ background: VERDE }}>
                   <th className="px-3 py-3 text-left whitespace-nowrap">Código</th>
                   <th className="px-3 py-3 text-left whitespace-nowrap">Nombre</th>
                   <th className="px-3 py-3 text-left whitespace-nowrap">Programa</th>
@@ -222,25 +233,25 @@ export default function PagosPendientesPage() {
               </thead>
               <tbody>
                 {soportes.map((s, idx) => (
-                  <tr key={s.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-blue-50/40'}>
+                  <tr key={s.id} style={{ background: PANEL }} className="hover:brightness-125 transition">
 
                     {/* Código */}
-                    <td className="px-3 py-3 font-black text-green-700 whitespace-nowrap">
+                    <td className="px-3 py-3 font-black whitespace-nowrap" style={{ color: VERDE }}>
                       {s.depCodigo || '—'}
                     </td>
 
                     {/* Nombre */}
-                    <td className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap max-w-[160px] truncate">
+                    <td className="px-3 py-3 font-semibold text-white whitespace-nowrap max-w-[160px] truncate">
                       {s.depNombre}
                     </td>
 
                     {/* Programa */}
-                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                    <td className="px-3 py-3 text-white whitespace-nowrap">
                       {s.depPrograma || '—'}
                     </td>
 
                     {/* Proyecto */}
-                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                    <td className="px-3 py-3 text-white whitespace-nowrap">
                       {s.depProyecto || '—'}
                     </td>
 
@@ -249,16 +260,16 @@ export default function PagosPendientesPage() {
                       {s.meses && s.meses.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {s.meses.map(m => (
-                            <span key={m} className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 text-[11px] font-bold whitespace-nowrap">
+                            <span key={m} className="px-2 py-0.5 rounded-md text-white text-[11px] font-bold whitespace-nowrap" style={{ background: VERDE }}>
                               {m}
                             </span>
                           ))}
                         </div>
-                      ) : <span className="text-gray-400">—</span>}
+                      ) : <span style={{ color: GRIS }}>—</span>}
                     </td>
 
                     {/* Fecha en que se subió el soporte */}
-                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-[12px]">
+                    <td className="px-3 py-3 text-white whitespace-nowrap text-[12px]">
                       {s.created_at
                         ? new Date(s.created_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
                         : (s.fecha || '—')}
@@ -270,7 +281,7 @@ export default function PagosPendientesPage() {
                         const img = datosMap[s.id];
                         if (!img) {
                           return (
-                            <div className="w-14 h-14 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center text-[9px] text-gray-400 animate-pulse">
+                            <div className="w-14 h-14 rounded-lg border flex items-center justify-center text-[9px] animate-pulse" style={{ background: CAMPO, borderColor: BORDE, color: GRIS }}>
                               cargando…
                             </div>
                           );
@@ -279,7 +290,7 @@ export default function PagosPendientesPage() {
                           <button onClick={() => setViendoIdx(idx)} className="relative block">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={img} alt="Soporte"
-                              className="w-14 h-14 object-cover rounded-lg border border-gray-200 hover:opacity-80 transition cursor-pointer" />
+                              className="w-14 h-14 object-cover rounded-lg border hover:opacity-80 transition cursor-pointer" style={{ borderColor: BORDE }} />
                             <span className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition">
                               <Eye className="w-5 h-5 text-white drop-shadow"/>
                             </span>
@@ -287,7 +298,7 @@ export default function PagosPendientesPage() {
                         ) : (
                           <button onClick={() => setViendoIdx(idx)}
                             title="Ver el soporte en PDF"
-                            className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition cursor-pointer">
+                            className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-lg border text-white hover:opacity-85 transition cursor-pointer" style={{ background: ROJO, borderColor: ROJO }}>
                             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>
                             <span className="text-[9px] font-black">PDF</span>
                           </button>
@@ -301,19 +312,22 @@ export default function PagosPendientesPage() {
                         <button
                           onClick={() => setAccion({ idx, tipo: 'confirmar' })}
                           title="Confirmar pago"
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white font-black text-[11px] transition whitespace-nowrap">
+                          style={{ background: VERDE, minHeight: 34 }}
+                          className="flex items-center gap-1 px-2.5 rounded-lg hover:opacity-85 text-white font-black text-[11px] transition whitespace-nowrap">
                           <CheckCircle className="w-3.5 h-3.5"/> OK
                         </button>
                         <button
                           onClick={() => setAccion({ idx, tipo: 'rechazar' })}
                           title="Rechazar soporte"
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 font-semibold text-[11px] transition">
+                          style={{ background: ROJO, minHeight: 34 }}
+                          className="flex items-center gap-1 px-2.5 rounded-lg hover:opacity-85 text-white font-semibold text-[11px] transition">
                           <XCircle className="w-3.5 h-3.5"/>
                         </button>
                         <button
                           onClick={() => router.push(`/alumnos/${s.depId}/estado-cuenta?readonly=1`)}
                           title="Ver cuenta"
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold text-[11px] transition whitespace-nowrap">
+                          style={{ background: CAMPO, border: `1px solid ${BORDE}`, minHeight: 34 }}
+                          className="flex items-center gap-1 px-2.5 rounded-lg hover:opacity-85 text-white font-semibold text-[11px] transition whitespace-nowrap">
                           <Eye className="w-3.5 h-3.5"/> Cuenta
                         </button>
                       </div>
@@ -337,16 +351,17 @@ export default function PagosPendientesPage() {
             {esPdfDato(datoVista) ? (
               /* PDF: se muestra dentro del visor del navegador. En celulares que no
                  saben mostrarlo, el boton de abajo lo abre o lo descarga. */
-              <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+              <div className="rounded-2xl shadow-2xl overflow-hidden" style={{ background: PANEL }}>
                 <iframe src={urlVista} title="Soporte de pago en PDF"
-                  className="w-full h-[75vh] border-0 bg-gray-100" />
-                <div className="flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 border-t border-gray-200">
-                  <p className="text-xs font-black text-gray-600 truncate">
+                  className="w-full h-[75vh] border-0" style={{ background: CAMPO }} />
+                <div className="flex items-center justify-between gap-2 px-4 py-3 border-t" style={{ background: CAMPO, borderColor: BORDE }}>
+                  <p className="text-xs font-black text-white truncate">
                     📄 {soportes[viendoIdx].nombre || 'Soporte en PDF'}
                   </p>
                   <button
                     onClick={() => abrirSoporte(datoVista, soportes[viendoIdx].nombre || 'soporte')}
-                    className="whitespace-nowrap px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] transition">
+                    style={{ background: VERDE }}
+                    className="whitespace-nowrap px-3 py-1.5 rounded-lg hover:opacity-85 text-white font-black text-[11px] transition">
                     Abrir / descargar ↗
                   </button>
                 </div>
@@ -356,12 +371,14 @@ export default function PagosPendientesPage() {
               <img
                 src={urlVista}
                 alt="Soporte de pago"
-                className="w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl bg-white"
+                className="w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl"
+                style={{ background: PANEL }}
               />
             )}
             <button
               onClick={() => setViendoIdx(null)}
-              className="absolute -top-3 -right-3 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 hover:text-red-500 transition text-lg font-black">
+              style={{ background: PANEL, border: `1px solid ${BORDE}` }}
+              className="absolute -top-3 -right-3 w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-white hover:opacity-70 transition text-lg font-black">
               ×
             </button>
           </div>
@@ -371,51 +388,55 @@ export default function PagosPendientesPage() {
       {/* ── Modal: confirmar acción ── */}
       {accion && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full">
+          <div className="rounded-3xl shadow-2xl p-6 max-w-sm w-full border" style={{ background: PANEL, borderColor: BORDE }}>
             {accion.tipo === 'confirmar' ? (
               <>
-                <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-7 h-7 text-green-600"/>
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: CAMPO }}>
+                  <CheckCircle className="w-7 h-7" style={{ color: VERDE }}/>
                 </div>
-                <h3 className="text-center font-black text-gray-900 text-lg mb-1">¿Confirmar pago?</h3>
-                <p className="text-center text-gray-500 text-sm mb-6">
+                <h3 className="text-center font-black text-white text-lg mb-1">¿Confirmar pago?</h3>
+                <p className="text-center text-white text-sm mb-6">
                   Esto marca el soporte de <strong>{soportes[accion.idx]?.depNombre}</strong> como pagado y confirmado.
                 </p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setAccion(null)}
                     disabled={procesando}
-                    className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition disabled:opacity-50">
+                    style={{ background: CAMPO, borderColor: BORDE, minHeight: 48 }}
+                    className="flex-1 rounded-xl border text-white font-semibold text-sm hover:opacity-85 transition disabled:opacity-50">
                     Cancelar
                   </button>
                   <button
                     onClick={() => handleConfirmar(accion.idx)}
                     disabled={procesando}
-                    className="flex-1 py-3 rounded-xl bg-green-500 text-white font-black text-sm hover:bg-green-600 transition disabled:opacity-50">
+                    style={{ background: VERDE, minHeight: 48 }}
+                    className="flex-1 rounded-xl text-white font-black text-sm hover:opacity-85 transition disabled:opacity-50">
                     {procesando ? 'Procesando…' : '✅ Confirmar'}
                   </button>
                 </div>
               </>
             ) : (
               <>
-                <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <XCircle className="w-7 h-7 text-red-600"/>
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: CAMPO }}>
+                  <XCircle className="w-7 h-7" style={{ color: ROJO }}/>
                 </div>
-                <h3 className="text-center font-black text-gray-900 text-lg mb-1">¿Rechazar soporte?</h3>
-                <p className="text-center text-gray-500 text-sm mb-6">
+                <h3 className="text-center font-black text-white text-lg mb-1">¿Rechazar soporte?</h3>
+                <p className="text-center text-white text-sm mb-6">
                   El soporte de <strong>{soportes[accion.idx]?.depNombre}</strong> será eliminado. El padre deberá volver a subir el comprobante correcto.
                 </p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setAccion(null)}
                     disabled={procesando}
-                    className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition disabled:opacity-50">
+                    style={{ background: CAMPO, borderColor: BORDE, minHeight: 48 }}
+                    className="flex-1 rounded-xl border text-white font-semibold text-sm hover:opacity-85 transition disabled:opacity-50">
                     Cancelar
                   </button>
                   <button
                     onClick={() => handleRechazar(accion.idx)}
                     disabled={procesando}
-                    className="flex-1 py-3 rounded-xl bg-red-500 text-white font-black text-sm hover:bg-red-600 transition disabled:opacity-50">
+                    style={{ background: ROJO, minHeight: 48 }}
+                    className="flex-1 rounded-xl text-white font-black text-sm hover:opacity-85 transition disabled:opacity-50">
                     {procesando ? 'Eliminando…' : '🗑️ Rechazar'}
                   </button>
                 </div>
@@ -427,7 +448,8 @@ export default function PagosPendientesPage() {
 
       {/* ── Toast ── */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl text-white font-bold text-sm ${toast.ok ? 'bg-green-600' : 'bg-red-600'}`}>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl text-white font-bold text-sm"
+             style={{ background: toast.ok ? VERDE : ROJO }}>
           {toast.msg}
         </div>
       )}
