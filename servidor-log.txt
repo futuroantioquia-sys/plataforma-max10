@@ -1,0 +1,40 @@
+
+> futuro-antioquia-web@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.32
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.1s
+ ✓ Compiled /src/middleware in 255ms (74 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 9.1s (1322 modules)
+ GET /login 200 in 9689ms
+ ✓ Compiled in 662ms (665 modules)
+ ○ Compiling /api/auth/login ...
+ ✓ Compiled /api/auth/login in 2.8s (683 modules)
+ POST /api/auth/login 200 in 2952ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 1032ms (1392 modules)
+ ✓ Compiled /api/pagos/soportes in 165ms (716 modules)
+ ✓ Compiled (718 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1355ms
+ GET /api/pagos/soportes?solo=count 200 in 1370ms
+ GET /api/deportistas 200 in 3432ms
+ GET /api/deportistas 200 in 3462ms
+ ○ Compiling /pagos ...
+ ✓ Compiled /pagos in 734ms (1411 modules)
+ ✓ Compiled in 2.3s (1461 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /pagos?prog=Desarrollo&proy=SUB+15A 200 in 196ms
+ ✓ Compiled /api/deportistas in 158ms (719 modules)
+ GET /api/deportistas 200 in 2534ms
+ GET /api/deportistas 200 in 2604ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 956ms (1387 modules)
+ GET /pagos?prog=Desarrollo&proy=SUB+15A 200 in 588ms
+ ✓ Compiled /api/deportistas in 141ms (719 modules)
+ GET /api/deportistas 200 in 3195ms
+ GET /api/deportistas 200 in 3462ms

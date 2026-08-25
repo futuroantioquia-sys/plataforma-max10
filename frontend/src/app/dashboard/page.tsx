@@ -350,6 +350,10 @@ function DashboardAdmin() {
         )}
         <AccesoCard titulo="Info Proyectos y Formadores" icono={Shield} href="/usuarios" descripcion="Profes, sedes y proyectos" color="verde" />
         <AccesoCard titulo="Gestión de Valoración" icono={Star} href="/gestion-valoracion" descripcion="Editar textos de los niveles" color="verde" />
+        {/* Botones de Cobro — 25/08/2026. Aquí el administrador cambia el texto,
+            el color y el mensaje de WhatsApp de los botones de Control de Pagos,
+            sin tener que tocar código. */}
+        <AccesoCard titulo="Botones de Cobro" icono={MessageCircle} href="/botones-cobro" descripcion="Texto, color y mensaje del cobro por WhatsApp" color="verde" />
         <AccesoCard titulo="Certificados Asistencia" icono={Clipboard} href="/certificados" descripcion="Quién descargó su certificado" color="verde" />
         <AccesoCard titulo="Formulario de Afiliación" icono={ClipboardList} href="/afiliacion" descripcion="Registro de deportistas" color="verde" />
         <AccesoCard titulo="Productos" icono={DollarSign} href="/productos" descripcion="Torneos e implementos" color="verde" />

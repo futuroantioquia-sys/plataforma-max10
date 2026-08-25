@@ -8,6 +8,10 @@ import {
   User,
 } from 'lucide-react';
 import { getDeportistas, getPagos, updateColumnasDeportista } from '@/lib/db';
+import {
+  getCobroConfig, armarMensaje, pagaAMax10, CONFIG_DEFAULT,
+  type CobroConfig,
+} from '@/lib/cobro-config';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 
@@ -29,7 +33,6 @@ const CAMPO     = '#2B3547';   // desplegables, buscador, cuadros de texto
 const BORDE     = '#4A5568';
 const VERDE     = '#00B050';   // verde institucional
 const ROJO      = '#C0504D';   // lo que se debe
-const ROJO_OSC  = '#9E403D';
 const AMBAR     = '#E0A33A';
 const GRIS_BECA = '#5A6478';   // becados: gris apagado, sin morado
 const GRIS_VACIO= '#7C879A';   // guiones y casillas sin dato
@@ -97,23 +100,18 @@ const MES_ACTUAL = new Date().getMonth() + 1;
 function esFuturo(d: string) { const n = MES_NUM[d]; return n !== undefined && n > 0 && n > MES_ACTUAL; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   COBRAR AHORA POR WHATSAPP  (dirección, 25/08/2026)
+   COBRAR POR WHATSAPP
 
-   El botón rojo solo sale cuando el deportista debe el MES EN CURSO **y**
-   además uno o más meses anteriores. Si solo debe el mes de este mes, no se
-   cobra todavía: apenas va corriendo.
+   El texto del botón, su color y el mensaje que se manda YA NO ESTAN AQUI:
+   los edita el administrador en  Gestión → Botones de Cobro  (/botones-cobro).
+   Esta pantalla solo los lee. Si la configuración no carga, se usan los
+   textos de fábrica y el cobro sigue funcionando igual.
 
-   Al oprimirlo se abre WhatsApp con el mensaje ya escrito. NO envía nada solo:
-   el mensaje queda listo y la persona le da enviar. Nadie recibe un cobro sin
-   que alguien lo lea antes.
+   Al oprimir el botón se abre WhatsApp con el mensaje ya escrito. NO envía
+   nada solo: el mensaje queda listo y la persona le da enviar. Nadie recibe
+   un cobro sin que alguien lo lea antes.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const CUENTA_COBRO = {
-  banco:  'Ahorros Bancolombia',
-  numero: '10182764613',
-  titular: 'Futuro Antioquia',
-  nit:    'Nit 811036997',
-};
 const URL_APP = 'https://plataforma-max10.vercel.app';
 
 const sinTildes = (t: any) =>
@@ -260,6 +258,9 @@ function PagosInner() {
   const [colaOn,      setColaOn]      = useState(false);   // ventana de la cola abierta
   const [colaIdx,     setColaIdx]     = useState(0);       // en cuál va
   const [colaAbierto, setColaAbierto] = useState(false);   // ya se abrió el chat de este
+  /* Lo que el administrador dejó escrito en Gestión → Botones de Cobro.
+     Arranca con los textos de fábrica para que la pantalla nunca quede muda. */
+  const [cfgCobro, setCfgCobro] = useState<CobroConfig>(CONFIG_DEFAULT);
   // OBSERVACIÓN por deportista (texto libre editable en la última columna)
   const [obs,          setObs]          = useState<Record<string, string>>({});
   const [editObs,      setEditObs]      = useState<string | null>(null);
@@ -333,6 +334,7 @@ function PagosInner() {
 
   useEffect(() => {
     getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
+    getCobroConfig().then(setCfgCobro).catch(() => {});
     getPagos().then(p => { if (Object.keys(p).length) setAllPagos(p as any); setPagosListos(true); }).catch(() => setPagosListos(true));
     try {
       const raw = localStorage.getItem(DEP_ESTADOS_KEY);
@@ -516,36 +518,30 @@ function PagosInner() {
     const total  = tarifa * n;
     const meses  = listaBonita(soloMeses.map(mesBonito));
 
-    const cuentaEnLineas = `${CUENTA_COBRO.banco}\n${CUENTA_COBRO.numero}\n${CUENTA_COBRO.titular}\n${CUENTA_COBRO.nit}`;
-    const cuentaEnUnaLinea = `${CUENTA_COBRO.banco} ${CUENTA_COBRO.numero} ${CUENTA_COBRO.titular} ${CUENTA_COBRO.nit}`;
-    const claridad =
-      `Si tiene alguna razón, duda, reclamo o comentario, le agradecemos hacerlo a la mayor brevedad. ` +
-      `Lo importante es dar claridad.`;
-
     /* ¿Va el mensaje suave? Solo si debe UN mes, ese mes es el de ahora, y no
        tiene la matrícula pendiente. Si no, el mensaje es el de atrasado. */
     const soloEsteMes = n === 1 && MES_NUM[soloMeses[0]] === MES_ACTUAL && !debeMatricula;
+    const boton = soloEsteMes ? cfgCobro.uno : cfgCobro.atrasado;
 
-    const texto = soloEsteMes
-      ? `Un saludo especial.\n\n` +
-        `Valoramos muchísimo su cumplimiento en los pagos.\n\n` +
-        `Solo tiene pendiente este mes y la idea es que no se les junte con el próximo.\n\n` +
-        `Adjuntamos Estado de Cuenta Plataforma MAX 10.\n\n` +
-        `${claridad}\n\n` +
-        /* El mes sale solo del mes que está debiendo: en agosto dice AGOSTO,
-           en septiembre dirá SEPTIEMBRE. No hay que cambiarlo a mano. */
-        `El Deportista ${nombre} tiene pendiente el pago de ${meses.toUpperCase()} por ${pesos(tarifa)}\n\n` +
-        `${cuentaEnUnaLinea}\n\n` +
-        `Gracias por su compromiso.`
-      : `Un saludo especial.\n\n` +
-        `Adjuntamos Estado de Cuenta Plataforma MAX 10, del deportista ${nombre}.\n\n` +
-        `${claridad}\n\n` +
-        `El Deportista ${nombre} tiene pendiente ` +
-        (n === 1 ? `el pago de ${meses}. ${pesos(tarifa)}` : `los pagos de ${meses}. ${pesos(tarifa)} x ${n}. Total: ${pesos(total)}`) +
-        (debeMatricula ? `, más la MATRÍCULA pendiente` : '') + `.\n\n` +
-        `${cuentaEnLineas}\n\n` +
-        `Ingrese a nuestra APP ${URL_APP} y suba los soportes correspondientes.\n\n` +
-        `Contamos con su compromiso.`;
+    /* La cuenta depende del proyecto: los SEIS proyectos de SUB 13, 14 y 15
+       (Selección y Desarrollo) consignan a MAX 10; el resto, a Futuro
+       Antioquia. Misma regla que el Estado de Cuenta. */
+    const cuenta = pagaAMax10(getCol(dep, /^program/i), getCol(dep, /^proy/i))
+      ? cfgCobro.cuentaMax10
+      : cfgCobro.cuentaFuturo;
+
+    /* El texto lo escribe el administrador en Gestión → Botones de Cobro.
+       Aquí solo se le reemplazan los comodines por los datos de este deportista. */
+    const texto = armarMensaje(boton.mensaje, {
+      nombre,
+      meses,
+      valorMes: pesos(tarifa),
+      cuantos:  n,
+      total:    pesos(total),
+      debeMatricula,
+      cuenta,
+      app: URL_APP,
+    });
 
     const tel = aWhatsApp(telefonoDe(dep));
     /* Se va DERECHO a WhatsApp Web (web.whatsapp.com), no por wa.me.
@@ -560,9 +556,10 @@ function PagosInner() {
       : `https://web.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
 
     return {
-      url, tel, texto, meses, total, tarifa, n,
+      url, tel, texto, meses, total, tarifa, n, cuenta,
       tono: soloEsteMes ? 'aldia' : 'atrasado',
-      etiqueta: soloEsteMes ? 'COBRAR UNO' : 'COBRAR AHORA',
+      etiqueta: boton.etiqueta,   // lo que dice el botón, según el módulo
+      color:    boton.color,      // el color del botón, según el módulo
     };
   }
 
@@ -756,7 +753,7 @@ function PagosInner() {
           </div>
         ) : (
           <div className="rounded-2xl overflow-x-auto shadow-sm border" style={{ borderColor: BORDE }}>
-            <table className="w-full border-collapse text-sm" style={{ minWidth: 950 }}>
+            <table className="w-full border-collapse text-sm" style={{ minWidth: 1100 }}>
               <thead>
                 <tr>
                   {/* Casilla de arriba: marca (o desmarca) a TODOS los que deben */}
@@ -804,6 +801,10 @@ function PagosInner() {
                   return (
                     <tr key={dep.id}
                       onClick={() => { try { sessionStorage.setItem('futuro_pagos_scroll', String(window.scrollY)); } catch {} router.push(`/alumnos/${dep.id}/estado-cuenta?edit=1`); }}
+                      /* Altura fija: todas las filas quedan igual de altas, deba
+                         un mes o deba ocho. Los meses ya no se van a un segundo
+                         renglón porque la columna es ancha y no deja doblar. */
+                      style={{ height: 44 }}
                       className="hover:brightness-125 transition-all cursor-pointer">
 
                       {/* CASILLA — solo la tiene quien tiene algo que cobrarle.
@@ -907,16 +908,19 @@ function PagosInner() {
                       <td style={{
                         background: bg,
                         border: '1px solid white', padding: '4px 8px',
-                        maxWidth: 220,
+                        /* Ancha a propósito: caben los meses de todo el año en un
+                           solo renglón, sin doblar y sin estirar la fila. */
+                        width: 350, minWidth: 350,
                       }}>
                         {mesesPendientes.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex gap-1"
+                               style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
                             {mesesPendientes.map((m: string) => (
                               <span key={m} style={{
                                 background: ROJO, color: 'white',
                                 fontSize: 9, fontWeight: 900,
                                 padding: '2px 5px', borderRadius: 4,
-                                whiteSpace: 'nowrap',
+                                whiteSpace: 'nowrap', flexShrink: 0,
                               }}>{m}</span>
                             ))}
                           </div>
@@ -948,9 +952,9 @@ function PagosInner() {
                               (cobro.tel
                                 ? `Abre WhatsApp con ${cobro.tel} y el mensaje listo. Usted revisa y le da enviar.`
                                 : `Sin CELULAR DEL ACUDIENTE en la ficha: se abre WhatsApp con el mensaje listo para que escoja el contacto a mano.`)}
-                            style={{ background: ROJO }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = ROJO_OSC; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ROJO; }}
+                            style={{ background: cobro.color }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.filter = 'brightness(0.85)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.filter = ''; }}
                             className="inline-flex items-center gap-1.5 text-white text-[10px] font-black px-3 py-1.5 rounded-lg whitespace-nowrap transition shadow-sm">
                             <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
                               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
@@ -1007,7 +1011,7 @@ function PagosInner() {
                             title={obs[dep.id] + '\n\n(clic para editar)'}
                             style={{
                               fontSize: 11, lineHeight: 1.35, color: '#FFFFFF', whiteSpace: 'pre-wrap',
-                              display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                               overflow: 'hidden', background: CAMPO, border: `1px solid ${BORDE}`,
                               borderRadius: 6, padding: '4px 6px', minHeight: 30,
                             }}>
@@ -1058,6 +1062,9 @@ function PagosInner() {
                 <p className="text-white font-black text-lg leading-tight">{dep._nombre}</p>
                 <p className="text-white text-xs">
                   Código {codigoDe(dep) || '—'} · Debe {cobro.meses} · {pesos(cobro.total)}
+                </p>
+                <p className="text-white text-xs">
+                  Consigna a: <strong>{cobro.cuenta.titular}</strong> · {cobro.cuenta.numero}
                 </p>
                 {cobro.tel
                   ? <p className="text-white text-xs">Celular del acudiente: {cobro.tel}</p>
