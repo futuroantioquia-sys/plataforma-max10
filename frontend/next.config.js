@@ -25,11 +25,17 @@ const CABECERAS_SEGURIDAD = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      /* cdn.sheetjs.com es el LECTOR DE EXCEL. La plataforma lo baja de ahí cada
+         vez que alguien sube o descarga un archivo de Excel: importar
+         deportistas, subir estratos, cargar torneos, el libro contable.
+         Al poner esta política el 24/08/2026 se olvidó incluirlo, y desde esa
+         mañana toda subida de Excel fallaba con "No se pudo cargar el lector de
+         Excel" — tanto en internet como en el computador local. — 25/08/2026 */
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.sheetjs.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.supabase.co",
+      "connect-src 'self' https://*.supabase.co https://cdn.sheetjs.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'",

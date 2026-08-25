@@ -229,6 +229,69 @@ const VT2  = '__TORNEO2__';
 const VT3  = '__TORNEO3__';
 const VT4  = '__TORNEO4__';
 const VPOS = '__POSICION__';
+/* Dos columnas que NO vienen del Excel: se calculan solas y no se editan.
+   Van enseguida de PROGRAMA. — 25/08/2026 */
+const VMEN = '__VALOR_MENSUALIDAD__';   // la misma cuota del estado de cuenta
+const VCON = '__CONSIGNA_A__';          // a Futuro, a MAX 10, o no paga
+
+/* ── VALOR DE LA MENSUALIDAD ───────────────────────────────────────────────
+   Misma tabla que usa el Estado de Cuenta del deportista, para que las dos
+   pantallas digan siempre lo mismo. Si el deportista tiene CUOTA_MANUAL
+   (acuerdo con la familia), esa manda sobre la tabla. */
+const sinTildes = (t: any) =>
+  String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+function tarifaMensual(programa: string, sede: string): number {
+  const p = sinTildes(programa), s = sinTildes(sede);
+  if (s.includes('niqu')) {
+    if (p.includes('estimul')) return 70000;
+    if (p.includes('formac'))  return 115000;
+    return 138000;
+  }
+  if (p.includes('estimul')) return 80000;
+  return 138000;
+}
+const enPesos = (n: number) => '$' + Math.round(n).toLocaleString('es-CO');
+
+/** BECADO: el código empieza por B pero NO por MB (esa es media beca y sí paga). */
+function esBecadoDep(dep: Deportista): boolean {
+  const k = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k.trim()));
+  const raw = k ? String(dep._columnas[k] ?? '').trim() : '';
+  return /^b\d/i.test(raw) && !/^mb/i.test(raw);
+}
+
+/** Cuánto paga al mes este deportista. Vacío si es becado (no paga). */
+function valorMensualidad(dep: Deportista): string {
+  if (esBecadoDep(dep)) return '';
+  const manual = Number(getColVal(dep, /^cuota_?manual$/i).replace(/[^0-9]/g, '')) || 0;
+  if (manual > 0) return enPesos(manual);
+  return enPesos(tarifaMensual(getColVal(dep, /^program/i), getColVal(dep, /^sede/i)));
+}
+
+/* ── A QUÉ CUENTA CONSIGNA ─────────────────────────────────────────────────
+   Los SEIS proyectos de MAX 10 — SUB 13, SUB 14 y SUB 15, tanto de SELECCIÓN
+   como de DESARROLLO — consignan a MAX 10. Todos los demás, a Futuro
+   Antioquia. Misma regla del Estado de Cuenta y de los botones de cobro. */
+const sinAcentoMay = (s: any) => String(s ?? '').toUpperCase().trim()
+  .replace(/[ÁÀÂÃÄ]/g, 'A').replace(/[ÉÈÊË]/g, 'E').replace(/[ÍÌÎÏ]/g, 'I')
+  .replace(/[ÓÒÔÕÖ]/g, 'O').replace(/[ÚÙÛÜ]/g, 'U').replace(/Ñ/g, 'N');
+
+function consignaAMax10(dep: Deportista): boolean {
+  const prog = sinAcentoMay(getColVal(dep, /^program/i));
+  const proy = sinAcentoMay(getColVal(dep, /proyecto|^proy\b/i));
+  if (/SELECC|DESARROLLO/.test(prog) && /SUB[\s\-]*(13|14|15)/.test(proy)) return true;
+  const junto = prog + ' ' + proy;
+  return ['DESARROLLO SUB 15', 'DESARROLLO SUB 14', 'DESARROLLO SUB 13',
+          'SELECCION SUB 15', 'SELECCION SUB 14', 'SELECCION SUB 13']
+    .some(p => junto.includes(p));
+}
+
+/** Qué dice la columna CONSIGNA A, y de qué color va. */
+function consignaA(dep: Deportista): { texto: string; color: string } {
+  if (esBecadoDep(dep))      return { texto: 'NO PAGA',  color: '#5A6478' };
+  if (consignaAMax10(dep))   return { texto: 'A MAX 10', color: '#4E8FD6' };
+  return { texto: 'A FUTURO', color: '#00B050' };
+}
 
 // Etiquetas de columna — renombra COMPITE → TORNEO 1, muestra labels de virtuales
 function labelCol(col: string): string {
@@ -239,6 +302,8 @@ function labelCol(col: string): string {
   if (col === VT3)  return 'TORNEO 3';
   if (col === VT4)  return 'TORNEO 4';
   if (col === VPOS) return 'POSICIÓN';
+  if (col === VMEN) return 'VALOR MENSUALIDAD';
+  if (col === VCON) return 'CONSIGNA A';
   return col.toUpperCase();
 }
 
@@ -449,8 +514,9 @@ export default function GeneralPage() {
       resto.push(...proyecto, ...profe, ...celAcud, ...torneos);
     }
 
-    // PROGRAMA queda ENSEGUIDA de TIPO DE AFILIACIÓN
-    return [...fecha, ...tipoAfil, ...programa, ...estado, ...cod, ...resto];
+    // PROGRAMA queda ENSEGUIDA de TIPO DE AFILIACIÓN, y justo después van
+    // VALOR MENSUALIDAD y CONSIGNA A, que se calculan solas.
+    return [...fecha, ...tipoAfil, ...programa, VMEN, VCON, ...estado, ...cod, ...resto];
   }, [deportistas]);
 
   // DEPORTISTA/NOMBRE/ALUMNO/JUGADOR/ATLETA nunca se ocultan (columna crítica)
@@ -1276,6 +1342,39 @@ export default function GeneralPage() {
                               const esFecha  = esFechaAfil(col);
                               const opciones = opcionesCol[col];
                               const changed  = edits[dep.id]?.[col] !== undefined;
+
+                              /* VALOR MENSUALIDAD — se calcula sola, no se edita.
+                                 Sale de la misma tabla del Estado de Cuenta; si la
+                                 familia tiene cuota acordada, manda esa. */
+                              if (col === VMEN) {
+                                const v = valorMensualidad(dep);
+                                return (
+                                  <td key={col}
+                                    style={{ background: PANEL, border: '2px solid #ffffff' }}
+                                    className="px-2 py-[7px] text-center whitespace-nowrap">
+                                    <span className="text-[11px] font-bold text-white">
+                                      {v || <span style={{ color: '#7C879A' }}>—</span>}
+                                    </span>
+                                  </td>
+                                );
+                              }
+
+                              /* CONSIGNA A — a qué cuenta le consigna esta familia.
+                                 Tampoco se edita: depende del proyecto. */
+                              if (col === VCON) {
+                                const c = consignaA(dep);
+                                return (
+                                  <td key={col}
+                                    style={{ background: PANEL, border: '2px solid #ffffff' }}
+                                    className="px-1 py-[5px] text-center">
+                                    <span style={{
+                                      display: 'inline-block', background: c.color, color: 'white',
+                                      borderRadius: 5, padding: '3px 8px', fontSize: 10, fontWeight: 900,
+                                      letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                                    }}>{c.texto}</span>
+                                  </td>
+                                );
+                              }
 
                               // CÓD — color por afiliación + columna DEPORTISTA fija a la derecha
                               if (esCod) {

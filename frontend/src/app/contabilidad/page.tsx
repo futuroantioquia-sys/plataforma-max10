@@ -24,13 +24,20 @@ const BANCOS = ['Bancolombia 613', 'Bancolombia 908', 'Bancolombia 382', 'Bancol
 // estado de cuenta (no están ligados a un deportista).
 const esInstitucional = (m: any) => String(m?.concepto ?? '').trim().toUpperCase().includes('INSTITUCIONAL');
 
-// INTERESES DE AHORRO y demás ingresos financieros del banco (ABONO INTERESES
-// AHORROS, INTERESES, RENDIMIENTOS…). NO son el pago de ningún deportista:
-// nunca llevan código ni mes, no se pintan de ningún color y no cuentan como
-// pendientes ni como "por orientar". La celda del mes queda VACÍA, sin letrero.
-const esIngresoFinanciero = (m: any) =>
-  String(m?.concepto ?? '').trim().toUpperCase() === 'INGRESO FINANCIERO' ||
-  /ABONO\s*INTERES|INTERESES|RENDIMIENT/i.test(String(m?.descripcion ?? ''));
+// INTERESES del banco, en cualquiera de los dos sentidos: los que el banco ABONA
+// (INTERESES A FAVOR) y los que COBRA (INTERESES FINANCIEROS). También los
+// rendimientos. NO son el pago de ningún deportista: nunca llevan código ni mes,
+// no se pintan de ningún color y no cuentan como pendientes ni como "por
+// orientar". La celda del mes queda VACÍA, sin letrero.
+//
+// 25/08/2026 — se cambió "INTERESES" por "INTERES": el banco escribe
+// "AJUSTE INTERES AHORROS CR" en singular, y esas filas se estaban quedando
+// por fuera y saliendo marcadas como SIN CÓDIGO.
+const esIngresoFinanciero = (m: any) => {
+  const c = String(m?.concepto ?? '').trim().toUpperCase();
+  if (c === 'INGRESO FINANCIERO' || c === 'INTERESES A FAVOR' || c === 'INTERESES FINANCIEROS') return true;
+  return /INTERES|RENDIMIENT/i.test(String(m?.descripcion ?? ''));
+};
 
 // Movimientos que NO van a ningún estado de cuenta: los institucionales y los
 // intereses del banco. Se tratan igual en el semáforo, el chulo y los conteos.
@@ -346,6 +353,17 @@ export default function ContabilidadPage() {
     deportistas.forEach(d => { const c = getCod(d); if (c) m[c] = d._nombre; });
     return m;
   }, [deportistas]);
+  /* NOMBRE DEL DEPORTISTA DE UNA FILA — 25/08/2026
+     Hasta hoy la pantalla mostraba únicamente el nombre GUARDADO en la fila, que
+     se escribe una sola vez (al subir el extracto o al escribir el código a mano)
+     y después se queda congelado. Si en ese momento el código todavía no existía
+     —porque el deportista se creó o se le cambió el código después— la fila
+     quedaba con código pero SIN nombre, para siempre.
+     Ahora, si la fila no trae nombre guardado, se saca del código en el momento
+     de mostrarlo. Así basta con que el código sea correcto. */
+  const nombreDeFila = (m: any): string =>
+    String(m?.deportista ?? '').trim() || codMap[String(m?.codigo ?? '').trim()] || '';
+
   // código → id del deportista (para abrir su estado de cuenta desde el libro)
   const codToId = useMemo(() => {
     const m: Record<string, string> = {};
@@ -801,10 +819,16 @@ export default function ContabilidadPage() {
         let concepto = '';
         let deportista = '';
         let detalle = '';
-        // INTERESES DE AHORRO / ingreso financiero: aunque la referencia se parezca
-        // a una cuenta ya cruzada en el diccionario, NO es de ningún deportista.
-        // Se le quita el código para que quede sin código y sin mes.
-        if (clas.concepto === 'INGRESO FINANCIERO') { codigo = ''; via = ''; }
+        /* INTERESES del banco (a favor o financieros): aunque la referencia se
+           parezca a una cuenta ya cruzada en el diccionario, NO son de ningún
+           deportista. Se les quita el código para que queden sin código y sin mes.
+
+           25/08/2026 — antes esto preguntaba por 'INGRESO FINANCIERO', un nombre
+           que la clasificación ya no devuelve: la comprobación nunca se cumplía y
+           algún interés podía quedar pegado a un deportista. */
+        if (clas.concepto === 'INTERESES A FAVOR' || clas.concepto === 'INTERESES FINANCIEROS') {
+          codigo = ''; via = '';
+        }
         // TERCERO reconocido por la descripción ("PAGO A NOMIN fredy alexander r",
         // "PAGO A PROVE sol marina vill", "TRANSF A Diana Fernan"…). Manda sobre
         // cualquier otro cruce: queda la cédula en CÓDIGO, el nombre completo, y
@@ -1286,7 +1310,8 @@ export default function ContabilidadPage() {
           : hay === needle;
         if (!ok) return false;
       }
-      if (f.deportista && !inc(m.deportista, f.deportista)) return false;
+      // Se busca por el nombre visible: el guardado o, si no hay, el del código.
+      if (f.deportista && !inc(nombreDeFila(m), f.deportista)) return false;
       if (f.detalle && !inc(m.detalle, f.detalle)) return false;
       // EGRESOS / INGRESOS SIN CONCEPTO.
       // Egreso = la fila tiene DÉBITO. Ingreso = la fila tiene CRÉDITO.
@@ -1785,7 +1810,7 @@ export default function ContabilidadPage() {
     const rows = libroFiltrado.map(m => ({
       BANCO: m.banco, FECHA: m.fecha, DESCRIPCIÓN: m.descripcion, REFERENCIA: m.referencia,
       DÉBITO: m.debito, CRÉDITO: m.credito, SALDO: m.saldo, CONCEPTO: m.concepto,
-      CÓDIGO: m.codigo, DEPORTISTA: m.deportista, DETALLE: m.detalle,
+      CÓDIGO: m.codigo, DEPORTISTA: nombreDeFila(m), DETALLE: m.detalle,
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Libro');
@@ -2218,15 +2243,17 @@ export default function ContabilidadPage() {
                       </td>
                       <td style={{ ...tdC, textAlign: 'left', padding: '2px 4px' }} title={m.deportista}>
                         {(() => {
+                          // Nombre guardado o, si no hay, el que diga el código.
+                          const nombreDep = nombreDeFila(m);
                           // id por código; si el código no está en la ficha, se busca por nombre
-                          const depId = codToId[m.codigo] || (m.deportista ? nombreToId[normNombre(m.deportista)] : '');
+                          const depId = codToId[m.codigo] || (nombreDep ? nombreToId[normNombre(nombreDep)] : '');
                           // Deportista real (ingreso) → enlace a su estado de cuenta (como antes)
-                          if (m.deportista && depId) {
+                          if (nombreDep && depId) {
                             return (
                               <button onClick={() => setEstadoCuentaUrl(`/alumnos/${depId}/estado-cuenta?edit=1`)}
                                 className="text-left text-green-700 hover:text-green-900 hover:underline font-semibold w-full truncate"
-                                title={`Ver estado de cuenta de ${m.deportista} (se abre en ventana, sin salir del libro)`}>
-                                {m.deportista}
+                                title={`Ver estado de cuenta de ${nombreDep} (se abre en ventana, sin salir del libro)`}>
+                                {nombreDep}
                               </button>
                             );
                           }

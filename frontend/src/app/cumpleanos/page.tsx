@@ -515,6 +515,10 @@ export default function CumpleanosPage() {
      corregir el número. Por eso el envío espera un instante: si llega el
      segundo clic, se cancela el envío y se abre la ventanita. */
   function clicWhatsApp(c: Cumple) {
+    /* SIN NÚMERO BUENO: no hay nada que enviar. Un solo clic abre de una la
+       ventanita para escribir el celular correcto, sin esperar el doble clic.
+       (Dirección, 25/08/2026: el botón se pinta de rojo en ese caso.) */
+    if (!celularWhatsApp(telefonoDe(c))) { abrirEditorTel(c); return; }
     if (clicTelRef.current) return;                 // ya hay un clic esperando
     clicTelRef.current = setTimeout(() => {
       clicTelRef.current = null;
@@ -954,14 +958,24 @@ export default function CumpleanosPage() {
         <Eye className={kIcono} />
         Ver
       </button>
-      {/* Un clic = enviar · DOBLE clic (o clic derecho) = ver y corregir el número */}
+      {/* VERDE = hay número bueno. Un clic envía · doble clic (o clic derecho) lo corrige.
+          ROJO  = no hay número, o el que hay no sirve para WhatsApp. Un solo clic
+                  abre la ventanita para escribir el correcto. */}
       <button
         onClick={() => clicWhatsApp(c)}
         onDoubleClick={() => abrirEditorTel(c)}
         onContextMenu={(e) => { e.preventDefault(); abrirEditorTel(c); }}
         disabled={generando === c.id}
-        title={`${telefonoDe(c) ? 'Enviar la tarjeta al ' + telefonoDe(c) : 'Sin celular registrado'}\nDoble clic: ver o cambiar el número`}
-        className={`relative flex items-center bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-black rounded-xl flex-shrink-0 ${kBoton}`}
+        title={celularWhatsApp(telefonoDe(c))
+          ? `Enviar la tarjeta al ${telefonoDe(c)}\nDoble clic: ver o cambiar el número`
+          : (telefonoDe(c)
+              ? `El número que tiene (${telefonoDe(c)}) no sirve para WhatsApp.\nClic para escribir el correcto.`
+              : 'Sin celular registrado.\nClic para escribir el número.')}
+        className={`relative flex items-center disabled:opacity-50 text-white font-black rounded-xl flex-shrink-0 ${kBoton} ${
+          celularWhatsApp(telefonoDe(c))
+            ? 'bg-green-600 hover:bg-green-700'
+            : 'bg-red-600 hover:bg-red-700'
+        }`}
       >
         <MessageCircle className={kIcono} />
         WhatsApp

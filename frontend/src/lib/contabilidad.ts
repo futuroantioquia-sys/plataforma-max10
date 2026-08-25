@@ -207,8 +207,21 @@ export async function borrarConcepto(id: string): Promise<boolean> {
    el cobro del banco por dispersar la nomina, un gasto financiero) tiene que ir
    ANTES que "PAGO A NOMINA" (que si es la nomina), porque las dos contienen
    la palabra NOMINA y si no, la segunda se lleva las dos.
-   `soloDebito` limita la regla a los movimientos que salen (columna DEBITO). */
-const PATRONES: { re: RegExp; concepto: string; tipo: string; soloDebito?: boolean }[] = [
+   `soloDebito` limita la regla a los movimientos que salen (columna DEBITO).
+   `soloCredito` la limita a los que entran (columna CREDITO). */
+const PATRONES: { re: RegExp; concepto: string; tipo: string; soloDebito?: boolean; soloCredito?: boolean }[] = [
+  /* 0) INTERESES — VAN DE PRIMERAS (direccion, 25/08/2026).
+        Si la descripcion trae la palabra INTERES, manda esta regla por encima de
+        cualquier otra. Segun la columna donde este la plata:
+          · en CREDITO (entra)  →  INTERESES A FAVOR
+          · en DEBITO  (sale)   →  INTERESES FINANCIEROS
+        En los dos casos el DETALLE queda vacio: no son de ningun deportista.
+
+        OJO CON EL SINGULAR: el banco escribe "AJUSTE INTERES AHORROS CR", sin la
+        S del final. La regla vieja buscaba "INTERESES" en plural, y por eso esas
+        filas se quedaban sin concepto y marcadas SIN CODIGO. */
+  { re: /INTERES|RENDIMIENT/i,  concepto: 'INTERESES A FAVOR',     tipo: 'ingreso', soloCredito: true },
+  { re: /INTERES/i,             concepto: 'INTERESES FINANCIEROS', tipo: 'gasto',   soloDebito:  true },
   // 1) El cobro del BANCO por dispersar la nomina  →  gasto financiero
   { re: /SERVICIO\s+PAGO\s+(DE\s+)?NOMINA/i,          concepto: 'GASTO FINANCIERO',        tipo: 'gasto' },
   // 2) La nomina propiamente dicha  →  nomina
@@ -228,16 +241,25 @@ const PATRONES: { re: RegExp; concepto: string; tipo: string; soloDebito?: boole
   // 5) Tarjeta de credito — SOLO cuando el movimiento esta en DEBITO
   { re: /MORA\s+TARJETA|PAGO\s+AUTOM\w*\s+TC|TARJETA\s+DE\s+CREDITO|PAGO\s+TARJETA|PAGO\s+PSE|DAVIVIENDA/i,
     concepto: 'PAGO TARJETA DE CREDITO', tipo: 'gasto', soloDebito: true },
-  // 6) Intereses que abona el banco  →  ingreso. El DETALLE queda vacio.
-  { re: /ABONO\s+INTERES|INTERESES/i,                 concepto: 'INTERESES A FAVOR',       tipo: 'ingreso' },
+  // 6) (los intereses subieron al principio de la lista — ver la regla 0)
   // 7) Traslados entre cuentas propias
   { re: /A NEQUI|TRASLADO|CTA SUC VIRTUAL/i,          concepto: 'TRASLADO',                tipo: 'traslado' },
   // 8) Proveedores
   { re: /PAGO QR|PAGO A PROVE|PROVEEDOR/i,            concepto: 'PROVEEDOR',               tipo: 'gasto' },
 ];
 
-/** Conceptos cuyo DETALLE (el mes) debe quedar SIEMPRE vacio. */
-export const CONCEPTOS_SIN_DETALLE = ['INTERESES A FAVOR'];
+/* ── DETALLE (el mes) ────────────────────────────────────────────────────
+   REGLA (direccion, 25/08/2026): el DETALLE va VACIO por defecto. Solo se
+   llena cuando el que paga es un CODIGO DE DEPORTISTA — ahi si lleva el mes
+   ("AGOSTO 2026") o "MATRICULA 2026".
+
+   Ningun concepto del banco es de un deportista: los intereses, los traslados,
+   el 4x1000, la nomina, los proveedores… nada de eso tiene mes. Por eso la
+   lista se arma sola con TODOS los conceptos de las reglas de arriba: si
+   manana se agrega una regla nueva, queda cubierta sin tener que acordarse. */
+export const CONCEPTOS_SIN_DETALLE: string[] = Array.from(new Set(
+  PATRONES.map(p => p.concepto),
+));
 
 /* ── RENOMBRES AUTORIZADOS ────────────────────────────────────────────────
    Un movimiento que YA tiene concepto puesto (por la contabilidad, a mano)
@@ -268,10 +290,16 @@ export function clasificarConcepto(
   const d = String(descripcion || '');
   const deb = Number(mov?.debito ?? 0) > 0;
   const sabemosColumna = mov !== undefined;
+  const cre = Number(mov?.credito ?? 0) > 0;
   for (const p of PATRONES) {
     if (!p.re.test(d)) continue;
     // Si la regla es solo para debito y sabemos que este movimiento no lo es, se salta.
-    if (p.soloDebito && sabemosColumna && !deb) continue;
+    if (p.soloDebito  && sabemosColumna && !deb) continue;
+    // Igual al reves: reglas que solo valen cuando la plata ENTRA.
+    if (p.soloCredito && sabemosColumna && !cre) continue;
+    // Sin saber la columna no se puede decidir entre las reglas de debito y de
+    // credito (por ejemplo INTERESES A FAVOR vs INTERESES FINANCIEROS): se salta.
+    if ((p.soloDebito || p.soloCredito) && !sabemosColumna) continue;
     return { concepto: p.concepto, tipo: p.tipo };
   }
   return { concepto: '', tipo: '' };

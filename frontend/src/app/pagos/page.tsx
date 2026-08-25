@@ -5,11 +5,15 @@ import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DollarSign, Search,
-  User,
+  User, Phone,
 } from 'lucide-react';
-import { getDeportistas, getPagos, updateColumnasDeportista } from '@/lib/db';
 import {
-  getCobroConfig, armarMensaje, pagaAMax10, CONFIG_DEFAULT,
+  getDeportistas, getPagos, updateColumnasDeportista,
+  getTelefonosWhatsApp, guardarTelefonoWhatsApp, borrarTelefonoWhatsApp,
+} from '@/lib/db';
+import type { TelefonoWhatsApp } from '@/lib/db';
+import {
+  getCobroConfig, armarMensaje, pagaAMax10, escogerBoton, CONFIG_DEFAULT,
   type CobroConfig,
 } from '@/lib/cobro-config';
 import type { Deportista } from '@/lib/db';
@@ -233,6 +237,10 @@ function PagosInner() {
   const [filtroProyecto,   setFiltroProyecto]   = useState(() => searchParams.get('proy')  ?? '');
   // Filtro de CARTERA: mostrar solo quienes deben un mes específico (abreviatura: FEB, MAR…)
   const [filtroMes,        setFiltroMes]        = useState(() => searchParams.get('mes') ?? '');
+  /* FILTRO POR BOTÓN DE COBRO: deja ver solo a los que les toca un botón
+     determinado (por ejemplo, solo los de COBRAR 4 O MAS). Sirve para marcarlos
+     todos de una y cobrarles en tanda. */
+  const [filtroBoton,      setFiltroBoton]      = useState('');
 
   // Sincronizar filtros → URL (replace para no apilar historial)
   // Incluye 'mes' para que al ver una cuenta y volver, se regrese al mismo mes filtrado.
@@ -261,10 +269,18 @@ function PagosInner() {
   /* Lo que el administrador dejó escrito en Gestión → Botones de Cobro.
      Arranca con los textos de fábrica para que la pantalla nunca quede muda. */
   const [cfgCobro, setCfgCobro] = useState<CobroConfig>(CONFIG_DEFAULT);
+  /* CELULARES CORREGIDOS A MANO — la misma tabla que usa Cumpleaños.
+     Cuando la ficha no tiene el celular del acudiente, o lo tiene malo, aquí se
+     escribe el bueno y queda guardado para toda la plataforma. */
+  const [telAlt,       setTelAlt]       = useState<Record<string, TelefonoWhatsApp>>({});
+  const [editandoTel,  setEditandoTel]  = useState<Deportista | null>(null);
+  const [borradorTel,  setBorradorTel]  = useState('');
+  const [guardandoTel, setGuardandoTel] = useState(false);
   // OBSERVACIÓN por deportista (texto libre editable en la última columna)
   const [obs,          setObs]          = useState<Record<string, string>>({});
-  const [editObs,      setEditObs]      = useState<string | null>(null);
-  const [textoObs,     setTextoObs]     = useState('');
+  /* Lo que se está escribiendo en OBSERVACIÓN antes de soltar la casilla.
+     Se guarda solo al hacer clic afuera: no hay botón de Guardar. */
+  const [obsDraft,     setObsDraft]     = useState<Record<string, string>>({});
   const [guardandoObs, setGuardandoObs] = useState<string | null>(null);
   // FECHA DE INGRESO editable (con confirmación antes de guardar)
   const [editFecha,      setEditFecha]      = useState<string | null>(null);
@@ -317,7 +333,6 @@ function PagosInner() {
   /** Guarda la observación del deportista en su ficha. Si queda vacía, se borra. */
   async function guardarObs(dep: Deportista, textoCrudo: string) {
     const texto = String(textoCrudo ?? '').trim();
-    setEditObs(null);
     if (texto === (obs[dep.id] ?? '')) return;      // no cambió: no se toca la base
     setGuardandoObs(dep.id);
     const cols: Record<string, any> = { ...(dep._columnas ?? {}) };
@@ -335,6 +350,7 @@ function PagosInner() {
   useEffect(() => {
     getDeportistas().then(lista => { setCargando(false); if (lista.length) setDeportistas(lista); });
     getCobroConfig().then(setCfgCobro).catch(() => {});
+    getTelefonosWhatsApp().then(setTelAlt).catch(() => {});
     getPagos().then(p => { if (Object.keys(p).length) setAllPagos(p as any); setPagosListos(true); }).catch(() => setPagosListos(true));
     try {
       const raw = localStorage.getItem(DEP_ESTADOS_KEY);
@@ -384,13 +400,19 @@ function PagosInner() {
       if (filtroCodigo && !cod.includes(filtroCodigo.toLowerCase())) return false;
       // CARTERA por mes: solo quienes tienen ese mes PENDIENTE
       if (filtroMes && !resumenPago(d).mesesPendientes.includes(filtroMes)) return false;
+      // Solo los que les toca este botón de cobro
+      if (filtroBoton) {
+        const r = resumenPago(d) as any;
+        const c = cobroDe(d, r.mesesPendFull, r.becado);
+        if (!c || c.botonId !== filtroBoton) return false;
+      }
       if (!q) return true;
       return d._nombre.toLowerCase().includes(q) || cod.includes(q);
     }).sort((a, b) => {
       const ca = codigoDe(a), cb = codigoDe(b);
       return ca.localeCompare(cb, 'es', { numeric: true });
     });
-  }, [deportistas, busqueda, filtroCodigo, filtroPrograma, filtroProyecto, filtroMes, allPagos, depEstados, mostrarRetirados]);
+  }, [deportistas, busqueda, filtroCodigo, filtroPrograma, filtroProyecto, filtroMes, filtroBoton, cfgCobro, allPagos, depEstados, mostrarRetirados]);
 
   /* Resumen de pagos por deportista — busca por dep.id Y por todos los códigos numéricos */
   function esBecadoDep(dep: Deportista): boolean {
@@ -491,24 +513,69 @@ function PagosInner() {
 
   const BL = '#FFFFFF';
 
+  /** El celular que se va a usar: el corregido a mano manda sobre el de la ficha. */
+  function telDe(dep: Deportista): string {
+    return String(telAlt[dep.id]?.telefono ?? '').trim() || telefonoDe(dep);
+  }
+
+  function abrirEditorTel(dep: Deportista) {
+    setBorradorTel(telDe(dep));
+    setEditandoTel(dep);
+  }
+  async function guardarTel() {
+    const dep = editandoTel;
+    if (!dep) return;
+    const limpio = borradorTel.replace(/\D/g, '');
+    if (limpio.length !== 10) {
+      window.alert('Ese número no parece un celular.\n\nEscríbalo con los 10 dígitos, por ejemplo: 3001234567');
+      return;
+    }
+    setGuardandoTel(true);
+    const ok = await guardarTelefonoWhatsApp(dep.id, limpio, {
+      codigo: codigoDe(dep), nombre: dep._nombre, telefonoFicha: telefonoDe(dep),
+    });
+    setGuardandoTel(false);
+    if (!ok) { window.alert('No se pudo guardar el número. Revise el internet e intente otra vez.'); return; }
+    setTelAlt(prev => ({
+      ...prev,
+      [dep.id]: {
+        deportistaId: dep.id, telefono: limpio, telefonoFicha: telefonoDe(dep),
+        nota: '', actualizadoEn: new Date().toISOString(),
+      },
+    }));
+    setEditandoTel(null);
+  }
+  async function quitarTel() {
+    const dep = editandoTel;
+    if (!dep) return;
+    if (!window.confirm('¿Volver a usar el celular que está en la ficha del deportista?')) return;
+    setGuardandoTel(true);
+    await borrarTelefonoWhatsApp(dep.id);
+    setGuardandoTel(false);
+    setTelAlt(prev => { const n = { ...prev }; delete n[dep.id]; return n; });
+    setEditandoTel(null);
+  }
+
   /* ── COBRO POR WHATSAPP ────────────────────────────────────────────────
-     Devuelve null cuando NO hay nada que cobrar. Hay dos tonos:
+     Devuelve null cuando NO hay nada que cobrar.
 
-       'atrasado' (ROJO · COBRAR AHORA) — debe dos o más meses, o debe un mes
-                  viejo que ya se pasó. Aquí el cobro va en serio.
-       'aldia'    (ROJO · COBRAR UNO)   — solo debe el mes en curso. No está
-                  atrasado: es un recordatorio amable para que no se le junte
-                  con el próximo.
+     Los botones los arma el administrador en Gestión → Botones de Cobro. Cada
+     uno dice cuándo aparece: solo cuando el deportista va corriendo con el mes
+     en curso, solo cuando ya viene atrasado, o siempre. Aquí se calcula en cuál
+     de las dos situaciones está y se devuelven TODOS los botones que apliquen,
+     ya con su mensaje armado.
 
-     En los dos casos se abre WhatsApp con el mensaje YA ESCRITO. No se envía
-     nada solo: el envío lo hace una persona después de leerlo. */
+     Se abre WhatsApp con el mensaje YA ESCRITO. No se envía nada solo: el envío
+     lo hace una persona después de leerlo. */
   function cobroDe(dep: Deportista, mesesPendFull: string[], becado?: boolean) {
     if (becado || !mesesPendFull?.length) return null;
 
     // La MATRÍCULA no es un mes: se menciona aparte y no multiplica la tarifa.
     const soloMeses = mesesPendFull.filter(d => (MES_NUM[d] ?? 0) > 0);
     const debeMatricula = mesesPendFull.some(d => (MES_NUM[d] ?? 0) === 0);
-    if (!soloMeses.length) return null;
+    /* Si solo debe la MATRÍCULA y ningún mes, TAMBIÉN hay que cobrarle:
+       le sale el botón de matrícula. — 25/08/2026 */
+    if (!soloMeses.length && !debeMatricula) return null;
 
     const nombre = dep._nombre || '';
     // La CUOTA MANUAL del deportista, si existe, manda sobre la tabla de tarifas.
@@ -521,17 +588,25 @@ function PagosInner() {
     /* ¿Va el mensaje suave? Solo si debe UN mes, ese mes es el de ahora, y no
        tiene la matrícula pendiente. Si no, el mensaje es el de atrasado. */
     const soloEsteMes = n === 1 && MES_NUM[soloMeses[0]] === MES_ACTUAL && !debeMatricula;
-    const boton = soloEsteMes ? cfgCobro.uno : cfgCobro.atrasado;
 
-    /* La cuenta depende del proyecto: los SEIS proyectos de SUB 13, 14 y 15
-       (Selección y Desarrollo) consignan a MAX 10; el resto, a Futuro
-       Antioquia. Misma regla que el Estado de Cuenta. */
-    const cuenta = pagaAMax10(getCol(dep, /^program/i), getCol(dep, /^proy/i))
-      ? cfgCobro.cuentaMax10
-      : cfgCobro.cuentaFuturo;
+    /* LA CUENTA NO LA DECIDE EL BOTÓN, LA DECIDE EL PROYECTO.
+       Los SEIS proyectos de SUB 13, 14 y 15 (Selección y Desarrollo) consignan
+       a MAX 10; todos los demás, a Futuro Antioquia. Vale para cualquier botón
+       que el administrador arme. Misma regla que el Estado de Cuenta. */
+    const esMax10 = pagaAMax10(getCol(dep, /^program/i), getCol(dep, /^proy/i));
+    const cuenta = esMax10 ? cfgCobro.cuentaMax10 : cfgCobro.cuentaFuturo;
 
-    /* El texto lo escribe el administrador en Gestión → Botones de Cobro.
-       Aquí solo se le reemplazan los comodines por los datos de este deportista. */
+    const tel = aWhatsApp(telDe(dep));
+
+    /* UN SOLO BOTÓN. Cuál, lo decide cuántos meses debe (n). Si el
+       administrador armó varios que le sirven, gana el más preciso.
+       El texto lo escribe él; aquí solo se le reemplazan los comodines por los
+       datos de este deportista. */
+    /* La MATRÍCULA manda: si la debe, sale el 5º botón (el fucsia), deba los
+       meses que deba. Si no, se escoge por cantidad de meses. */
+    const boton = escogerBoton(cfgCobro.botones ?? [], n, debeMatricula);
+    if (!boton) return null;   // ningún botón le aplica: la casilla va vacía
+
     const texto = armarMensaje(boton.mensaje, {
       nombre,
       meses,
@@ -543,7 +618,6 @@ function PagosInner() {
       app: URL_APP,
     });
 
-    const tel = aWhatsApp(telefonoDe(dep));
     /* Se va DERECHO a WhatsApp Web (web.whatsapp.com), no por wa.me.
        wa.me es la página intermedia que pregunta "¿abrir en la aplicación o
        en WhatsApp Web?" — ese es el permiso que había que dar cada vez.
@@ -556,10 +630,11 @@ function PagosInner() {
       : `https://web.whatsapp.com/send?text=${encodeURIComponent(texto)}`;
 
     return {
-      url, tel, texto, meses, total, tarifa, n, cuenta,
+      tel, meses, total, tarifa, n, cuenta, texto, url, debeMatricula, esMax10,
+      botonId:  boton.id,
+      etiqueta: boton.etiqueta,
+      color:    boton.color,
       tono: soloEsteMes ? 'aldia' : 'atrasado',
-      etiqueta: boton.etiqueta,   // lo que dice el botón, según el módulo
-      color:    boton.color,      // el color del botón, según el módulo
     };
   }
 
@@ -590,7 +665,10 @@ function PagosInner() {
   }
   /** Abre (o vuelve a abrir) el chat de esta persona, siempre en la MISMA pestaña. */
   function abrirWhatsApp(url: string) {
-    window.open(url, 'whatsapp_max10');
+    /* SIEMPRE la misma pestaña, con el mismo nombre. Si ya está abierta, solo
+       cambia de chat y se pone al frente; no se abre una nueva. */
+    const w = window.open(url, 'whatsapp_max10');
+    try { w?.focus(); } catch {}
     setColaAbierto(true);
   }
   /** Pasa al siguiente de la fila. Si era el último, cierra y borra las marcas. */
@@ -686,6 +764,20 @@ function PagosInner() {
                 ))}
               </select>
             </div>
+            {/* FILTRO POR BOTÓN DE COBRO — para trabajar por tandas: escoja
+                "COBRAR 4 O MAS" y quedan solo esos, listos para marcarlos todos. */}
+            <div className="w-[190px]">
+              <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Tipo de cobro</label>
+              <select value={filtroBoton} onChange={e => setFiltroBoton(e.target.value)}
+                title="Ver solo los deportistas a los que les toca este botón de cobro"
+                className="w-full rounded-xl px-3 py-2 text-sm text-white border focus:outline-none focus:ring-2 focus:ring-[#00B050]"
+                style={{ background: CAMPO, borderColor: BORDE }}>
+                <option value="">Todos los cobros</option>
+                {(cfgCobro.botones ?? []).map(b => (
+                  <option key={b.id} value={b.id}>{b.etiqueta}</option>
+                ))}
+              </select>
+            </div>
             <div className="relative flex-1 min-w-[160px]">
               <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Nombre</label>
               <div className="relative">
@@ -753,7 +845,7 @@ function PagosInner() {
           </div>
         ) : (
           <div className="rounded-2xl overflow-x-auto shadow-sm border" style={{ borderColor: BORDE }}>
-            <table className="w-full border-collapse text-sm" style={{ minWidth: 1100 }}>
+            <table className="w-full border-collapse text-sm" style={{ minWidth: 1200 }}>
               <thead>
                 <tr>
                   {/* Casilla de arriba: marca (o desmarca) a TODOS los que deben */}
@@ -935,33 +1027,58 @@ function PagosInner() {
                         )}
                       </td>
 
-                      {/* COBRAR — botón rojo de WhatsApp. Dice COBRAR AHORA cuando
-                          está atrasado y COBRAR UNO cuando solo debe el mes en
-                          curso (ahí el mensaje es más suave). Abre WhatsApp con el
-                          texto ya escrito; el envío lo hace una persona. */}
+                      {/* COBRAR — un botón por cada uno de los que el administrador
+                          armó en Gestión → Botones de Cobro y que aplique a esta
+                          fila. Abren WhatsApp con el texto ya escrito; el envío lo
+                          hace una persona. Van en fila, sin doblar, para que todas
+                          las filas queden igual de altas. */}
                       <td onClick={e => e.stopPropagation()}
-                        style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'center' }}>
+                        style={{ background: bg, border: '1px solid white', padding: '6px 8px', textAlign: 'left' }}>
                         {cobro ? (
-                          /* target con nombre fijo: todos los cobros usan la MISMA
-                             pestaña de WhatsApp. Así no se le llena el navegador de
-                             pestañas y, si ya la tiene abierta, solo cambia de chat. */
-                          <a href={cobro.url} target="whatsapp_max10" rel="noopener noreferrer"
-                            title={(cobro.tono === 'aldia'
-                                ? `Solo debe el mes en curso — ${cobro.meses} · ${pesos(cobro.total)}. Recordatorio amable, para que no se le junte con el próximo. `
-                                : `Atrasado — ${cobro.meses} · ${pesos(cobro.total)}. `) +
+                          /* El botón de cobro pegado a la izquierda y el teléfono
+                             a la derecha, para que la columna quede pareja. */
+                          <div className="flex items-center justify-between gap-2">
+                          {/* target con nombre fijo: todos los cobros usan la MISMA
+                              pestaña de WhatsApp. Así no se le llena el navegador de
+                              pestañas y, si ya la tiene abierta, solo cambia de chat. */}
+                          <a href={cobro.url} target="whatsapp_max10"
+                            /* El clic se maneja a mano para que TODOS los cobros usen
+                               la MISMA pestaña de WhatsApp. Antes iba con
+                               rel="noopener", y eso hace que el navegador ignore el
+                               nombre de la pestaña y abra una nueva cada vez: se le
+                               llenaba el computador de ventanas de WhatsApp. */
+                            onClick={e => { e.preventDefault(); window.open(cobro.url, 'whatsapp_max10'); }}
+                            title={`Debe ${cobro.n} ${cobro.n === 1 ? 'mes' : 'meses'} — ${cobro.meses} · ${pesos(cobro.total)}. ` +
+                              `Consigna a ${cobro.cuenta.titular}. ` +
                               (cobro.tel
                                 ? `Abre WhatsApp con ${cobro.tel} y el mensaje listo. Usted revisa y le da enviar.`
                                 : `Sin CELULAR DEL ACUDIENTE en la ficha: se abre WhatsApp con el mensaje listo para que escoja el contacto a mano.`)}
-                            style={{ background: cobro.color }}
+                            /* Ancho fijo: todos los botones de la columna quedan
+                               del mismo tamaño, diga lo que diga cada uno. */
+                            style={{ background: cobro.color, width: 152 }}
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.filter = 'brightness(0.85)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.filter = ''; }}
-                            className="inline-flex items-center gap-1.5 text-white text-[10px] font-black px-3 py-1.5 rounded-lg whitespace-nowrap transition shadow-sm">
+                            className="inline-flex items-center justify-center gap-1.5 text-white text-[10px] font-black px-2 py-1.5 rounded-lg whitespace-nowrap transition shadow-sm">
                             <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
                               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                             </svg>
                             {cobro.etiqueta}
-                            {!cobro.tel && <span title="Sin CELULAR DEL ACUDIENTE en la ficha">⚠</span>}
                           </a>
+                          {/* TELÉFONO AMARILLO — sale SOLO cuando no hay WhatsApp:
+                              o no tiene número, o el que tiene no sirve. Al oprimirlo
+                              se escribe el correcto, y queda guardado para toda la
+                              plataforma (la misma lista que usa Cumpleaños).
+                              Si el WhatsApp está bien, no sale ningún teléfono. */}
+                          {!cobro.tel && (
+                            <button
+                              onClick={() => abrirEditorTel(dep)}
+                              title="Sin WhatsApp — clic para escribir el número"
+                              style={{ background: AMBAR, width: 30, height: 30, flexShrink: 0 }}
+                              className="inline-flex items-center justify-center rounded-lg hover:opacity-80 transition">
+                              <Phone className="w-3.5 h-3.5" style={{ color: '#232B39' }} />
+                            </button>
+                          )}
+                          </div>
                         ) : (
                           <span className="text-xs font-black" style={{ color: GRIS_VACIO }}>—</span>
                         )}
@@ -972,60 +1089,38 @@ function PagosInner() {
                       <td
                         onClick={e => e.stopPropagation()}
                         style={{ background: bg, border: '1px solid white', padding: '4px 6px', minWidth: 240, maxWidth: 320, cursor: 'text' }}>
-                        {editObs === dep.id ? (
-                          <div>
-                            <textarea
-                              autoFocus
-                              value={textoObs}
-                              onChange={e => setTextoObs(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Escape') { e.preventDefault(); setEditObs(null); }
-                                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); guardarObs(dep, textoObs); }
-                              }}
-                              rows={3}
-                              placeholder="Compromiso de pago, acuerdo, razón de la mora…"
-                              style={{
-                                width: '100%', fontSize: 11, lineHeight: 1.35, color: '#FFFFFF',
-                                border: `1px solid ${VERDE}`, borderRadius: 6, padding: '4px 6px',
-                                resize: 'vertical', background: CAMPO, outline: 'none',
-                              }}
-                            />
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <button onClick={() => guardarObs(dep, textoObs)}
-                                style={{ background: VERDE }}
-                                className="hover:opacity-85 text-white text-[10px] font-black px-2.5 py-1 rounded-lg transition">
-                                Guardar
-                              </button>
-                              <button onClick={() => setEditObs(null)}
-                                className="text-white hover:opacity-70 text-[10px] font-black px-1.5 py-1 transition">
-                                Cancelar
-                              </button>
-                              <span className="text-[9px] font-bold ml-auto" style={{ color: GRIS_VACIO }}>Ctrl+Enter guarda · Esc cancela</span>
-                            </div>
-                          </div>
-                        ) : guardandoObs === dep.id ? (
-                          <span className="text-[10px] font-black text-white">guardando…</span>
-                        ) : obs[dep.id] ? (
-                          <div
-                            onClick={() => { setTextoObs(obs[dep.id] ?? ''); setEditObs(dep.id); }}
-                            title={obs[dep.id] + '\n\n(clic para editar)'}
-                            style={{
-                              fontSize: 11, lineHeight: 1.35, color: '#FFFFFF', whiteSpace: 'pre-wrap',
-                              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden', background: CAMPO, border: `1px solid ${BORDE}`,
-                              borderRadius: 6, padding: '4px 6px', minHeight: 30,
-                            }}>
-                            {obs[dep.id]}
-                          </div>
-                        ) : (
-                          <div
-                            onClick={() => { setTextoObs(''); setEditObs(dep.id); }}
-                            title="Clic para escribir una observación"
-                            className="text-[10px] font-black hover:text-[#00B050] transition"
-                            style={{ padding: '6px 4px', color: GRIS_VACIO }}>
-                            + observación
-                          </div>
-                        )}
+                        {/* Se escribe directo, sin botones. Al hacer clic afuera
+                            (o al oprimir Tab) queda guardado. Esc devuelve lo que
+                            estaba. El cuadro crece solo mientras se escribe. */}
+                        <textarea
+                          value={obsDraft[dep.id] ?? obs[dep.id] ?? ''}
+                          onChange={e => {
+                            const t = e.target as HTMLTextAreaElement;
+                            setObsDraft(prev => ({ ...prev, [dep.id]: t.value }));
+                            t.style.height = 'auto';
+                            t.style.height = Math.min(t.scrollHeight, 150) + 'px';
+                          }}
+                          onBlur={e => {
+                            const txt = e.target.value;
+                            setObsDraft(prev => { const n = { ...prev }; delete n[dep.id]; return n; });
+                            guardarObs(dep, txt);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Escape') {
+                              e.preventDefault();
+                              setObsDraft(prev => { const n = { ...prev }; delete n[dep.id]; return n; });
+                              (e.target as HTMLTextAreaElement).blur();
+                            }
+                          }}
+                          rows={1}
+                          placeholder="Compromiso de pago, acuerdo, razón de la mora…"
+                          style={{
+                            width: '100%', fontSize: 11, lineHeight: 1.35, color: '#FFFFFF',
+                            border: `1px solid ${guardandoObs === dep.id ? VERDE : BORDE}`,
+                            borderRadius: 6, padding: '4px 6px', minHeight: 30, maxHeight: 150,
+                            resize: 'none', overflow: 'auto', background: CAMPO, outline: 'none',
+                          }}
+                        />
                       </td>
                     </tr>
                   );
@@ -1035,6 +1130,86 @@ function PagosInner() {
           </div>
         )}
       </main>
+
+      {/* ── CUADRO PARA CAMBIAR EL CELULAR DE WHATSAPP ─────────────────────
+          Es la misma lista de celulares corregidos que usa Cumpleaños: lo que
+          se escriba aquí sirve también allá, y al revés. NO toca la ficha del
+          deportista; queda como una corrección aparte. */}
+      {editandoTel && (() => {
+        const dep = editandoTel;
+        const deLaFicha = telefonoDe(dep);
+        const corregido = telAlt[dep.id]?.telefono ?? '';
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+               style={{ background: 'rgba(0,0,0,0.65)' }}
+               onClick={() => !guardandoTel && setEditandoTel(null)}>
+            <div className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
+                 style={{ background: PANEL, borderColor: BORDE }}
+                 onClick={e => e.stopPropagation()}>
+
+              <div className="px-5 py-3 flex items-center justify-between" style={{ background: '#232B39' }}>
+                <p className="text-white font-black text-sm tracking-wide">CELULAR DE WHATSAPP</p>
+                <button onClick={() => setEditandoTel(null)}
+                  className="text-white font-black text-lg px-2 hover:opacity-70 transition">✕</button>
+              </div>
+
+              <div className="px-5 py-4 space-y-3">
+                <div>
+                  <p className="text-white font-black text-base leading-tight">{dep._nombre}</p>
+                  <p className="text-white text-xs mt-0.5">Código {codigoDe(dep) || '—'}</p>
+                </div>
+
+                <div className="rounded-xl px-3 py-2" style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: GRIS_VACIO }}>
+                    En la ficha del deportista
+                  </p>
+                  <p className="text-white text-sm font-bold">
+                    {deLaFicha || <span style={{ color: AMBAR }}>No tiene celular registrado</span>}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">
+                    Celular al que se le va a escribir
+                  </label>
+                  <input
+                    autoFocus
+                    value={borradorTel}
+                    onChange={e => setBorradorTel(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') guardarTel(); if (e.key === 'Escape') setEditandoTel(null); }}
+                    inputMode="numeric"
+                    placeholder="3001234567"
+                    className="w-full rounded-xl px-3 py-2 text-base text-white border placeholder:text-[#8C94A0] focus:outline-none focus:ring-2 focus:ring-[#00B050]"
+                    style={{ background: CAMPO, borderColor: BORDE, minHeight: 48, letterSpacing: '0.05em' }}
+                  />
+                  <p className="text-[11px] mt-1" style={{ color: GRIS_VACIO }}>
+                    Los 10 dígitos, sin indicativo ni espacios.
+                  </p>
+                </div>
+
+                <button onClick={guardarTel} disabled={guardandoTel}
+                  style={{ background: VERDE, minHeight: 48 }}
+                  className="w-full text-white font-black text-sm rounded-xl hover:opacity-90 transition disabled:opacity-60">
+                  {guardandoTel ? 'GUARDANDO…' : 'GUARDAR ESTE CELULAR'}
+                </button>
+
+                {corregido && (
+                  <button onClick={quitarTel} disabled={guardandoTel}
+                    style={{ minHeight: 40 }}
+                    className="w-full text-white text-[11px] font-bold hover:opacity-70 transition">
+                    volver a usar el de la ficha
+                  </button>
+                )}
+
+                <p className="text-[11px] leading-relaxed" style={{ color: GRIS_VACIO }}>
+                  Esto no cambia la ficha del deportista: queda como una corrección aparte, y la usan
+                  tanto Control de Pagos como Cumpleaños.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── VENTANA DE LA COLA DE COBRO ─────────────────────────────────────
           Va de uno en uno. En cada persona: se abre su chat de WhatsApp con el
@@ -1060,10 +1235,20 @@ function PagosInner() {
 
               <div className="px-5 py-4 space-y-3">
                 <p className="text-white font-black text-lg leading-tight">{dep._nombre}</p>
-                <p className="text-white text-xs">
-                  Código {codigoDe(dep) || '—'} · Debe {cobro.meses} · {pesos(cobro.total)}
+                {/* PROYECTO — en ÁMBAR cuando es uno de los seis de MAX 10, para que
+                    salte a la vista que ese pago va a la otra cuenta. */}
+                <p className="text-sm font-black leading-tight"
+                   style={{ color: cobro.esMax10 ? AMBAR : '#FFFFFF' }}>
+                  {[getCol(dep, /^program/i), getCol(dep, /^proy/i)].filter(Boolean).join(' · ') || 'Sin proyecto'}
+                  {cobro.esMax10 && ' — MAX 10'}
                 </p>
                 <p className="text-white text-xs">
+                  Código {codigoDe(dep) || '—'} · Debe {cobro.n} {cobro.n === 1 ? 'mes' : 'meses'}
+                  {cobro.meses ? ` (${cobro.meses})` : ''} · {pesos(cobro.total)}
+                  {cobro.debeMatricula && <strong> · más la MATRÍCULA</strong>}
+                </p>
+                {/* La CUENTA en ÁMBAR cuando es la de MAX 10. */}
+                <p className="text-xs" style={{ color: cobro.esMax10 ? AMBAR : '#FFFFFF' }}>
                   Consigna a: <strong>{cobro.cuenta.titular}</strong> · {cobro.cuenta.numero}
                 </p>
                 {cobro.tel
@@ -1073,12 +1258,19 @@ function PagosInner() {
                       listo para que usted escoja el contacto a mano.
                     </p>}
 
+                {/* El botón que le corresponde a esta persona, uno solo,
+                    escogido por cuántos meses debe. */}
                 {!colaAbierto ? (
-                  <button onClick={() => abrirWhatsApp(cobro.url)}
-                    style={{ background: VERDE, minHeight: 48 }}
-                    className="w-full text-white font-black text-sm rounded-xl hover:opacity-90 transition">
-                    ABRIR WHATSAPP Y ESCRIBIRLE
-                  </button>
+                  <div className="space-y-2">
+                    <button onClick={() => abrirWhatsApp(cobro.url)}
+                      style={{ background: cobro.color, minHeight: 48 }}
+                      className="w-full text-white font-black text-sm rounded-xl hover:opacity-90 transition">
+                      {cobro.etiqueta}
+                    </button>
+                    <p className="text-[11px]" style={{ color: GRIS_VACIO }}>
+                      Se abre WhatsApp con el mensaje ya escrito.
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     <p className="text-white text-xs leading-relaxed">
@@ -1090,7 +1282,7 @@ function PagosInner() {
                       className="w-full text-white font-black text-sm rounded-xl hover:opacity-90 transition">
                       {esUltimo ? 'TERMINAR' : 'SIGUIENTE →'}
                     </button>
-                    <button onClick={() => abrirWhatsApp(cobro.url)}
+                    <button onClick={() => setColaAbierto(false)}
                       className="w-full text-white text-[11px] font-bold py-1 hover:opacity-70 transition">
                       volver a abrir el chat
                     </button>
