@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Users } from 'lucide-react';
 import { getProfes, contarDeportistasPorProyecto } from '@/lib/db';
 
+/* El conteo de cada proyecto se guarda en este teléfono. Así, de la segunda
+   vez en adelante, el número aparece de una y solo se actualiza por detrás.
+   — 25/08/2026 */
+const CONTEO_KEY = 'futuro-conteo-proyectos';
+
 export default function MisProyectosPage() {
   const router = useRouter();
 
@@ -12,8 +17,15 @@ export default function MisProyectosPage() {
   const [fotoProfe,   setFotoProfe]   = useState('');
   const [proyectosProfe, setProyectosProfe] = useState<string[]>([]);
   const [conteoProyecto, setConteoProyecto] = useState<Record<string, number>>({});
+  const [conteoFallo, setConteoFallo] = useState(false);
   const [cargando,       setCargando]       = useState(true);
   useEffect(() => {
+    // 0. Conteo de la última vez: se pinta de una, sin esperar al servidor.
+    try {
+      const raw = localStorage.getItem(CONTEO_KEY);
+      if (raw) { const c = JSON.parse(raw); if (c && typeof c === 'object') setConteoProyecto(c); }
+    } catch {}
+
     // 1. Nombre y foto desde localStorage (inmediato)
     try {
       const rawNombre = localStorage.getItem('futuro-profe-nombre');
@@ -30,6 +42,28 @@ export default function MisProyectosPage() {
     } catch {}
 
     // 2. Proyectos: primero localStorage (rápido), luego Supabase (preciso)
+    /* Pide el número de cada proyecto y lo deja guardado en el teléfono.
+       Se puede llamar dos veces (con la lista del teléfono y con la del
+       servidor); si la lista es la misma no se repite el trabajo. */
+    let yaContado = '';
+    async function contar(proyectos: string[]) {
+      const clave = proyectos.slice().sort().join('|');
+      if (!clave || clave === yaContado) return;
+      yaContado = clave;
+      try {
+        const conteos = await contarDeportistasPorProyecto(proyectos);
+        if (Object.keys(conteos).length) {
+          setConteoProyecto(prev => {
+            const mezcla = { ...prev, ...conteos };
+            try { localStorage.setItem(CONTEO_KEY, JSON.stringify(mezcla)); } catch {}
+            return mezcla;
+          });
+        } else {
+          setConteoFallo(true);
+        }
+      } catch { setConteoFallo(true); }
+    }
+
     async function cargar() {
       let proyectos: string[] = [];
       try {
@@ -39,7 +73,13 @@ export default function MisProyectosPage() {
         // Intentar desde localStorage primero (rápido)
         const rawLS = localStorage.getItem('futuro-profe-proyectos');
         const proyLS: string[] = rawLS ? JSON.parse(rawLS) : [];
-        if (proyLS.length) { setProyectosProfe(proyLS); proyectos = proyLS; setCargando(false); }
+        if (proyLS.length) {
+          setProyectosProfe(proyLS);
+          proyectos = proyLS;
+          setCargando(false);
+          // El conteo arranca YA, sin esperar a que carguen los formadores.
+          contar(proyLS);
+        }
 
         // Luego desde Supabase para garantizar data fresca
         if (nombre) {
@@ -65,14 +105,9 @@ export default function MisProyectosPage() {
 
       setCargando(false);
 
-      /* 3. El número de deportistas de cada proyecto se pide APARTE y al final:
-            la lista de proyectos ya está en pantalla, y el conteo llega solo.
-            Antes esto bajaba las más de mil fichas de la academia y el
-            formador se quedaba mirando "Cargando tus proyectos…". */
-      try {
-        const conteos = await contarDeportistasPorProyecto(proyectos);
-        setConteoProyecto(conteos);
-      } catch {}
+      /* 3. El conteo, con la lista ya confirmada por el servidor. Si es la
+            misma que la del teléfono, esto no vuelve a pedir nada. */
+      await contar(proyectos);
     }
     cargar();
   }, []);
@@ -189,7 +224,9 @@ export default function MisProyectosPage() {
                       <p className="font-black text-white text-base leading-tight truncate">{proy}</p>
                       <p className="text-white/45 text-xs mt-0.5 flex items-center gap-1">
                         <Users className="w-3.5 h-3.5 inline"/>
-                        {alumnos < 0 ? 'Contando…' : `${alumnos} ${alumnos === 1 ? 'deportista' : 'deportistas'}`}
+                        {alumnos >= 0
+                          ? `${alumnos} ${alumnos === 1 ? 'deportista' : 'deportistas'}`
+                          : conteoFallo ? 'Ver deportistas' : 'Contando…'}
                       </p>
                     </div>
                     {/* Flecha */}

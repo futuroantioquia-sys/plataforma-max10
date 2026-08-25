@@ -352,25 +352,44 @@ export async function contarDeportistasPorProyecto(
   proyectos: string[]
 ): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
-  const lista = (proyectos ?? []).map(p => String(p ?? '').trim()).filter(Boolean);
+  const lista = Array.from(new Set(
+    (proyectos ?? []).map(p => String(p ?? '').trim()).filter(Boolean)
+  ));
   if (!lista.length) return out;
+
+  /* Camino bueno: que cuente el servidor de Vercel (una sola llamada, y allá
+     sí se puede leer la cabecera con el total). */
+  try {
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12_000);
+    const res = await fetch(
+      `/api/deportistas?conteo=${encodeURIComponent(lista.join('|'))}`,
+      { cache: 'no-store', signal: ctrl.signal }
+    ).finally(() => clearTimeout(timer));
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        for (const p of lista) {
+          const n = Number((data as any)[p]);
+          if (!Number.isNaN(n)) out[p] = n;
+        }
+        if (Object.keys(out).length) return out;
+      }
+    }
+  } catch { /* se intenta el camino de abajo */ }
+
+  /* Repuesto: contar desde el navegador. Se piden SOLO los id (nada de fichas
+     ni fotos: son unos pocos kilobytes) y se cuentan las filas que llegan. No
+     depende de leer cabeceras, que es lo que puede bloquear el navegador. */
   await Promise.all(lista.map(async proy => {
     try {
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/deportistas?select=id&columnas->>PROY=eq.${encodeURIComponent(proy)}`,
-        {
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Prefer': 'count=exact',
-            'Range': '0-0',
-          },
-        }
+        { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
       );
-      const cr = res.headers.get('content-range');           // "0-0/25"
-      if (cr && cr.includes('/')) {
-        const n = parseInt(cr.split('/')[1], 10);
-        if (!Number.isNaN(n)) out[proy] = n;
+      if (res.ok) {
+        const filas = await res.json();
+        if (Array.isArray(filas)) out[proy] = filas.length;
       }
     } catch { /* si falla, ese proyecto simplemente no muestra número */ }
   }));

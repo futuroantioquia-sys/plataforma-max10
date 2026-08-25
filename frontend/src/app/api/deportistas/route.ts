@@ -21,6 +21,44 @@ export async function GET(request: NextRequest) {
     const proyecto = searchParams.get('proyecto');
     const offsetParam = searchParams.get('offset');
 
+    /* ── SOLO EL CONTEO ──────────────────────────────────────────────────
+       ?conteo=SUB 8A|SUB 8B  →  {"SUB 8A":24,"SUB 8B":21}
+
+       "Mis Proyectos" solo necesita el número que va debajo de cada
+       proyecto. Antes bajaba las más de mil fichas de la academia para
+       contarlas en el teléfono. Esto lo cuenta el servidor de Vercel, que
+       está al lado del de la base de datos, y devuelve dos numeritos.
+       Va aquí (y no directo desde el navegador) porque el número viene en
+       una cabecera de la respuesta que el navegador no siempre deja leer.
+       — 25/08/2026 */
+    const conteoParam = searchParams.get('conteo');
+    if (conteoParam !== null) {
+      const proyectos = Array.from(new Set(
+        conteoParam.split('|').map(s => s.trim()).filter(Boolean)
+      )).slice(0, 40);
+      const out: Record<string, number> = {};
+      await Promise.all(proyectos.map(async p => {
+        try {
+          const res = await fetch(
+            `${SB_URL}/rest/v1/deportistas?select=id&columnas->>PROY=eq.${encodeURIComponent(p)}`,
+            {
+              headers: {
+                'apikey':        SB_KEY,
+                'Authorization': `Bearer ${SB_KEY}`,
+                'Prefer':        'count=exact',
+                'Range':         '0-0',
+              },
+              cache: 'no-store',
+            }
+          );
+          const cr = res.headers.get('content-range');          // "0-0/24"
+          const n  = cr && cr.includes('/') ? parseInt(cr.split('/')[1], 10) : NaN;
+          out[p] = Number.isNaN(n) ? 0 : n;
+        } catch { out[p] = 0; }
+      }));
+      return NextResponse.json(out);
+    }
+
     // Si el cliente pide una página específica (paginación del cliente)
     if (offsetParam !== null) {
       const offset = parseInt(offsetParam, 10) || 0;

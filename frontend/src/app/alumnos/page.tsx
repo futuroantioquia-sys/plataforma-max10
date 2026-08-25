@@ -1010,21 +1010,27 @@ function AlumnosPageContent() {
   /* ── RENDIMIENTO (25/08/2026) ────────────────────────────────────────────
      Estas dos consultas se disparaban apenas abría la pantalla y traían los
      datos de TODA la academia: el resumen de documentos y —lo más pesado de
-     todo— la FOTO en base64 de los más de mil deportistas. El formador solo
-     está viendo los 25 niños de su proyecto; bajaba decenas de megas para
-     nada, y en el celular eso son minutos.
+     todo— la FOTO en base64 de los más de mil deportistas. Decenas de megas
+     antes de poder ver nada, tanto para el formador como para el
+     administrador.
 
-     Ahora esperan a que esté la lista en pantalla y piden únicamente esos. */
-  const idsEnPantalla = useMemo(
-    () => deportistas.map(d => d.id).filter(Boolean),
-    [deportistas]
-  );
-  const clave = idsEnPantalla.join(',');
+     Las fotos y el resumen SOLO se ven dentro de la tabla de un proyecto
+     (Vista General y las tarjetas de proyecto no muestran ninguna foto). Por
+     eso ahora no se pide nada hasta que se entra a un proyecto, y solo de los
+     deportistas de ESE proyecto. */
+  const idsDelProyecto = useMemo(() => {
+    if (!proy) return [] as string[];
+    return deportistas
+      .filter(d => colProy(d) === proy)
+      .map(d => d.id)
+      .filter(Boolean);
+  }, [deportistas, proy]);
+  const clave = idsDelProyecto.join(',');
   useEffect(() => {
-    if (!idsEnPantalla.length) return;
-    // Con listas muy grandes (el administrador ve toda la academia) sale más
-    // barato pedir la tabla completa que armar una dirección con mil códigos.
-    const acotar = idsEnPantalla.length <= 300 ? idsEnPantalla : undefined;
+    if (!idsDelProyecto.length) return;
+    // Si un proyecto fuera enorme, sale más barato pedir la tabla completa que
+    // armar una dirección con cientos de códigos.
+    const acotar = idsDelProyecto.length <= 300 ? idsDelProyecto : undefined;
     getResumenDocumentos(acotar).then(setResumen).catch(() => {});
     getFotosDeportistas(acotar).then(cloud => {
       if (cloud && Object.keys(cloud).length) setFotos(prev => ({ ...prev, ...cloud }));

@@ -704,6 +704,44 @@ export default function GeneralPage() {
     [edits]
   );
 
+  /* ── LA TABLA SE PINTA POR TANDAS ─────────────────────────────────────────
+     Antes se dibujaban de un golpe las 1.167 filas, cada una con 17 casillas y
+     varias listas desplegables adentro: más de veinte mil elementos en la
+     pantalla. Por eso el computador se ponía pesado y el clic tardaba en
+     responder, aunque los datos ya hubieran llegado.
+
+     Ahora se dibujan de a 80 y van apareciendo solas al ir bajando. El buscador
+     y los filtros siguen mirando la lista COMPLETA, así que buscar un código
+     sigue funcionando igual aunque su fila todavía no esté dibujada.
+     — 25/08/2026 */
+  const TANDA = 80;
+  const listaPlana = useMemo(() => ordenados.filter(d => {
+    if (programaFiltro !== null && grupoDep(d) !== programaFiltro) return false;
+    if (proyectoFiltro && getColVal(d, RX_PROY).trim() !== proyectoFiltro) return false;
+    if (anioFiltro && getColVal(d, /^a[ñn]o$/i).trim() !== anioFiltro) return false;
+    return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [ordenados, programaFiltro, proyectoFiltro, anioFiltro, edits]);
+
+  const [visibles, setVisibles] = useState(TANDA);
+  const finTablaRef = useRef<HTMLTableRowElement>(null);
+
+  // Al buscar o filtrar se vuelve a empezar por arriba.
+  useEffect(() => { setVisibles(TANDA); }, [buscar, buscarCod, programaFiltro, proyectoFiltro, anioFiltro]);
+
+  // Cuando la última fila dibujada asoma en pantalla, se dibuja la tanda siguiente.
+  useEffect(() => {
+    const nodo = finTablaRef.current;
+    if (!nodo || visibles >= listaPlana.length) return;
+    const obs = new IntersectionObserver(entradas => {
+      if (entradas.some(e => e.isIntersecting)) {
+        setVisibles(v => Math.min(v + TANDA, listaPlana.length));
+      }
+    }, { rootMargin: '600px' });
+    obs.observe(nodo);
+    return () => obs.disconnect();
+  }, [visibles, listaPlana.length]);
+
   // Deportista que se está eliminando (para no repetir el clic)
   const [borrandoDep, setBorrandoDep] = useState<string | null>(null);
 
@@ -1302,13 +1340,7 @@ export default function GeneralPage() {
                 {/* ── BODY PLANO — orden global por código ── */}
                 <tbody>
                   {(() => {
-                    const listaPlana = ordenados.filter(d => {
-                      if (programaFiltro !== null && grupoDep(d) !== programaFiltro) return false;
-                      if (proyectoFiltro && getColVal(d, RX_PROY).trim() !== proyectoFiltro) return false;
-                      if (anioFiltro && getColVal(d, /^a[ñn]o$/i).trim() !== anioFiltro) return false;
-                      return true;
-                    });
-                    return listaPlana.map((dep, rowIdx) => {
+                    return listaPlana.slice(0, visibles).map((dep, rowIdx) => {
                         const rowNum   = numFilaGlobal[dep.id] ?? (rowIdx + 1);
                         const retirado = esRetirado(dep);
                         const inactivo = retirado || esPausado(dep);
@@ -1626,6 +1658,24 @@ export default function GeneralPage() {
                         );
                     });
                   })()}
+
+                  {/* Fila centinela: cuando asoma, se dibuja la tanda siguiente. */}
+                  <tr ref={finTablaRef}>
+                    <td colSpan={colVisibles.length + 2}
+                      style={{ background: CAMPO, border: '2px solid #ffffff' }}
+                      className="px-3 py-2 text-center text-white text-[11px] font-bold">
+                      {visibles < listaPlana.length ? (
+                        <span className="inline-flex items-center gap-2">
+                          <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          Mostrando {visibles} de {listaPlana.length} · sigue bajando para ver más
+                        </span>
+                      ) : (
+                        <span className="text-white/60">
+                          {listaPlana.length} deportista{listaPlana.length !== 1 ? 's' : ''} · fin de la lista
+                        </span>
+                      )}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
