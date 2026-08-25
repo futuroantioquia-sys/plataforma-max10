@@ -312,10 +312,14 @@ function DashboardAdmin() {
       <CategoriaSection emoji="📊" titulo="Seguimiento" color="verde" delay={200}>
         <AccesoCard titulo="Control de Asistencia"  icono={Clipboard}  href="/asistencia"   descripcion="Registro por proyecto"       color="verde" />
         <AccesoCard titulo="Valoración Deportiva"   icono={Star}       href="/evaluaciones" descripcion="Registrar evaluaciones"      color="verde" />
-        {/* 22/08/2026 — se retiraron de Seguimiento:
-              · "Sesiones de Entrenamiento" (/sesiones): la reemplaza Microciclo.
-              · "Control de Informes" (/control-informes): sale del tablero.
-            Los módulos siguen en el código; solo dejaron de tener acceso aquí. */}
+        {/* 22/08/2026 — se retiró de Seguimiento "Sesiones de Entrenamiento"
+            (/sesiones): la reemplaza Microciclo. El módulo sigue en el código;
+            solo dejó de tener acceso aquí.
+
+            25/08/2026 — "Control de Informes" VUELVE al tablero por pedido de la
+            dirección: es donde el administrador ve qué informes ya hicieron los
+            profes y cuáles faltan. */}
+        <AccesoCard titulo="Control de Informes" icono={ClipboardList} href="/control-informes" descripcion="Qué informes hicieron los profes y cuáles faltan" color="verde" />
         <AccesoCard titulo="Microciclo de Entrenamiento" icono={CalendarDays} href="/microciclo" descripcion="Planeación semanal · lunes a domingo" color="verde" />
         <AccesoCard titulo="Postpartido"            icono={Trophy}     href="/postpartido"  descripcion="Resultado y desempeño individual" color="verde" />
         <AccesoCard titulo="Torneos y Estadísticas" icono={Trophy}     href="/torneos"      descripcion="Deportistas por competencia" color="verde" />

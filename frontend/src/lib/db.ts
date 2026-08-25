@@ -339,6 +339,44 @@ export async function buscarPorCodigo(codigo: string): Promise<Deportista[]> {
  * Timeout 8s por intento para evitar spinner infinito.
  * Devuelve { data, error } para que la UI muestre el problema real.
  */
+/** Cuántos deportistas tiene cada proyecto, SIN bajarse las fichas.
+ *
+ *  ⚠ RENDIMIENTO (25/08/2026): la pantalla "Mis Proyectos" llamaba a
+ *  getDeportistas(), que baja las MÁS DE MIL fichas completas de la academia,
+ *  solo para escribir "25 deportistas" debajo de cada proyecto. En el celular
+ *  del formador eso eran varios megas antes de ver nada.
+ *
+ *  Esto le pregunta al servidor únicamente el número (Prefer: count=exact con
+ *  Range 0-0 no devuelve ni una fila), y solo de los proyectos del formador. */
+export async function contarDeportistasPorProyecto(
+  proyectos: string[]
+): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  const lista = (proyectos ?? []).map(p => String(p ?? '').trim()).filter(Boolean);
+  if (!lista.length) return out;
+  await Promise.all(lista.map(async proy => {
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/deportistas?select=id&columnas->>PROY=eq.${encodeURIComponent(proy)}`,
+        {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Prefer': 'count=exact',
+            'Range': '0-0',
+          },
+        }
+      );
+      const cr = res.headers.get('content-range');           // "0-0/25"
+      if (cr && cr.includes('/')) {
+        const n = parseInt(cr.split('/')[1], 10);
+        if (!Number.isNaN(n)) out[proy] = n;
+      }
+    } catch { /* si falla, ese proyecto simplemente no muestra número */ }
+  }));
+  return out;
+}
+
 export async function getDeportistasPorProyecto(
   proyecto: string
 ): Promise<{ data: Deportista[]; error: string | null }> {
@@ -1055,14 +1093,38 @@ export async function saveFoto(depId: string, base64: string): Promise<void> {
 /** Trae TODAS las fotos guardadas en la nube (deportista_id → base64).
  *  Sirve para que el admin/profe vea las fotos de todos los deportistas,
  *  no solo las que tenga en la memoria local de su dispositivo. */
-export async function getFotosDeportistas(): Promise<Record<string, string>> {
+/** Corta una lista larga en pedazos, para no armar URLs gigantes. */
+function enPedazos<T>(lista: T[], tam: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < lista.length; i += tam) out.push(lista.slice(i, i + tam));
+  return out;
+}
+
+/** Fotos de los deportistas.
+ *
+ *  ⚠ RENDIMIENTO (25/08/2026): antes esta función SIEMPRE se traía la foto de
+ *  TODOS los deportistas de la academia (más de mil imágenes en base64, decenas
+ *  de MB) aunque el formador solo estuviera viendo los 25 niños de su proyecto.
+ *  Eso era lo que hacía que la lista tardara tanto en el celular.
+ *
+ *  Ahora se le pueden pasar los `ids` que están en pantalla y trae solo esos.
+ *  Sin `ids` sigue trayendo todas (lo usa el administrador). */
+export async function getFotosDeportistas(ids?: string[]): Promise<Record<string, string>> {
   const map: Record<string, string> = {};
+  const hdr = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+  const limpios = (ids ?? []).map(s => String(s ?? '').trim()).filter(Boolean);
+  if (ids && limpios.length === 0) return map;   // pidió una lista vacía → nada que traer
+
+  const urls = limpios.length
+    ? enPedazos(limpios, 100).map(gr =>
+        `${SUPABASE_URL}/rest/v1/fotos_deportistas?select=deportista_id,base64`
+        + `&deportista_id=in.(${gr.map(id => `"${encodeURIComponent(id)}"`).join(',')})`)
+    : [`${SUPABASE_URL}/rest/v1/fotos_deportistas?select=deportista_id,base64`];
+
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/fotos_deportistas?select=deportista_id,base64`,
-      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
-    );
-    if (res.ok) {
+    const respuestas = await Promise.all(urls.map(u => fetch(u, { headers: hdr })));
+    for (const res of respuestas) {
+      if (!res.ok) continue;
       const rows = await res.json();
       if (Array.isArray(rows)) {
         for (const r of rows) if (r.deportista_id && r.base64) map[r.deportista_id] = r.base64;
@@ -1541,14 +1603,20 @@ export async function getResumenGestion(): Promise<{ conFoto: Set<string>; conDo
 }
 
 /** Resumen para el cuadro de proyecto: qué deportistas tienen documento, EPS y calificaciones. */
-export async function getResumenDocumentos(): Promise<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string>; conFoto: Set<string> }> {
+/** Quién tiene documento / EPS / notas escolares / foto.
+ *  Con `ids` consulta solo esos deportistas (el formador ve un solo proyecto);
+ *  sin `ids` consulta toda la academia. — 25/08/2026 */
+export async function getResumenDocumentos(ids?: string[]): Promise<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string>; conFoto: Set<string> }> {
   const conDoc = new Set<string>(), conEps = new Set<string>(), conEsc = new Set<string>(), conFoto = new Set<string>();
+  const limpios = (ids ?? []).map(s => String(s ?? '').trim()).filter(Boolean);
+  if (ids && limpios.length === 0) return { conDoc, conEps, conEsc, conFoto };
+  const soloEstos = (q: any): any => (limpios.length ? q.in('deportista_id', limpios) : q);
   try {
     const [docsRes, escRes, fotoRes] = await Promise.all([
-      supabase().from('documentos_deportista').select('deportista_id, tipo'),
-      supabase().from('calificaciones_escolares').select('deportista_id'),
+      soloEstos(supabase().from('documentos_deportista').select('deportista_id, tipo')),
+      soloEstos(supabase().from('calificaciones_escolares').select('deportista_id')),
       // Solo el id (sin base64): chequeo LIVIANO de "¿tiene foto?" sin descargar la imagen.
-      supabase().from('fotos_deportistas').select('deportista_id').neq('base64', ''),
+      soloEstos(supabase().from('fotos_deportistas').select('deportista_id').neq('base64', '')),
     ]);
     for (const r of (docsRes.data ?? []) as any[]) {
       if (r.tipo === 'eps') conEps.add(r.deportista_id);
@@ -2345,12 +2413,30 @@ export interface Evaluacion {
 const LS_EVALUACIONES = 'futuro_evaluaciones';
 
 /** Lee el historial de evaluaciones, opcionalmente filtrado por código de deportista. */
+/** Marca si la ÚLTIMA lectura de evaluaciones salió del servidor (true) o de la
+ *  copia guardada en este navegador (false). La pantalla de valoración la usa
+ *  para avisarle al formador que está viendo datos viejos. */
+export let ultimaLecturaEvaluacionesEnLinea = true;
+
 export async function getEvaluaciones(codigo?: string): Promise<Evaluacion[]> {
   try {
-    let query = supabase().from('evaluaciones').select('*').order('created_at', { ascending: false });
-    if (codigo) query = query.eq('codigo', codigo.trim().toUpperCase());
-    const { data, error } = await query;
-    if (error) throw error;
+    // Se intenta dos veces: en el celular del formador, con datos móviles, la
+    // primera petición falla a menudo y antes se caía derecho a la copia vieja.
+    const pedir = async () => {
+      let query = supabase().from('evaluaciones').select('*').order('created_at', { ascending: false });
+      if (codigo) query = query.eq('codigo', codigo.trim().toUpperCase());
+      const r = await query;
+      if (r.error) throw r.error;
+      return r;
+    };
+    let data: any[] | null = null;
+    try {
+      ({ data } = await pedir());
+    } catch {
+      await new Promise(res => setTimeout(res, 900));
+      ({ data } = await pedir());
+    }
+    ultimaLecturaEvaluacionesEnLinea = true;
 
     const lista: Evaluacion[] = (data ?? []).map((r: any) => ({
       id: r.id, fecha: r.fecha, codigo: r.codigo, nombre: r.nombre ?? '', edad: r.edad ?? '',
@@ -2398,7 +2484,9 @@ export async function getEvaluaciones(codigo?: string): Promise<Evaluacion[]> {
     // deportista puntual, pisar la cache dejaria al resto sin respaldo.
     if (!codigo) lsSet(LS_EVALUACIONES, lista);
     return lista;
-  } catch {
+  } catch (e) {
+    console.warn('[db] getEvaluaciones: sin conexión, se muestra la copia de este navegador.', e);
+    ultimaLecturaEvaluacionesEnLinea = false;
     const cached = lsGet<Evaluacion[]>(LS_EVALUACIONES, []);
     return codigo ? cached.filter(e => e.codigo === codigo.trim().toUpperCase()) : cached;
   }
@@ -2424,16 +2512,23 @@ export interface EvaluacionResumen {
 
 const LS_EVALS_RESUMEN = 'futuro_evaluaciones_resumen';
 
-export async function getEvaluacionesResumen(): Promise<EvaluacionResumen[]> {
+/** Resumen de informes. Con `codigos` trae solo los de esos deportistas
+ *  (el formador ve un solo proyecto); sin `codigos` trae los de toda la
+ *  academia, que es lo que necesita Control de Informes. — 25/08/2026 */
+export async function getEvaluacionesResumen(codigos?: string[]): Promise<EvaluacionResumen[]> {
   const paso = 1000;
   const out: EvaluacionResumen[] = [];
+  const cods = (codigos ?? []).map(c => String(c ?? '').trim().toUpperCase()).filter(Boolean);
+  if (codigos && cods.length === 0) return out;
   try {
     for (let desde = 0; desde < 200000; desde += paso) {
-      const { data, error } = await supabase()
+      let q = supabase()
         .from('evaluaciones')
         .select('id, codigo, fecha, numero_informe')
         .order('id', { ascending: true })
         .range(desde, desde + paso - 1);
+      if (cods.length) q = q.in('codigo', cods) as typeof q;
+      const { data, error } = await q;
       if (error) throw error;
       const lote = data ?? [];
       for (const r of lote as any[]) {
@@ -2446,21 +2541,28 @@ export async function getEvaluacionesResumen(): Promise<EvaluacionResumen[]> {
       }
       if (lote.length < paso) break;
     }
-    lsSet(LS_EVALS_RESUMEN, out);
+    // Solo se guarda la copia cuando se pidió TODO; si se pidió un puñado de
+    // códigos, pisarla dejaría al resto de la academia sin respaldo.
+    if (!cods.length) lsSet(LS_EVALS_RESUMEN, out);
     return out;
   } catch {
     // Sin conexion: se usa lo ultimo que se alcanzo a guardar en este navegador.
-    return lsGet<EvaluacionResumen[]>(LS_EVALS_RESUMEN, []);
+    const cache = lsGet<EvaluacionResumen[]>(LS_EVALS_RESUMEN, []);
+    return cods.length ? cache.filter(e => cods.includes(e.codigo)) : cache;
   }
 }
 
-/** Guarda una NUEVA evaluación (siempre inserta — cada guardado queda en el historial). */
-export async function saveEvaluacion(data: Omit<Evaluacion, 'id'>): Promise<void> {
+/** Guarda una NUEVA evaluación (siempre inserta — cada guardado queda en el historial).
+ *
+ *  ⚠ IMPORTANTE (25/08/2026): antes esta función se TRAGABA los errores: si el
+ *  insert fallaba solo escribía en la consola y la pantalla igual decía
+ *  "¡Guardado!". Por eso varios formadores creían haber subido el informe y
+ *  después no aparecía. Ahora, si falla, LANZA el error para que la pantalla
+ *  pueda avisar de verdad. Devuelve el id de la fila insertada. */
+export async function saveEvaluacion(data: Omit<Evaluacion, 'id'>): Promise<string> {
   const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-  const cached = lsGet<Evaluacion[]>(LS_EVALUACIONES, []);
-  lsSet(LS_EVALUACIONES, [{ ...data, id }, ...cached]);
 
-  try {
+  {
     const row = {
       id, fecha: data.fecha, codigo: data.codigo.trim().toUpperCase(), nombre: data.nombre, edad: data.edad,
       proyecto: data.proyecto, perfil: data.perfil, posicion: data.posicion,
@@ -2505,9 +2607,16 @@ export async function saveEvaluacion(data: Omit<Evaluacion, 'id'>): Promise<void
       observaciones: data.observaciones,
     };
     const { error } = await supabase().from('evaluaciones').insert(row);
-    if (error) console.error('[db] saveEvaluacion:', error.message);
-  } catch (e) {
-    console.error('[db] saveEvaluacion:', e);
+    if (error) {
+      console.error('[db] saveEvaluacion:', error.message);
+      throw new Error(error.message || 'No se pudo guardar la valoración.');
+    }
+    // La copia local SOLO se guarda cuando el servidor confirmó. Antes se
+    // escribía primero, así que un guardado fallido dejaba un informe fantasma
+    // que el formador veía en su teléfono y nadie más.
+    const cached = lsGet<Evaluacion[]>(LS_EVALUACIONES, []);
+    lsSet(LS_EVALUACIONES, [{ ...data, id } as Evaluacion, ...cached]);
+    return id;
   }
 }
 

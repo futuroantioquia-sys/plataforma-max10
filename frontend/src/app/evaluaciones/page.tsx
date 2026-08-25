@@ -704,6 +704,14 @@ function ValoracionPageInner() {
   const [encontrado,  setEncontrado]  = useState('');
   const [historial,   setHistorial]   = useState<Evaluacion[]>([]);
   const [verHistorial, setVerHistorial] = useState(false);
+  /* ── AVISO DE GUARDADO ────────────────────────────────────────────────────
+     Antes lo único que confirmaba el guardado era la palabra "¡Guardado!" en
+     el botón, durante 2 segundos. En el celular el formador termina el
+     formulario abajo del todo, alcanza a ver el parpadeo y ya. Por eso varios
+     decían "guardé y no me aparece". Ahora queda un aviso fijo que dice
+     cuántos informes tiene el deportista, y si algo falla lo dice en rojo.
+     — 25/08/2026 */
+  const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
   // Si estamos EDITANDO una valoración del historial, guardamos su id: al guardar,
   // se reemplaza esa misma (no se crea una duplicada).
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -861,7 +869,7 @@ function ValoracionPageInner() {
       textosManual.current = true;   // respetar los logros/objetivos ya guardados
       const { id, ...resto } = historial[0];
       const infoGuardado = String((resto as any).numeroInforme ?? '').trim();
-      setData(prev => ({ ...prev, ...resto, numeroInforme: infoGuardado || String(Math.min(historial.length, 4)) }));
+      setData(prev => ({ ...prev, ...resto, numeroInforme: infoGuardado || primerInformeLibre(historial) }));
     } else {
       // Sin valoraciones previas → la próxima será la #1
       setData(prev => ({ ...prev, numeroInforme: prev.numeroInforme || '1' }));
@@ -952,6 +960,11 @@ function ValoracionPageInner() {
     if (!data.programa.trim())      f.push('Programa');
     if (!data.proyecto.trim())      f.push('Proyecto');
     if (!data.fecha.trim())         f.push('Fecha Informe');
+    /* NÚMERO DE INFORME — obligatorio desde el 25/08/2026.
+       Antes se podía guardar con esta casilla vacía, y ese informe quedaba
+       "suelto": no salía ni en INFORME 1 ni en INFORME 2 de Control de
+       Informes, así que el formador creía que no se había guardado. */
+    if (!data.numeroInforme.trim()) f.push('Informe (1, 2, 3 o 4)');
     if (!data.posicion.trim())      f.push('Posición');
     if (!data.perfil.trim())        f.push('Perfil');
     if (!data.fuerzaNivel)      f.push('Fuerza');
@@ -1002,13 +1015,45 @@ function ValoracionPageInner() {
       return;
     }
     setGuardando(true);
+    setAviso(null);
     try {
-      await saveEvaluacion(data);
+      const nuevoId = await saveEvaluacion(data);
       // Si venía de "Editar", reemplaza la valoración anterior (borra la vieja) para no duplicar.
       if (editandoId) { await borrarEvaluacionPorId(editandoId); setEditandoId(null); }
-      setGuardado(true);
-      setTimeout(() => setGuardado(false), 2000);
-      getEvaluaciones(data.codigo).then(setHistorial);
+
+      /* Se vuelve a leer del servidor y se COMPRUEBA que el informe recién
+         guardado esté ahí de verdad. Si no aparece, se dice; no se finge que
+         todo salió bien. */
+      let lista: Evaluacion[] = [];
+      try { lista = await getEvaluaciones(data.codigo); } catch { lista = []; }
+      setHistorial(lista);
+
+      const quedo = lista.some(e => e.id === nuevoId);
+      if (quedo) {
+        setGuardado(true);
+        setTimeout(() => setGuardado(false), 2000);
+        const n = String(data.numeroInforme || '').trim();
+        setAviso({
+          tipo: 'ok',
+          texto: `Informe ${n || '—'} de ${data.nombre || data.codigo} GUARDADO. `
+               + `Este deportista ya tiene ${lista.length} ${lista.length === 1 ? 'informe guardado' : 'informes guardados'}.`,
+        });
+        setVerHistorial(true);   // que lo vea con sus propios ojos, sin buscar el botón
+      } else {
+        setAviso({
+          tipo: 'error',
+          texto: 'El informe se envió, pero no se pudo confirmar que quedara guardado '
+               + '(puede ser la conexión). Revisa la señal y oprime GUARDAR otra vez. '
+               + 'No cierres esta pantalla todavía.',
+        });
+      }
+    } catch (e: any) {
+      setGuardado(false);
+      setAviso({
+        tipo: 'error',
+        texto: 'NO se guardó el informe: ' + (e?.message || 'error desconocido')
+             + '. Revisa la conexión y vuelve a oprimir GUARDAR. No cierres esta pantalla.',
+      });
     } finally {
       setGuardando(false);
     }
@@ -1058,7 +1103,7 @@ function ValoracionPageInner() {
       codigo: p.codigo, nombre: p.nombre, fechaNac: p.fechaNac,
       programa: p.programa, proyecto: p.proyecto, perfil: p.perfil, posicion: p.posicion,
       foto: p.foto,
-      numeroInforme: String(Math.min(historial.length + 1, 4)),
+      numeroInforme: primerInformeLibre(historial),
     }));
   };
 
@@ -1383,6 +1428,33 @@ function ValoracionPageInner() {
       {/* Espaciador: compensa la altura de la barra fija para que no tape el contenido */}
       <div className="print:hidden" style={{ height: toolbarH }} />
 
+      {/* ── AVISO DE GUARDADO — queda fijo hasta que el formador lo cierre ── */}
+      {aviso && (
+        <div className="print:hidden"
+          style={{
+            position: 'fixed', left: 0, right: 0, top: toolbarH, zIndex: 60,
+            background: aviso.tipo === 'ok' ? '#00B050' : '#C0504D',
+            color: '#fff', padding: '12px 16px',
+            display: 'flex', alignItems: 'center', gap: 12,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+          }}>
+          <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>
+            {aviso.tipo === 'ok' ? '✓' : '⚠'}
+          </span>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 800, lineHeight: 1.35 }}>
+            {aviso.texto}
+          </span>
+          <button onClick={() => setAviso(null)}
+            style={{
+              flexShrink: 0, background: 'rgba(255,255,255,0.22)', border: 'none',
+              color: '#fff', fontWeight: 900, fontSize: 13, borderRadius: 8,
+              minWidth: 44, minHeight: 36, cursor: 'pointer',
+            }}>
+            OK
+          </button>
+        </div>
+      )}
+
       {/* HISTORIAL DE EVALUACIONES DEL DEPORTISTA */}
       {verHistorial && historial.length > 0 && (
         <div className="print:hidden" style={{ maxWidth: 780, margin: '0 auto', background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '10px 16px' }}>
@@ -1489,10 +1561,21 @@ function ValoracionPageInner() {
                       {/* INFORME + PERFIL */}
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>INFORME</span>
+                          {/* Obligatorio: sin número el informe queda "suelto" y
+                              nadie lo ve en Control de Informes. — 25/08/2026 */}
+                          <span style={{ background: err('numeroInforme') ? '#C0504D' : '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>INFORME</span>
                           <select value={data.numeroInforme} onChange={e => set('numeroInforme', e.target.value)}
-                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('numeroInforme') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
-                            <option value="">—</option>
+                            title="Obligatorio: elige si es el Informe 1, 2, 3 o 4"
+                            style={{
+                              background: err('numeroInforme') ? '#fde8e8' : 'transparent',
+                              border: err('numeroInforme') ? '1.5px solid #C0504D' : 'none',
+                              borderBottom: err('numeroInforme') ? '1.5px solid #C0504D' : '1px solid transparent',
+                              borderRadius: err('numeroInforme') ? 5 : 0,
+                              outline: 'none', color: err('numeroInforme') ? '#7f1d1d' : '#222',
+                              fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                              fontFamily: 'Arial, sans-serif', padding: err('numeroInforme') ? '1px 4px' : 0,
+                            }}>
+                            <option value="">— Elige 1, 2, 3 o 4 —</option>
                             {[1, 2, 3, 4].map(n => <option key={n} value={String(n)}>Informe {n}</option>)}
                           </select>
                         </div>
@@ -1852,6 +1935,21 @@ function ValoracionPageInner() {
       `}</style>
     </div>
   );
+}
+
+/** El primer número de informe LIBRE (1 a 4) para este deportista.
+ *  Antes se usaba "cuántas evaluaciones tiene + 1", y eso numeraba mal: si un
+ *  niño ya tenía una evaluación vieja SIN número, la siguiente salía como
+ *  Informe 2 aunque el profe estuviera haciendo el Informe 1. Después, en
+ *  Control de Informes, la casilla del Informe 1 quedaba vacía y el profe creía
+ *  que no se le había guardado. — 25/08/2026 */
+function primerInformeLibre(historial: any[]): string {
+  const usados = new Set(
+    (historial ?? [])
+      .map(e => String((e as any)?.numeroInforme ?? '').trim())
+      .filter(n => ['1', '2', '3', '4'].includes(n)),
+  );
+  return ['1', '2', '3', '4'].find(n => !usados.has(n)) ?? '4';
 }
 
 export default function ValoracionPage() {

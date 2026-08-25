@@ -126,9 +126,32 @@ export default function ControlInformesPage() {
       const codigo = codigoDe(dep).toUpperCase();
       const proyecto = proyectoDe(dep);
       const mis = evalsPorCod[codigo] ?? [];
-      const buscarInf = (n: string) => mis.find(e => String(e.numeroInforme ?? '').trim() === n);
-      const i1 = buscarInf('1');
-      const i2 = buscarInf('2');
+      /* ── QUÉ INFORME ES CADA UNO ────────────────────────────────────────
+         Antes esto solo miraba el campo "numeroInforme". Problema: muchas
+         evaluaciones viejas se guardaron SIN ese número (quedó vacío), y otras
+         quedaron numeradas mal. Esas no aparecían en ninguna de las dos
+         columnas, y el profe que acababa de guardar su informe veía la casilla
+         vacía y creía que no se había guardado.
+
+         Ahora: las que traen número bueno (1 a 4) se respetan tal cual; las que
+         no lo traen se acomodan por FECHA en los puestos que queden libres. Así
+         ninguna evaluación guardada se pierde de vista. — 25/08/2026 */
+      const esNum = (e: any) => ['1', '2', '3', '4'].includes(String(e?.numeroInforme ?? '').trim());
+      const porPuesto: Record<string, any> = {};
+      mis.filter(esNum).forEach(e => {
+        const n = String(e.numeroInforme).trim();
+        if (!porPuesto[n]) porPuesto[n] = e;          // si hay dos con el mismo, manda el primero
+      });
+      const sueltas = mis
+        .filter(e => !esNum(e) || porPuesto[String(e.numeroInforme).trim()] !== e)
+        .sort((a, b) => String(a.fecha ?? '').localeCompare(String(b.fecha ?? '')));
+      for (const e of sueltas) {
+        const libre = ['1', '2', '3', '4'].find(n => !porPuesto[n]);
+        if (!libre) break;
+        porPuesto[libre] = e;
+      }
+      const i1 = porPuesto['1'];
+      const i2 = porPuesto['2'];
       const ultima = mis.reduce((acc, e) => (e.fecha && e.fecha > acc ? e.fecha : acc), '');
       return {
         id: dep.id,

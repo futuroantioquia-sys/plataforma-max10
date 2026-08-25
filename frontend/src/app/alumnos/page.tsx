@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -421,7 +421,11 @@ function DashboardProyecto({
   useEffect(() => {
     // Resumen liviano (codigo + numero de informe). Antes se traia la
     // valoracion COMPLETA de cada deportista, fotos incluidas.
-    getEvaluacionesResumen().then(evs => {
+    // Desde el 25/08/2026 se piden SOLO los codigos que estan en pantalla:
+    // antes se recorria la tabla entera de informes de toda la academia.
+    const cods = lista.map(d => getCol(d, /^c[oó]d/i).trim().toUpperCase()).filter(Boolean);
+    if (!cods.length) { setInfMap({}); return; }
+    getEvaluacionesResumen(cods).then(evs => {
       const m: Record<string, Set<string>> = {};
       evs.forEach((ev: any) => {
         const c = String(ev.codigo ?? '').trim().toUpperCase();
@@ -431,7 +435,8 @@ function DashboardProyecto({
       });
       setInfMap(m);
     }).catch(() => {});
-  }, [esProfe]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esProfe, lista.length, proy]);
 
   // ── Subir foto del deportista desde el listado (profe/admin) ──
   const [fotosLocal,   setFotosLocal]   = useState<Record<string, string>>({});
@@ -1000,15 +1005,32 @@ function AlumnosPageContent() {
   useEffect(() => { getCodigosConAcceso().then(setAccesos).catch(() => {}); }, []);
   // Resumen de cargue: qué deportistas tienen documento (TI/RC), EPS y calificaciones escolares
   const [resumen, setResumen] = useState<{ conDoc: Set<string>; conEps: Set<string>; conEsc: Set<string>; conFoto: Set<string> }>({ conDoc: new Set(), conEps: new Set(), conEsc: new Set(), conFoto: new Set() });
-  useEffect(() => { getResumenDocumentos().then(setResumen).catch(() => {}); }, []);
   const soloLectura = useSoloLectura(); // contabilidad: solo ver
-  // Fotos desde la nube: para que el admin/profe vea TODAS las fotos subidas,
-  // no solo las que estén en la memoria local de este dispositivo.
+
+  /* ── RENDIMIENTO (25/08/2026) ────────────────────────────────────────────
+     Estas dos consultas se disparaban apenas abría la pantalla y traían los
+     datos de TODA la academia: el resumen de documentos y —lo más pesado de
+     todo— la FOTO en base64 de los más de mil deportistas. El formador solo
+     está viendo los 25 niños de su proyecto; bajaba decenas de megas para
+     nada, y en el celular eso son minutos.
+
+     Ahora esperan a que esté la lista en pantalla y piden únicamente esos. */
+  const idsEnPantalla = useMemo(
+    () => deportistas.map(d => d.id).filter(Boolean),
+    [deportistas]
+  );
+  const clave = idsEnPantalla.join(',');
   useEffect(() => {
-    getFotosDeportistas().then(cloud => {
+    if (!idsEnPantalla.length) return;
+    // Con listas muy grandes (el administrador ve toda la academia) sale más
+    // barato pedir la tabla completa que armar una dirección con mil códigos.
+    const acotar = idsEnPantalla.length <= 300 ? idsEnPantalla : undefined;
+    getResumenDocumentos(acotar).then(setResumen).catch(() => {});
+    getFotosDeportistas(acotar).then(cloud => {
       if (cloud && Object.keys(cloud).length) setFotos(prev => ({ ...prev, ...cloud }));
     }).catch(() => {});
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clave]);
 
   // Backup a Excel/CSV de TODOS los deportistas (botón "Backup Excel").
   function exportarExcel() {

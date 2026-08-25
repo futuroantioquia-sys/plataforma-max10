@@ -269,3 +269,17 @@
  GET /api/pagos/soportes?solo=count 200 in 529ms
  GET /api/deportistas 200 in 2509ms
  GET /api/deportistas 200 in 2549ms
+ GET /api/pagos/soportes?solo=count 200 in 2579ms
+ GET /api/pagos/soportes?solo=count 200 in 2581ms
+ ○ Compiling /pagos-pendientes ...
+ ✓ Compiled /pagos-pendientes in 2.4s (1493 modules)
+ ✓ Compiled in 492ms (745 modules)
+ GET /api/pagos/soportes 200 in 381ms
+ GET /api/pagos/soportes 200 in 492ms
+ ✓ Compiled /api/pagos/soportes/datos in 341ms (750 modules)
+ GET /api/pagos/soportes/datos?id=1033708d-7fd1-4a34-bf24-a50d18986a73 200 in 2448ms
+ GET /api/pagos/soportes/datos?id=1033708d-7fd1-4a34-bf24-a50d18986a73 200 in 3138ms
+ GET /api/pagos/soportes/datos?id=49b8113e-e30d-4715-85d6-e10129d9bde4 200 in 7227ms
+ ✓ Compiled /api/pagos/soportes in 958ms (1452 modules)
+ ✓ Compiled in 0ms (740 modules)
+ GET /api/pagos/soportes 200 in 1975ms

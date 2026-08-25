@@ -208,6 +208,9 @@ export default function PerfilDeportista() {
   // Vista Dinámica: elegir qué informe revisar cuando hay más de uno
   const [showElegirVD, setShowElegirVD] = useState(false);
   const [vdInformes, setVdInformes]     = useState<Evaluacion[]>([]);
+  // Si la consulta falla, NO se puede decir "aún no hay valoraciones": eso hacía
+  // creer al formador que su informe no se había guardado. — 25/08/2026
+  const [errorInf, setErrorInf]         = useState(false);
   const [cargandoVD, setCargandoVD]     = useState(false);
   const inputTIRef  = useRef<HTMLInputElement>(null);
   const inputRCRef  = useRef<HTMLInputElement>(null);
@@ -437,10 +440,11 @@ export default function PerfilDeportista() {
   async function abrirInformes() {
     setShowInformes(true);
     const cod = String(codigoVal || '').trim();
+    setErrorInf(false);
     if (!cod) { setHistorialInf([]); return; }
     setCargandoInf(true);
     try { setHistorialInf(await getEvaluaciones(cod)); }
-    catch { setHistorialInf([]); }
+    catch { setHistorialInf([]); setErrorInf(true); }
     finally { setCargandoInf(false); }
   }
   async function eliminarInf(ev: Evaluacion) {
@@ -1122,6 +1126,12 @@ export default function PerfilDeportista() {
                 <p className="text-[11px] font-black text-gray-500 uppercase tracking-wide mb-2">Historial de valoraciones ({historialInf.length})</p>
                 {cargandoInf ? (
                   <p className="text-center text-gray-400 text-sm py-6">Cargando…</p>
+                ) : errorInf ? (
+                  <div className="text-center text-[13px] py-5 px-3 rounded-xl border-[1.5px] border-red-200 bg-red-50 text-red-700 font-bold leading-snug">
+                    ⚠ No se pudo consultar el historial (problema de conexión).<br/>
+                    <span className="font-semibold">Esto NO quiere decir que el informe no esté guardado.</span><br/>
+                    Revisa la señal y vuelve a abrir esta ventana.
+                  </div>
                 ) : historialInf.length === 0 ? (
                   <p className="text-center text-gray-400 text-sm py-6 border border-dashed border-gray-200 rounded-xl">Aún no hay valoraciones guardadas.</p>
                 ) : (

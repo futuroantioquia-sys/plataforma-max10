@@ -1,15 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Users } from 'lucide-react';
-import { getProfes, getDeportistas } from '@/lib/db';
-
-function getCol(dep: any, rx: RegExp): string {
-  const cols = dep._columnas ?? {};
-  const k = Object.keys(cols).find((c: string) => rx.test(c.trim()));
-  return k ? String(cols[k] ?? '') : '';
-}
+import { getProfes, contarDeportistasPorProyecto } from '@/lib/db';
 
 export default function MisProyectosPage() {
   const router = useRouter();
@@ -17,7 +11,7 @@ export default function MisProyectosPage() {
   const [nombreProfe, setNombreProfe] = useState('');
   const [fotoProfe,   setFotoProfe]   = useState('');
   const [proyectosProfe, setProyectosProfe] = useState<string[]>([]);
-  const [deportistas,    setDeportistas]    = useState<any[]>([]);
+  const [conteoProyecto, setConteoProyecto] = useState<Record<string, number>>({});
   const [cargando,       setCargando]       = useState(true);
   useEffect(() => {
     // 1. Nombre y foto desde localStorage (inmediato)
@@ -37,6 +31,7 @@ export default function MisProyectosPage() {
 
     // 2. Proyectos: primero localStorage (rápido), luego Supabase (preciso)
     async function cargar() {
+      let proyectos: string[] = [];
       try {
         const rawNombre = localStorage.getItem('futuro-profe-nombre');
         const nombre = rawNombre ? JSON.parse(rawNombre) : '';
@@ -44,7 +39,7 @@ export default function MisProyectosPage() {
         // Intentar desde localStorage primero (rápido)
         const rawLS = localStorage.getItem('futuro-profe-proyectos');
         const proyLS: string[] = rawLS ? JSON.parse(rawLS) : [];
-        if (proyLS.length) setProyectosProfe(proyLS);
+        if (proyLS.length) { setProyectosProfe(proyLS); proyectos = proyLS; setCargando(false); }
 
         // Luego desde Supabase para garantizar data fresca
         if (nombre) {
@@ -55,6 +50,7 @@ export default function MisProyectosPage() {
           if (profe) {
             if (profe.proyectos.length > 0) {
               setProyectosProfe(profe.proyectos);
+              proyectos = profe.proyectos;
               try {
                 localStorage.setItem('futuro-profe-proyectos', JSON.stringify(profe.proyectos));
               } catch {}
@@ -67,26 +63,19 @@ export default function MisProyectosPage() {
         }
       } catch {}
 
-      // 3. Cargar deportistas para contar alumnos por proyecto
-      try {
-        const lista = await getDeportistas();
-        setDeportistas(lista);
-      } catch {}
-
       setCargando(false);
+
+      /* 3. El número de deportistas de cada proyecto se pide APARTE y al final:
+            la lista de proyectos ya está en pantalla, y el conteo llega solo.
+            Antes esto bajaba las más de mil fichas de la academia y el
+            formador se quedaba mirando "Cargando tus proyectos…". */
+      try {
+        const conteos = await contarDeportistasPorProyecto(proyectos);
+        setConteoProyecto(conteos);
+      } catch {}
     }
     cargar();
   }, []);
-
-  // Contar deportistas por proyecto
-  const conteoProyecto = useMemo(() => {
-    const map: Record<string, number> = {};
-    deportistas.forEach(dep => {
-      const proy = getCol(dep, /^proy/i).trim();
-      if (proy) map[proy] = (map[proy] ?? 0) + 1;
-    });
-    return map;
-  }, [deportistas]);
 
   const primerNombre = nombreProfe ? nombreProfe.split(' ')[0] : 'Profe';
   // Paleta del sistema (la del consolidado de asistencias)
@@ -176,7 +165,7 @@ export default function MisProyectosPage() {
         ) : (
           <div className="space-y-3">
             {proyectosProfe.map(proy => {
-              const alumnos = conteoProyecto[proy] ?? 0;
+              const alumnos = conteoProyecto[proy] ?? -1;   // -1 = todavía contando
               return (
                 <button
                   key={proy}
@@ -200,7 +189,7 @@ export default function MisProyectosPage() {
                       <p className="font-black text-white text-base leading-tight truncate">{proy}</p>
                       <p className="text-white/45 text-xs mt-0.5 flex items-center gap-1">
                         <Users className="w-3.5 h-3.5 inline"/>
-                        {alumnos > 0 ? `${alumnos} deportistas` : 'Cargando…'}
+                        {alumnos < 0 ? 'Contando…' : `${alumnos} ${alumnos === 1 ? 'deportista' : 'deportistas'}`}
                       </p>
                     </div>
                     {/* Flecha */}
