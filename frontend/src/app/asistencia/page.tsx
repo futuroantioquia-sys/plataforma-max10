@@ -454,9 +454,20 @@ function AsistenciaInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cuando profe cambia de proyecto manualmente → carga los atletas del nuevo proyecto
+  /* Cuando se cambia de proyecto manualmente → carga los atletas del nuevo.
+     Antes se comparaba contra el proyecto de la dirección web, así que si el
+     formador se iba a otro proyecto y VOLVÍA al primero, la pantalla no
+     recargaba y quedaba mostrando la lista del otro. Ahora se recuerda cuál
+     fue el último que se cargó de verdad. — 25/08/2026 */
+  const proyectoCargado = useRef<string | null>(null);
   useEffect(() => {
-    if (!proyecto || proyecto === TODOS || proyecto === searchParams.get('proyecto')) return;
+    if (!proyecto || proyecto === TODOS) return;
+    if (proyectoCargado.current === null && proyecto === searchParams.get('proyecto')) {
+      proyectoCargado.current = proyecto;   // el de la dirección ya lo cargó el arranque
+      return;
+    }
+    if (proyectoCargado.current === proyecto) return;
+    proyectoCargado.current = proyecto;
     if (esProfe) {
       // Profe cambia de proyecto → recargar deportistas + asistencia por IDs
       setCargandoProy(true);
@@ -1523,8 +1534,16 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
           <button
             className="w-full flex items-center justify-between px-4 py-3 sm:hidden"
             onClick={() => setControlesAbiertos(v => !v)}>
-            <span className="text-sm font-black text-white/80">
-              {esResumen ? `📊 ${esTodosProy ? 'Todos' : proyecto} · consolidado ${anio}` : proyecto ? `📋 ${proyecto} · ${MESES[mes]} ${anio}` : '⚙️ Configurar asistencia'}
+            {/* Antes esta barra repetía "SUB 8A · Agosto 2026", que ya está
+                abajo en el título de la tabla y en los propios selectores.
+                Ahora solo dice qué es y para qué se abre. — 25/08/2026 */}
+            <span className="text-sm font-black text-white/80 text-left">
+              ⚙️ Ajustes
+              {esProfe && proyectos.length > 1 && !controlesAbiertos && (
+                <span className="block text-[10px] font-bold normal-case mt-0.5" style={{ color: '#00B050' }}>
+                  toca para cambiar de proyecto
+                </span>
+              )}
             </span>
             {controlesAbiertos ? <ChevronUp className="w-4 h-4 text-white/50" /> : <ChevronDown className="w-4 h-4 text-white/50" />}
           </button>
@@ -1545,7 +1564,7 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                 </div>
               )}
 
-              {/* Proyecto */}
+              {/* Proyecto — solo admin. El formador lo tiene al lado del MES. */}
               {!esProfe && (
                 <div className="flex-1 min-w-[160px]">
                   <label className="block text-[10px] font-black text-white/55 uppercase tracking-widest mb-1">Proyecto</label>
@@ -1664,8 +1683,24 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                 </button>
               </div>
 
-              {/* Mes + Año en fila */}
-              <div className="flex gap-2">
+              {/* Proyecto + Mes + Año en fila */}
+              <div className="flex gap-2 flex-wrap">
+                {/* CAMBIAR DE PROYECTO SIN SALIR DE ASISTENCIA — 25/08/2026
+                    El formador tenía que volver a Mis Proyectos para pasarse a
+                    su otro grupo. Ahora lo cambia aquí mismo, al lado del mes.
+                    Solo aparece si tiene más de un proyecto asignado. */}
+                {esProfe && proyectos.length > 1 && (
+                  <div className="min-w-[130px] flex-1">
+                    <label className="block text-[10px] font-black text-white/55 uppercase tracking-widest mb-1">
+                      Proyecto <span className="normal-case tracking-normal font-bold text-[#00B050]">· cámbialo aquí</span>
+                    </label>
+                    <select value={proyecto} onChange={e => setProyecto(e.target.value)}
+                      className="w-full rounded-lg px-2 py-1.5 text-sm font-black focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white border"
+                      style={{ background: CAMPO, borderColor: '#00B050' }}>
+                      {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="min-w-[145px]">
                   <label className="block text-[10px] font-black text-white/55 uppercase tracking-widest mb-1">Mes</label>
                   <select value={mes} onChange={e => setMes(Number(e.target.value))}

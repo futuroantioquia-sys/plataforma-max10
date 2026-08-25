@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Users, Search, FileSpreadsheet, Trash2,
   ChevronRight, ArrowLeft, Camera, GraduationCap,
-  LayoutGrid, TableProperties, ChevronDown, Download, Loader2, ClipboardList, Home, CalendarDays,
+  LayoutGrid, TableProperties, ChevronDown, Download, Loader2, ClipboardList, CalendarDays,
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
@@ -1729,44 +1729,75 @@ function AlumnosPageContent() {
   const palProy   = PALETA[proysSorted.findIndex(([n]) => n === proy) % PALETA.length];
   const listaProy = porProy[proy] ?? [];
 
+  /* ── ENCABEZADO DEL PROYECTO ──────────────────────────────────────────────
+     En el celular los dos botones no cabían al lado del nombre del proyecto:
+     el de MICROCICLOS quedaba cortado diciendo solo "MICRO" y había que
+     deslizar a un lado para alcanzarlo.
+
+     Todo va en UN SOLO RENGLÓN. Para que quepa: letra más pequeña, se quitó el
+     botón de inicio (la flecha de atrás ya lleva a Mis Proyectos, y además está
+     el redondo verde de abajo a la derecha) y los dos botones se reparten el
+     espacio que sobra, dejando que el texto se parta en dos líneas adentro si
+     hace falta. En el computador se ve como siempre.
+     — 25/08/2026 */
+  const mostrarAcciones = (esProfe || !!searchParams.get('proyecto')) && !!proy;
+  const irAsistencia = () => router.push(`/asistencia?proyecto=${encodeURIComponent(proy!)}`);
+  const irMicrociclo = () => router.push(
+    `/microciclo?proyecto=${encodeURIComponent(proy!)}`
+    + `&programa=${encodeURIComponent(programa ?? '')}`
+  );
+  const CLASE_ACCION = cn(
+    'bg-white text-[#16a34a] rounded-xl font-black hover:bg-green-50 transition shadow-sm',
+    'flex items-center justify-center text-center leading-[1.15]',
+    // Celular: se reparten lo que sobra del renglón, letra chica.
+    'flex-1 min-w-0 min-h-[38px] gap-1 px-1.5 py-1 text-[10px]',
+    // Computador: como siempre, al tamaño de su texto y en una sola línea.
+    'sm:flex-none sm:min-h-0 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs sm:whitespace-nowrap',
+  );
+
+  /* El distintivo del proyecto va en dos renglones — "SUB" arriba y "8A"
+     abajo — igual que el de Mis Proyectos. Así ocupa menos a lo ancho y les
+     deja más espacio a los dos botones. Los proyectos que son solo un número
+     (43, 20, 48B…) quedan en un solo renglón. — 25/08/2026 */
+  const [proyArriba, ...proyResto] = String(proy ?? '').trim().split(/\s+/);
+  const proyAbajo = proyResto.join(' ');
+
   return (
     <div style={{ background: LIENZO }} className="min-h-screen">
-      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-10">
-        <button onClick={() => (esProfe || !!searchParams.get('proyecto')) ? router.push('/mis-proyectos') : setProy(null)}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0"
-          title="Atrás">
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        {(esProfe || !!searchParams.get('proyecto')) && (
-          <button onClick={() => router.push('/mis-proyectos')}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0"
-            title="Inicio – Mis Proyectos">
-            <Home className="w-4 h-4" />
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-2.5 sm:px-6 py-2.5 sm:py-4 sticky top-0 z-10">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          <button onClick={() => (esProfe || !!searchParams.get('proyecto')) ? router.push('/mis-proyectos') : setProy(null)}
+            className="w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition flex-shrink-0"
+            title="Atrás">
+            <ArrowLeft className="w-4 h-4" />
           </button>
-        )}
-        <span className="text-xs text-white/60 hidden sm:block">{mostrarPrograma(programa)}</span>
-        <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block" />
-        <span className={cn('text-xs font-black px-2.5 py-1 rounded-full', palProy.chip)}>{proy}</span>
-        {(esProfe || !!searchParams.get('proyecto')) && proy && (
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => router.push(`/asistencia?proyecto=${encodeURIComponent(proy)}`)}
-              className="flex items-center gap-1.5 bg-white text-[#16a34a] px-3 py-1.5 rounded-xl text-xs font-black hover:bg-green-50 transition shadow-sm whitespace-nowrap">
-              <ClipboardList className="w-3.5 h-3.5" />
-              GESTIONAR ASISTENCIA
-            </button>
-            {/* El formador arma aquí su microciclo de la semana. */}
-            <button
-              onClick={() => router.push(
-                `/microciclo?proyecto=${encodeURIComponent(proy)}`
-                + `&programa=${encodeURIComponent(programa ?? '')}`
-              )}
-              className="flex items-center gap-1.5 bg-white text-[#16a34a] px-3 py-1.5 rounded-xl text-xs font-black hover:bg-green-50 transition shadow-sm whitespace-nowrap">
-              <CalendarDays className="w-3.5 h-3.5" />
-              MICROCICLOS
-            </button>
-          </div>
-        )}
+          {/* Se quitó el botón de INICIO: la flecha de atrás ya lleva a Mis
+              Proyectos y abajo a la derecha está el redondo verde. — 25/08/2026 */}
+          <span className="text-xs text-white/60 hidden sm:block">{mostrarPrograma(programa)}</span>
+          <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block" />
+          <span className={cn(
+            'font-black rounded-full flex-shrink-0 flex flex-col items-center justify-center text-center',
+            'leading-[1.05] min-w-[34px] px-1.5 py-1 text-[10px]',
+            'sm:min-w-[40px] sm:px-2 sm:py-1.5 sm:text-[11px]',
+            palProy.chip,
+          )} title={proy}>
+            <span>{proyArriba}</span>
+            {proyAbajo && <span>{proyAbajo}</span>}
+          </span>
+          {mostrarAcciones && (
+            <div className="ml-auto flex items-center gap-1.5 sm:gap-2 flex-1 sm:flex-none min-w-0">
+              <button onClick={irAsistencia} className={CLASE_ACCION}>
+                <ClipboardList className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                GESTIONAR ASISTENCIA
+              </button>
+              {/* El formador arma aquí su microciclo de la semana. */}
+              <button onClick={irMicrociclo} className={CLASE_ACCION}>
+                <CalendarDays className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                MICROCICLOS
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Ancho amplio: con CAL y POSICIÓN la tabla ya no cabe en 5xl y salía
