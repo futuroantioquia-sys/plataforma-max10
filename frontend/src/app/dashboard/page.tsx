@@ -679,6 +679,7 @@ function DashboardInner() {
 
   const vistaPorRol: Record<string, JSX.Element> = {
     administracion: <DashboardAdmin />,
+    total:          <DashboardAdmin />,   // acceso completo — 25/08/2026
     contable:       <DashboardAdmin />,
     contabilidad:   <DashboardAdmin />,
     deportivo:      <DashboardAdmin />,

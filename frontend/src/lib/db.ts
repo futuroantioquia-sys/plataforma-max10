@@ -2342,7 +2342,18 @@ export interface Admin {
   usuario: string;                          // login en mayúsculas
   clave:   string;                          // contraseña
   nombre:  string;                          // nombre visible
-  tipo:    'contabilidad' | 'deportivo';    // define los permisos
+  /** Permisos:
+   *   'total'        — acceso completo (deportivo + finanzas). 25/08/2026
+   *   'contabilidad' — edita Finanzas; el resto lo ve en solo lectura
+   *   'deportivo'    — todo menos Finanzas */
+  tipo:    'total' | 'contabilidad' | 'deportivo';
+}
+
+/** Normaliza lo que venga de la base a uno de los tres tipos válidos. */
+export function tipoAdmin(v: unknown): Admin['tipo'] {
+  const t = String(v ?? '').trim().toLowerCase();
+  if (t === 'total' || t === 'contabilidad') return t;
+  return 'deportivo';
 }
 
 export async function getAdmins(): Promise<Admin[]> {
@@ -2359,7 +2370,7 @@ export async function getAdmins(): Promise<Admin[]> {
       // Seguridad: la contraseña (cifrada) NO se envía al navegador (vacío = no cambiar).
       clave:   '',
       nombre:  r.nombre ?? '',
-      tipo:    r.tipo === 'contabilidad' ? 'contabilidad' : 'deportivo',
+      tipo:    tipoAdmin(r.tipo),
     }));
   } catch (e: any) { console.error('[db] getAdmins:', e?.message); return []; }
 }
@@ -2370,7 +2381,7 @@ export async function saveAdmin(a: Admin): Promise<{ ok: boolean; msg?: string }
     usuario: String(a.usuario || '').trim().toUpperCase(),
     clave:   String(a.clave || '').trim(),
     nombre:  String(a.nombre || '').trim(),
-    tipo:    a.tipo === 'contabilidad' ? 'contabilidad' : 'deportivo',
+    tipo:    tipoAdmin(a.tipo),
   };
   try {
     const { error } = await supabase().from('admins').upsert(row, { onConflict: 'id' });

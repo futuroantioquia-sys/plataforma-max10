@@ -1280,6 +1280,18 @@ export default function GeneralPage() {
               .tabla-scroll::-webkit-scrollbar-thumb:hover { background: #8D96A3; }
               .tabla-scroll::-webkit-scrollbar-corner { background: #2B3547; }
               .tabla-scroll { scrollbar-color: #717985 #2B3547; scrollbar-width: thin; }
+
+              /* ── LISTAS DESPLEGABLES ──────────────────────────────────────
+                 Las casillas de la tabla llevan la letra BLANCA sobre el fondo
+                 oscuro, pero la lista que abre el navegador se pinta sobre
+                 fondo BLANCO. Resultado: al desplegar ESTADO para retirar a un
+                 deportista, las opciones salían blancas sobre blanco y no se
+                 veía nada (solo la que estaba resaltada en azul).
+                 Aquí se le pone letra oscura a las opciones. Se hace en la
+                 lista y no en la casilla para que en la tabla se siga viendo
+                 blanca. — 25/08/2026 */
+              .tabla-scroll select option,
+              .tabla-scroll select optgroup { color: #111827; background-color: #ffffff; }
             `}</style>
             <div className="overflow-auto tabla-scroll" style={{ maxHeight: 'calc(100vh - 210px)' }}>
               <table className="border-collapse text-xs" style={{ width: 'max-content', tableLayout: 'fixed' }}>
@@ -1583,8 +1595,12 @@ export default function GeneralPage() {
                                       }
                                     }}
                                     className="w-full text-[11px] font-semibold py-[7px] px-1.5 outline-none bg-transparent text-white cursor-pointer truncate">
-                                    <option value="">—</option>
-                                    {opciones.map(o => <option key={o} value={o}>{o}</option>)}
+                                    {/* Letra oscura en las opciones: la lista del
+                                        navegador se abre sobre fondo blanco. */}
+                                    <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
+                                    {opciones.map(o => (
+                                      <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o}</option>
+                                    ))}
                                   </select>
                                 </td>
                                 );
@@ -1615,7 +1631,7 @@ export default function GeneralPage() {
                                         if (colProfe) setCelda(dep.id, colProfe, profeDeProyecto(nuevaProy));
                                       }}
                                       className="w-full text-[13px] font-semibold text-white py-[6px] px-2 outline-none bg-transparent cursor-pointer truncate">
-                                      <option value="">—</option>
+                                      <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
                                       {opsProy.map(o => <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o}</option>)}
                                     </select>
                                   </td>

@@ -41,7 +41,9 @@ export const DUR_SEG = 24 * 60 * 60;
 export const COOKIE_LEGIBLE = 'futuro-session';
 export const COOKIE_FIRMA   = 'fa-sig';
 
-const ROLES_VALIDOS = ['1', 'contabilidad', 'deportivo', 'profesor', 'deportista'];
+// 'total' = administrador con acceso completo (deportivo + finanzas). Se agregó
+// el 25/08/2026; la gestión de administradores sigue siendo solo de ADMON ('1').
+const ROLES_VALIDOS = ['1', 'total', 'contabilidad', 'deportivo', 'profesor', 'deportista'];
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();

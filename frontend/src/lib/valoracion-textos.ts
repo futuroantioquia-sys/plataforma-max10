@@ -6,9 +6,47 @@
 //  formador usa estos textos para autocompletar la descripción de cada nivel.
 // ─────────────────────────────────────────────────────────────
 
+/* ⚠ PENDIENTE 3 — ESTE ARCHIVO TODAVÍA APUNTA A LA BASE VIEJA.
+   ------------------------------------------------------------------
+   La plataforma se mudó al proyecto `fykdyalpuydkwfjqguip` el 18/08/2026, pero
+   "Gestión de Valoración" siguió guardando en el proyecto viejo
+   `gsovtgtrsqzoruvgmhed`, que ya nadie más lee.
+
+   NO se cambió todavía a propósito: en la base buena aún no existe la tabla
+   `config_valoracion`. Si se cambia antes de crearla, esta pantalla se queda
+   sin poder guardar.
+
+   PARA TERMINARLO (25/08/2026):
+     1. Doble clic en  PASO-1-CREAR-TABLAS.bat          (crea las tablas)
+     2. Doble clic en  PASO-2-PASAR-TEXTOS-VALORACION.bat  (trae los textos)
+     3. Cambiar estas dos líneas por:
+          const SB_URL = 'https://fykdyalpuydkwfjqguip.supabase.co';
+          const SB_KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
+     4. Publicar con SUBIR-AHORA.bat
+   ------------------------------------------------------------------ */
 const SB_URL = 'https://gsovtgtrsqzoruvgmhed.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzb3Z0Z3Ryc3F6b3J1dmdtaGVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NzQyNjUsImV4cCI6MjA5OTU1MDI2NX0.ZpLaLh-Y_ksfGInDLHeuzb8UG1r3stzjcqcyBUQ-uP4';
 const SB_HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
+
+/* Guardar una fila de config_valoracion.
+   Antes se usaba PATCH con ?id=eq.… : si la fila NO existía, el servidor
+   respondía "todo bien" sin haber guardado nada, y la pantalla decía Guardado.
+   Con upsert la fila se crea si falta, así que el guardado es de verdad. */
+async function guardarFila(id: string, data: unknown): Promise<boolean> {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/config_valoracion`, {
+      method: 'POST',
+      headers: {
+        ...SB_HDR,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify({ id, data, updated_at: new Date().toISOString() }),
+    });
+    if (!res.ok) console.error('[valoracion] guardar ' + id + ':', res.status, await res.text().catch(() => ''));
+    return res.ok;
+  } catch (e) { console.error('[valoracion] guardar ' + id + ':', e); return false; }
+}
 
 export const NIVELES_LABELS = [
   'Nivel 1 (Iniciación)',
@@ -260,14 +298,7 @@ export async function getDescripcionesValoracion(): Promise<Record<string, Desc>
 
 /** Guarda los textos editados por el administrador. */
 export async function saveDescripcionesValoracion(data: Record<string, Desc>): Promise<boolean> {
-  try {
-    const res = await fetch(`${SB_URL}/rest/v1/config_valoracion?id=eq.descripciones`, {
-      method: 'PATCH',
-      headers: { ...SB_HDR, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ data, updated_at: new Date().toISOString() }),
-    });
-    return res.ok;
-  } catch { return false; }
+  return guardarFila('descripciones', data);
 }
 
 // ── Metadatos editables de cada componente (nombre, subtítulo, definición) ──
@@ -297,14 +328,7 @@ export async function getMetaValoracion(): Promise<Record<string, FundMetaEdit>>
 
 /** Guarda los metadatos editados de los componentes. */
 export async function saveMetaValoracion(data: Record<string, FundMetaEdit>): Promise<boolean> {
-  try {
-    const res = await fetch(`${SB_URL}/rest/v1/config_valoracion?id=eq.meta`, {
-      method: 'PATCH',
-      headers: { ...SB_HDR, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ data, updated_at: new Date().toISOString() }),
-    });
-    return res.ok;
-  } catch { return false; }
+  return guardarFila('meta', data);
 }
 
 // ── Nombres editables de los COMPONENTES del informe ──
@@ -339,12 +363,5 @@ export async function getCategoriasValoracion(): Promise<Record<string, string>>
 
 /** Guarda los nombres editados de las categorías. */
 export async function saveCategoriasValoracion(data: Record<string, string>): Promise<boolean> {
-  try {
-    const res = await fetch(`${SB_URL}/rest/v1/config_valoracion?id=eq.categorias`, {
-      method: 'PATCH',
-      headers: { ...SB_HDR, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ data, updated_at: new Date().toISOString() }),
-    });
-    return res.ok;
-  } catch { return false; }
+  return guardarFila('categorias', data);
 }

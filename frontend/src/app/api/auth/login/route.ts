@@ -78,6 +78,31 @@ async function claveCoincide(clave: string, guardado: any): Promise<'ok' | 'no' 
   }
 }
 
+/** Tipo guardado en la tabla `admins` → rol de la sesión.
+ *  'total' = acceso completo (deportivo + finanzas). Cualquier valor
+ *  desconocido cae en 'deportivo', que es el más restringido de los dos
+ *  administradores generales. — 25/08/2026 */
+function rolDeTipo(v: unknown): 'total' | 'contabilidad' | 'deportivo' {
+  const t = String(v ?? '').trim().toLowerCase();
+  if (t === 'total' || t === 'contabilidad') return t;
+  return 'deportivo';
+}
+
+/** Lee el `tipo` de un administrador en la tabla `admins`. Devuelve null si no
+ *  se pudo consultar (entonces el que llama usa su propio respaldo). */
+async function tipoGuardado(usuario: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${SB_URL}/rest/v1/admins?select=tipo&usuario=eq.${encodeURIComponent(usuario)}`,
+      { headers: hayLlaveMaestra() ? headersAdmin() : { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, cache: 'no-store' },
+    );
+    if (!res.ok) return null;
+    const filas = await res.json();
+    const t = Array.isArray(filas) && filas[0] ? filas[0].tipo : null;
+    return t ? String(t) : null;
+  } catch { return null; }
+}
+
 async function darSesion(role: string, extra: Record<string, any> = {}) {
   const firma = await crearFirma(role);
   const res = NextResponse.json({ ok: true, ...extra });
@@ -148,7 +173,11 @@ export async function POST(request: NextRequest) {
     // Administradores dinámicos: verificación DENTRO de la base de datos.
     const v = await verificarEnBD('admin', usuario, clave);
     if (v && v.ok === true) {
-      const role = v.role === 'contabilidad' ? 'contabilidad' : 'deportivo';
+      /* La función de la base es de antes de que existiera 'total' y solo sabe
+         devolver contabilidad/deportivo. Ella verifica la contraseña; el TIPO
+         se lee de la tabla, que es donde el super-administrador lo cambia.
+         Si no se puede leer, se usa lo que dijo la función. — 25/08/2026 */
+      const role = rolDeTipo(await tipoGuardado(usuario) ?? v.role);
       return darSesion(role, { rol: role, nombre: v.nombre || '' });
     }
 
@@ -169,7 +198,7 @@ export async function POST(request: NextRequest) {
         else {
           const c = await claveCoincide(clave, a.clave);
           if (c === 'ok') {
-            const tipo = a.tipo === 'contabilidad' ? 'contabilidad' : 'deportivo';
+            const tipo = rolDeTipo(a.tipo);
             return darSesion(tipo, { rol: tipo, nombre: a.nombre || '' });
           }
           respaldoAdm = `clave-${c}`;

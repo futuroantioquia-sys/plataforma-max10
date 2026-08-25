@@ -18,10 +18,15 @@ export async function sesionDeSolicitud(req: NextRequest): Promise<{ rol: string
 
 /** Administración o contabilidad (quienes gestionan pagos). */
 export function esAdminContable(rol: string | null): boolean {
-  return rol === '1' || rol === 'contabilidad';
+  return rol === '1' || rol === 'total' || rol === 'contabilidad';
 }
 
-/** Cualquier sesión válida (incluye padres y profes). */
+/** Cualquier sesión válida (incluye padres y profes).
+ *
+ *  ⚠ 25/08/2026: faltaba 'deportivo'. Por eso a un administrador deportivo la
+ *  ruta /api/deportistas le respondía "no autorizado" y la lista de deportistas
+ *  le cargaba por el camino lento de respaldo. Se agrega junto con 'total'. */
 export function estaAutenticado(rol: string | null): boolean {
-  return rol === '1' || rol === 'contabilidad' || rol === 'profesor' || rol === 'deportista';
+  return rol === '1' || rol === 'total' || rol === 'contabilidad'
+      || rol === 'deportivo' || rol === 'profesor' || rol === 'deportista';
 }

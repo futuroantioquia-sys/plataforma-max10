@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Save, Trash2, Eye, EyeOff, UserCog, ShieldCheck, DollarSign, Dumbbell, X } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Trash2, Eye, EyeOff, UserCog, ShieldCheck, DollarSign, Dumbbell, KeyRound, X } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { getAdmins, saveAdmin, deleteAdmin, type Admin } from '@/lib/db';
 
@@ -12,9 +12,20 @@ function uuid(): string {
 }
 
 const TIPO_INFO: Record<string, { label: string; desc: string; color: string; icono: any }> = {
-  contabilidad: { label: 'Contabilidad', desc: 'Edita solo Finanzas · el resto lo ve en solo lectura', color: '#2563eb', icono: DollarSign },
-  deportivo:    { label: 'Deportivo',    desc: 'Acceso total EXCEPTO Finanzas (oculta)',             color: '#16a34a', icono: Dumbbell },
+  // ACCESO TOTAL — agregado el 25/08/2026. Entra a todo, Finanzas incluida.
+  // Lo único que NO puede es esta pantalla: crear o borrar administradores
+  // sigue siendo exclusivo de ADMON.
+  total:        { label: 'Acceso total',  desc: 'Entra a TODO, Finanzas incluida · no gestiona administradores', color: '#D6409F', icono: KeyRound },
+  contabilidad: { label: 'Contabilidad',  desc: 'Edita solo Finanzas · el resto lo ve en solo lectura',           color: '#2563eb', icono: DollarSign },
+  deportivo:    { label: 'Deportivo',     desc: 'Todo EXCEPTO Finanzas (se le oculta)',                           color: '#16a34a', icono: Dumbbell },
 };
+
+/** Las tres opciones del desplegable, en un solo lugar. */
+const OPCIONES_TIPO: { valor: 'total' | 'contabilidad' | 'deportivo'; texto: string }[] = [
+  { valor: 'total',        texto: 'Acceso total (todo, Finanzas incluida)' },
+  { valor: 'deportivo',    texto: 'Deportivo (todo menos Finanzas)' },
+  { valor: 'contabilidad', texto: 'Contabilidad (solo Finanzas · resto solo lectura)' },
+];
 
 export default function AdministradoresPage() {
   const router = useRouter();
@@ -118,8 +129,8 @@ export default function AdministradoresPage() {
       <main className="max-w-4xl mx-auto px-3 sm:px-6 py-6 space-y-4">
 
         {/* Explicación de los tipos */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {(['contabilidad', 'deportivo'] as const).map(t => {
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {(['total', 'deportivo', 'contabilidad'] as const).map(t => {
             const info = TIPO_INFO[t]; const Ico = info.icono;
             return (
               <div key={t} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-start gap-3">
@@ -139,7 +150,9 @@ export default function AdministradoresPage() {
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-amber-600 flex-shrink-0" />
           <p className="text-xs text-amber-800 font-semibold">
-            El super-administrador (ADMON) es el único con acceso total y a esta pantalla; no se edita desde aquí.
+            Un administrador de <strong>acceso total</strong> entra a toda la plataforma, Finanzas incluida.
+            Lo único reservado al super-administrador (ADMON) es <strong>esta pantalla</strong>: crear, editar
+            o eliminar administradores. ADMON no se edita desde aquí.
           </p>
         </div>
 
@@ -183,8 +196,7 @@ export default function AdministradoresPage() {
                 <div>
                   <label className={labelCls}>Tipo de administrador</label>
                   <select value={a.tipo} onChange={e => editar(a.id, 'tipo', e.target.value)} className={inputCls}>
-                    <option value="contabilidad">Contabilidad (solo finanzas)</option>
-                    <option value="deportivo">Deportivo (todo menos finanzas)</option>
+                    {OPCIONES_TIPO.map(o => <option key={o.valor} value={o.valor}>{o.texto}</option>)}
                   </select>
                 </div>
               </div>
@@ -229,9 +241,9 @@ export default function AdministradoresPage() {
               <div>
                 <label className={labelCls}>Tipo de administrador</label>
                 <select value={nuevo.tipo} onChange={e => setNuevo(p => ({ ...p, tipo: e.target.value as Admin['tipo'] }))} className={inputCls}>
-                  <option value="contabilidad">Contabilidad (solo finanzas · resto solo lectura)</option>
-                  <option value="deportivo">Deportivo (todo menos finanzas)</option>
+                  {OPCIONES_TIPO.map(o => <option key={o.valor} value={o.valor}>{o.texto}</option>)}
                 </select>
+                <p className="text-[11px] text-gray-500 mt-1 leading-snug">{TIPO_INFO[nuevo.tipo]?.desc}</p>
               </div>
             </div>
             <div className="flex gap-2 mt-5">
