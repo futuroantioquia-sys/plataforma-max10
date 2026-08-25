@@ -7,7 +7,7 @@ import { rutaAnterior } from '@/components/RastreoRuta';
 import { getDeportistas, getFoto, getProfes } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { getCategoriasValoracion } from '@/lib/valoracion-textos';
-import { esSuperAdmin, esDeportivo, esContabilidad } from '@/lib/permisos';
+import { esDelEquipo } from '@/lib/permisos';
 
 const SB_URL = 'https://fykdyalpuydkwfjqguip.supabase.co';
 const SB_KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
@@ -265,9 +265,12 @@ function ValoracionDinamicaInner() {
     } catch { /* noop */ }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Solo administradores ven el botón de descargar PDF (para probar)
+  /* Quién ve el botón de DESCARGAR PDF, al final del informe.
+     Antes era solo para administradores ("para probar"). Desde el 25/08/2026
+     también lo ven los FORMADORES, que son quienes hacen la valoración y
+     necesitan entregarla. Los padres y deportistas siguen sin verlo. */
   const [esAdminUI, setEsAdminUI] = useState(false);
-  useEffect(() => { setEsAdminUI(esSuperAdmin() || esDeportivo() || esContabilidad()); }, []);
+  useEffect(() => { setEsAdminUI(esDelEquipo()); }, []);
 
   const [deps, setDeps]   = useState<Deportista[]>([]);
   const [q, setQ]         = useState('');
@@ -717,12 +720,19 @@ function ValoracionDinamicaInner() {
               </div>
             </div>
 
-            {/* Botón Descargar PDF — solo administradores (para probar) */}
+            {/* DESCARGAR PDF — al final del informe. Lo ven administradores y
+                formadores; los padres y deportistas no. — 25/08/2026 */}
             {esAdminUI && (
-              <button onClick={descargarPDF}
-                className="print:hidden w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#16a34a] to-[#064e1e] hover:opacity-90 active:opacity-80 transition rounded-2xl py-3.5 text-white font-black text-sm tracking-wide">
-                <Download className="w-4 h-4" /> Descargar PDF
-              </button>
+              <div className="print:hidden">
+                <button onClick={descargarPDF}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#16a34a] to-[#064e1e] hover:opacity-90 active:opacity-80 transition rounded-2xl py-4 min-h-[52px] text-white font-black text-sm tracking-wide">
+                  <Download className="w-4 h-4" /> DESCARGAR PDF
+                </button>
+                <p className="text-white/40 text-[11px] text-center mt-2 leading-snug px-2">
+                  Se abre la ventana de impresión. En <strong className="text-white/60">Destino</strong> elige
+                  <strong className="text-white/60"> “Guardar como PDF”</strong> y luego Guardar.
+                </p>
+              </div>
             )}
           </>
         )}

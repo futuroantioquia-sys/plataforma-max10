@@ -31,10 +31,28 @@ export function esDeportivo(): boolean {
   return getSesion() === 'deportivo';
 }
 
+/** Administrador de ACCESO TOTAL (deportivo + finanzas). — 25/08/2026 */
+export function esAccesoTotal(): boolean {
+  return getSesion() === 'total';
+}
+
 /** Super-administrador (ADMON) — único que gestiona administradores. */
 export function esSuperAdmin(): boolean {
   const s = getSesion();
   return s === '1' || s === 'administracion';
+}
+
+/** Formador (profe). */
+export function esProfesor(): boolean {
+  return getSesion() === 'profesor';
+}
+
+/** Cualquiera del equipo de trabajo: administración o formador.
+ *  (NO incluye a los padres ni a los deportistas.) */
+export function esDelEquipo(): boolean {
+  const s = getSesion();
+  return s === '1' || s === 'administracion' || s === 'total'
+      || s === 'deportivo' || s === 'contabilidad' || s === 'profesor';
 }
 
 /** ¿La ruta actual pertenece a Finanzas? (incluye subrutas como /pagos/importar-valores) */
