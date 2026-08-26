@@ -1840,3 +1840,35 @@ https://nextjs.org/docs/messages/module-not-found
  ✓ Compiled /api/auth/login in 552ms (789 modules)
 [login:admin] respaldo:clave-sin-clave
  POST /api/auth/login 401 in 1592ms
+ ✓ Compiled in 2.6s (1718 modules)
+ GET /login 200 in 181ms
+ ✓ Compiled /api/auth/login in 198ms (786 modules)
+ POST /api/auth/login 200 in 295ms
+ ✓ Compiled /api/pagos/soportes in 341ms (789 modules)
+ ✓ Compiled (791 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1366ms
+ GET /api/pagos/soportes?solo=count 200 in 1376ms
+ ✓ Compiled /api/profes in 222ms (793 modules)
+ GET /api/deportistas 200 in 3124ms
+ GET /api/deportistas 200 in 3152ms
+ GET /api/deportistas 200 in 1571ms
+ GET /api/deportistas 200 in 1604ms
+ GET /api/profes 200 in 3138ms
+ GET /api/profes 200 in 3703ms
+ GET /api/pagos/soportes?solo=count 200 in 952ms
+ GET /api/pagos/soportes?solo=count 200 in 955ms
+ ✓ Compiled in 2.1s (1751 modules)
+ ○ Compiling /productos ...
+ ✓ Compiled /productos in 691ms (1757 modules)
+ GET /api/pagos/soportes?solo=count 200 in 321ms
+ GET /api/pagos/soportes?solo=count 200 in 345ms
+ ✓ Compiled /api/profes in 187ms (782 modules)
+ GET /api/profes 200 in 2767ms
+ GET /api/profes 200 in 3581ms
+ GET /api/pagos/soportes?solo=count 200 in 1101ms
+ GET /api/pagos/soportes?solo=count 200 in 1105ms
+ ✓ Compiled /api/auth/logout in 435ms (782 modules)
+ POST /api/auth/logout 200 in 526ms
+ ✓ Compiled /api/auth/login in 458ms (787 modules)
+[login:admin] respaldo:clave-sin-clave
+ POST /api/auth/login 401 in 1516ms
