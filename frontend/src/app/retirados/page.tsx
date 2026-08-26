@@ -100,13 +100,55 @@ export default function TotalRetiradosPage() {
     [sols, busca],
   );
 
-  /* ── Pestaña 2: los que hoy figuran retirados ─────────────────────────── */
-  const retirados = useMemo(() => {
-    return deps
+  /* ── Pestaña 2: los que hoy figuran retirados ─────────────────────────────
+     A cada uno se le pega su solicitud, si la tiene. Los retirados ANTIGUOS
+     no la tienen —salieron antes de que existiera este módulo— y por eso les
+     quedan vacías la fecha y el motivo. Es lo esperado, no un error.
+
+     El orden lo pidió la dirección (26/08/2026): primero los antiguos, en
+     orden alfabético, y AL FINAL los que salieron por la plataforma. Así los
+     casos nuevos se van acumulando abajo y se encuentran de una. */
+  const solPorDep = useMemo(() => {
+    const m: Record<string, Solicitud> = {};
+    // De más vieja a más nueva, para que quede guardada la MÁS RECIENTE.
+    for (const s of [...sols].reverse()) m[s.deportista_id] = s;
+    return m;
+  }, [sols]);
+
+  type FilaRetirado = {
+    dep: Deportista;
+    sol: Solicitud | undefined;
+    fechaRetiro: string;   // cuándo se resolvió (o cuándo se radicó)
+    motivoTipo: string;    // la casilla que escogió administración
+    motivoTexto: string;   // lo que escribió el padre, tal cual
+  };
+
+  const retirados = useMemo<FilaRetirado[]>(() => {
+    const filas = deps
       .filter(d => yaRetirado(colDe(d, RX_ESTADO)))
-      .filter(d => filtra(`${colDe(d, RX_CODIGO)} ${d._nombre} ${colDe(d, RX_PROYECTO)}`))
-      .sort((a, b) => a._nombre.localeCompare(b._nombre, 'es'));
-  }, [deps, busca]);
+      .filter(d => {
+        const s = solPorDep[d.id];
+        return filtra(
+          `${colDe(d, RX_CODIGO)} ${d._nombre} ${colDe(d, RX_PROYECTO)} ` +
+          `${s?.motivo_tipo ?? ''} ${s?.motivo ?? ''}`,
+        );
+      })
+      .map(d => {
+        const s = solPorDep[d.id];
+        return {
+          dep: d,
+          sol: s,
+          fechaRetiro: fechaCorta(s?.resuelta_en || s?.creada_en || null),
+          motivoTipo:  s?.motivo_tipo ?? '',
+          motivoTexto: s?.motivo ?? '',
+        };
+      });
+
+    // Los que salieron por la plataforma van de últimos.
+    const antiguos = filas.filter(f => !f.sol).sort((a, b) => a.dep._nombre.localeCompare(b.dep._nombre, 'es'));
+    const nuevos   = filas.filter(f =>  f.sol).sort((a, b) => a.dep._nombre.localeCompare(b.dep._nombre, 'es'));
+    return [...antiguos, ...nuevos];
+  }, [deps, sols, solPorDep, busca]);
 
   /* ── Por qué se nos está yendo la gente ───────────────────────────────
      La cuenta que solo se puede sacar gracias a la casilla del motivo. */
@@ -293,7 +335,7 @@ export default function TotalRetiradosPage() {
           <ArrowLeft className="w-5 h-5 text-white" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-white font-black text-base leading-tight">Total Retirados</h1>
+          <h1 className="text-white font-black text-base leading-tight">Retiros</h1>
           <p className="text-white/55 text-[11px] leading-tight">
             Solicitudes de los padres y deportistas retirados
           </p>
@@ -308,7 +350,11 @@ export default function TotalRetiradosPage() {
         </button>
       </header>
 
-      <main className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 1100 }}>
+      {/* El cuadro de RETIRADOS tiene diez columnas: se le da todo el ancho de
+          la pantalla. Las solicitudes son tarjetas de leer, y esas se dejan
+          angostas a propósito, que leer renglones larguísimos cansa. */}
+      <main className="px-4 pt-4 mx-auto w-full"
+        style={{ maxWidth: pestana === 'retirados' ? 1800 : 1100 }}>
 
         {/* ── Pestañas ── */}
         <div className="flex gap-2 mb-4">
@@ -455,34 +501,74 @@ export default function TotalRetiradosPage() {
             {retirados.length === 0 && <Vacio texto="No hay deportistas retirados." />}
 
             {retirados.length > 0 && (
-              <div className="rounded-xl overflow-auto" style={{ border: `1px solid ${BORDE}` }}>
-                <table className="text-[12px]" style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 720 }}>
-                  <thead className="sticky top-0 z-10">
-                    <tr>
-                      {['N°', 'CÓDIGO', 'DEPORTISTA', 'PROGRAMA', 'PROYECTO', 'SEDE', 'AFILIACIÓN'].map(h => (
-                        <th key={h}
-                          className="px-2 py-2 text-center font-black text-[10px] whitespace-nowrap text-white"
-                          style={{ background: VERDE, borderRight: BLANCO, borderBottom: BLANCO, borderTop: BLANCO }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {retirados.map((d, i) => (
-                      <tr key={d.id} style={{ background: PANEL }}>
-                        <Celda centro>{i + 1}</Celda>
-                        <Celda centro fuerte>{colDe(d, RX_CODIGO) || '—'}</Celda>
-                        <Celda>{d._nombre || '—'}</Celda>
-                        <Celda>{colDe(d, RX_PROGRAMA) || '—'}</Celda>
-                        <Celda centro>{colDe(d, RX_PROYECTO) || '—'}</Celda>
-                        <Celda>{colDe(d, RX_SEDE) || '—'}</Celda>
-                        <Celda centro>{fechaBonita(colDe(d, RX_FECHAAF)) || '—'}</Celda>
+              <>
+                <p className="text-white/45 text-[11.5px] mb-2 leading-snug">
+                  Los retirados de antes no tienen fecha ni motivo: salieron cuando este
+                  módulo no existía. Los que salieron por la plataforma van de últimos.
+                </p>
+                {/* El alto tope es lo que hace que el encabezado se quede pegado
+                    arriba al bajar: sin él, el que se desplaza es toda la página
+                    y no hay contra qué pegarlo. — 26/08/2026 */}
+                <div className="rounded-xl overflow-auto"
+                  style={{ border: `1px solid ${BORDE}`, maxHeight: 'calc(100vh - 205px)' }}>
+                  <table className="text-[12px]" style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 1080 }}>
+                    <thead>
+                      <tr>
+                        {['N°', 'CÓDIGO', 'DEPORTISTA', 'PROGRAMA', 'PROYECTO', 'SEDE', 'AFILIACIÓN',
+                          'FECHA DE RETIRO', 'MOTIVO DE RETIRO', 'LO QUE ESCRIBIÓ EL PADRE'].map(h => (
+                          <th key={h}
+                            className="sticky top-0 z-10 px-2 py-2 text-center font-black text-[10px] whitespace-nowrap text-white"
+                            style={{ background: VERDE, borderRight: BLANCO, borderBottom: BLANCO, borderTop: BLANCO }}>
+                            {h}
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {retirados.map((f, i) => {
+                        const d = f.dep;
+                        /* Los que salieron por la plataforma se distinguen con un
+                           borde ámbar a la izquierda: son los del proceso nuevo. */
+                        const porPlataforma = !!f.sol;
+                        return (
+                          <tr key={d.id} style={{ background: PANEL }}>
+                            <Celda centro>
+                              <span style={porPlataforma ? { color: AMBAR } : undefined}>{i + 1}</span>
+                            </Celda>
+                            <Celda centro fuerte>{colDe(d, RX_CODIGO) || '—'}</Celda>
+                            <Celda>{d._nombre || '—'}</Celda>
+                            <Celda>{colDe(d, RX_PROGRAMA) || '—'}</Celda>
+                            <Celda centro>{colDe(d, RX_PROYECTO) || '—'}</Celda>
+                            <Celda>{colDe(d, RX_SEDE) || '—'}</Celda>
+                            <Celda centro>{fechaBonita(colDe(d, RX_FECHAAF)) || '—'}</Celda>
+                            {/* Las tres del proceso nuevo van al final (26/08/2026):
+                                así lo de siempre queda a la izquierda, donde el ojo
+                                lo busca, y estas no empujan el nombre hacia el lado. */}
+                            <Celda centro>
+                              {f.fechaRetiro || <span style={{ color: GRIS }}>—</span>}
+                            </Celda>
+                            <Celda centro>
+                              {f.motivoTipo
+                                ? <span className="inline-block rounded-md px-2 py-[3px] text-[10.5px] font-black whitespace-nowrap"
+                                    style={{ background: '#5A6478' }}>{f.motivoTipo}</span>
+                                : <span style={{ color: GRIS }}>—</span>}
+                            </Celda>
+                            <Celda>
+                              {f.motivoTexto
+                                ? <span className="block text-[11.5px] font-normal"
+                                    style={{ maxWidth: 260, whiteSpace: 'normal', lineHeight: 1.35 }}
+                                    title={f.motivoTexto}>
+                                    “{f.motivoTexto}”
+                                  </span>
+                                : <span style={{ color: GRIS }}>—</span>}
+                            </Celda>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </>
         )}

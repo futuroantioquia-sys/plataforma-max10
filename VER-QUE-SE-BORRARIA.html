@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobros de torneo · qué se borraría</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --lienzo:#333F50; --panel:#3C4759; --campo:#2B3547; --borde:#4A5568;
+    --tinta:#ffffff; --tinta-2:rgba(255,255,255,.62); --tinta-3:rgba(255,255,255,.40);
+    --serie:#8AB4FF;        /* magnitud, una sola serie */
+    --pagado:#5BE39B;       /* estado: ya pagado */
+    --pendiente:#D9822B;    /* estado: sin pagar */
+    --rejilla:rgba(255,255,255,.10);
+  }
+  body{background:var(--lienzo);color:var(--tinta);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    padding:22px 16px 60px;line-height:1.45}
+  .caja{max-width:1000px;margin:0 auto}
+  h1{font-size:22px;font-weight:900;letter-spacing:-.01em}
+  .sub{color:var(--tinta-2);font-size:13.5px;margin-top:4px}
+  .aviso{background:var(--campo);border:1px solid var(--borde);border-left:4px solid var(--serie);
+    border-radius:12px;padding:12px 14px;margin:18px 0;font-size:13px;color:var(--tinta-2)}
+  .aviso b{color:var(--tinta)}
+  .tarjeta{background:var(--panel);border:1px solid var(--borde);border-radius:16px;
+    padding:18px 18px 20px;margin-bottom:16px}
+  .tarjeta h2{font-size:11px;font-weight:900;letter-spacing:.12em;color:var(--tinta-3);
+    text-transform:uppercase;margin-bottom:14px}
+  /* Cifras grandes */
+  .cifras{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .cifra{background:var(--campo);border:1px solid var(--borde);border-radius:14px;padding:14px 16px}
+  .cifra .n{font-size:30px;font-weight:900;letter-spacing:-.02em;line-height:1.1}
+  .cifra .et{font-size:11.5px;color:var(--tinta-2);margin-top:3px}
+  /* Barras horizontales */
+  .barra-fila{display:grid;grid-template-columns:1fr;gap:5px;margin-bottom:13px}
+  .barra-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .barra-et{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .barra-val{font-size:12.5px;color:var(--tinta-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .pista{background:rgba(255,255,255,.06);border-radius:4px;height:14px;overflow:hidden}
+  .relleno{height:100%;border-radius:0 4px 4px 0;min-width:3px;transition:width .35s ease}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800}
+  .punto{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+  /* Tabla */
+  .tabla-env{overflow-x:auto;border:1px solid var(--borde);border-radius:12px;max-height:430px;overflow-y:auto}
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;min-width:560px}
+  th{position:sticky;top:0;background:var(--campo);text-align:left;font-weight:900;
+    font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--tinta-2);
+    padding:9px 11px;border-bottom:1px solid var(--borde);white-space:nowrap}
+  td{padding:8px 11px;border-bottom:1px solid rgba(255,255,255,.07)}
+  tr:last-child td{border-bottom:none}
+  .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .et-estado{display:inline-flex;align-items:center;gap:5px;font-weight:800;font-size:11.5px;white-space:nowrap}
+  .cargando,.error{text-align:center;padding:46px 20px;color:var(--tinta-2);font-size:14px}
+  .error{color:#FFB4A8}
+  .error code{display:block;margin-top:10px;font-size:11.5px;color:var(--tinta-3);word-break:break-all}
+  .pie{color:var(--tinta-3);font-size:12px;margin-top:22px;text-align:center}
+  @media(max-width:560px){ .cifra .n{font-size:25px} h1{font-size:19px} }
+</style>
+</head>
+<body>
+<div class="caja">
+
+  <h1>Cobros de torneo · qué se borraría</h1>
+  <p class="sub">Futuro Antioquia · MAX 10 — lectura de los datos reales, tomada en este momento</p>
+
+  <div class="aviso">
+    Esta página <b>solo mira</b>. No borra ni cambia absolutamente nada.
+    Es para ver qué hay antes de decidir. El borrado se hace aparte, con
+    <b>BORRAR-COBROS-DE-TORNEO.bat</b>, que además guarda una copia.
+  </div>
+
+  <div id="estado" class="cargando">Leyendo los datos…</div>
+  <div id="todo" style="display:none">
+
+    <div class="tarjeta">
+      <h2>Lo que se borraría</h2>
+      <div class="cifras" id="cifras"></div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Cuántos ya estaban pagados</h2>
+      <div id="estados"></div>
+      <p class="sub" id="nota-pagados" style="margin-top:12px;font-size:12.5px"></p>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Por torneo · cuánto dinero representa</h2>
+      <div id="portorneo"></div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>El detalle, torneo por torneo</h2>
+      <div class="tabla-env">
+        <table>
+          <thead><tr>
+            <th>Torneo</th>
+            <th class="num">Cobros</th>
+            <th class="num">Pagados</th>
+            <th class="num">Pendientes</th>
+            <th class="num">Total</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="pie" id="pie"></p>
+  </div>
+</div>
+
+<script>
+const SB  = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
+
+const pesos = n => '$' + Math.round(n||0).toLocaleString('es-CO').replace(/,/g,'.');
+const mil   = n => (n||0).toLocaleString('es-CO').replace(/,/g,'.');
+const esc   = s => String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function barra(etiqueta, valorTxt, prop, color){
+  return `<div class="barra-fila">
+    <div class="barra-top">
+      <span class="barra-et" title="${esc(etiqueta)}">${esc(etiqueta)}</span>
+      <span class="barra-val">${esc(valorTxt)}</span>
+    </div>
+    <div class="pista"><div class="relleno" style="width:${(prop*100).toFixed(1)}%;background:${color}"></div></div>
+  </div>`;
+}
+
+(async function(){
+  const est = document.getElementById('estado');
+  let filas;
+  try {
+    const r = await fetch(`${SB}/rest/v1/otros_pagos?select=id,descripcion,tipo,valor,estado,deportista_id&limit=20000`,
+      { headers: { apikey: KEY, Authorization: 'Bearer ' + KEY }, cache: 'no-store' });
+    if (!r.ok) throw new Error('La base respondió ' + r.status);
+    filas = await r.json();
+  } catch (e) {
+    est.className = 'error';
+    est.innerHTML = 'No se pudieron leer los datos.<br>Revisa que tengas internet e inténtalo de nuevo.'
+      + '<code>' + esc(e && e.message ? e.message : e) + '</code>';
+    return;
+  }
+  if (!Array.isArray(filas)) filas = [];
+
+  const esTorneo = f => String(f.tipo||'').toLowerCase().includes('torneo');
+  const torneos  = filas.filter(esTorneo);
+  const otros    = filas.filter(f => !esTorneo(f));
+  const pagado   = f => String(f.estado||'').toUpperCase().startsWith('PAG');
+
+  const total    = torneos.reduce((s,f)=> s + (Number(f.valor)||0), 0);
+  const pagados  = torneos.filter(pagado);
+  const pends    = torneos.filter(f => !pagado(f));
+  const totalPag = pagados.reduce((s,f)=> s + (Number(f.valor)||0), 0);
+  const totalPen = pends.reduce((s,f)=> s + (Number(f.valor)||0), 0);
+  const deps     = new Set(torneos.map(f => f.deportista_id)).size;
+
+  document.getElementById('estado').style.display = 'none';
+  document.getElementById('todo').style.display   = '';
+
+  /* ── Cifras ── */
+  document.getElementById('cifras').innerHTML = [
+    ['n', mil(torneos.length), 'cobros de torneo'],
+    ['n', mil(deps),           'deportistas con al menos uno'],
+    ['n', pesos(total),        'suman en total'],
+    ['n', mil(otros.length),   'implementos que NO se tocan'],
+  ].map(([,n,et]) => `<div class="cifra"><div class="n">${n}</div><div class="et">${et}</div></div>`).join('');
+
+  /* ── Pagado vs pendiente (estado: icono + palabra, nunca solo el color) ── */
+  const maxE = Math.max(pagados.length, pends.length, 1);
+  document.getElementById('estados').innerHTML =
+      barra('✔ Ya pagados — ' + mil(pagados.length) + ' cobros',
+            pesos(totalPag), pagados.length/maxE, 'var(--pagado)')
+    + barra('⏳ Sin pagar — ' + mil(pends.length) + ' cobros',
+            pesos(totalPen), pends.length/maxE, 'var(--pendiente)');
+
+  const nota = document.getElementById('nota-pagados');
+  nota.innerHTML = pagados.length === 0
+    ? 'Ninguno de estos cobros figura como pagado. Borrarlos no hace perder ningún pago.'
+    : `<b style="color:var(--pendiente)">Ojo:</b> ${mil(pagados.length)} de estos cobros ya están marcados como PAGADOS `
+      + `(${pesos(totalPag)}). Si se borran, esas familias van a volver a aparecer debiendo algo que ya pagaron. `
+      + `Si no quieres eso, avísame y hago que el borrado respete los pagados.`;
+
+  /* ── Por torneo ── */
+  const porNombre = {};
+  for (const f of torneos) {
+    const k = (String(f.descripcion||'').trim() || 'Sin nombre');
+    if (!porNombre[k]) porNombre[k] = { n:0, valor:0, pag:0, pen:0 };
+    porNombre[k].n++;
+    porNombre[k].valor += Number(f.valor)||0;
+    if (pagado(f)) porNombre[k].pag++; else porNombre[k].pen++;
+  }
+  const lista = Object.entries(porNombre).sort((a,b)=> b[1].valor - a[1].valor);
+  const maxV  = Math.max(...lista.map(([,v])=>v.valor), 1);
+
+  document.getElementById('portorneo').innerHTML = lista.length === 0
+    ? '<p class="sub">No hay ningún cobro de torneo cargado.</p>'
+    : lista.slice(0,14).map(([k,v]) =>
+        barra(k, pesos(v.valor) + '  ·  ' + mil(v.n) + (v.n===1?' cobro':' cobros'),
+              v.valor/maxV, 'var(--serie)')).join('')
+      + (lista.length > 14 ? `<p class="sub" style="font-size:12px">y ${lista.length-14} torneo(s) más, en la tabla de abajo.</p>` : '');
+
+  /* ── Tabla ── */
+  document.getElementById('tbody').innerHTML = lista.map(([k,v]) => `<tr>
+      <td>${esc(k)}</td>
+      <td class="num">${mil(v.n)}</td>
+      <td class="num"><span class="et-estado" style="color:var(--pagado)">✔ ${mil(v.pag)}</span></td>
+      <td class="num"><span class="et-estado" style="color:var(--pendiente)">⏳ ${mil(v.pen)}</span></td>
+      <td class="num">${pesos(v.valor)}</td>
+    </tr>`).join('');
+
+  const ahora = new Date();
+  document.getElementById('pie').textContent =
+    'Leído el ' + ahora.toLocaleDateString('es-CO') + ' a las ' + ahora.toLocaleTimeString('es-CO');
+})();
+</script>
+</body>
+</html>

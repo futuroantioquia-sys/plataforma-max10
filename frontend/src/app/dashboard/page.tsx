@@ -313,18 +313,15 @@ function DashboardAdmin() {
         <AccesoCard titulo="Total Afiliados"   icono={LayoutList}    href="/general"      descripcion="Todos los deportistas"       color="verde" />
         <AccesoCard titulo="Asignación de Proyectos" icono={UserPlus}      href="/asignacion"   descripcion="Asignar nuevos deportistas"  color="verde" badge={pendientesAsign} />
         <AccesoCard titulo="Programas y Proyectos"   icono={Users}         href="/alumnos"      descripcion="Ver y editar fichas"         color="verde" />
-        {/* 26/08/2026 — Los dos módulos de retiro.
-            · Solicitud de Retiro: la MISMA pantalla del padre. Entrando desde
-              aquí sale un buscador para escoger el deportista, y se puede
-              radicar por el padre (por ejemplo, cuando llama por teléfono).
-            · Total Retirados: donde se estudia y se resuelve. El número en rojo
-              es la cantidad de casos EN ESTUDIO. */}
-        <AccesoCard titulo="Solicitud de Retiro"     icono={FileText}      href="/retiro"       descripcion="Radicar y ver lo del padre"  color="verde" />
-        {/* El número rojo son las solicitudes SIN RESOLVER, contadas de la
+        {/* 26/08/2026 — Aquí queda TOTAL RETIRADOS, que es donde se trabaja:
+            se estudian los casos y se resuelven. El FORMATO de la solicitud
+            —la pantalla que llena el padre— se movió a Gestión, junto con los
+            demás formatos y ajustes de la plataforma.
+            El número rojo son las solicitudes SIN RESOLVER, contadas de la
             tabla de solicitudes. La primera versión contaba los deportistas
             marcados "SOLICITA RETIRO" en su ficha y se quedaba prendido al
             eliminar o resolver una; así ya no pasa: baja solo. — 26/08/2026 */}
-        <AccesoCard titulo="Total Retirados"         icono={UserMinus}     href="/retirados"    descripcion="Solicitudes y retirados"     color="verde" badge={retirosEnEstudio} />
+        <AccesoCard titulo="Retiros"                 icono={UserMinus}     href="/retirados"    descripcion="Solicitudes nuevas y retirados" color="verde" badge={retirosEnEstudio} />
       </CategoriaSection>
 
 
@@ -380,6 +377,12 @@ function DashboardAdmin() {
         <AccesoCard titulo="Botones de Cobro" icono={MessageCircle} href="/botones-cobro" descripcion="Texto, color y mensaje del cobro por WhatsApp" color="verde" />
         <AccesoCard titulo="Certificados Asistencia" icono={Clipboard} href="/certificados" descripcion="Quién descargó su certificado" color="verde" />
         <AccesoCard titulo="Formulario de Afiliación" icono={ClipboardList} href="/afiliacion" descripcion="Registro de deportistas" color="verde" />
+        {/* FORMATO SOLICITUD DE RETIRO — 26/08/2026. Es la MISMA pantalla que
+            llena el padre. Entrando desde aquí sale un buscador para escoger el
+            deportista, y se puede radicar por él (cuando llama por teléfono).
+            Va junto al Formulario de Afiliación: los dos son formatos que
+            diligencia la familia — uno para entrar y el otro para salir. */}
+        <AccesoCard titulo="Formato Solicitud de Retiro" icono={FileText} href="/retiro" descripcion="El formato que llena el padre" color="verde" />
         <AccesoCard titulo="Productos" icono={DollarSign} href="/productos" descripcion="Torneos e implementos" color="verde" />
       </CategoriaSection>
     </div>

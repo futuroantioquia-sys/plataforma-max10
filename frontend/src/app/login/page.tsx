@@ -46,18 +46,32 @@ export default function LoginPage() {
         });
         const data = await r.json().catch(() => ({} as any));
         if (r.ok && data?.ok) {
+          /* ERROR CORREGIDO (26/08/2026): faltaba 'total'.
+             El servidor ya devolvía rol 'total' para el administrador de ACCESO
+             TOTAL, pero aquí cualquier cosa que no fuera contabilidad o
+             deportivo se convertía en 'administracion' —el super-administrador—.
+             Resultado: la cookie decía 'total' y la pantalla creía que era
+             ADMON. Quedaban peleando, y al que le pusieran acceso total le
+             empezaba a fallar el ingreso. */
           const rolSrv = data.rol === 'contabilidad' ? 'contabilidad'
                        : data.rol === 'deportivo'    ? 'deportivo'
+                       : data.rol === 'total'        ? 'total'
                        : 'administracion';
           try {
             localStorage.removeItem('futuro-profe-proyectos');
             localStorage.removeItem('futuro-profe-nombre');
           } catch {}
           const nombreSrv = data.nombre
-            || (rolSrv === 'contabilidad' ? 'Diana' : rolSrv === 'deportivo' ? 'Administrador Deportivo' : 'Administrador');
+            || (rolSrv === 'contabilidad' ? 'Diana'
+              : rolSrv === 'deportivo'    ? 'Administrador Deportivo'
+              : rolSrv === 'total'        ? 'Administrador'
+              : 'Administrador');
           useAuthStore.setState({
             usuario: {
-              id:       rolSrv === 'contabilidad' ? 'contab-diana' : rolSrv === 'deportivo' ? 'admin-dep' : 'admin-1',
+              id:       rolSrv === 'contabilidad' ? 'contab-diana'
+                      : rolSrv === 'deportivo'    ? 'admin-dep'
+                      : rolSrv === 'total'        ? 'admin-total'
+                      : 'admin-1',
               email:    rolSrv === 'contabilidad' ? 'diana@futuroantioquia.com' : 'admin@futuroantioquia.com',
               nombre:   nombreSrv,
               apellido: '',

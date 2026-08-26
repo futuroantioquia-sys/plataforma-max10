@@ -36,6 +36,21 @@ async function permitido(req: NextRequest): Promise<NextResponse | null> {
 
 const limpiar = (v: any) => String(v ?? '').trim();
 
+/** Los TRES tipos de administrador que existen hoy.
+ *
+ *  ERROR CORREGIDO (26/08/2026): esta ruta solo conocía dos —contabilidad y
+ *  deportivo— y cualquier otro valor lo volvía 'deportivo'. Como el 25/08 se
+ *  agregó ACCESO TOTAL a la pantalla, pasaba esto:
+ *    · al GUARDAR, el acceso total quedaba guardado como deportivo, sin avisar;
+ *    · al LISTAR, un administrador total se veía como deportivo, y con solo
+ *      volver a guardarlo se le quitaba el acceso sin que nadie lo pidiera.
+ *  Ahora los tres viajan completos, de ida y de vuelta. */
+function tipoValido(v: any): 'total' | 'contabilidad' | 'deportivo' {
+  const t = String(v ?? '').trim().toLowerCase();
+  if (t === 'total' || t === 'contabilidad') return t;
+  return 'deportivo';
+}
+
 /** Lista de administradores. Nunca incluye la contraseña. */
 export async function GET(req: NextRequest) {
   const no = await permitido(req);
@@ -51,7 +66,7 @@ export async function GET(req: NextRequest) {
       usuario: limpiar(r.usuario).toUpperCase(),
       clave:   '',                       // jamás sale del servidor
       nombre:  r.nombre ?? '',
-      tipo:    r.tipo === 'contabilidad' ? 'contabilidad' : 'deportivo',
+      tipo:    tipoValido(r.tipo),
     })));
   } catch (e: any) {
     return NextResponse.json({ ok: false, msg: String(e?.message ?? e) }, { status: 500 });
@@ -69,7 +84,7 @@ export async function POST(req: NextRequest) {
   const id      = limpiar(body?.id);
   const usuario = limpiar(body?.usuario).toUpperCase();
   const nombre  = limpiar(body?.nombre);
-  const tipo    = body?.tipo === 'contabilidad' ? 'contabilidad' : 'deportivo';
+  const tipo    = tipoValido(body?.tipo);
   const clave   = limpiar(body?.clave);
 
   if (!id)      return NextResponse.json({ ok: false, msg: 'Falta el identificador.' }, { status: 400 });
