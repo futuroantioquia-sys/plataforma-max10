@@ -651,3 +651,147 @@ https://nextjs.org/docs/messages/module-not-found
  ✓ Compiled /login in 8.8s (1322 modules)
  GET /login 200 in 9447ms
  ✓ Compiled in 720ms (665 modules)
+ ○ Compiling /api/auth/login ...
+ ✓ Compiled /api/auth/login in 551ms (683 modules)
+ POST /api/auth/login 200 in 1529ms
+ ○ Compiling /mis-proyectos ...
+ ✓ Compiled /mis-proyectos in 1092ms (1348 modules)
+ ✓ Compiled /api/deportistas in 182ms (694 modules)
+ ✓ Compiled (696 modules)
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 770ms
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 789ms
+ ○ Compiling /alumnos ...
+ ✓ Compiled /alumnos in 951ms (1383 modules)
+ GET /api/deportistas?proyecto=SUB%208A 200 in 5615ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 5898ms
+ GET /api/profes 200 in 8763ms
+ GET /api/profes 200 in 9433ms
+ ○ Compiling /alumnos/[id] ...
+ ✓ Compiled /alumnos/[id] in 633ms (1399 modules)
+ GET /api/deportistas 200 in 1556ms
+ GET /api/deportistas 200 in 1907ms
+ ○ Compiling /valoracion-dinamica ...
+ ✓ Compiled /valoracion-dinamica in 564ms (1409 modules)
+ GET /api/profes 200 in 3781ms
+ GET /api/profes 200 in 3975ms
+ ⚠ Found a change in next.config.js. Restarting the server to apply the changes...
+  ▲ Next.js 14.2.32
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1802ms
+ ✓ Compiled /src/middleware in 298ms (74 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 8.4s (1322 modules)
+ GET /login 200 in 8999ms
+ ✓ Compiled in 660ms (665 modules)
+ ✓ Compiled /api/auth/login in 439ms (683 modules)
+ POST /api/auth/login 200 in 1454ms
+ ○ Compiling /mis-proyectos ...
+ ✓ Compiled /mis-proyectos in 757ms (1348 modules)
+ ✓ Compiled /api/profes in 158ms (694 modules)
+ ✓ Compiled (696 modules)
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 700ms
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 717ms
+ ○ Compiling /alumnos ...
+ ✓ Compiled /alumnos in 927ms (1383 modules)
+ GET /api/deportistas?proyecto=SUB%208A 200 in 348ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 364ms
+ GET /api/profes 200 in 3722ms
+ GET /api/profes 200 in 4303ms
+ ○ Compiling /alumnos/[id] ...
+ ✓ Compiled /alumnos/[id] in 596ms (1399 modules)
+ GET /api/deportistas 200 in 2098ms
+ GET /api/deportistas 200 in 2227ms
+ ○ Compiling /valoracion-dinamica ...
+ ✓ Compiled /valoracion-dinamica in 532ms (1409 modules)
+ GET /api/profes 200 in 3879ms
+ GET /api/profes 200 in 4207ms
+ ✓ Compiled in 1347ms (1383 modules)
+ ○ Compiling /api/auth/login ...
+ ✓ Compiled /api/auth/login in 1050ms (722 modules)
+ POST /api/auth/login 200 in 1258ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 1975ms (1466 modules)
+ ✓ Compiled in 354ms (719 modules)
+ POST /api/auth/login 200 in 31ms
+ ✓ Compiled /api/pagos/soportes in 243ms (750 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1034ms
+ GET /api/pagos/soportes?solo=count 200 in 1038ms
+ GET /api/pagos/soportes?solo=count 200 in 328ms
+ GET /api/pagos/soportes?solo=count 200 in 339ms
+ GET /api/pagos/soportes?solo=count 200 in 664ms
+ GET /api/pagos/soportes?solo=count 200 in 363ms
+ GET /api/pagos/soportes?solo=count 200 in 318ms
+ GET /api/pagos/soportes?solo=count 200 in 530ms
+ GET /api/pagos/soportes?solo=count 200 in 321ms
+ GET /api/pagos/soportes?solo=count 200 in 356ms
+ GET /api/pagos/soportes?solo=count 200 in 414ms
+ GET /api/pagos/soportes?solo=count 200 in 327ms
+ GET /api/pagos/soportes?solo=count 200 in 327ms
+ GET /api/pagos/soportes?solo=count 200 in 300ms
+ GET /api/pagos/soportes?solo=count 200 in 343ms
+ GET /api/pagos/soportes?solo=count 200 in 321ms
+ GET /api/pagos/soportes?solo=count 200 in 351ms
+ GET /api/pagos/soportes?solo=count 200 in 465ms
+ GET /api/pagos/soportes?solo=count 200 in 348ms
+ GET /api/pagos/soportes?solo=count 200 in 329ms
+ GET /api/pagos/soportes?solo=count 200 in 367ms
+ GET /api/pagos/soportes?solo=count 200 in 354ms
+ GET /api/pagos/soportes?solo=count 200 in 539ms
+ GET /api/pagos/soportes?solo=count 200 in 388ms
+ GET /api/pagos/soportes?solo=count 200 in 377ms
+ GET /api/pagos/soportes?solo=count 200 in 449ms
+ GET /api/pagos/soportes?solo=count 200 in 418ms
+ GET /api/pagos/soportes?solo=count 200 in 345ms
+ GET /api/pagos/soportes?solo=count 200 in 380ms
+ GET /api/pagos/soportes?solo=count 200 in 359ms
+ GET /api/pagos/soportes?solo=count 200 in 368ms
+ GET /api/pagos/soportes?solo=count 200 in 348ms
+ GET /api/pagos/soportes?solo=count 200 in 292ms
+ GET /api/pagos/soportes?solo=count 200 in 685ms
+ GET /api/pagos/soportes?solo=count 200 in 299ms
+ GET /api/pagos/soportes?solo=count 200 in 307ms
+ GET /api/pagos/soportes?solo=count 200 in 320ms
+ GET /api/pagos/soportes?solo=count 200 in 626ms
+ GET /api/pagos/soportes?solo=count 200 in 432ms
+ GET /api/pagos/soportes?solo=count 200 in 359ms
+ GET /api/pagos/soportes?solo=count 200 in 459ms
+ GET /api/pagos/soportes?solo=count 200 in 369ms
+ GET /api/pagos/soportes?solo=count 200 in 380ms
+ GET /api/pagos/soportes?solo=count 200 in 356ms
+ GET /api/pagos/soportes?solo=count 200 in 332ms
+ GET /api/pagos/soportes?solo=count 200 in 347ms
+ GET /api/pagos/soportes?solo=count 200 in 675ms
+ GET /api/pagos/soportes?solo=count 200 in 306ms
+ GET /api/pagos/soportes?solo=count 200 in 702ms
+ GET /api/pagos/soportes?solo=count 200 in 678ms
+ ○ Compiling /contabilidad ...
+ ✓ Compiled /contabilidad in 2.9s (1462 modules)
+ ✓ Compiled /dashboard in 391ms (712 modules)
+ ✓ Compiled /api/pagos/soportes in 193ms (745 modules)
+ GET /api/pagos/soportes?solo=count 200 in 738ms
+ GET /api/pagos/soportes?solo=count 200 in 741ms
+ ○ Compiling /nomina ...
+ ✓ Compiled /nomina in 1491ms (1485 modules)
+ GET /api/pagos/soportes?solo=count 200 in 416ms
+ GET /api/pagos/soportes?solo=count 200 in 433ms
+ ✓ Compiled /contabilidad in 352ms (763 modules)
+ GET /login 200 in 248ms
+ ✓ Compiled /api/auth/login in 504ms (722 modules)
+ POST /api/auth/login 200 in 610ms
+ ✓ Compiled /dashboard in 295ms (747 modules)
+ ✓ Compiled /api/pagos/soportes in 207ms (750 modules)
+ ✓ Compiled (752 modules)
+ GET /api/pagos/soportes?solo=count 200 in 816ms
+ GET /api/pagos/soportes?solo=count 200 in 808ms
+ GET /api/deportistas 200 in 2369ms
+ GET /api/deportistas 200 in 2503ms
+ ○ Compiling /contabilidad ...
+ ✓ Compiled /contabilidad in 765ms (764 modules)
+ ✓ Compiled in 2.5s (1443 modules)
+ ✓ Compiled in 368ms (733 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 511ms (719 modules)
+ GET /login 200 in 787ms

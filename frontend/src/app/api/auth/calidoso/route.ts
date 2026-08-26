@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server';
 import { crearFirma, COOKIE_LEGIBLE, COOKIE_FIRMA, DUR_SEG } from '@/lib/session';
+import { yaRetirado, tienePazYSalvo, TEL_ATENCION } from '@/lib/retiro';
 
 const SB_URL = 'https://fykdyalpuydkwfjqguip.supabase.co';
 const SB_KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
 
   let id = '';
   let nombre = '';
+  let estadoDep = '';   // el ESTADO de la ficha, para saber si ya se retiró
 
   /* ── 1. Búsqueda por código en la tabla de deportistas ─────────────────── */
   try {
@@ -108,6 +110,8 @@ export async function POST(request: NextRequest) {
           if (buscarDocumento(cols) === documento) {
             id = String(f?.id ?? '');
             nombre = String(f?.nombre ?? '');
+            const kEstado = Object.keys(cols || {}).find(k => /^estado$/i.test(k.trim()));
+            estadoDep = kEstado ? String(cols[kEstado] ?? '') : '';
             break;
           }
         }
@@ -137,7 +141,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Código o documento incorrecto' }, { status: 401 });
   }
 
-  /* ── 3. Sesión firmada de rol 'deportista' (el de menor privilegio) ────── */
+  /* ── 3. TRÁMITE CERRADO: retirado y con Paz y Salvo entregado ───────────
+     Cuando el deportista ya se retiró Y la casa le entregó su constancia, el
+     ciclo con la institución terminó: desde ese momento no vuelve a entrar a
+     la plataforma. Se le da la línea de atención, que es su camino de ahora
+     en adelante. — 26/08/2026
+
+     Se comprueba AQUÍ, en el servidor, y no escondiendo botones: así no hay
+     forma de saltárselo desde el navegador.
+     Solo bloquea si se cumplen LAS DOS cosas. Un retirado sin constancia SÍ
+     entra, porque justamente puede estar viniendo a descargarla. */
+  if (id && yaRetirado(estadoDep) && await tienePazYSalvo(id)) {
+    return NextResponse.json({
+      ok: false,
+      error:
+        'Tu proceso de retiro ya finalizó y se entregó el Paz y Salvo, ' +
+        'por lo que el ingreso a la plataforma quedó cerrado. ' +
+        `Para cualquier consulta comunícate con la línea de atención ${TEL_ATENCION}. ` +
+        '¡Gracias por haber hecho parte de nuestra historia!',
+    }, { status: 403 });
+  }
+
+  /* ── 4. Sesión firmada de rol 'deportista' (el de menor privilegio) ────── */
   exitoso(ip);
   // El id del deportista viaja DENTRO de la firma: así el servidor sabe de
   // quién es esta sesión y puede negar el acceso a los datos de otros niños.

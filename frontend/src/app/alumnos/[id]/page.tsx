@@ -649,6 +649,40 @@ export default function PerfilDeportista() {
               </button>
             ))}
           </div>
+
+          {/* ── SOLICITUD DE RETIRO (26/08/2026) ─────────────────────────────
+              Va aparte y en tono discreto: no compite con los cuatro botones
+              de arriba, pero se encuentra sin tener que preguntar. Si el caso
+              ya está en estudio, el botón lo dice en vez de invitar otra vez. */}
+          {(() => {
+            const cols = dep._columnas ?? {};
+            const kEst = Object.keys(cols).find(k => /^estado$/i.test(k.trim()));
+            const est  = kEst ? String(cols[kEst] ?? '') : '';
+            const enEstudio = /solicit/i.test(est);
+            const yaSalio   = /retir/i.test(est) && !enEstudio;
+            const resaltado = enEstudio || yaSalio;
+            return (
+              <button
+                onClick={() => router.push('/retiro')}
+                style={{
+                  width: '100%', marginTop: 10, minHeight: 44,
+                  background: resaltado ? 'rgba(224,163,58,0.16)' : 'rgba(255,255,255,0.05)',
+                  border: resaltado ? '1.5px solid rgba(224,163,58,0.65)' : '1.5px solid rgba(255,255,255,0.16)',
+                  borderRadius: 13,
+                  color: resaltado ? '#E0A33A' : 'rgba(255,255,255,0.72)',
+                  fontWeight: 900, fontSize: 11.5, letterSpacing: '0.05em',
+                  textTransform: 'uppercase', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                }}>
+                <span>{enEstudio ? '⏳' : yaSalio ? '📄' : '📄'}</span>
+                <span>
+                  {enEstudio ? 'Solicitud de retiro · en estudio'
+                    : yaSalio ? 'Mi retiro y paz y salvo'
+                    : 'Solicitud de retiro'}
+                </span>
+              </button>
+            );
+          })()}
         </div>
 
         {/* ── MENSAJES: elegir canal y escribir (queda en la plataforma) ── */}

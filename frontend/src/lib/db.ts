@@ -396,6 +396,41 @@ export async function contarDeportistasPorProyecto(
   return out;
 }
 
+/** UNA sola ficha, por su id.
+ *
+ *  ⚠ RENDIMIENTO (25/08/2026): la pantalla de asistencia del deportista —la que
+ *  abren los PADRES— llamaba a getDeportistas() y se bajaba las 1.163 fichas de
+ *  la academia para encontrar UNA. En el celular de una familia eso son varios
+ *  megas para ver a su propio hijo.
+ *
+ *  Devuelve null si no se encuentra (por ejemplo, los calidosos con id temporal
+ *  tipo `dep-xxxx`): ahí quien llama puede recurrir a la lista completa. */
+export async function getDeportistaPorId(id: string): Promise<Deportista | null> {
+  const clean = String(id ?? '').trim();
+  if (!clean) return null;
+
+  // Si la lista ya está en memoria, no se pide nada.
+  if (_cacheDeportistas) {
+    const hit = _cacheDeportistas.find(d => d.id === clean);
+    if (hit) return hit;
+  }
+  // Los ids temporales no son uuid: preguntar por ellos da error en el servidor.
+  const esUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean);
+  if (!esUuid) return null;
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/deportistas?select=id,nombre,columnas&id=eq.${encodeURIComponent(clean)}&limit=1`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }, cache: 'no-store' },
+    );
+    if (res.ok) {
+      const filas = await res.json();
+      if (Array.isArray(filas) && filas[0]) return rowToDeportista(filas[0]);
+    }
+  } catch { /* sin conexión: quien llama decide qué hacer */ }
+  return null;
+}
+
 export async function getDeportistasPorProyecto(
   proyecto: string
 ): Promise<{ data: Deportista[]; error: string | null }> {
@@ -1176,7 +1211,27 @@ export type AsistenciaData = Record<string, Record<string, Record<string, Record
 const LS_ASIST = 'futuro_asistencia';
 
 /** Lee asistencia completa: fetch() directo → SDK → localStorage. */
-export async function getAsistencia(): Promise<AsistenciaData> {
+/** Meses a los que limitar la consulta, en formato `2026_08`.
+ *  Devuelve el pedazo de dirección para PostgREST, o '' si no hay límite. */
+function filtroMeses(meses?: string[]): string {
+  const lim = (meses ?? []).map(m => String(m ?? '').trim()).filter(Boolean);
+  if (!lim.length) return '';
+  return `&anio_mes=in.(${lim.map(m => encodeURIComponent(m)).join(',')})`;
+}
+
+/** Lee la asistencia.
+ *
+ *  ⚠ RENDIMIENTO (25/08/2026): antes SIEMPRE se traía la asistencia COMPLETA de
+ *  la academia — todos los deportistas, todos los meses, todos los años. Son
+ *  decenas de miles de filas que el servidor entrega de a 1.000, o sea decenas
+ *  de viajes seguidos antes de poder pintar nada. Por eso el módulo tardaba
+ *  tanto en abrir.
+ *
+ *  Ahora se le pasan los `meses` que de verdad se van a mostrar (normalmente
+ *  los 12 del año seleccionado). Sin `meses` se comporta como antes. */
+export async function getAsistencia(meses?: string[]): Promise<AsistenciaData> {
+  const filtro = filtroMeses(meses);
+  const limMeses = (meses ?? []).map(m => String(m ?? '').trim()).filter(Boolean);
   const parseAsistRows = (data: any[]): AsistenciaData => {
     const result: AsistenciaData = {};
     for (const r of data) {
@@ -1191,7 +1246,7 @@ export async function getAsistencia(): Promise<AsistenciaData> {
   // ── Intento 1: fetch() nativo PAGINADO — trae TODOS los meses (sin tope de 5000) ──
   try {
     const data = await fetchAllPages(
-      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&order=anio_mes.desc,id.asc`,
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado${filtro}&order=anio_mes.desc,id.asc`,
       {
         'apikey':        SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
@@ -1201,7 +1256,9 @@ export async function getAsistencia(): Promise<AsistenciaData> {
     );
     if (Array.isArray(data) && data.length > 0) {
       const result = parseAsistRows(data);
-      try { lsSet(LS_ASIST, result); } catch {}
+      // La copia local solo se guarda cuando se trajo TODO; si se pidió un año
+      // suelto, pisarla dejaría al resto de años sin respaldo.
+      if (!limMeses.length) { try { lsSet(LS_ASIST, result); } catch {} }
       return result;
     }
   } catch { /* intentar SDK */ }
@@ -1211,12 +1268,14 @@ export async function getAsistencia(): Promise<AsistenciaData> {
     const all: any[] = [];
     let offset = 0;
     for (let i = 0; i < 60; i++) {
-      const { data, error } = await supabase()
+      let q = supabase()
         .from('asistencia')
         .select('proyecto, anio_mes, deportista_id, fecha, estado')
         .order('anio_mes', { ascending: false })
         .order('id', { ascending: true })
         .range(offset, offset + 999);
+      if (limMeses.length) q = q.in('anio_mes', limMeses) as typeof q;
+      const { data, error } = await q;
       if (error) throw error;
       if (!data || data.length === 0) break;
       all.push(...data);
@@ -1226,7 +1285,7 @@ export async function getAsistencia(): Promise<AsistenciaData> {
     if (!all.length) return lsGet<AsistenciaData>(LS_ASIST, {});
 
     const result = parseAsistRows(all);
-    try { lsSet(LS_ASIST, result); } catch {}
+    if (!limMeses.length) { try { lsSet(LS_ASIST, result); } catch {} }
     return result;
   } catch {
     return lsGet<AsistenciaData>(LS_ASIST, {});
@@ -1368,8 +1427,12 @@ export async function getAsistenciaPorProyecto(proyecto: string): Promise<Asiste
  * Carga asistencia para una lista de deportista_ids.
  * Permite que los registros históricos sigan al deportista aunque cambie de proyecto.
  */
-export async function getAsistenciaDeportistas(ids: string[]): Promise<AsistenciaData> {
+export async function getAsistenciaDeportistas(ids: string[], meses?: string[]): Promise<AsistenciaData> {
   if (!ids.length) return {};
+  // Igual que getAsistencia: si se dicen los meses, se traen SOLO esos. Antes
+  // se bajaba el historial completo de cada deportista. — 25/08/2026
+  const filtro = filtroMeses(meses);
+  const limMeses = (meses ?? []).map(m => String(m ?? '').trim()).filter(Boolean);
 
   const parseRows = (data: any[]): AsistenciaData => {
     const result: AsistenciaData = {};
@@ -1386,7 +1449,7 @@ export async function getAsistenciaDeportistas(ids: string[]): Promise<Asistenci
   const inParam = `(${ids.map(id => encodeURIComponent(id)).join(',')})`;
   try {
     const data = await fetchAllPages(
-      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&deportista_id=in.${inParam}&order=id.asc`,
+      `${SUPABASE_URL}/rest/v1/asistencia?select=proyecto,anio_mes,deportista_id,fecha,estado&deportista_id=in.${inParam}${filtro}&order=id.asc`,
       {
         'apikey':        SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
@@ -1402,12 +1465,14 @@ export async function getAsistenciaDeportistas(ids: string[]): Promise<Asistenci
     const all: any[] = [];
     let offset = 0;
     for (let i = 0; i < 60; i++) {
-      const { data, error } = await supabase()
+      let q = supabase()
         .from('asistencia')
         .select('proyecto, anio_mes, deportista_id, fecha, estado')
         .in('deportista_id', ids)
         .order('id', { ascending: true })
         .range(offset, offset + 999);
+      if (limMeses.length) q = q.in('anio_mes', limMeses) as typeof q;
+      const { data, error } = await q;
       if (error) break;
       if (!data || data.length === 0) break;
       all.push(...data);

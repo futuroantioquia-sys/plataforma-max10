@@ -7,12 +7,14 @@ import {
   Star, MessageCircle, Clipboard, ClipboardList, UserPlus, LayoutList,
   Link2, Copy, Check, QrCode, BarChart3, Trophy, Upload, FolderKanban,
   LogOut, Zap, Shield, Dumbbell, HardHat, Clock, UserCog, Calculator, Cake, CalendarDays,
+  UserMinus, FileText,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { esSuperAdmin, esDeportivo } from '@/lib/permisos';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
 import { getDeportistas, countSoportesPendientes, countSolicitudesFacturaPendientes, countLibroPagos, getResumenVisitas, getVisitasPorDia } from '@/lib/db';
+import { contarSolicitudesEnEstudio } from '@/lib/retiro';
 
 // ── PALETA ───────────────────────────────────────────────────────
 //  La misma del consolidado de asistencias (arte aprobado 22/08/2026),
@@ -256,6 +258,9 @@ function DashboardAdmin() {
   const [pendientesSoportes, setPendientesSoportes] = useState(0);
   const [pagosCargados,      setPagosCargados]      = useState(0);
   const [pendientesFacturas, setPendientesFacturas] = useState(0);
+  // Solicitudes de retiro SIN RESOLVER (26/08/2026). Se cuentan de la tabla
+  // de solicitudes, no del estado de las fichas: ver contarSolicitudesEnEstudio.
+  const [retirosEnEstudio,   setRetirosEnEstudio]   = useState(0);
   // Rol (se resuelve en cliente para evitar desajustes de hidratación)
   const [esSuper, setEsSuper] = useState(false); // ADMON → gestiona administradores
   const [esDep,   setEsDep]   = useState(false); // deportivo → sin finanzas
@@ -279,6 +284,9 @@ function DashboardAdmin() {
 
       // Pagos subidos: contar desde la base (igual para admin y contable, no del localStorage)
       countLibroPagos().then(n => setPagosCargados(n)).catch(() => {});
+
+      // Solicitudes de retiro que están esperando decisión
+      contarSolicitudesEnEstudio().then(n => setRetirosEnEstudio(n)).catch(() => {});
     };
 
     refrescar();
@@ -305,6 +313,18 @@ function DashboardAdmin() {
         <AccesoCard titulo="Total Afiliados"   icono={LayoutList}    href="/general"      descripcion="Todos los deportistas"       color="verde" />
         <AccesoCard titulo="Asignación de Proyectos" icono={UserPlus}      href="/asignacion"   descripcion="Asignar nuevos deportistas"  color="verde" badge={pendientesAsign} />
         <AccesoCard titulo="Programas y Proyectos"   icono={Users}         href="/alumnos"      descripcion="Ver y editar fichas"         color="verde" />
+        {/* 26/08/2026 — Los dos módulos de retiro.
+            · Solicitud de Retiro: la MISMA pantalla del padre. Entrando desde
+              aquí sale un buscador para escoger el deportista, y se puede
+              radicar por el padre (por ejemplo, cuando llama por teléfono).
+            · Total Retirados: donde se estudia y se resuelve. El número en rojo
+              es la cantidad de casos EN ESTUDIO. */}
+        <AccesoCard titulo="Solicitud de Retiro"     icono={FileText}      href="/retiro"       descripcion="Radicar y ver lo del padre"  color="verde" />
+        {/* El número rojo son las solicitudes SIN RESOLVER, contadas de la
+            tabla de solicitudes. La primera versión contaba los deportistas
+            marcados "SOLICITA RETIRO" en su ficha y se quedaba prendido al
+            eliminar o resolver una; así ya no pasa: baja solo. — 26/08/2026 */}
+        <AccesoCard titulo="Total Retirados"         icono={UserMinus}     href="/retirados"    descripcion="Solicitudes y retirados"     color="verde" badge={retirosEnEstudio} />
       </CategoriaSection>
 
 

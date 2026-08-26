@@ -12,7 +12,14 @@ const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/microc
 // Rutas permitidas para deportista (calidoso) — SOLO su perfil y secciones propias.
 // IMPORTANTE: NO incluye /evaluaciones ni /valoracion-dinamica → las valoraciones
 // quedan bloqueadas EN EL SERVIDOR para los calidosos (requisito fundamental).
-const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/afiliacion', '/calendario', '/mantenimiento', '/mis-pagos'];
+// '/retiro' (26/08/2026) es el módulo donde el padre pide el retiro de SU hijo.
+// OJO: '/retirados' es OTRA ruta —la de administración— y NO entra aquí: la
+// comparación es exacta o con barra ('/retiro/'), así que '/retirados' no cuela.
+const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/afiliacion', '/calendario', '/mantenimiento', '/mis-pagos', '/retiro'];
+
+// TOTAL RETIRADOS — solo administración. Ni formadores ni padres.
+const RUTAS_SOLO_ADMIN = ['/retirados'];
+const ROLES_ADMIN = ['1', 'total', 'deportivo', 'contabilidad'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -66,6 +73,15 @@ export async function middleware(request: NextRequest) {
     const finanzas = ['/pagos', '/pagos-pendientes', '/productos', '/contabilidad', '/facturas', '/nomina', '/proveedores'];
     const esFinanzas = finanzas.some(r => pathname === r || pathname.startsWith(r + '/'));
     if (esFinanzas) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // TOTAL RETIRADOS: solo administración (26/08/2026).
+  // Los formadores y los padres ya quedaron desviados arriba; esto cierra la
+  // puerta también para cualquier rol nuevo que se agregue mañana.
+  if (RUTAS_SOLO_ADMIN.some(r => pathname === r || pathname.startsWith(r + '/'))) {
+    if (!ROLES_ADMIN.includes(rol)) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }

@@ -1,11 +1,57 @@
 # PENDIENTES — Plataforma MAX 10 / Futuro Antioquia
-*(al 25 de agosto de 2026, 5:00 p.m.)*
+*(al 26 de agosto de 2026)*
 
 Claude: si retomas el trabajo, lee esto primero. Está en orden de importancia.
 
 ---
 
-## 0. SIN PUBLICAR ⚠️ ← lo primero
+## REGLA DE ORO — TOTAL AFILIADOS ES LA FUENTE ⚠️ (dirección, 26/08/2026)
+
+**TOTAL AFILIADOS (`/general`) es el módulo que alimenta a TODOS los demás.**
+Asistencias, Valoraciones, Estado de Cuenta, Cobros y Contabilidad **leen** de
+ahí; no tienen datos propios.
+
+Los datos que mandan desde Total Afiliados son, como mínimo:
+
+- **FECHA DE AFILIACIÓN**
+- **PROGRAMA**
+- **PROYECTO**
+- **VALOR MENSUALIDAD**
+
+Y con ellos viajan también: SEDE, JORNADA DE ENTRENAMIENTO, PROFE, ESTADO,
+TIPO DE AFILIACIÓN, CÓDIGO y CONSIGNA A.
+
+**Qué significa esto al programar:**
+
+1. Ningún otro módulo puede guardar su propia versión de estos campos. Si
+   Asistencias o Valoraciones necesitan el proyecto o la cuota, lo **leen** de
+   la ficha del deportista (tabla `deportistas`), nunca lo copian ni lo
+   recalculan aparte.
+2. Si un dato se ve distinto en dos pantallas, el que está bien es el de
+   Total Afiliados; lo que hay que arreglar es la otra pantalla.
+3. Cuando se cambie algo en Total Afiliados, hay que revisar que Asistencias,
+   Valoraciones y Estado de Cuenta sigan mostrando lo mismo.
+4. El Estado de Cuenta y Total Afiliados usan **la misma tabla de tarifas**
+   (`tarifaMensual`) a propósito. No duplicar esa tabla en ningún otro lado.
+
+---
+
+## 0a. LO PRIMERO DEL 26/08 — CREAR LA TABLA DE RETIROS ⚠️
+
+Los dos módulos nuevos (**Solicitud de Retiro** para el padre y **Total
+Retirados** para administración) ya están escritos, pero necesitan una tabla
+que todavía no existe en la base de datos.
+
+**Qué hacer (una sola vez):** doble clic en **`PASO-CREAR-TABLA-RETIROS.bat`**
+y seguir los 4 pasos que salen en la pantalla negra. Cuando diga
+`Success. No rows returned`, ya quedó.
+
+Sin ese paso, cuando un padre oprima ACEPTAR le va a salir un aviso que dice
+que falta correr ese archivo. No se rompe nada, simplemente no guarda.
+
+---
+
+## 0. SIN PUBLICAR ⚠️
 
 Al cierre del 25/08 quedó guardado en el computador pero **NO publicado**:
 
@@ -231,6 +277,67 @@ Publicado en: https://plataforma-max10.vercel.app
 - **Nombre del deportista en el libro:** se mostraba solo el nombre guardado,
   que se congela al subir el extracto. Ahora, si falta, se saca del código
   (en la tabla, en el filtro y en la exportación a Excel).
+
+---
+
+# LO QUE SE HIZO EL 26 DE AGOSTO
+
+**Total Afiliados — contornos y colores.**
+El cuadro estaba en modo `collapse`, donde dos casillas comparten la línea: por
+eso las columnas congeladas (N°, CÓDIGO, DEPORTISTA) perdían el marco blanco al
+desplazar. Se pasó a `separate` y cada casilla pinta su lado derecho y el de
+abajo, con el cierre de la primera columna y del encabezado aparte. Resultado:
+rejilla pareja de 1px, sin huecos, en todo el cuadro.
+Colores del código: ANTIGUOS verde · NUEVOS naranja · REINGRESOS azul · los que
+empiezan por **B** o **MB** en gris (el código manda sobre el tipo de
+afiliación). La columna CONSIGNA A quedó con el mismo fondo gris de las demás,
+sin pastillas azules ni verdes; lo escogido a mano se marca con la línea ámbar.
+
+**MÓDULOS NUEVOS: Solicitud de Retiro y Total Retirados.**
+
+Cómo funciona, de principio a fin:
+
+1. El padre entra como siempre (código + documento) y en la pantalla de su
+   deportista ve el botón **SOLICITUD DE RETIRO**.
+2. En `/retiro` ve el CÓDIGO y el NOMBRE (no los puede cambiar), escribe el
+   **motivo** y oprime ACEPTAR.
+3. **El deportista NO queda retirado.** Queda con estado **"SOLICITA RETIRO"**
+   en Total Afiliados: el caso *entra en estudio* hasta coordinar los pagos.
+   La fila se ve con el código en **ámbar**.
+4. Le sale el aviso: *"El retiro no puede realizarse hasta no aclarar el estado
+   de pago del deportista"*, con dos caminos: **ver su Estado de Cuenta**
+   (donde está el buzón del Área de Pagos) y el **WhatsApp 304 540 14 97** de
+   la línea de pagos, con el mensaje ya escrito.
+5. Si **no debe nada**, además le aparece el botón **DESCARGAR PAZ Y SALVO**.
+6. Administración entra a **Total Retirados** (`/retirados`, tarjeta nueva en el
+   tablero, con el número de casos en rojo) y en cada caso puede **APROBAR**
+   (pasa a RETIRADO) o **DEVOLVER** (vuelve a ACTIVO). Segunda pestaña: todos
+   los que hoy figuran retirados.
+
+Detalles que hay que saber para no romperlo:
+
+- **"SOLICITA RETIRO" contiene la palabra "retiro".** Media plataforma pregunta
+  `/retir/`. Se revisaron todos los sitios: los que usan `/retirad/` (con la D)
+  ya estaban bien. Se corrigieron los tres que sí confundían: Total Afiliados,
+  Cartera y Cumpleaños. **Regla: quien pidió el retiro sigue activo y sigue en
+  cartera** — si lo sacáramos de ahí, la deuda que hay que aclarar desaparecería
+  de la vista, que es justo lo contrario de lo que se busca.
+- El cálculo del paz y salvo vive en `lib/retiro.ts` (`estadoDePago`) y repite
+  paso por paso lo que hace el Estado de Cuenta: junta lo guardado bajo el
+  código con lo guardado bajo el id interno, arma **siempre** las 12 filas del
+  año y cuenta como deuda los meses PEND que ya pasaron. Un mes sin dato **no**
+  es un mes pagado. Un becado siempre está a paz y salvo.
+- **PENDIENTE:** el Estado de Cuenta todavía tiene su propia copia de esa
+  cuenta (98 KB de página). Habría que hacerlo importar `estadoDePago` para que
+  quede una sola, como manda la regla de oro.
+- **PENDIENTE:** el formato del **Paz y Salvo** está sin construir. Hoy el botón
+  avisa que viene pronto. Falta definir con la dirección qué debe decir, si
+  lleva firma y si sale en PDF (se puede usar el mismo html2canvas + jsPDF de la
+  Valoración Dinámica, que ya está resuelto).
+- **PENDIENTE:** el módulo escribe el estado desde el navegador, igual que todo
+  el resto de la plataforma. No es una puerta nueva, pero sí conviene, cuando se
+  arregle el tema del repositorio público (pendiente 4), pasar estas escrituras
+  a rutas del servidor.
 
 ---
 

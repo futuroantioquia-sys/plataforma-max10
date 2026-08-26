@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Calendar, BarChart2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, getAsistencia, getAsistenciaDeportista, getFoto, registrarDescargaCertificado } from '@/lib/db';
+import { getDeportistas, getDeportistaPorId, getAsistenciaDeportista, getFoto, registrarDescargaCertificado } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import LoadingBall from '@/components/LoadingBall';
 import { useAuthStore } from '@/store/auth.store';
@@ -83,7 +83,14 @@ export default function AsistenciaAtletaPage() {
   const [realId,     setRealId]     = useState<string>(id);
 
   useEffect(() => {
-    getDeportistas().then(lista => {
+    /* ── RENDIMIENTO (25/08/2026) ────────────────────────────────────────────
+       Esta pantalla la abren los PADRES desde el celular. Antes se bajaba la
+       lista COMPLETA de la academia —1.163 fichas, varios megas— solo para
+       encontrar a un niño. Ahora se pide esa ficha sola; la lista completa
+       queda de respaldo, únicamente para los calidosos con id temporal. */
+    getDeportistaPorId(id).then(async unica => {
+      if (unica) { setDep(unica); return; }
+      const lista = await getDeportistas();
       let found = lista.find(d => d.id === id);
 
       // Calidosos con IDs temporales (dep-xxxxx): buscar por nombre para obtener UUID real
@@ -116,10 +123,14 @@ export default function AsistenciaAtletaPage() {
     });
     // Cargar solo los datos de ESTE deportista — la tabla tiene 20k+ filas y el límite
     // de getAsistencia() corta datos. getAsistenciaDeportista filtra por deportista_id.
-    getAsistenciaDeportista(id).then(data => {
-      if (Object.keys(data).length) setAsistencia(data as any);
-      else getAsistencia().then(full => { if (Object.keys(full).length) setAsistencia(full as any); });
-    });
+    /* ⚠ Aquí había un respaldo peligroso: si el deportista todavía no tenía
+       NINGUNA asistencia registrada, la respuesta venía vacía y entonces se
+       llamaba a getAsistencia(), que baja la asistencia de TODA la academia —
+       más de cien mil filas— para terminar mostrando una pantalla vacía.
+       Justo le pasaba a los deportistas nuevos. Se quitó. — 25/08/2026 */
+    getAsistenciaDeportista(id)
+      .then(data => { if (Object.keys(data).length) setAsistencia(data as any); })
+      .catch(err => console.error('[asistencia deportista]', err));
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Datos derivados del deportista (seguros con dep ?? null) */

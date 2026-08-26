@@ -7,6 +7,7 @@ import { ArrowLeft, Search, Users, Save, CheckCircle, Columns3, Upload, X, Troph
 import { getDeportistas, saveDeportistas, deleteAllDeportistas, eliminarDeportista, getProfes } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
+import { EST_SOLICITA } from '@/lib/retiro';
 
 // ── Regex reutilizable para columna de proyecto ───────────────
 const RX_PROY = /proyecto|^proy\b/i;
@@ -22,7 +23,74 @@ const SELECTS_RX: RegExp[] = [
   /tipo.*afil|afil.*tipo/i,
   /^program/i,
   /^estado$/i,
+  /^sede/i,          // SEDE DE ENTRENAMIENTO — editable desde la fila (25/08/2026)
 ];
+
+/* ── SEDES OFICIALES ──────────────────────────────────────────────────────
+   En las fichas la misma sede está escrita de varias formas: "la 80" y
+   "LA 80", "BELLO NIQUIA" y "Bello Niquía", "Santa Mónica" y "SANTA MÓNICA".
+   Por eso el filtro mostraba la misma sede repetida y una sede quedaba
+   partida en dos.
+
+   Esta es la lista buena. Todo lo que llegue se compara SIN tildes y SIN
+   mayúsculas contra ella, así que lo ya escrito sigue reconociéndose, pero en
+   pantalla y al guardar queda siempre la forma oficial. — 25/08/2026 */
+/* ORDEN OFICIAL, dictado por la dirección el 25/08/2026. Es el orden en que se
+   ven las sedes en el filtro y en el desplegable de cada fila, para TODOS los
+   programas. NO es alfabético a propósito: es el orden con el que la academia
+   las nombra. */
+const SEDES_OFICIALES: string[] = [
+  'SANTA MÓNICA',
+  'LA 80',
+  'CENTRO',
+  'BELLO NIQUÍA',
+  'SABANETA',
+  'RIONEGRO',      // la dirección confirmó que se llama RIONEGRO, no ORIENTE
+  'INSTITUCIONAL',
+];
+
+/** Igual que arriba pero comparable: sin tildes, en mayúsculas y sin dobles
+ *  espacios. "la 80", "LA  80" y "La 80" dan todos "LA 80". */
+function llaveSede(s: any): string {
+  return String(s ?? '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+}
+
+/* NOMBRES VIEJOS QUE APUNTAN A UNA SEDE OFICIAL.
+   La dirección (25/08/2026) pidió que en el desplegable quede SANTA MÓNICA y
+   LA 80 como dos sedes, sin la tercera "LA 80 (SANTA MÓNICA)": ese nombre
+   compuesto es LA 80, y el paréntesis era solo una aclaración.
+   La llave se escribe SIN tildes y en mayúsculas, como la deja llaveSede(). */
+const ALIAS_SEDE: Record<string, string> = {
+  'LA 80 SANTA MONICA': 'LA 80',
+};
+
+/* LO QUE NO ES UNA SEDE.
+   En algunas fichas la casilla de sede quedó con "SEL/DES", que es el PROGRAMA
+   (Selección/Desarrollo), no un lugar. Se trata como vacío: desaparece del
+   desplegable y en la fila queda en "—" para que se le ponga la sede buena.
+   El dato viejo no se borra de la base; solo deja de contarse como sede. */
+const NO_SON_SEDE = new Set<string>([
+  'SEL DES',   // SEL/DES
+  'SELDES',
+]);
+
+/** Devuelve la forma OFICIAL de una sede.
+ *
+ *  Si NO la reconoce, no la inventa ni la mete en otra sede: la deja tal cual,
+ *  solo en mayúsculas, para que al menos "Rionegro" y "RIONEGRO" no salgan como
+ *  dos sedes distintas. Esas quedan al final de la lista, a la vista, para que
+ *  la administración decida qué hacer con ellas. */
+function sedeCanonica(v: any): string {
+  const bruto = String(v ?? '').trim();
+  if (!bruto) return '';
+  const k = llaveSede(bruto);
+  if (NO_SON_SEDE.has(k)) return '';            // SEL/DES y parecidos: no son sede
+  if (ALIAS_SEDE[k]) return ALIAS_SEDE[k];
+  const oficial = SEDES_OFICIALES.find(o => llaveSede(o) === k);
+  return oficial ?? bruto.toUpperCase();
+}
 
 // ── PALETA (la misma del consolidado de asistencias) ─────────
 const LIENZO     = '#333F50';   // lienzo de la tabla
@@ -123,31 +191,44 @@ function claveCanonica(s) {
 }
 function esTipoAfil(col: string)  { return !esFechaAfil(col) && /tipo.*afil|^afil/i.test(col.trim()); }
 
-function prioridadCodigo(cod: number): number {
-  if (cod >= 26000 && cod <= 26999) return 1;
-  if (cod >= 25000 && cod <= 25999) return 2;
-  if (cod >= 24000 && cod <= 24999) return 3;
-  if (cod >= 23000 && cod <= 23999) return 4;
-  if (cod >= 22000 && cod <= 22999) return 5;
-  if (cod >= 21000 && cod <= 21999) return 6;
-  if (cod >= 2000  && cod <= 2999)  return 7;
-  if (cod >= 9000  && cod <= 9999)  return 8;
-  if (cod >= 8000  && cod <= 8999)  return 9;
-  if (cod >= 7000  && cod <= 7999)  return 10;
-  if (cod >= 6000  && cod <= 6999)  return 11;
-  if (cod >= 5000  && cod <= 5999)  return 12;
-  if (cod >= 4000  && cod <= 4999)  return 13;
-  return 99;
+/* ── EN QUÉ BLOQUE VA CADA CÓDIGO ─────────────────────────────────────────
+   Orden pedido por la dirección el 25/08/2026:
+
+     1. Los de CUATRO dígitos, de menor a mayor   (3456, 4123, …)
+     2. Los de CINCO dígitos, de menor a mayor    (21345, 22345, … 26111)
+     3. Los que empiezan por B — becados, y MB de media beca
+     4. Cualquier otro código raro, de últimas
+
+   Los RETIRADOS y PAUSADOS bajan después de todo esto, sin importar su
+   código: de eso se encarga rangoEstado().
+
+   (Antes había una lista fija que ponía los 26xxx de primeras y los 4xxx de
+   últimas. Se reemplazó por esta regla, que no hay que tocar cada año.) */
+function grupoCodigo(codRaw: string): number {
+  const s = String(codRaw ?? '').trim().toUpperCase();
+  if (!s) return 9;
+  if (/^M?B/.test(s)) return 3;                 // B… y MB… (media beca)
+  if (/^\d+$/.test(s)) {
+    if (s.length === 4) return 1;
+    if (s.length === 5) return 2;
+  }
+  return 4;
 }
+
+/* COLORES DEL CÓDIGO — orden de la dirección (26/08/2026):
+   ANTIGUOS verde · NUEVOS naranja · REINGRESOS azul · los B (y MB) en gris. */
+const COD_VERDE   = '#16a34a';  // ANTIGUO
+const COD_NARANJA = '#f97316';  // NUEVO
+const COD_AZUL    = '#2563eb';  // REINGRESO
+const COD_GRIS    = '#6b7280';  // B / MB institucional y todo lo demás
 
 function colorCodigo(afil: string): string {
   const v = afil.toLowerCase();
-  if (v.includes('nuevo'))     return '#f97316'; // Naranja
-  if (v.includes('antigu'))    return '#16a34a'; // Verde
-  if (v.includes('reingreso')) return '#2563eb'; // Azul
-  if (v.includes('mb instit')) return '#374151'; // Gris oscuro
-  if (v.includes('b instit'))  return '#7c3aed'; // Morado
-  return '#6b7280';
+  if (v.includes('nuevo'))     return COD_NARANJA;
+  if (v.includes('antigu'))    return COD_VERDE;
+  if (v.includes('reingreso')) return COD_AZUL;
+  if (v.includes('instit'))    return COD_GRIS;   // B y MB institucional
+  return COD_GRIS;
 }
 
 /** Prioridad de orden: Nuevo→Antiguo→Reingreso→MB Inst→B Inst */
@@ -169,14 +250,16 @@ function cmpDeportistasCon(
   nombreDe: (d: Deportista) => string,
 ) {
   return (a: Deportista, b: Deportista): number => {
-    // Primero separa activos / pausados / retirados; lo demás queda igual.
+    // 1º) Activos arriba; pausados y retirados al final.
     const rA = rangoEstado(a), rB = rangoEstado(b);
     if (rA !== rB) return rA - rB;
-    const nA = Number(codigoDe(a).replace(/\D/g, '')) || 0;
-    const nB = Number(codigoDe(b).replace(/\D/g, '')) || 0;
-    const pA = prioridadCodigo(nA);
-    const pB = prioridadCodigo(nB);
-    if (pA !== pB) return pA - pB;
+    // 2º) Bloque del código: 4 dígitos → 5 dígitos → B → otros.
+    const cA = codigoDe(a), cB = codigoDe(b);
+    const gA = grupoCodigo(cA), gB = grupoCodigo(cB);
+    if (gA !== gB) return gA - gB;
+    // 3º) Dentro del bloque, de menor a mayor.
+    const nA = Number(String(cA).replace(/\D/g, '')) || 0;
+    const nB = Number(String(cB).replace(/\D/g, '')) || 0;
     if (nA !== nB) return nA - nB;
     return nombreDe(a).localeCompare(nombreDe(b), 'es');
   };
@@ -191,7 +274,17 @@ function ordenPrograma(prog: string) {
   const i = ORDEN_PROGRAMA.findIndex(p => p.toLowerCase() === prog.trim().toLowerCase());
   return i >= 0 ? i : ORDEN_PROGRAMA.length;
 }
-function esRetirado(dep: Deportista) { return /retir/i.test(getColVal(dep, /^estado$/i)); }
+/* PEDIR el retiro NO es estar retirado (26/08/2026).
+   El estado "SOLICITA RETIRO" significa que el caso ENTRÓ EN ESTUDIO mientras
+   se coordinan los pagos pendientes: el deportista sigue activo, sigue en su
+   proyecto y se le sigue cobrando hasta que administración resuelva en
+   Total Retirados. Por eso se descarta la palabra "solicita" antes de mirar
+   si dice "retirado". */
+function pidioRetiro(dep: Deportista) { return /solicit/i.test(getColVal(dep, /^estado$/i)); }
+function esRetirado(dep: Deportista) {
+  const v = getColVal(dep, /^estado$/i);
+  return /retir/i.test(v) && !/solicit/i.test(v);
+}
 function esPausado(dep: Deportista)  { return /pausa/i.test(getColVal(dep, /^estado$/i)); }
 /** Los que ya no están entrenando bajan al final de la lista:
  *  0 = activo · 1 = pausado · 2 = retirado.
@@ -253,6 +346,17 @@ function tarifaMensual(programa: string, sede: string): number {
 }
 const enPesos = (n: number) => '$' + Math.round(n).toLocaleString('es-CO');
 
+/* VALOR MENSUALIDAD — las cuotas que se usan (dirección, 25/08/2026).
+   Normalmente la cuota se deduce del programa y la sede, pero ahora se puede
+   escoger a mano de esta lista, o escribir otra cifra para casos especiales. */
+const CUOTAS = [138000, 115000, 80000, 70000];
+/** Nombre de la casilla donde se guarda la cuota puesta a mano. */
+const CUOTA_MANUAL = 'CUOTA_MANUAL';
+/** La casilla de cuota manual tal como se llame en esta ficha (o la de por defecto). */
+function claveCuotaManual(dep: Deportista): string {
+  return Object.keys(dep._columnas ?? {}).find(k => /^cuota_?manual$/i.test(k.trim())) || CUOTA_MANUAL;
+}
+
 /** BECADO: el código empieza por B pero NO por MB (esa es media beca y sí paga). */
 function esBecadoDep(dep: Deportista): boolean {
   const k = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k.trim()));
@@ -286,11 +390,30 @@ function consignaAMax10(dep: Deportista): boolean {
     .some(p => junto.includes(p));
 }
 
-/** Qué dice la columna CONSIGNA A, y de qué color va. */
-function consignaA(dep: Deportista): { texto: string; color: string } {
-  if (esBecadoDep(dep))      return { texto: 'NO PAGA',  color: '#5A6478' };
-  if (consignaAMax10(dep))   return { texto: 'A MAX 10', color: '#4E8FD6' };
-  return { texto: 'A FUTURO', color: '#00B050' };
+/* CONSIGNA A — opciones del desplegable (dirección, 25/08/2026).
+   Normalmente se deduce del proyecto, pero ahora se puede forzar a mano para
+   los casos sueltos que no siguen la regla. */
+const CONSIGNA_OPCIONES = ['A MAX 10', 'A FUTURO', 'NO PAGA'];
+const COLOR_CONSIGNA: Record<string, string> = {
+  'A MAX 10':  '#4E8FD6',
+  'A FUTURO':  '#00B050',
+  'NO PAGA':   '#5A6478',
+};
+
+/** Lo que se escogió A MANO en la columna, si es que se escogió algo. */
+function consignaManual(dep: Deportista): string {
+  const v = String((dep._columnas ?? {})[VCON] ?? '').trim().toUpperCase();
+  return CONSIGNA_OPCIONES.includes(v) ? v : '';
+}
+
+/** Qué dice la columna CONSIGNA A, y de qué color va.
+ *  Manda lo escogido a mano; si no hay nada escogido, se deduce del proyecto. */
+function consignaA(dep: Deportista): { texto: string; color: string; manual: boolean } {
+  const manual = consignaManual(dep);
+  if (manual) return { texto: manual, color: COLOR_CONSIGNA[manual], manual: true };
+  if (esBecadoDep(dep))    return { texto: 'NO PAGA',  color: '#5A6478', manual: false };
+  if (consignaAMax10(dep)) return { texto: 'A MAX 10', color: '#4E8FD6', manual: false };
+  return { texto: 'A FUTURO', color: '#00B050', manual: false };
 }
 
 // Etiquetas de columna — renombra COMPITE → TORNEO 1, muestra labels de virtuales
@@ -318,6 +441,9 @@ export default function GeneralPage() {
   const nombreClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [buscar,      setBuscar]      = useState('');
   const [buscarCod,   setBuscarCod]   = useState('');
+  /* Filas donde el usuario escogió "Otro valor…" en VALOR MENSUALIDAD: esa
+     casilla se convierte en un campo para escribir la cifra. — 25/08/2026 */
+  const [cuotaOtro,   setCuotaOtro]   = useState<Record<string, boolean>>({});
   const [guardado,    setGuardado]    = useState(false);
   const COL_WIDTHS_KEY   = 'futuro_vg_col_widths';
   const COL_VISIBLE_KEY  = 'futuro_vg_col_visible';
@@ -340,6 +466,7 @@ export default function GeneralPage() {
   const [resizingActive, setResizingActive] = useState<string | null>(null);
   const [programaFiltro, setProgramaFiltro] = useState<string | null>(null);
   const [proyectoFiltro, setProyectoFiltro] = useState<string | null>(null);
+  const [sedeFiltro,     setSedeFiltro]     = useState<string | null>(null);   // 25/08/2026
   const [anioFiltro,     setAnioFiltro]     = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -478,6 +605,12 @@ export default function GeneralPage() {
     const programa   = todas.filter(c => /^program/i.test(c.trim()));
     const proyecto   = todas.filter(c => /proyecto|^proy\b/i.test(c.trim()));
     const profe      = todas.filter(c => /^prof|\bprofe\b/i.test(c.trim()));
+    /* SEDE DE ENTRENAMIENTO y JORNADA DE ENTRENAMIENTO van JUSTO DESPUÉS de
+       PROFE (dirección, 25/08/2026). Antes quedaban perdidas allá en el montón
+       de columnas del formulario de afiliación. Ojo con no confundir JORNADA DE
+       ENTRENAMIENTO con JORNADA DE ESTUDIO, que es otra columna. */
+    const sedeEnt    = todas.filter(c => /^sede/i.test(c.trim()));
+    const jornadaEnt = todas.filter(c => /^jornada\s+de\s+entren/i.test(c.trim()));
     const celAcud    = todas.filter(c => /^celular del acudiente$/i.test(c.trim())); // después de PROFE
     const cal        = todas.filter(c => /^cal$/i.test(c.trim()));      // después de COMPETENCIA
     const com        = todas.filter(c => /^com$/i.test(c.trim()));      // después de COMPETENCIA
@@ -489,6 +622,7 @@ export default function GeneralPage() {
     // Estas columnas las ubicamos manualmente, así que las sacamos del bloque "resto"
     const excluidas = new Set([
       ...fecha, ...tipoAfil, ...estado, ...cod, ...programa, ...proyecto, ...profe,
+      ...sedeEnt, ...jornadaEnt,
       ...celAcud, ...cal, ...com, ...compite, ...competencia, ...torneo2, ...torneo3, ...torneo4,
       VPOS,
     ]);
@@ -506,12 +640,15 @@ export default function GeneralPage() {
       VPOS,
     ];
 
-    // Después de la columna DÍA: PROYECTO → PROFE → CELULAR DEL ACUDIENTE → TORNEOS
+    /* Después de la columna DÍA:
+       PROYECTO → PROFE → SEDE DE ENTRENAMIENTO → JORNADA DE ENTRENAMIENTO
+       → CELULAR DEL ACUDIENTE → TORNEOS */
+    const trasProfe = [...proyecto, ...profe, ...sedeEnt, ...jornadaEnt, ...celAcud, ...torneos];
     const idxDia = resto.findIndex(c => /^d[ií]a$/i.test(c.trim()));
     if (idxDia >= 0) {
-      resto.splice(idxDia + 1, 0, ...proyecto, ...profe, ...celAcud, ...torneos);
+      resto.splice(idxDia + 1, 0, ...trasProfe);
     } else {
-      resto.push(...proyecto, ...profe, ...celAcud, ...torneos);
+      resto.push(...trasProfe);
     }
 
     // PROGRAMA queda ENSEGUIDA de TIPO DE AFILIACIÓN, y justo después van
@@ -541,6 +678,56 @@ export default function GeneralPage() {
     return result;
   }, [deportistas]);
 
+  /* ── FILTROS EN CASCADA: PROGRAMA → SEDE → PROYECTO ───────────────────────
+     La dirección lo pidió en ese orden (25/08/2026): primero se escoge la sede
+     y el desplegable de PROYECTO queda mostrando SOLO los proyectos de esa
+     sede. Antes salían todos los de la academia y tocaba adivinar cuál era de
+     dónde. */
+  const sedes = useMemo<string[]>(() => {
+    const s = new Set<string>();
+    deportistas.forEach(dep => {
+      if (programaFiltro !== null && grupoDep(dep) !== programaFiltro) return;
+      const v = sedeCanonica(getColVal(dep, /^sede/i));
+      if (v) s.add(v);
+    });
+    // Se ordenan como en la lista oficial; lo que no esté ahí va al final.
+    return Array.from(s).sort((a, b) => {
+      const ia = SEDES_OFICIALES.indexOf(a), ib = SEDES_OFICIALES.indexOf(b);
+      if (ia >= 0 && ib >= 0) return ia - ib;
+      if (ia >= 0) return -1;
+      if (ib >= 0) return 1;
+      return a.localeCompare(b, 'es');
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deportistas, programaFiltro]);
+
+  /** Proyectos que se pueden escoger, según el programa y la sede elegidos. */
+  const proyectosVisibles = useMemo<string[]>(() => {
+    const s = new Set<string>();
+    deportistas.forEach(dep => {
+      if (programaFiltro !== null && grupoDep(dep) !== programaFiltro) return;
+      if (sedeFiltro && sedeCanonica(getColVal(dep, /^sede/i)) !== sedeFiltro) return;
+      const v = getColVal(dep, RX_PROY).trim();
+      if (v) s.add(v);
+    });
+    // Los proyectos son casi todos números (43, 20, 48B…): se ordenan como tales.
+    return Array.from(s).sort((a, b) => {
+      const na = parseInt(a, 10), nb = parseInt(b, 10);
+      return (!isNaN(na) && !isNaN(nb) && na !== nb) ? na - nb : a.localeCompare(b, 'es');
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deportistas, programaFiltro, sedeFiltro]);
+
+  /* Si al cambiar de programa la sede elegida ya no existe, se suelta sola.
+     Igual el proyecto cuando deja de pertenecer a la sede escogida: así nunca
+     queda una combinación imposible que deje la tabla vacía sin explicación. */
+  useEffect(() => {
+    if (sedeFiltro && !sedes.includes(sedeFiltro)) setSedeFiltro(null);
+  }, [sedes, sedeFiltro]);
+  useEffect(() => {
+    if (proyectoFiltro && !proyectosVisibles.includes(proyectoFiltro)) setProyectoFiltro(null);
+  }, [proyectosVisibles, proyectoFiltro]);
+
   // ── Columna PROGRAMA / PROYECTO / PROFE (nombre real en el Excel) ──
   const colPrograma = useMemo(
     () => columnas.find(c => /^program/i.test(c.trim())) ?? '',
@@ -558,6 +745,9 @@ export default function GeneralPage() {
   // ── Mapa proyecto → formador (usuario), desde la tabla de formadores ──
   // El PROFE de un deportista se deriva del proyecto en el que está.
   const [profePorProyecto, setProfePorProyecto] = useState<Record<string, string>>({});
+  /* Todos los formadores, para el desplegable de la columna PROFE
+     (dirección, 25/08/2026). Antes esa columna era de solo lectura. */
+  const [profesTodos, setProfesTodos] = useState<string[]>([]);
   useEffect(() => {
     getProfes().then(lista => {
       const map: Record<string, string> = {};
@@ -566,6 +756,10 @@ export default function GeneralPage() {
         if (k) map[k.toUpperCase()] = p.usuario;
       }));
       setProfePorProyecto(map);
+      setProfesTodos(
+        Array.from(new Set(lista.map(p => String(p.usuario ?? '').trim()).filter(Boolean)))
+          .sort((a, b) => a.localeCompare(b, 'es')),
+      );
     }).catch(() => {});
   }, []);
   const profeDeProyecto = useCallback(
@@ -576,7 +770,12 @@ export default function GeneralPage() {
   // ── Opciones únicas por columna select ───────────────────────
   const opcionesCol = useMemo<Record<string, string[]>>(() => {
     const map: Record<string, Set<string>> = {};
+    /* SEDE: la lista NO se saca de las fichas (ahí está escrita de mil formas),
+       sino de SEDES_OFICIALES. Así el formulario ofrece siempre las mismas seis
+       y se dejan de crear duplicados. — 25/08/2026 */
+    const sedeCols: string[] = [];
     columnas.forEach(col => {
+      if (/^sede/i.test(col.trim())) { sedeCols.push(col); return; }
       if (SELECTS_RX.some(rx => rx.test(col.trim()))) {
         map[col] = new Set<string>();
         deportistas.forEach(dep => {
@@ -587,10 +786,18 @@ export default function GeneralPage() {
         if (/^program/i.test(col.trim())) {
           ORDEN_PROGRAMA.forEach(p => map[col].add(p));
         }
+        /* ESTADO: "SOLICITA RETIRO" siempre debe estar en la lista, aunque
+           todavía no haya nadie en ese estado. Es el que pone el padre desde el
+           módulo de Solicitud de Retiro, y administración también lo puede
+           poner a mano. — 26/08/2026 */
+        if (/^estado$/i.test(col.trim())) {
+          map[col].add(EST_SOLICITA);
+        }
       }
     });
     const result: Record<string, string[]> = {};
     Object.entries(map).forEach(([k, s]) => { result[k] = Array.from(s).sort(); });
+    for (const col of sedeCols) result[col] = [...SEDES_OFICIALES];
     return result;
   }, [columnas, deportistas]);
 
@@ -718,16 +925,17 @@ export default function GeneralPage() {
   const listaPlana = useMemo(() => ordenados.filter(d => {
     if (programaFiltro !== null && grupoDep(d) !== programaFiltro) return false;
     if (proyectoFiltro && getColVal(d, RX_PROY).trim() !== proyectoFiltro) return false;
+    if (sedeFiltro && sedeCanonica(getColVal(d, /^sede/i)) !== sedeFiltro) return false;
     if (anioFiltro && getColVal(d, /^a[ñn]o$/i).trim() !== anioFiltro) return false;
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [ordenados, programaFiltro, proyectoFiltro, anioFiltro, edits]);
+  }), [ordenados, programaFiltro, proyectoFiltro, sedeFiltro, anioFiltro, edits]);
 
   const [visibles, setVisibles] = useState(TANDA);
   const finTablaRef = useRef<HTMLTableRowElement>(null);
 
   // Al buscar o filtrar se vuelve a empezar por arriba.
-  useEffect(() => { setVisibles(TANDA); }, [buscar, buscarCod, programaFiltro, proyectoFiltro, anioFiltro]);
+  useEffect(() => { setVisibles(TANDA); }, [buscar, buscarCod, programaFiltro, proyectoFiltro, sedeFiltro, anioFiltro]);
 
   // Cuando la última fila dibujada asoma en pantalla, se dibuja la tanda siguiente.
   useEffect(() => {
@@ -1177,6 +1385,7 @@ export default function GeneralPage() {
               value={programaFiltro ?? ''}
               onChange={e => {
                 setProgramaFiltro(e.target.value || null);
+                setSedeFiltro(null);       // la cascada se reinicia: sede y luego proyecto
                 setProyectoFiltro(null);
               }}
               className="w-full rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white border" style={{ background: LIENZO, borderColor: BORDE }}>
@@ -1187,18 +1396,38 @@ export default function GeneralPage() {
             </select>
           </div>
 
-          {/* Proyecto */}
+          {/* SEDE — va ANTES de Proyecto (dirección, 25/08/2026): primero se
+              escoge la sede y el desplegable de Proyecto queda mostrando solo
+              los proyectos de esa sede. */}
           <div className="min-w-[180px]">
-            <label className="block text-[11px] font-black text-white/55 uppercase tracking-widest mb-1">Proyecto</label>
+            <label className="block text-[11px] font-black text-white/55 uppercase tracking-widest mb-1">Sede</label>
+            <select
+              value={sedeFiltro ?? ''}
+              onChange={e => { setSedeFiltro(e.target.value || null); setProyectoFiltro(null); }}
+              disabled={sedes.length === 0}
+              className="w-full rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white border disabled:opacity-50"
+              style={{ background: LIENZO, borderColor: BORDE }}>
+              <option value="">— Todas —</option>
+              {sedes.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          {/* Proyecto — solo los de la sede escogida */}
+          <div className="min-w-[180px]">
+            <label className="block text-[11px] font-black text-white/55 uppercase tracking-widest mb-1">
+              Proyecto
+              {sedeFiltro && (
+                <span className="normal-case tracking-normal font-bold text-[#00B050]"> · de {sedeFiltro}</span>
+              )}
+            </label>
             <select
               value={proyectoFiltro ?? ''}
               onChange={e => setProyectoFiltro(e.target.value || null)}
-              className="w-full rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white border" style={{ background: LIENZO, borderColor: BORDE }}>
+              disabled={proyectosVisibles.length === 0}
+              className="w-full rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white border disabled:opacity-50"
+              style={{ background: LIENZO, borderColor: BORDE }}>
               <option value="">— Todos —</option>
-              {(programaFiltro
-                ? (proyectosPorPrograma[programaFiltro] ?? [])
-                : Object.entries(proyectosPorPrograma).filter(([k]) => k !== '__RETIRADO__').flatMap(([,v]) => v).filter((v,i,a) => a.indexOf(v) === i).sort((a,b)=>{ const na=parseInt(a,10),nb=parseInt(b,10); return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b,'es'); })
-              ).map(p => <option key={p} value={p}>{p}</option>)}
+              {proyectosVisibles.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
 
@@ -1213,6 +1442,44 @@ export default function GeneralPage() {
               {ANIOS_NACIMIENTO.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
+
+          {/* ── CUÁNTOS QUEDARON ────────────────────────────────────────────
+              Al filtrar hay que poder leer de una cuántos deportistas cumplen,
+              sin tener que bajar hasta el final de la tabla. Pedido de la
+              dirección, 25/08/2026. */}
+          {(() => {
+            const n     = listaPlana.length;
+            const total = deportistas.length;
+            const hayFiltro = programaFiltro !== null || !!sedeFiltro || !!proyectoFiltro
+                           || !!anioFiltro || !!buscar.trim() || !!buscarCod.trim();
+            return (
+              <div className="ml-auto self-end flex items-center gap-2 flex-shrink-0">
+                {hayFiltro && (
+                  <button
+                    onClick={() => {
+                      setProgramaFiltro(null); setSedeFiltro(null); setProyectoFiltro(null);
+                      setAnioFiltro(null); setBuscar(''); setBuscarCod('');
+                    }}
+                    title="Quitar todos los filtros"
+                    className="rounded-xl px-3 py-2 text-xs font-black text-white/70 border hover:text-white transition"
+                    style={{ background: LIENZO, borderColor: BORDE }}>
+                    ✕ Quitar filtros
+                  </button>
+                )}
+                <div className="rounded-xl px-4 py-2 border text-center"
+                  style={{ background: hayFiltro ? VERDE : LIENZO, borderColor: hayFiltro ? VERDE : BORDE }}>
+                  <p className="text-white font-black text-lg leading-none">
+                    {n.toLocaleString('es-CO')}
+                  </p>
+                  <p className="text-white/70 text-[10px] font-bold uppercase tracking-wide mt-0.5">
+                    {hayFiltro
+                      ? `de ${total.toLocaleString('es-CO')} deportistas`
+                      : (n === 1 ? 'deportista' : 'deportistas')}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
 
         </div>
       )}
@@ -1292,9 +1559,36 @@ export default function GeneralPage() {
                  blanca. — 25/08/2026 */
               .tabla-scroll select option,
               .tabla-scroll select optgroup { color: #111827; background-color: #ffffff; }
+
+              /* ── CONTORNO BLANCO EN TODAS LAS CASILLAS ────────────────────
+                 El cuadro venía con "border-collapse: collapse". Con ese modo
+                 las casillas COMPARTEN la línea, y las columnas congeladas
+                 (N°, CÓDIGO, DEPORTISTA) PIERDEN su contorno al desplazar:
+                 por eso se veían celdas sin marco blanco, sobre todo a la
+                 izquierda y en las últimas filas.
+                 Se pasa a "separate" con separación 0: así CADA casilla dibuja
+                 su propio marco, sin depender de la vecina.
+                 Para que la línea quede DELGADA (dirección, 26/08/2026) cada
+                 casilla pinta solo su lado DERECHO y su lado de ABAJO: la línea
+                 de la izquierda se la presta la casilla anterior y la de arriba
+                 la de la fila anterior. Así nunca se suman dos líneas y toda la
+                 rejilla queda pareja en 1px. Los bordes del comienzo (primera
+                 columna y primera fila) se agregan aparte, para que el cuadro
+                 quede cerrado por los cuatro costados. */
+              .tabla-max10 { border-collapse: separate !important; border-spacing: 0 !important; }
+              .tabla-max10 th,
+              .tabla-max10 td {
+                border: 0 !important;
+                border-right: 1px solid #ffffff !important;
+                border-bottom: 1px solid #ffffff !important;
+              }
+              /* Cierre del cuadro: raya izquierda de la primera columna
+                 y raya de arriba de la fila del encabezado. */
+              .tabla-max10 tr > *:first-child { border-left: 1px solid #ffffff !important; }
+              .tabla-max10 thead tr:first-child > * { border-top: 1px solid #ffffff !important; }
             `}</style>
             <div className="overflow-auto tabla-scroll" style={{ maxHeight: 'calc(100vh - 210px)' }}>
-              <table className="border-collapse text-xs" style={{ width: 'max-content', tableLayout: 'fixed' }}>
+              <table className="tabla-max10 text-xs" style={{ width: 'max-content', tableLayout: 'fixed' }}>
 
                 {/* ── COLGROUP para anchos ── */}
                 <colgroup>
@@ -1356,7 +1650,11 @@ export default function GeneralPage() {
                         const rowNum   = numFilaGlobal[dep.id] ?? (rowIdx + 1);
                         const retirado = esRetirado(dep);
                         const inactivo = retirado || esPausado(dep);
-                        const rowBg    = inactivo ? GRIS_VACIO : PANEL;
+                        /* EN ESTUDIO: el padre pidió el retiro y se están
+                           coordinando los pagos. Sigue activo, pero la fila va
+                           en ámbar oscuro para que salte a la vista. */
+                        const enEstudio = pidioRetiro(dep);
+                        const rowBg    = inactivo ? GRIS_VACIO : enEstudio ? '#4E4231' : PANEL;
                         const stickyBg = rowBg;
                         return (
                           <tr key={dep.id}
@@ -1387,35 +1685,129 @@ export default function GeneralPage() {
                               const opciones = opcionesCol[col];
                               const changed  = edits[dep.id]?.[col] !== undefined;
 
-                              /* VALOR MENSUALIDAD — se calcula sola, no se edita.
-                                 Sale de la misma tabla del Estado de Cuenta; si la
-                                 familia tiene cuota acordada, manda esa. */
+                              /* VALOR MENSUALIDAD — sale del programa y la sede, pero
+                                 desde el 25/08/2026 se puede escoger a mano de la
+                                 lista (138.000 / 115.000 / 80.000 / 70.000) o
+                                 escribir otra cifra. "— Auto —" la vuelve a calcular. */
                               if (col === VMEN) {
-                                const v = valorMensualidad(dep);
-                                return (
-                                  <td key={col}
-                                    style={{ background: PANEL, border: '2px solid #ffffff' }}
-                                    className="px-2 py-[7px] text-center whitespace-nowrap">
+                                const becado   = esBecadoDep(dep);
+                                const kCuota   = claveCuotaManual(dep);
+                                const manualN  = Number(String(getValCelda(dep, kCuota) ?? '').replace(/[^0-9]/g, '')) || 0;
+                                const autoTxt  = becado ? '' : enPesos(tarifaMensual(getColVal(dep, /^program/i), getColVal(dep, /^sede/i)));
+                                const mostrado = manualN > 0 ? enPesos(manualN) : autoTxt;
+
+                                if (soloLectura || becado) return (
+                                  <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }}
+                                    className="px-2 py-[7px] text-center whitespace-nowrap"
+                                    title={becado ? 'Becado: no paga mensualidad' : undefined}>
                                     <span className="text-[11px] font-bold text-white">
-                                      {v || <span style={{ color: '#7C879A' }}>—</span>}
+                                      {mostrado || <span style={{ color: '#7C879A' }}>—</span>}
                                     </span>
+                                  </td>
+                                );
+
+                                // Modo "otra cifra": la casilla se vuelve un campo para escribir.
+                                if (cuotaOtro[dep.id]) return (
+                                  <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-0 py-0">
+                                    <input
+                                      autoFocus
+                                      inputMode="numeric"
+                                      value={manualN > 0 ? String(manualN) : ''}
+                                      placeholder="Escribe la cifra"
+                                      onChange={e => setCelda(dep.id, kCuota, e.target.value.replace(/[^0-9]/g, ''))}
+                                      onBlur={() => setCuotaOtro(p => { const q = { ...p }; delete q[dep.id]; return q; })}
+                                      className="w-full text-[11px] font-bold text-white text-center py-[7px] px-1 outline-none bg-transparent"
+                                      style={{ borderBottom: '2px solid #E0A33A' }}
+                                    />
+                                  </td>
+                                );
+
+                                return (
+                                  <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-0 py-0">
+                                    <select
+                                      value={manualN > 0 ? String(manualN) : ''}
+                                      onChange={e => {
+                                        const v = e.target.value;
+                                        if (v === '__OTRO__') { setCuotaOtro(p => ({ ...p, [dep.id]: true })); return; }
+                                        setCelda(dep.id, kCuota, v);   // '' = volver a Auto
+                                      }}
+                                      title={manualN > 0
+                                        ? 'Cuota puesta a mano. Escoge “— Auto —” para que vuelva a calcularse.'
+                                        : 'Sale del programa y la sede. Escoge una cuota para fijarla.'}
+                                      className="w-full text-[11px] font-bold text-white text-center py-[7px] px-1 outline-none bg-transparent cursor-pointer"
+                                      style={manualN > 0 ? { borderBottom: '2px solid #E0A33A' } : undefined}>
+                                      {/* La primera es la automática: se ve tal cual la
+                                          cifra que le toca, sin palabras de más. Lo puesto
+                                          a mano se distingue por la línea ámbar. */}
+                                      <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>
+                                        {autoTxt || '—'}
+                                      </option>
+                                      {CUOTAS.filter(n => enPesos(n) !== autoTxt).map(n => (
+                                        <option key={n} value={String(n)} style={{ color: '#111827', backgroundColor: 'white' }}>
+                                          {enPesos(n)}
+                                        </option>
+                                      ))}
+                                      {/* Una cuota especial que ya estaba puesta y no está en la lista */}
+                                      {manualN > 0 && !CUOTAS.includes(manualN) && (
+                                        <option value={String(manualN)} style={{ color: '#111827', backgroundColor: 'white' }}>
+                                          {enPesos(manualN)}
+                                        </option>
+                                      )}
+                                      <option value="__OTRO__" style={{ color: '#111827', backgroundColor: 'white' }}>
+                                        Otro valor…
+                                      </option>
+                                    </select>
                                   </td>
                                 );
                               }
 
                               /* CONSIGNA A — a qué cuenta le consigna esta familia.
-                                 Tampoco se edita: depende del proyecto. */
+                                 Por defecto se deduce del proyecto, pero desde el
+                                 25/08/2026 se puede forzar a mano con el
+                                 desplegable, para los casos que no siguen la regla.
+                                 Al escoger "— Auto —" vuelve a deducirse solo. */
                               if (col === VCON) {
-                                const c = consignaA(dep);
+                                /* Se usa rawVal (que ya mira lo editado sin guardar)
+                                   para que el desplegable responda de inmediato. */
+                                const elegido = (() => {
+                                  const v = String(rawVal ?? '').trim().toUpperCase();
+                                  return CONSIGNA_OPCIONES.includes(v) ? v : '';
+                                })();
+                                const auto = consignaA({ ...dep, _columnas: { ...(dep._columnas ?? {}), [VCON]: '' } } as any);
+                                const c = elegido
+                                  ? { texto: elegido, color: COLOR_CONSIGNA[elegido], manual: true }
+                                  : auto;
+                                /* Desde el 26/08/2026 la columna va con el MISMO fondo
+                                   gris de las demás: sin pastillas azules ni verdes.
+                                   Lo puesto a mano se distingue por la línea ámbar. */
+                                if (soloLectura) return (
+                                  <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-1 py-[7px] text-center">
+                                    <span className="block w-full text-[11px] font-bold text-white truncate">{c.texto || '—'}</span>
+                                  </td>
+                                );
                                 return (
                                   <td key={col}
                                     style={{ background: PANEL, border: '2px solid #ffffff' }}
-                                    className="px-1 py-[5px] text-center">
-                                    <span style={{
-                                      display: 'inline-block', background: c.color, color: 'white',
-                                      borderRadius: 5, padding: '3px 8px', fontSize: 10, fontWeight: 900,
-                                      letterSpacing: '0.04em', whiteSpace: 'nowrap',
-                                    }}>{c.texto}</span>
+                                    className="px-0 py-0 text-center">
+                                    <select
+                                      value={elegido}
+                                      onChange={e => setCelda(dep.id, VCON, e.target.value)}
+                                      title={c.manual
+                                        ? 'Escogido a mano. Escoge el primero de la lista para que vuelva a salir del proyecto.'
+                                        : 'Sale del proyecto. Escoge una cuenta para forzarla en este deportista.'}
+                                      className="w-full text-[11px] font-bold text-white py-[7px] px-1 outline-none bg-transparent cursor-pointer truncate"
+                                      style={{
+                                        textAlign: 'center', textAlignLast: 'center',
+                                        borderBottom: c.manual ? '2px solid #E0A33A' : undefined,
+                                      } as any}>
+                                      {/* La primera es la automática: se ve igual que
+                                          el valor que le toca, sin palabras de más.
+                                          Lo puesto a mano se distingue por el borde ámbar. */}
+                                      <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>{auto.texto}</option>
+                                      {CONSIGNA_OPCIONES.filter(o => o !== auto.texto).map(o => (
+                                        <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o}</option>
+                                      ))}
+                                    </select>
                                   </td>
                                 );
                               }
@@ -1426,9 +1818,18 @@ export default function GeneralPage() {
                                 const estadoVal = getColVal(dep, /^estado$/i);
                                 // Naranja para TODOS los nuevos activos (por tipo de afiliación o por estado "Nuevo")
                                 const esNuevo   = /nuevo/i.test(afilVal) || /nuevo/i.test(estadoVal);
-                                const codColor  = retirado ? '#9ca3af' : (esNuevo ? '#f97316' : colorCodigo(afilVal));
                                 // Buscar el código con regex por si está bajo "CODIGO" (sin tilde) u otra variante
                                 const rawValCod = rawVal || getColVal(dep, /^c[oó]d/i);
+                                /* Color del código (dirección, 26/08/2026):
+                                   los que empiezan por B o MB van SIEMPRE en gris,
+                                   así el código mande sobre el tipo de afiliación.
+                                   Los demás: NUEVO naranja · REINGRESO azul · ANTIGUO verde. */
+                                const esCodigoB = /^M?B/i.test(String(rawValCod ?? '').trim());
+                                const codColor  = retirado   ? '#9ca3af'
+                                                : enEstudio  ? '#E0A33A'   // pidió el retiro: en estudio
+                                                : esCodigoB  ? COD_GRIS
+                                                : esNuevo    ? COD_NARANJA
+                                                : colorCodigo(afilVal);
                                 return (
                                   <>
                                   <td key={col}
@@ -1573,11 +1974,17 @@ export default function GeneralPage() {
                                 );
                               }
 
-                              // SELECT (Programa / Estado)
+                              // SELECT (Programa / Estado / Sede)
                               if (opciones) {
+                                /* En SEDE lo guardado puede venir escrito de
+                                   cualquier forma ("la 80"). Se muestra la forma
+                                   OFICIAL para que coincida con la lista; al
+                                   escoger, se guarda ya normalizado. */
+                                const esSede  = /^sede/i.test(col.trim());
+                                const valSel  = esSede ? sedeCanonica(rawVal) : rawVal;
                                 if (soloLectura) return (
                                   <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-1.5 py-[7px]">
-                                    <span className="block w-full text-[11px] font-semibold text-white truncate">{rawVal || '—'}</span>
+                                    <span className="block w-full text-[11px] font-semibold text-white truncate">{valSel || '—'}</span>
                                   </td>
                                 );
                                 return (
@@ -1585,9 +1992,9 @@ export default function GeneralPage() {
                                   style={{ background: PANEL, border: '2px solid #ffffff' }}
                                   className="px-0 py-0">
                                   <select
-                                    value={rawVal}
+                                    value={valSel}
                                     onChange={e => {
-                                      setCelda(dep.id, col, e.target.value);
+                                      setCelda(dep.id, col, esSede ? sedeCanonica(e.target.value) : e.target.value);
                                       // Al cambiar el PROGRAMA, limpiar PROYECTO y PROFE (se debe reseleccionar)
                                       if (col === colPrograma) {
                                         if (colProy)  setCelda(dep.id, colProy, '');
@@ -1598,6 +2005,12 @@ export default function GeneralPage() {
                                     {/* Letra oscura en las opciones: la lista del
                                         navegador se abre sobre fondo blanco. */}
                                     <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
+                                    {/* Si lo guardado no está en la lista (alguien lo
+                                        escribió a mano), se agrega para no borrarlo
+                                        sin querer al abrir el desplegable. */}
+                                    {valSel && !opciones.includes(valSel) && (
+                                      <option value={valSel} style={{ color: '#111827', backgroundColor: 'white' }}>{valSel}</option>
+                                    )}
                                     {opciones.map(o => (
                                       <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o}</option>
                                     ))}
@@ -1638,17 +2051,41 @@ export default function GeneralPage() {
                                 );
                               }
 
-                              // PROFE — se DERIVA del formador asignado al proyecto (solo lectura).
-                              // Si en /usuarios cambia el profe del proyecto, aquí se refleja.
+                              /* PROFE — normalmente sale del formador asignado al
+                                 proyecto, pero desde el 25/08/2026 se puede
+                                 cambiar a mano con un desplegable que trae a
+                                 TODOS los formadores. Sirve para los casos
+                                 sueltos que no siguen la asignación del proyecto. */
                               const esProfe = /^prof/i.test(col.trim());
                               if (esProfe) {
                                 const proyActual = getValCelda(dep, colProy).trim();
                                 const derivado   = profeDeProyecto(proyActual);
-                                const mostrar    = derivado || (rawVal && rawVal !== '—' ? rawVal : '');
-                                return (
+                                const puesto     = (rawVal && rawVal !== '—') ? rawVal : '';
+                                const mostrar    = puesto || derivado;
+                                if (soloLectura || profesTodos.length === 0) return (
                                   <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-2 py-[6px]"
-                                    title="Se asigna automáticamente según el formador del proyecto (se cambia en Usuarios)">
+                                    title="Sale del formador asignado al proyecto (se cambia en Usuarios)">
                                     <span className="block w-full text-[13px] font-semibold text-white truncate">{mostrar || '—'}</span>
+                                  </td>
+                                );
+                                return (
+                                  <td key={col} style={{ background: PANEL, border: '2px solid #ffffff' }} className="px-0 py-0">
+                                    <select
+                                      value={mostrar}
+                                      onChange={e => setCelda(dep.id, col, e.target.value)}
+                                      title={derivado
+                                        ? `El proyecto ${proyActual || ''} lo tiene asignado a ${derivado}. Puedes cambiarlo aquí.`
+                                        : 'Escoge el formador de este deportista.'}
+                                      className="w-full text-[13px] font-semibold py-[6px] px-2 outline-none bg-transparent text-white cursor-pointer truncate">
+                                      <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
+                                      {/* Si el que está puesto ya no es formador, no se borra sin querer. */}
+                                      {mostrar && !profesTodos.includes(mostrar) && (
+                                        <option value={mostrar} style={{ color: '#111827', backgroundColor: 'white' }}>{mostrar}</option>
+                                      )}
+                                      {profesTodos.map(p => (
+                                        <option key={p} value={p} style={{ color: '#111827', backgroundColor: 'white' }}>{p}</option>
+                                      ))}
+                                    </select>
                                   </td>
                                 );
                               }
@@ -1935,9 +2372,9 @@ export default function GeneralPage() {
                   <table className="w-full border-collapse text-xs">
                     <thead>
                       <tr style={{ background: '#16a34a' }}>
-                        <th style={{ border: '1px solid white', padding: '6px 10px', color: 'white', fontWeight: 900 }}>ESTADO</th>
+                        <th style={{ border: '2px solid #ffffff', padding: '6px 10px', color: 'white', fontWeight: 900 }}>ESTADO</th>
                         {nuevosFilas[0] && Object.keys(nuevosFilas[0]._columnas ?? {}).slice(0, 7).map(k => (
-                          <th key={k} style={{ border: '1px solid white', padding: '6px 10px', color: 'white', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                          <th key={k} style={{ border: '2px solid #ffffff', padding: '6px 10px', color: 'white', fontWeight: 900, whiteSpace: 'nowrap' }}>
                             {k.toUpperCase()}
                           </th>
                         ))}
@@ -1945,14 +2382,14 @@ export default function GeneralPage() {
                     </thead>
                     <tbody>
                       {nuevosFilas.map((r, i) => (
-                        <tr key={i} style={{ background: r.duplicado ? '#fef3c7' : '#f1f5f9', borderTop: '1px solid white' }}>
-                          <td style={{ border: '1px solid white', padding: '5px 8px', textAlign: 'center', fontWeight: 900, fontSize: 10 }}>
+                        <tr key={i} style={{ background: r.duplicado ? '#fef3c7' : '#f1f5f9', borderTop: '2px solid #ffffff' }}>
+                          <td style={{ border: '2px solid #ffffff', padding: '5px 8px', textAlign: 'center', fontWeight: 900, fontSize: 10 }}>
                             {r.duplicado
                               ? <span style={{ color: '#d97706' }}>DUPLICADO</span>
                               : <span style={{ color: '#16a34a' }}>NUEVO</span>}
                           </td>
                           {Object.keys(nuevosFilas[0]._columnas ?? {}).slice(0, 7).map(k => (
-                            <td key={k} style={{ border: '1px solid white', padding: '5px 8px', whiteSpace: 'nowrap', color: '#111827' }}>
+                            <td key={k} style={{ border: '2px solid #ffffff', padding: '5px 8px', whiteSpace: 'nowrap', color: '#111827' }}>
                               {r._columnas[k] || '—'}
                             </td>
                           ))}

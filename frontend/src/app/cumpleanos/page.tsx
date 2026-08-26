@@ -30,8 +30,14 @@ const MESES_CAP = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Ago
 
 const norm = (s: string) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
 
-/** ¿El deportista ya no está en la institución? (retirado, se fue, etc.) */
-const esRetirado = (estado: string) => /retir/.test(norm(estado));
+/** ¿El deportista ya no está en la institución? (retirado, se fue, etc.)
+ *  OJO (26/08/2026): "SOLICITA RETIRO" NO cuenta como retirado. Ese caso está
+ *  EN ESTUDIO mientras se coordinan los pagos: el niño sigue activo y sigue
+ *  cumpliendo años con nosotros. */
+const esRetirado = (estado: string) => {
+  const v = norm(estado);
+  return /retir/.test(v) && !/solicit/.test(v);
+};
 
 /** Mes → número 1..12, acepta nombre en español o número. */
 function mesNum(mesRaw: string): number {

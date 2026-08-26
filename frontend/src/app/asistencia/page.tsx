@@ -301,6 +301,17 @@ function AsistenciaInner() {
   }, []);
 
   const mesKey = `${anio}_${String(mes + 1).padStart(2, '0')}`;
+
+  /* ── RENDIMIENTO (25/08/2026) ──────────────────────────────────────────────
+     La asistencia se pedía COMPLETA: todos los deportistas, todos los meses de
+     todos los años. Son decenas de miles de filas que el servidor entrega de a
+     mil, o sea decenas de viajes seguidos antes de poder pintar nada. Eso era
+     lo que hacía lento este módulo.
+
+     Ahora se piden solo los 12 meses del AÑO que se está viendo. Cambiar de mes
+     no pide nada (ya está en memoria); cambiar de año sí recarga. */
+  const mesesDeAnio = (a: number) =>
+    Array.from({ length: 12 }, (_, i) => `${a}_${String(i + 1).padStart(2, '0')}`);
   // Promedio de valoraciones del año, para la columna VAL del consolidado
   const [valAnio, setValAnio] = useState<Record<string, string>>({});
 
@@ -421,7 +432,7 @@ function AsistenciaInner() {
             const ids = deps.map(d => d.id);
             // Cargar asistencia por deportista_id para que los traslados de proyecto no pierdan historial
             return ids.length
-              ? getAsistenciaDeportistas(ids)
+              ? getAsistenciaDeportistas(ids, mesesDeAnio(now.getFullYear()))
               : getAsistenciaPorProyecto(proyUrl); // fallback si no hay IDs aún
           })
           .then(asistData => {
@@ -437,19 +448,28 @@ function AsistenciaInner() {
         router.replace('/mis-proyectos');
       }
     } else {
-      // Admin: carga todos los proyectos para poder navegar entre ellos
+      /* ── RENDIMIENTO (25/08/2026) ─────────────────────────────────────────
+         Antes el administrador esperaba DOS cosas antes de ver nada:
+           1) las 1.163 fichas completas, y
+           2) la asistencia de TODA la academia.
+         Y con `Promise.all` la pantalla no pintaba hasta que llegaran las dos.
+
+         La asistencia de toda la academia son más de cien mil filas al año, y
+         además NO se necesita para pintar la pantalla inicial: el administrador
+         primero escoge programa y proyecto. Se trae después, ya acotada al
+         proyecto que abra (lo hace el efecto de más abajo).
+
+         Aquí queda solo la lista de deportistas, y sin esperar a nada más. */
       setCargando(true);
-      Promise.all([
-        getDeportistas(),
-        getAsistencia(),
-      ]).then(([lista, asistData]) => {
-        setCargando(false);
-        if (lista.length) setDeportistas(lista);
-        if (Object.keys(asistData).length) setAsistencia(asistData as any);
-      }).catch(err => {
-        console.error('[asistencia] carga admin:', err);
-        setCargando(false);
-      });
+      getDeportistas()
+        .then(lista => {
+          setCargando(false);
+          if (lista.length) setDeportistas(lista);
+        })
+        .catch(err => {
+          console.error('[asistencia] carga admin:', err);
+          setCargando(false);
+        });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -461,13 +481,37 @@ function AsistenciaInner() {
      fue el último que se cargó de verdad. — 25/08/2026 */
   const proyectoCargado = useRef<string | null>(null);
   useEffect(() => {
-    if (!proyecto || proyecto === TODOS) return;
+    if (!proyecto) return;
+    /* TODOS (resumen anual del programa) también necesita su asistencia. Antes
+       la sacaba de la carga inicial, que traía toda la academia; ahora se pide
+       aquí, acotada al programa. — 25/08/2026 */
+    const clave = proyecto === TODOS ? `${TODOS}|${programa}` : proyecto;
     if (proyectoCargado.current === null && proyecto === searchParams.get('proyecto')) {
-      proyectoCargado.current = proyecto;   // el de la dirección ya lo cargó el arranque
+      proyectoCargado.current = clave;   // el de la dirección ya lo cargó el arranque
       return;
     }
-    if (proyectoCargado.current === proyecto) return;
-    proyectoCargado.current = proyecto;
+    if (proyectoCargado.current === clave) return;
+    proyectoCargado.current = clave;
+    if (proyecto === TODOS) {
+      const idsPrograma = deportistas
+        .filter(d => !programa || getCol(d, /^program/i) === programa)
+        .map(d => d.id).filter(Boolean);
+      if (!idsPrograma.length) return;
+      getAsistenciaDeportistas(idsPrograma, mesesDeAnio(anio))
+        .then(asistData => {
+          if (Object.keys(asistData).length) {
+            setAsistencia(prev => {
+              const out: any = { ...prev };
+              for (const [proy, meses] of Object.entries(asistData as any)) {
+                out[proy] = { ...(out[proy] || {}), ...(meses as any) };
+              }
+              return out;
+            });
+          }
+        })
+        .catch(err => console.error('[asistencia] TODOS:', err));
+      return;
+    }
     if (esProfe) {
       // Profe cambia de proyecto → recargar deportistas + asistencia por IDs
       setCargandoProy(true);
@@ -476,7 +520,7 @@ function AsistenciaInner() {
         .then(({ data: deps }) => {
           if (deps.length) setDeportistas(deps);
           const ids = deps.map(d => d.id);
-          return ids.length ? getAsistenciaDeportistas(ids) : getAsistenciaPorProyecto(proyecto);
+          return ids.length ? getAsistenciaDeportistas(ids, mesesDeAnio(anio)) : getAsistenciaPorProyecto(proyecto);
         })
         .then(asistData => {
           setCargandoProy(false);
@@ -490,7 +534,7 @@ function AsistenciaInner() {
       // Así los deportistas trasladados de proyecto no pierden su historial
       const idsEnProy = deportistas.filter(d => proyectoDe(d) === proyecto).map(d => d.id);
       const loader = idsEnProy.length
-        ? getAsistenciaDeportistas(idsEnProy)
+        ? getAsistenciaDeportistas(idsEnProy, mesesDeAnio(anio))
         : getAsistenciaPorProyecto(proyecto); // fallback si aún no hay deportistas cargados
       loader.then(asistData => {
         if (Object.keys(asistData).length) {
@@ -501,7 +545,38 @@ function AsistenciaInner() {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proyecto, esProfe]);
+  }, [proyecto, programa, esProfe, deportistas.length]);
+
+  /* ── AL CAMBIAR DE AÑO, TRAER ESE AÑO ─────────────────────────────────────
+     Como la asistencia ya no se baja completa sino por año, cuando el usuario
+     cambia el año hay que ir por ese. Se hace UNA vez por año y se mezcla con
+     lo que ya está en memoria, así devolverse al año anterior es inmediato.
+     — 25/08/2026 */
+  const aniosCargados = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (!anio || aniosCargados.current.has(anio)) return;
+    // El año con el que arrancó la pantalla ya lo trajo la carga inicial.
+    if (aniosCargados.current.size === 0) { aniosCargados.current.add(anio); return; }
+    aniosCargados.current.add(anio);
+
+    const ids = deportistas.map(d => d.id).filter(Boolean);
+    const traer = ids.length
+      ? getAsistenciaDeportistas(ids, mesesDeAnio(anio))
+      : getAsistencia(mesesDeAnio(anio));
+
+    traer.then(asistData => {
+      if (!asistData || !Object.keys(asistData).length) return;
+      // Mezcla por proyecto y por mes: no se pisa lo que ya estaba de otros años.
+      setAsistencia(prev => {
+        const out: any = { ...prev };
+        for (const [proy, meses] of Object.entries(asistData as any)) {
+          out[proy] = { ...(out[proy] || {}), ...(meses as any) };
+        }
+        return out;
+      });
+    }).catch(err => console.error('[asistencia] cambio de año:', err));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anio]);
 
   // Cargar días del proyecto seleccionado (y resetear a [] al cambiar de proyecto)
   useEffect(() => {

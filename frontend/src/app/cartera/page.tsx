@@ -189,7 +189,11 @@ export default function CarteraPage() {
     // Mismo criterio que Consolidado de Afiliados: la columna ESTADO del deportista.
     lista = lista.filter(d => {
       const e = getCol(d, /^estado/i).toLowerCase();
-      if (/retirad/.test(e) || /paus/.test(e) || /retiro/.test(e)) return false;
+      /* OJO (26/08/2026): "SOLICITA RETIRO" NO sale de cartera. Es justamente
+         el que está en estudio mientras se le coordinan los pagos: si lo
+         sacáramos aquí, la deuda que hay que aclarar desaparecería de la vista. */
+      const soloSolicita = /solicit/.test(e);
+      if (!soloSolicita && (/retirad/.test(e) || /paus/.test(e) || /retiro/.test(e))) return false;
       const manual = depEstados[d.id];
       if (manual === 'RETIRADO' || manual === 'PAUSO') return false;
       return true;
