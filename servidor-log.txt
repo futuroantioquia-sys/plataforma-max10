@@ -1902,3 +1902,58 @@ https://nextjs.org/docs/messages/module-not-found
  GET /api/admins 200 in 791ms
  GET /api/admins 200 in 801ms
  GET /api/admins 200 in 319ms
+ GET /api/pagos/soportes?solo=count 200 in 340ms
+ GET /api/pagos/soportes?solo=count 200 in 342ms
+ GET /api/pagos/soportes?solo=count 200 in 311ms
+ GET /api/pagos/soportes?solo=count 200 in 316ms
+ ✓ Compiled /api/auth/logout in 382ms (790 modules)
+ POST /api/auth/logout 200 in 433ms
+ ✓ Compiled /login in 207ms (796 modules)
+ ✓ Compiled /api/auth/login in 327ms (798 modules)
+ POST /api/auth/login 200 in 908ms
+ GET /api/pagos/soportes?solo=count 200 in 219ms
+ GET /api/pagos/soportes?solo=count 200 in 272ms
+ GET /api/pagos/soportes?solo=count 200 in 555ms
+ GET /login 200 in 253ms
+ POST /api/auth/login 200 in 753ms
+ ✓ Compiled /api/deportistas in 222ms (798 modules)
+ GET /api/pagos/soportes?solo=count 200 in 725ms
+ GET /api/pagos/soportes?solo=count 200 in 865ms
+ GET /api/deportistas 200 in 2684ms
+ GET /api/deportistas 200 in 2737ms
+ GET /api/pagos/soportes?solo=count 200 in 559ms
+ GET /api/pagos/soportes?solo=count 200 in 301ms
+ GET /api/pagos/soportes?solo=count 200 in 332ms
+ GET /api/pagos/soportes?solo=count 200 in 219ms
+ GET /api/pagos/soportes?solo=count 200 in 491ms
+ GET /api/pagos/soportes?solo=count 200 in 458ms
+ GET /api/pagos/soportes?solo=count 200 in 425ms
+ GET /api/pagos/soportes?solo=count 200 in 435ms
+ GET /api/pagos/soportes?solo=count 200 in 288ms
+ GET /api/pagos/soportes?solo=count 200 in 379ms
+ GET /api/pagos/soportes?solo=count 200 in 347ms
+ GET /api/pagos/soportes?solo=count 200 in 502ms
+ GET /api/pagos/soportes?solo=count 200 in 361ms
+ GET /api/pagos/soportes?solo=count 200 in 445ms
+ GET /api/pagos/soportes?solo=count 200 in 294ms
+ GET /api/pagos/soportes?solo=count 200 in 266ms
+ GET /api/pagos/soportes?solo=count 200 in 317ms
+ ✓ Compiled in 1948ms (1758 modules)
+ ✓ Compiled in 655ms (973 modules)
+ GET /api/pagos/soportes?solo=count 200 in 586ms
+ GET /api/pagos/soportes?solo=count 200 in 589ms
+ GET /api/pagos/soportes?solo=count 200 in 440ms
+ GET /api/pagos/soportes?solo=count 200 in 448ms
+ ✓ Compiled /api/auth/logout in 353ms (787 modules)
+ POST /api/auth/logout 200 in 437ms
+ ✓ Compiled /api/auth/login in 224ms (792 modules)
+ POST /api/auth/login 200 in 287ms
+ GET /api/pagos/soportes?solo=count 200 in 349ms
+ GET /api/pagos/soportes?solo=count 200 in 350ms
+ GET /api/pagos/soportes?solo=count 200 in 414ms
+ GET /api/pagos/soportes?solo=count 200 in 339ms
+ ○ Compiling /productos ...
+ ✓ Compiled /productos in 665ms (796 modules)
+ ✓ Compiled in 1162ms (973 modules)
+ ✓ Compiled in 344ms (973 modules)
+ ✓ Compiled in 3.8s (1722 modules)

@@ -94,9 +94,28 @@ export default function SolicitudRetiroPage() {
   useEffect(() => {
     let vivo = true;
     (async () => {
-      const id = (typeof window !== 'undefined'
+      let id = (typeof window !== 'undefined'
         ? localStorage.getItem('futuro-calidoso-id')
         : '') || '';
+
+      /* Si el navegador no lo tiene guardado, se le PREGUNTA AL SERVIDOR de
+         quién es esta sesión (26/08/2026). Antes solo se miraba la memoria del
+         navegador, y por eso a un padre retirado que acababa de ingresar bien
+         esta pantalla le decía "vuelve a ingresar": el ingreso no había
+         alcanzado a guardar el id. El servidor sí sabe, porque va dentro de la
+         cookie firmada. */
+      if (!id) {
+        try {
+          const r = await fetch('/api/auth/quien-soy', { cache: 'no-store' });
+          if (r.ok) {
+            const d = await r.json();
+            if (d?.rol === 'deportista' && d?.id) {
+              id = String(d.id);
+              try { localStorage.setItem('futuro-calidoso-id', id); } catch { /* noop */ }
+            }
+          }
+        } catch { /* se sigue con lo de abajo */ }
+      }
 
       /* Sin id de calidoso: si es alguien del equipo, se abre el buscador
          para que escoja el deportista. Si no, se le pide volver a ingresar. */

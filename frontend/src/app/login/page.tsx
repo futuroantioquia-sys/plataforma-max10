@@ -172,9 +172,9 @@ export default function LoginPage() {
           },
           cargando: false, error: null,
         });
-        /* Al RETIRADO se le deja entrar, pero solo a lo suyo: se le lleva
-           derecho a su Paz y Salvo, no al portal completo. — 26/08/2026 */
-        if (data.retirado) { router.push('/retiro'); return; }
+        /* El RETIRADO entra igual que cualquiera, a su portal de siempre
+           (26/08/2026). Se probó mandarlo derecho al Paz y Salvo y quedaba
+           peor: sin el resto de la pantalla perdía el hilo. */
         router.push(data.id ? `/alumnos/${data.id}` : '/alumnos');
         return;
       }
