@@ -1,7 +1,46 @@
 # PENDIENTES — Plataforma MAX 10 / Futuro Antioquia
-*(al 25 de agosto de 2026, 1:30 p.m.)*
+*(al 25 de agosto de 2026, 5:00 p.m.)*
 
 Claude: si retomas el trabajo, lee esto primero. Está en orden de importancia.
+
+---
+
+## 0. SIN PUBLICAR ⚠️ ← lo primero
+
+Al cierre del 25/08 quedó guardado en el computador pero **NO publicado**:
+
+- El **botón DESCARGAR PDF** de la Valoración Dinámica (baja el archivo solo a
+  la carpeta de Descargas, sin la ventana de imprimir) y el sello
+  **VALORACIÓN 1 / 2 / 3** al final del informe.
+- `next.config.js`: permiso para bajar las librerías del PDF desde
+  `cdnjs.cloudflare.com` y `cdn.jsdelivr.net`.
+
+**Qué hacer:** correr `SUBIR-AHORA.bat`. Nada más. NO hay que instalar
+librerías: se bajan solas de internet, igual que el lector de Excel.
+(`INSTALAR-LIBRERIA-PDF.bat` quedó obsoleto y se puede borrar.)
+
+---
+
+## 0b. WHATSAPP AUTOMÁTICO — conversación abierta
+
+El usuario preguntó el 25/08 cómo comprar el envío automático de los cobros por
+WhatsApp. Se le explicó y dijo *"luego seguimos abordando el tema"*.
+Resumen de lo dicho, para no repetirlo:
+
+- Hoy la plataforma abre WhatsApp Web con el mensaje escrito y alguien oprime
+  enviar. Gratis, pero manual.
+- Para que envíe sola hay que contratar la **API de WhatsApp Business** de Meta.
+- Costo: los cobros son categoría *utilidad*, unos **12 pesos por mensaje** en
+  Colombia. Con 400 familias, unos $5.000 al mes. Lo caro es el intermediario
+  ($20–80 USD/mes) si no se va directo con Meta (Cloud API, sin cuota mensual).
+- **Ojo con el 1 de octubre de 2026:** Meta empieza a cobrar mensajes que hoy
+  son gratis. Cualquier cuenta hay que hacerla con eso encima.
+- Los tres frenos: (1) el número que se conecte **deja de servir en la app
+  normal de WhatsApp**; (2) verificación de Meta Business con papeles de la
+  academia; (3) los textos de *Botones de Cobro* tendrían que volverse
+  **plantillas aprobadas** por Meta, con espacios `{{1}}`, no texto libre.
+- Recomendación dada: Cloud API directo con Meta, y decidir primero el número
+  dedicado, que es lo que frena a la mayoría.
 
 ---
 
@@ -43,19 +82,37 @@ El usuario va a pedirle ayuda a alguien para reconectarla. Mientras tanto,
 Claude no puede tocar la base de datos y le toca pedirle al usuario que corra
 SQL a mano, cosa que él no sabe hacer con comodidad.
 
-**Cuando esté reconectada, hacer de una:**
+### YA ESTÁ TODO PREPARADO — solo faltan dos doble clic (25/08, 5 p.m.)
 
-- **Crear la tabla `config_cobro`.** Sin ella, el módulo *Botones de Cobro*
-  (Gestión → Botones de Cobro) muestra los textos pero **no puede guardar**.
-  El SQL ya está listo en `CREAR-TABLA-BOTONES-COBRO.bat`.
-- **Arreglar `frontend/src/lib/valoracion-textos.ts`.** Apunta al proyecto
-  **viejo** (`gsovtgtrsqzoruvgmhed`). O sea que lo que se edite en
-  *Gestión de Valoración* se está guardando en la base muerta.
-  ⚠️ **No cambiar la dirección a ciegas:** primero hay que confirmar que la
-  tabla `config_valoracion` exista en el proyecto bueno. Si no existe, crearla
-  antes; si se cambia sin más, deja de guardar del todo y queda peor que hoy.
-- **Barrer el resto del código** buscando otras cosas que sigan mirando al
-  proyecto viejo.
+No hay que esperar a reconectar Supabase. Se dejaron listos dos botones en la
+carpeta principal. **Van en este orden:**
+
+1. **`PASO-1-CREAR-TABLAS.bat`** — abre Chrome con el SQL ya escrito en el
+   proyecto BUENO. Crea `config_cobro` y `config_valoracion`, con sus permisos.
+   El usuario debe decirle **NO** a la traducción de Chrome (si traduce, la
+   página se daña), hacer clic sobre el texto de colores y oprimir
+   **Ctrl+Enter**. Debe responder *Success. No rows returned*.
+2. **`PASO-2-PASAR-TEXTOS-VALORACION.bat`** — trabaja solo (llama a
+   `pasar-textos-valoracion.ps1`). Copia las 3 filas de configuración de
+   Valoración de la base vieja a la buena. Es prudente: **si en la buena ya hay
+   texto, no lo pisa**. Se puede correr varias veces.
+
+**Después de esos dos pasos, Claude debe:** cambiar en
+`frontend/src/lib/valoracion-textos.ts` las dos líneas `SB_URL` y `SB_KEY` por
+las del proyecto bueno (están escritas dentro del propio archivo, en el
+comentario de arriba), y publicar.
+
+⚠️ **Por qué NO se cambió ya:** en la base buena todavía no existe
+`config_valoracion`. Si se cambia antes de crearla, Gestión de Valoración se
+queda sin poder guardar. Por eso se dejó apuntando a la vieja a propósito.
+
+Dato útil: la base vieja tiene 3 filas (`descripciones`, `meta`, `categorias`),
+la última tocada el 5 de agosto. Como la mudanza fue el 18, **nadie editó esa
+pantalla después**: no se perdió nada.
+
+- El resto del código ya se barrió: solo quedaban `valoracion-textos.ts` (este
+  pendiente), un comentario en `supabase/client.ts` y la lista de imágenes
+  permitidas en `next.config.js`. Los dos últimos son inofensivos.
 
 ---
 
@@ -174,3 +231,59 @@ Publicado en: https://plataforma-max10.vercel.app
 - **Nombre del deportista en el libro:** se mostraba solo el nombre guardado,
   que se congela al subir el extracto. Ahora, si falta, se saca del código
   (en la tabla, en el filtro y en la exportación a Excel).
+
+---
+
+# LO QUE SE HIZO EL 25 DE AGOSTO, POR LA TARDE
+
+**Informes que no aparecían (el reclamo de los profes).** Eran cuatro causas
+distintas, no una:
+
+1. `saveEvaluacion` se tragaba los errores: decía "¡Guardado!" aunque el
+   servidor hubiera fallado. Ahora lanza el error de verdad.
+2. Al leer el historial, si la consulta fallaba, la app se iba callada a la
+   copia vieja del teléfono y mostraba "Aún no hay valoraciones". Ahora
+   reintenta y, si falla, lo dice.
+3. Control de Informes ignoraba los informes sin número. Ahora los acomoda por
+   fecha en los puestos libres.
+4. Después de guardar, la pantalla **comprueba contra el servidor** que el
+   informe quedó, y muestra un aviso verde fijo con cuántos tiene el deportista
+   (antes era un parpadeo de 2 segundos en el botón).
+   Y el **número de informe pasó a ser obligatorio** para poder guardar.
+
+**Velocidad.** Se encontró que la app bajaba, en cada carga, la **foto en
+base64 de los 1.163 deportistas** — decenas de megas — incluso en pantallas
+donde no se ve ninguna foto. Ahora las fotos, el resumen de documentos y el
+resumen de informes se piden **solo del proyecto abierto**. "Mis Proyectos" ya
+no baja ninguna ficha: le pide el conteo al servidor de Vercel
+(`/api/deportistas?conteo=`) y lo guarda en el teléfono para la próxima.
+Total Afiliados dibuja la tabla **de a 80 filas**, no las 1.167 de golpe: eso
+era lo que trababa el mouse.
+
+**Perfil del formador.** Encabezado del proyecto en un renglón (sin el botón de
+inicio, con el grupo en dos líneas SUB/8A); cambio de proyecto **dentro de
+Asistencia**, al lado del MES; y botón **DESCARGAR PDF** en la Valoración
+Dinámica que baja el archivo solo, sin la ventana de imprimir.
+
+**Administradores.** Nuevo tipo **Acceso total** (entra a todo, Finanzas
+incluida; lo único reservado a ADMON es la pantalla de administradores).
+⚠️ Si al guardar uno sale un error que mencione `tipo` o `check`, es que la
+tabla `admins` tiene una restricción vieja y hay que ampliarla con SQL.
+De paso: al administrador **deportivo** le faltaba estar en la lista de
+sesiones válidas de `/api/deportistas`, y por eso cargaba por el camino lento.
+
+**Listas desplegables de Total Afiliados.** Salían blancas sobre blanco: la
+letra de la tabla es blanca y la lista del navegador se abre sobre fondo
+blanco. Ahora las opciones llevan letra oscura.
+
+## Nota de método para el próximo Claude
+
+Este día se cometió un error que conviene no repetir: se hicieron cambios en la
+copia de trabajo, se mostraron vistas previas al usuario, y **no se guardaron en
+su computador**. El usuario publicó y el commit decía "1 file changed" cuando
+debían ser tres. **Después de cada cambio, guardarlo de una en su carpeta y
+decírselo explícitamente**, aunque venga una vista previa detrás.
+
+Y los `.bat`: se deben escribir con **fin de línea de Windows (CRLF) y sin
+tildes ni eñes**. Un `.bat` con saltos de línea de Linux hace que cmd se coma
+letras ("cho" en vez de "echo") y el archivo no sirve.

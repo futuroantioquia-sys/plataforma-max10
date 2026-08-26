@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Search, Download } from 'lucide-react';
 import { rutaAnterior } from '@/components/RastreoRuta';
@@ -410,13 +410,139 @@ function ValoracionDinamicaInner() {
   const heroPeriodo   = (pDesde && pHasta) ? `${pDesde} a ${pHasta}${heroAnio ? ' de ' + heroAnio : ''}`
                        : (pDesde || pHasta || '');
 
-  function descargarPDF() {
-    const cod = (codParam || '').trim();
+  /* ── DESCARGAR PDF ────────────────────────────────────────────────────────
+     Antes esto abría la ventana de imprimir y el formador tenía que elegir
+     "Guardar como PDF". Ahora el PDF se arma aquí mismo y se baja solo a la
+     carpeta de Descargas, como cualquier archivo. — 25/08/2026
+
+     Se toma una foto fiel del informe (con sus colores y su fondo negro) y se
+     reparte en hojas tamaño carta. Tarda unos segundos: el botón avisa. */
+  const pdfRef = useRef<HTMLDivElement>(null);
+  const [generando, setGenerando] = useState(false);
+
+  /* Las dos librerías que arman el PDF se bajan de internet en el momento en
+     que se oprime el botón — igual que el lector de Excel. Así no hay que
+     instalar nada en el computador ni volver a compilar el proyecto.
+     (Están permitidas en la política de seguridad de next.config.js.) */
+  function cargarGuion(src: string, seVe: () => boolean): Promise<void> {
+    return new Promise((listo, falla) => {
+      if (seVe()) { listo(); return; }
+      const ya = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+      if (ya) {
+        ya.addEventListener('load', () => listo());
+        ya.addEventListener('error', () => falla(new Error('No se pudo bajar ' + src)));
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.onload  = () => listo();
+      s.onerror = () => falla(new Error('No se pudo bajar ' + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  /** Intenta varias direcciones: si la primera no responde, prueba la siguiente. */
+  async function cargarConRespaldo(urls: string[], seVe: () => boolean): Promise<void> {
+    let ultimo: unknown = null;
+    for (const u of urls) {
+      try { await cargarGuion(u, seVe); if (seVe()) return; }
+      catch (e) { ultimo = e; }
+    }
+    if (!seVe()) throw (ultimo instanceof Error ? ultimo : new Error('No se pudo bajar la librería.'));
+  }
+
+  async function cargarLibreriasPDF(): Promise<[any, any]> {
+    const w = window as any;
+    await Promise.all([
+      cargarConRespaldo([
+        'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+        'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+      ], () => !!w.html2canvas),
+      // (jsPDF va abajo, con su propia lista de direcciones)
+      /* OJO con la versión: en cdnjs la 2.5.2 de jsPDF no existe y la descarga
+         fallaba. La 2.5.1 sí. Se dejan varias direcciones por si alguna se
+         cae. — 25/08/2026 */
+      cargarConRespaldo([
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+        'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+        'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
+      ], () => !!(w.jspdf && w.jspdf.jsPDF)),
+    ]);
+    const html2canvas = w.html2canvas;
+    const jsPDF = w.jspdf?.jsPDF;
+    if (!html2canvas || !jsPDF) {
+      throw new Error('No se pudieron cargar las librerías del PDF. Revisa la conexión a internet.');
+    }
+    return [html2canvas, jsPDF];
+  }
+
+  /* El nombre del archivo termina en el NÚMERO del informe — Valoracion-1,
+     Valoracion-2, Valoracion-3 — para no confundir los informes de un mismo
+     deportista al guardarlos o enviarlos. — 25/08/2026
+     Queda, por ejemplo:  23080_MIGUEL-ANDRES-GOMEZ_Valoracion-1.pdf  */
+  function nombreArchivo(): string {
+    const cod    = (codParam || codigoDe(sel as Deportista) || '').trim();
     const nombre = (sel?._nombre || '').trim().replace(/\s+/g, '-');
-    const prev = document.title;
-    document.title = [cod, nombre, 'Valoracion-Dinamica'].filter(Boolean).join('_') || 'Valoracion-Dinamica';
-    window.print();
-    setTimeout(() => { document.title = prev; }, 1000);
+    const num    = String(row?.numero_informe ?? '').trim();
+    const etiqueta = num ? `Valoracion-${num}` : 'Valoracion';
+    const base   = [cod, nombre, etiqueta].filter(Boolean).join('_') || 'Valoracion';
+    return base.replace(/[\\/:*?"<>|]/g, '') + '.pdf';
+  }
+
+  async function descargarPDF() {
+    const nodo = pdfRef.current;
+    if (!nodo || generando) return;
+    setGenerando(true);
+    try {
+      const [html2canvas, jsPDF] = await cargarLibreriasPDF();
+
+      const lienzo = await html2canvas(nodo, {
+        scale: Math.min(2, window.devicePixelRatio || 1.5),
+        backgroundColor: '#000000',
+        useCORS: true,
+        logging: false,
+        windowWidth: nodo.scrollWidth,
+      });
+
+      const doc      = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const anchoPag = doc.internal.pageSize.getWidth();
+      const altoPag  = doc.internal.pageSize.getHeight();
+      const margen   = 6;
+      const anchoImg = anchoPag - margen * 2;
+      const mmPorPx  = anchoImg / lienzo.width;            // cuánto mide un punto de la foto
+      const pxPorHoja = Math.max(1, Math.floor((altoPag - margen * 2) / mmPorPx));
+
+      let desde = 0;
+      let hoja  = 0;
+      while (desde < lienzo.height) {
+        const alto  = Math.min(pxPorHoja, lienzo.height - desde);
+        const trozo = document.createElement('canvas');
+        trozo.width  = lienzo.width;
+        trozo.height = alto;
+        const ctx = trozo.getContext('2d');
+        if (!ctx) throw new Error('El navegador no permitió preparar la imagen.');
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, trozo.width, trozo.height);
+        ctx.drawImage(lienzo, 0, desde, lienzo.width, alto, 0, 0, lienzo.width, alto);
+
+        if (hoja > 0) doc.addPage();
+        doc.setFillColor(0, 0, 0);
+        doc.rect(0, 0, anchoPag, altoPag, 'F');           // hoja negra, como la pantalla
+        doc.addImage(trozo.toDataURL('image/jpeg', 0.92), 'JPEG',
+                     margen, margen, anchoImg, alto * mmPorPx);
+        desde += alto;
+        hoja  += 1;
+      }
+
+      doc.save(nombreArchivo());
+    } catch (e: any) {
+      console.error('[valoracion-dinamica] PDF:', e);
+      alert('No se pudo generar el PDF: ' + (e?.message || 'error desconocido')
+          + '\n\nIntenta de nuevo. Si vuelve a fallar, avísale al administrador.');
+    } finally {
+      setGenerando(false);
+    }
   }
 
   return (
@@ -509,6 +635,9 @@ function ValoracionDinamicaInner() {
 
         {row && (
           <>
+            {/* Todo lo que va DENTRO de este marco es lo que sale en el PDF.
+                El botón de descargar queda por fuera, para que no se retrate. */}
+            <div ref={pdfRef} className="space-y-4">
             {/* ── HERO — foto grande, nombre grande, programa y posición (estilo vista padres) ── */}
             <div className="rounded-3xl overflow-hidden shadow-xl border border-white/10" style={{ background: 'linear-gradient(150deg,#0b1220 0%,#0d2b1a 55%,#052a10 100%)' }}>
               <div className="p-5 flex gap-5 items-center">
@@ -720,17 +849,41 @@ function ValoracionDinamicaInner() {
               </div>
             </div>
 
+            {/* CIERRE — de qué valoración se trata. Va al final del informe y,
+                por lo tanto, al final del PDF. — 25/08/2026 */}
+            <div className="text-center py-2">
+              <span className="inline-block rounded-full px-5 py-2 text-white font-black text-sm tracking-[0.18em] uppercase"
+                style={{ background: '#00B050' }}>
+                Valoración {heroInforme || '1'}
+              </span>
+              {heroPeriodo && (
+                <p className="text-white/45 text-[10px] font-semibold mt-2 uppercase tracking-wide">
+                  {heroPeriodo}
+                </p>
+              )}
+            </div>
+
+            </div>{/* ── fin de lo que sale en el PDF ── */}
+
             {/* DESCARGAR PDF — al final del informe. Lo ven administradores y
                 formadores; los padres y deportistas no. — 25/08/2026 */}
             {esAdminUI && (
               <div className="print:hidden">
-                <button onClick={descargarPDF}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#16a34a] to-[#064e1e] hover:opacity-90 active:opacity-80 transition rounded-2xl py-4 min-h-[52px] text-white font-black text-sm tracking-wide">
-                  <Download className="w-4 h-4" /> DESCARGAR PDF
+                <button onClick={descargarPDF} disabled={generando}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#16a34a] to-[#064e1e] hover:opacity-90 active:opacity-80 transition rounded-2xl py-4 min-h-[52px] text-white font-black text-sm tracking-wide disabled:opacity-70">
+                  {generando ? (
+                    <>
+                      <span className="inline-block w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      ARMANDO EL PDF…
+                    </>
+                  ) : (
+                    <><Download className="w-4 h-4" /> DESCARGAR PDF</>
+                  )}
                 </button>
                 <p className="text-white/40 text-[11px] text-center mt-2 leading-snug px-2">
-                  Se abre la ventana de impresión. En <strong className="text-white/60">Destino</strong> elige
-                  <strong className="text-white/60"> “Guardar como PDF”</strong> y luego Guardar.
+                  {generando
+                    ? 'Puede tardar unos segundos. No cierres la pantalla.'
+                    : 'El archivo queda en tu carpeta de Descargas.'}
                 </p>
               </div>
             )}

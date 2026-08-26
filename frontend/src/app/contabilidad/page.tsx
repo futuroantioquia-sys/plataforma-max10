@@ -87,11 +87,30 @@ const EMPLEADOS_NOMINA: Record<string, { nombre: string; tipo: string }> = {
    (25/08/2026). Si todavía no tiene tipo, se deja en NOMINA, que es lo más
    conservador: se ve raro en pantalla y alguien lo corrige. */
 const CONCEPTO_POR_TIPO: Record<string, string> = {
-  PROFESOR:       'SERVICIOS POR FORMACIÓN',
+  // Se escribe IGUAL que en lib/contabilidad.ts (singular y sin tilde). Antes
+  // aquí decía "SERVICIOS POR FORMACIÓN" y allá "SERVICIO POR FORMACION": eran
+  // dos conceptos distintos para la misma cosa y los informes salían partidos.
+  PROFESOR:       'SERVICIO POR FORMACION',
   ADMINISTRATIVO: 'NOMINA',
   PROVEEDOR:      'PROVEEDOR',
 };
-const conceptoDeTipo = (tipo: any) => CONCEPTO_POR_TIPO[String(tipo ?? '').trim().toUpperCase()] || 'NOMINA';
+
+/* REGLA DE LA DIRECCIÓN (25/08/2026, tarde):
+   TODO pago a alguien que esté en el listado de NÓMINA se clasifica como
+   SERVICIO POR FORMACION. Solo lleva NOMINA quien esté marcado expresamente
+   como ADMINISTRATIVO.
+
+   Antes, si a la persona no se le había puesto el tipo —o si la columna `tipo`
+   todavía no existía en la base—, caía en 'NOMINA' y tocaba corregir a mano
+   fila por fila. Ese era justo el reclamo. */
+const conceptoDeTipo = (tipo: any, origen?: any) => {
+  const t = String(tipo ?? '').trim().toUpperCase();
+  if (CONCEPTO_POR_TIPO[t]) return CONCEPTO_POR_TIPO[t];
+  // Sin tipo: manda la lista de donde salió.
+  return String(origen ?? '').trim().toLowerCase() === 'proveedores'
+    ? 'PROVEEDOR'
+    : 'SERVICIO POR FORMACION';
+};
 
 /* ── RECONOCER AL TERCERO POR LA DESCRIPCIÓN DEL BANCO ────────────────────
    El banco escribe "PAGO A NOMIN fredy alexander r", "PAGO A PROVE sol marina
@@ -117,7 +136,7 @@ function trozoDeNombre(desc: any): string {
   return d;
 }
 
-type TerceroLibro = { documento: string; nombre: string; tipo: string };
+type TerceroLibro = { documento: string; nombre: string; tipo: string; origen?: string };
 
 /** Busca en el directorio a quién le corresponde esta descripción.
  *  Devuelve null si no hay nadie o si hay más de uno posible (ambiguo). */
@@ -382,14 +401,17 @@ export default function ContabilidadPage() {
      EMPLEADOS_NOMINA del código queda solo como respaldo, para que el Libro
      siga reconociendo a la gente aunque la base no responda. */
   const tercerosIdx = useMemo(() => {
-    const m: Record<string, { nombre: string; tipo: string }> = {};
-    for (const doc of Object.keys(EMPLEADOS_NOMINA)) m[doc] = { ...EMPLEADOS_NOMINA[doc] };
-    for (const t of terceros) m[t.documento] = { nombre: t.nombre, tipo: t.tipo || '' };
+    // `origen` dice de qué lista salió (nomina o proveedores). Se guarda porque
+    // la regla del concepto depende de eso: todo el que esté en NÓMINA es
+    // SERVICIO POR FORMACION salvo que se marque ADMINISTRATIVO. — 25/08/2026
+    const m: Record<string, { nombre: string; tipo: string; origen: string }> = {};
+    for (const doc of Object.keys(EMPLEADOS_NOMINA)) m[doc] = { ...EMPLEADOS_NOMINA[doc], origen: 'nomina' };
+    for (const t of terceros) m[t.documento] = { nombre: t.nombre, tipo: t.tipo || '', origen: t.origen || 'nomina' };
     return m;
   }, [terceros]);
   /** El mismo directorio, en lista, para buscar por el nombre de la descripción. */
   const tercerosLista = useMemo<TerceroLibro[]>(
-    () => Object.keys(tercerosIdx).map(doc => ({ documento: doc, nombre: tercerosIdx[doc].nombre, tipo: tercerosIdx[doc].tipo })),
+    () => Object.keys(tercerosIdx).map(doc => ({ documento: doc, nombre: tercerosIdx[doc].nombre, tipo: tercerosIdx[doc].tipo, origen: tercerosIdx[doc].origen })),
     [tercerosIdx],
   );
   /** A quién le corresponde esta descripción del banco (o null si no se sabe). */
@@ -525,7 +547,7 @@ export default function ContabilidadPage() {
              Si el mes que traía no es de la lista mensual, se borra: a estas
              personas no se les cobra matrícula ni inscripción. */
           next.deportista = tercerosIdx[clave].nombre;
-          next.concepto = conceptoDeTipo(tercerosIdx[clave].tipo);
+          next.concepto = conceptoDeTipo(tercerosIdx[clave].tipo, tercerosIdx[clave].origen);
           const detActual = String(next.detalle ?? '').trim().toUpperCase();
           const esMensual = String(tercerosIdx[clave].tipo ?? '').trim().toUpperCase() !== 'PROVEEDOR';
           if (esMensual && detActual && !MESES_NOMINA.includes(detActual)) next.detalle = '';
@@ -836,7 +858,7 @@ export default function ContabilidadPage() {
         const ter = terceroDeDesc(descripcion);
         if (ter) {
           codigo = ter.documento; deportista = ter.nombre;
-          concepto = conceptoDeTipo(ter.tipo); detalle = ''; via = 'tercero';
+          concepto = conceptoDeTipo(ter.tipo, ter.origen); detalle = ''; via = 'tercero';
         } else if (codigo) {
           deportista = codMap[codigo] || '';
           const esMatricula = /MATRICUL|INSCRIP/i.test(descripcion);
@@ -1382,7 +1404,7 @@ export default function ContabilidadPage() {
       const r = terceroDeDesc(m.descripcion);
       if (!r) return false;
       const det = String(m.detalle ?? '').trim().toUpperCase();
-      return sinTildes(String(m.concepto ?? '')) !== sinTildes(conceptoDeTipo(r.tipo))
+      return sinTildes(String(m.concepto ?? '')) !== sinTildes(conceptoDeTipo(r.tipo, r.origen))
           || String(m.codigo ?? '').trim() !== r.documento
           || sinTildes(String(m.deportista ?? '')) !== sinTildes(r.nombre)
           || (!!det && !MESES_NOMINA.includes(det));
@@ -1537,7 +1559,7 @@ export default function ContabilidadPage() {
       const r = terceroDeDesc(m.descripcion);
       if (!r || !m.id) continue;
       const g = porPersona[r.documento] = porPersona[r.documento]
-        || { doc: r.documento, nombre: r.nombre, tipo: r.tipo, concepto: conceptoDeTipo(r.tipo), conMes: [], sinMes: [] };
+        || { doc: r.documento, nombre: r.nombre, tipo: r.tipo, concepto: conceptoDeTipo(r.tipo, r.origen), conMes: [], sinMes: [] };
       const det = String(m.detalle ?? '').trim().toUpperCase();
       if (det && MESES_NOMINA.includes(det)) g.conMes.push(m.id);
       else g.sinMes.push(m.id);

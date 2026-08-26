@@ -31,11 +31,16 @@ const CABECERAS_SEGURIDAD = [
          Al poner esta política el 24/08/2026 se olvidó incluirlo, y desde esa
          mañana toda subida de Excel fallaba con "No se pudo cargar el lector de
          Excel" — tanto en internet como en el computador local. — 25/08/2026 */
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.sheetjs.com",
+      /* cdnjs.cloudflare.com trae las dos librerías que arman el PDF de la
+         Valoración Dinámica (html2canvas y jsPDF). Se bajan solo cuando el
+         formador oprime DESCARGAR PDF, igual que el lector de Excel.
+         Se hace así, y no instalándolas en el proyecto, para no obligar a
+         reinstalar nada en el computador cada vez. — 25/08/2026 */
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.sheetjs.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.supabase.co https://cdn.sheetjs.com",
+      "connect-src 'self' https://*.supabase.co https://cdn.sheetjs.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'",
