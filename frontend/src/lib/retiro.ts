@@ -521,29 +521,18 @@ export async function contarSolicitudesEnEstudio(): Promise<number> {
   }
 }
 
-/** ¿A este deportista ya se le entregó el Paz y Salvo?
- *
- *  Lo usa el INGRESO: al que ya se retiró y recibió su constancia no se le
- *  deja volver a entrar a la plataforma; se le da la línea de atención.
- *
- *  Si la consulta falla por lo que sea (la tabla todavía no existe, se cayó
- *  la red), devuelve FALSE a propósito: es preferible dejar entrar a una
- *  familia de más que dejar por fuera a todas por un tropiezo de la base. */
-export async function tienePazYSalvo(deportistaId: string): Promise<boolean> {
-  if (!deportistaId) return false;
-  try {
-    const res = await fetch(
-      `${SB_URL}/rest/v1/${TABLA}?select=id&deportista_id=eq.${encodeURIComponent(deportistaId)}` +
-      `&paz_salvo=is.true&limit=1`,
-      { headers: HDR, cache: 'no-store' },
-    );
-    if (!res.ok) return false;
-    const filas = await res.json();
-    return Array.isArray(filas) && filas.length > 0;
-  } catch {
-    return false;
-  }
-}
+/* ── EL INGRESO YA NO SE CIERRA ───────────────────────────────────────────
+   Se quitó el 26/08/2026, por orden de la dirección, y con razón.
+
+   La regla era: retirado + Paz y Salvo autorizado = no vuelve a entrar. El
+   problema es que AUTORIZAR no es ENTREGAR. Un deportista quedó por fuera de
+   la plataforma antes de alcanzar a descargar su constancia, y sin manera de
+   sacarla. El daño de dejar a una familia sin su documento pesa mucho más
+   que el de que alguien retirado siga viendo su historial.
+
+   Si algún día se retoma, la condición correcta NO es "autorizado" sino
+   "ya lo descargó" — y aun así conviene dejarle siempre una puerta para
+   volver a bajar el PDF. */
 
 /** Administración clasifica el motivo en una de las casillas de MOTIVOS_RETIRO.
  *  Se guarda apenas se escoge, sin tener que oprimir nada más. */

@@ -1774,8 +1774,48 @@ export default function ContabilidadPage() {
     });
   }, [vista, cargandoLibro, libroFiltrado, limite]);
 
+  /* ── RECORDAR EN QUÉ FILA VA ─────────────────────────────────────────────
+     ERROR CORREGIDO (26/08/2026): el código de ARRIBA ya sabía devolver la
+     pantalla a la fila guardada en 'cont_last_row'… pero NADIE la guardaba.
+     Solo se escribía al hacer clic en un deportista para ir a su estado de
+     cuenta. Por eso, al editar un movimiento o al entrar a otra sección y
+     volver, el libro arrancaba otra vez desde arriba y tocaba bajar a buscar
+     dónde iba uno.
+
+     Ahora el libro anota solo la primera fila que se está viendo, cada vez
+     que uno se desplaza. Al volver, regresa a esa fila y la resalta un
+     momento para que salte a la vista. */
+  useEffect(() => {
+    const cont = scrollRef.current;
+    if (!cont || vista !== 'libro') return;
+    let temporizador: any;
+    const anotarFila = () => {
+      clearTimeout(temporizador);
+      temporizador = setTimeout(() => {
+        const borde = cont.getBoundingClientRect().top;
+        const filas = cont.querySelectorAll('tr[id^="mov-"]');
+        for (const f of Array.from(filas)) {
+          const caja = (f as HTMLElement).getBoundingClientRect();
+          // La primera fila que todavía se alcanza a ver bajo el encabezado
+          if (caja.bottom > borde + 40) {
+            const id = (f as HTMLElement).id.replace('mov-', '');
+            if (id) { try { sessionStorage.setItem('cont_last_row', id); } catch { /* noop */ } }
+            break;
+          }
+        }
+      }, 250);
+    };
+    cont.addEventListener('scroll', anotarFila, { passive: true });
+    return () => { clearTimeout(temporizador); cont.removeEventListener('scroll', anotarFila); };
+  }, [vista]);
+
   // ── Editor / división de un movimiento ──
-  function abrirEditor(m: MovCont) { setEditRow({ orig: m, filas: [{ ...m }] }); }
+  function abrirEditor(m: MovCont) {
+    // Se anota la fila ANTES de abrir el editor: si al guardar se recarga el
+    // libro, la pantalla vuelve exactamente a este movimiento.
+    if (m.id) { try { sessionStorage.setItem('cont_last_row', m.id); } catch { /* noop */ } }
+    setEditRow({ orig: m, filas: [{ ...m }] });
+  }
   function agregarFila() {
     setEditRow(er => er && ({
       ...er,
@@ -1807,6 +1847,10 @@ export default function ContabilidadPage() {
       flash('Movimiento actualizado ✓');
       setEditRow(null);
       libroCache = null;              // invalidar caché para que se vean los cambios
+      /* Al recargar, el libro se va otra vez para arriba. Se vuelve a habilitar
+         la restauración para que regrese a la fila que se acaba de editar
+         —abrirEditor la dejó anotada—. — 26/08/2026 */
+      scrollRestaurado.current = false;
       await cargarLibro(true);        // FORZAR recarga (no usar la caché vieja)
     } catch (e: any) { flash('Error al guardar: ' + (e?.message || e)); }
     setGuardandoEd(false);

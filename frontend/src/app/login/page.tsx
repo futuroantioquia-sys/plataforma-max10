@@ -172,6 +172,9 @@ export default function LoginPage() {
           },
           cargando: false, error: null,
         });
+        /* Al RETIRADO se le deja entrar, pero solo a lo suyo: se le lleva
+           derecho a su Paz y Salvo, no al portal completo. — 26/08/2026 */
+        if (data.retirado) { router.push('/retiro'); return; }
         router.push(data.id ? `/alumnos/${data.id}` : '/alumnos');
         return;
       }

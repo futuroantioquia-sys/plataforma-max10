@@ -10,6 +10,7 @@ import { getDeportistas } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre, updateColumnasDeportista, enviarMensaje } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
+import { rolManejaFinanzas } from '@/lib/permisos';
 
 const FOTOS_KEY    = 'futuro_fotos_deportistas';
 const PAGOS_KEY    = 'futuro_pagos_estado';
@@ -241,7 +242,10 @@ function EstadoCuentaInner() {
   const [showAddOtro,   setShowAddOtro]   = useState(false);
   const [selProdId,     setSelProdId]     = useState('');
   const [guardandoOtro, setGuardandoOtro] = useState(false);
-  const esAdmin = usuario?.rol === 'administracion' || usuario?.rol === 'contable';
+  /* Antes decía `'administracion' || 'contable'`. 'contable' no existe —el rol
+     de Diana es 'contabilidad'— y faltaba 'total'. Por eso solo ADMON veía el
+     botón de eliminar de "Otros pagos". — 26/08/2026 */
+  const esAdmin = rolManejaFinanzas(usuario?.rol);
 
   useEffect(() => {
     if (!id) return;

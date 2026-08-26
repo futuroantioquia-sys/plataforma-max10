@@ -1872,3 +1872,33 @@ https://nextjs.org/docs/messages/module-not-found
  ✓ Compiled /api/auth/login in 458ms (787 modules)
 [login:admin] respaldo:clave-sin-clave
  POST /api/auth/login 401 in 1516ms
+ POST /api/auth/login 200 in 22ms
+ GET /api/pagos/soportes?solo=count 200 in 539ms
+ GET /api/pagos/soportes?solo=count 200 in 534ms
+ ○ Compiling /pagos-pendientes ...
+ ✓ Compiled /pagos-pendientes in 1673ms (1764 modules)
+ GET /api/pagos/soportes 200 in 570ms
+ GET /api/pagos/soportes 200 in 571ms
+ ✓ Compiled /api/pagos/soportes/datos in 270ms (793 modules)
+ GET /api/pagos/soportes/datos?id=4ba4b073-62d4-4975-aa59-57b6b5dbec2c 200 in 1080ms
+ GET /api/pagos/soportes/datos?id=4ba4b073-62d4-4975-aa59-57b6b5dbec2c 200 in 1339ms
+ GET /api/pagos/soportes/datos?id=ba638043-2f81-4236-85c1-be8ffbc93992 200 in 586ms
+ GET /api/pagos/soportes?solo=count 200 in 440ms
+ GET /api/pagos/soportes?solo=count 200 in 453ms
+ GET /api/pagos/soportes?solo=count 200 in 457ms
+ GET /api/pagos/soportes?solo=count 200 in 488ms
+ GET /api/pagos/soportes?solo=count 200 in 396ms
+ GET /api/pagos/soportes?solo=count 200 in 475ms
+ GET /api/pagos/soportes?solo=count 200 in 467ms
+ ○ Compiling /torneos ...
+ ✓ Compiled /torneos in 613ms (786 modules)
+ GET /api/pagos/soportes?solo=count 200 in 229ms
+ GET /api/pagos/soportes?solo=count 200 in 667ms
+ GET /api/pagos/soportes?solo=count 200 in 677ms
+ GET /api/pagos/soportes?solo=count 200 in 469ms
+ GET /api/pagos/soportes?solo=count 200 in 483ms
+ ✓ Compiled /administradores in 410ms (789 modules)
+ ✓ Compiled /api/admins in 382ms (794 modules)
+ GET /api/admins 200 in 791ms
+ GET /api/admins 200 in 801ms
+ GET /api/admins 200 in 319ms

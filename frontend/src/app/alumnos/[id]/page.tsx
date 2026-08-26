@@ -627,14 +627,33 @@ export default function PerfilDeportista() {
             )}
           </div>
 
-          {/* Botones */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginTop: 16 }}>
-            {[
-              { label: 'PAGOS',       href: `/alumnos/${id}/estado-cuenta`,   mant: false, accion: '' },
-              { label: 'ASISTENCIA',  href: `/alumnos/${id}/asistencia`,      mant: false, accion: '' },
-              { label: 'VALORACIÓN',  href: '/mantenimiento',                  mant: true,  accion: '' },
-              { label: 'MENSAJES',    href: '',                                mant: false, accion: 'mensajes' },
-            ].filter(b => !esProfesor || !b.mant).map(({ label, href, mant, accion }) => (
+          {/* Botones — al deportista RETIRADO se le dejan solo los suyos:
+              su Paz y Salvo y su estado de cuenta, que es lo que puede
+              necesitar para cerrar. Asistencia, valoración y mensajes ya no
+              le corresponden. — 26/08/2026 */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${(() => {
+              const cols = dep._columnas ?? {};
+              const k = Object.keys(cols).find(k => /^estado$/i.test(k.trim()));
+              const est = k ? String(cols[k] ?? '') : '';
+              return (/retir/i.test(est) && !/solicit/i.test(est)) ? 1 : 4;
+            })()},1fr)`,
+            gap: 8, marginTop: 16,
+          }}>
+            {(() => {
+              const cols = dep._columnas ?? {};
+              const k = Object.keys(cols).find(k => /^estado$/i.test(k.trim()));
+              const est = k ? String(cols[k] ?? '') : '';
+              const yaSalio = /retir/i.test(est) && !/solicit/i.test(est);
+              const todos = [
+                { label: 'PAGOS',       href: `/alumnos/${id}/estado-cuenta`,   mant: false, accion: '' },
+                { label: 'ASISTENCIA',  href: `/alumnos/${id}/asistencia`,      mant: false, accion: '' },
+                { label: 'VALORACIÓN',  href: '/mantenimiento',                  mant: true,  accion: '' },
+                { label: 'MENSAJES',    href: '',                                mant: false, accion: 'mensajes' },
+              ];
+              return yaSalio ? todos.filter(b => b.label === 'PAGOS') : todos;
+            })().filter(b => !esProfesor || !b.mant).map(({ label, href, mant, accion }) => (
               <button key={label} onClick={() => { if (accion === 'mensajes') { setShowCanales(true); setMsgDestino(null); setMsgOk(false); } else router.push(href); }} style={{
                 background: mant ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.11)',
                 border: mant ? '1.5px solid rgba(255,255,255,0.12)' : '1.5px solid rgba(255,255,255,0.22)',

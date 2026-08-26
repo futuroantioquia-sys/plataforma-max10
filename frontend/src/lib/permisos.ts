@@ -55,6 +55,21 @@ export function esDelEquipo(): boolean {
       || s === 'deportivo' || s === 'contabilidad' || s === 'profesor';
 }
 
+/** ¿Este rol maneja FINANZAS? — recibe el rol tal cual lo guarda la sesión.
+ *
+ *  ERROR CORREGIDO (26/08/2026): varias pantallas de Finanzas comprobaban a
+ *  mano `rol === 'administracion' || rol === 'contable'`. Dos problemas:
+ *    · 'contable' no existe — el rol de Diana es 'contabilidad';
+ *    · faltaba 'total', el acceso completo que se creó el 25/08.
+ *  Resultado: a Diana la sacaban de Productos y no le aparecía el botón de
+ *  eliminar en el Estado de Cuenta. Solo entraba ADMON.
+ *  De aquí en adelante se pregunta con esta función, en un solo lugar. */
+export function rolManejaFinanzas(rol: any): boolean {
+  const r = String(rol ?? '').trim().toLowerCase();
+  return r === '1' || r === 'administracion' || r === 'total'
+      || r === 'contabilidad' || r === 'contable';
+}
+
 /** ¿La ruta actual pertenece a Finanzas? (incluye subrutas como /pagos/importar-valores) */
 export function rutaEsFinanzas(pathname: string): boolean {
   return RUTAS_FINANZAS.some(r => pathname === r || pathname.startsWith(r + '/'));

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
+import { rolManejaFinanzas } from '@/lib/permisos';
 import { cn } from '@/lib/utils';
 
 const SUPABASE_URL     = 'https://fykdyalpuydkwfjqguip.supabase.co';
@@ -64,7 +65,84 @@ export default function ProductosPage() {
   const [masivaSubiendo, setMasivaSubiendo] = useState(false);
   const [masivaResumen, setMasivaResumen] = useState('');
 
-  const esAdmin = usuario?.rol === 'administracion' || usuario?.rol === 'contable';
+  const esAdmin = rolManejaFinanzas(usuario?.rol);
+
+  /* ── BORRAR TODOS LOS COBROS DE TORNEO (26/08/2026) ──────────────────────
+     Pedido de la dirección: dejar en cero los torneos que ya se le cargaron a
+     los deportistas —los que salen abajo del Estado de Cuenta, en "Otros
+     pagos"— para volver a cargarlos desde el principio.
+     Esto NO toca el catálogo de productos de esta pantalla, ni los
+     implementos, ni las mensualidades. */
+  const [limpiando, setLimpiando] = useState(false);
+  const [conteoTor, setConteoTor] = useState<{ n: number; valor: number; deps: number; pagados: number } | null>(null);
+
+  async function contarCobrosTorneo() {
+    setError(''); setExito('');
+    setLimpiando(true);
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/otros_pagos?select=id,deportista_id,valor,estado,tipo&limit=20000`,
+        { headers: HEADERS, cache: 'no-store' },
+      );
+      if (!res.ok) throw new Error(`La base respondió ${res.status}`);
+      const filas: any[] = await res.json();
+      const tor = (filas || []).filter(f => String(f.tipo ?? '').toLowerCase().includes('torneo'));
+      setConteoTor({
+        n:       tor.length,
+        valor:   tor.reduce((s, f) => s + (Number(f.valor) || 0), 0),
+        deps:    new Set(tor.map(f => f.deportista_id)).size,
+        pagados: tor.filter(f => String(f.estado ?? '').toUpperCase().startsWith('PAG')).length,
+      });
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo consultar.');
+      setConteoTor(null);
+    }
+    setLimpiando(false);
+  }
+
+  async function borrarCobrosTorneo() {
+    if (!conteoTor || conteoTor.n === 0) return;
+    if (!window.confirm(
+      `¿Borrar los ${conteoTor.n} cobros de torneo de TODOS los deportistas?\n\n` +
+      `Suman $${conteoTor.valor.toLocaleString('es-CO')} y afectan a ${conteoTor.deps} deportista(s).\n` +
+      (conteoTor.pagados > 0
+        ? `OJO: ${conteoTor.pagados} ya figuran PAGADOS y también se borran.\n`
+        : '') +
+      `\nNo se tocan los implementos ni las mensualidades.\nEsto no se puede deshacer.`
+    )) return;
+
+    setLimpiando(true);
+    setError(''); setExito('');
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/otros_pagos?select=id,tipo&limit=20000`,
+        { headers: HEADERS, cache: 'no-store' },
+      );
+      if (!res.ok) throw new Error(`La base respondió ${res.status}`);
+      const filas: any[] = await res.json();
+      const ids = (filas || [])
+        .filter(f => String(f.tipo ?? '').toLowerCase().includes('torneo'))
+        .map(f => String(f.id));
+
+      // De a 100, para no armar una dirección web kilométrica.
+      let hechos = 0;
+      for (let i = 0; i < ids.length; i += 100) {
+        const lote   = ids.slice(i, i + 100);
+        const filtro = lote.map(x => `"${x}"`).join(',');
+        const del = await fetch(`${SUPABASE_URL}/rest/v1/otros_pagos?id=in.(${filtro})`, {
+          method: 'DELETE',
+          headers: { ...HEADERS, Prefer: 'return=minimal' },
+        });
+        if (!del.ok) throw new Error(`Se detuvo en ${hechos} de ${ids.length} (error ${del.status})`);
+        hechos += lote.length;
+      }
+      setExito(`Listo: se borraron ${hechos} cobros de torneo. Ya puedes cargarlos de nuevo.`);
+      setConteoTor({ n: 0, valor: 0, deps: 0, pagados: 0 });
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo borrar.');
+    }
+    setLimpiando(false);
+  }
 
   useEffect(() => {
     if (usuario && !esAdmin) router.replace('/dashboard');
@@ -356,6 +434,88 @@ export default function ProductosPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+
+        {/* ── LIMPIAR LOS TORNEOS YA CARGADOS ─────────────────────────────
+            Borra los cobros de torneo que están en el Estado de Cuenta de los
+            deportistas (la sección "Otros pagos"). No toca el catálogo de
+            abajo, ni los implementos, ni las mensualidades. — 26/08/2026 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100" style={{ background: '#fff7ed' }}>
+            <h2 className="font-black text-sm uppercase tracking-wide" style={{ color: '#9a3412' }}>
+              🧹 Limpiar los torneos ya cargados
+            </h2>
+          </div>
+          <div className="p-5 space-y-3">
+            <p className="text-[12.5px] text-gray-600 leading-relaxed">
+              Quita los cobros de torneo que ya se le cargaron a los deportistas —los
+              que salen abajo del Estado de Cuenta, en <b>Otros pagos</b>— para volver
+              a cargarlos desde cero.
+              <br />
+              <span className="text-gray-500">
+                No toca el catálogo de aquí abajo, ni los implementos, ni las mensualidades.
+              </span>
+            </p>
+
+            {!conteoTor && (
+              <button
+                onClick={contarCobrosTorneo}
+                disabled={limpiando}
+                className="w-full py-3 rounded-xl font-black text-sm text-white transition disabled:opacity-60"
+                style={{ background: '#ea580c' }}>
+                {limpiando ? 'Consultando…' : '1 · VER CUÁNTOS HAY'}
+              </button>
+            )}
+
+            {conteoTor && conteoTor.n === 0 && (
+              <div className="rounded-xl px-4 py-3 text-center"
+                style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                <p className="font-black text-sm" style={{ color: '#166534' }}>
+                  No hay ningún cobro de torneo cargado.
+                </p>
+                <p className="text-[12px] mt-0.5" style={{ color: '#15803d' }}>
+                  Puedes cargarlos cuando quieras.
+                </p>
+              </div>
+            )}
+
+            {conteoTor && conteoTor.n > 0 && (
+              <>
+                <div className="rounded-xl px-4 py-3 space-y-1"
+                  style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
+                  <p className="font-black text-[15px]" style={{ color: '#9a3412' }}>
+                    {conteoTor.n.toLocaleString('es-CO')} cobros de torneo
+                  </p>
+                  <p className="text-[12.5px]" style={{ color: '#9a3412' }}>
+                    ${conteoTor.valor.toLocaleString('es-CO')} · {conteoTor.deps} deportista(s)
+                  </p>
+                  {conteoTor.pagados > 0 ? (
+                    <p className="text-[12px] font-bold pt-1" style={{ color: '#b91c1c' }}>
+                      ⚠ {conteoTor.pagados} ya figuran PAGADOS. Al borrarlos, esas familias
+                      vuelven a aparecer debiendo lo que ya pagaron.
+                    </p>
+                  ) : (
+                    <p className="text-[12px] font-bold pt-1" style={{ color: '#15803d' }}>
+                      Ninguno está pagado: borrarlos no hace perder ningún pago.
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={borrarCobrosTorneo}
+                  disabled={limpiando}
+                  className="w-full py-3 rounded-xl font-black text-sm text-white transition disabled:opacity-60"
+                  style={{ background: '#dc2626' }}>
+                  {limpiando ? 'Borrando…' : `2 · BORRAR LOS ${conteoTor.n} COBROS`}
+                </button>
+                <button
+                  onClick={() => setConteoTor(null)}
+                  disabled={limpiando}
+                  className="w-full py-2 rounded-xl font-bold text-[12.5px] text-gray-500 border border-gray-200 hover:bg-gray-50 transition">
+                  Cancelar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Formulario */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
