@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buscar por teléfono</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --lienzo:#333F50; --panel:#3C4759; --campo:#2B3547; --borde:#4A5568;
+    --tinta:#fff; --tinta2:rgba(255,255,255,.62); --tinta3:rgba(255,255,255,.40);
+    --verde:#00B050; --ambar:#E0A33A; --azul:#8AB4FF;
+  }
+  body{background:var(--lienzo);color:var(--tinta);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    padding:24px 16px 60px;line-height:1.45}
+  .caja{max-width:900px;margin:0 auto}
+  h1{font-size:22px;font-weight:900}
+  .sub{color:var(--tinta2);font-size:13.5px;margin-top:4px;margin-bottom:20px}
+  .buscador{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+    background:var(--campo);border:1px solid var(--borde);border-radius:14px;padding:10px}
+  input{flex:1;min-width:200px;background:transparent;border:none;outline:none;
+    color:var(--tinta);font-size:17px;padding:10px 8px;font-variant-numeric:tabular-nums}
+  input::placeholder{color:var(--tinta3)}
+  button{background:var(--verde);color:#fff;border:none;border-radius:10px;
+    padding:11px 18px;font-weight:900;font-size:14px;cursor:pointer;min-height:44px}
+  button.sec{background:var(--panel);border:1px solid var(--borde);font-size:12.5px;padding:9px 12px;min-height:38px}
+  .rapidos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .estado{margin:22px 0;color:var(--tinta2);font-size:14px;text-align:center}
+  .error{color:#FFB4A8}
+  .ficha{background:var(--panel);border:1px solid var(--borde);border-radius:16px;
+    padding:16px 18px;margin-bottom:14px}
+  .ficha .cod{display:inline-block;background:var(--verde);color:#fff;font-weight:900;
+    font-size:16px;padding:4px 12px;border-radius:9px;margin-right:10px;vertical-align:middle}
+  .ficha .nom{font-weight:900;font-size:17px;vertical-align:middle}
+  .meta{color:var(--tinta2);font-size:12.5px;margin-top:6px}
+  .hallazgo{background:var(--campo);border:1px solid var(--ambar);border-radius:11px;
+    padding:9px 12px;margin-top:12px}
+  .hallazgo .et{font-size:10px;font-weight:900;letter-spacing:.1em;color:var(--tinta3)}
+  .hallazgo .v{font-size:14.5px;font-weight:800;color:var(--ambar);font-variant-numeric:tabular-nums}
+  .datos{margin-top:12px;border-top:1px solid var(--borde);padding-top:10px}
+  .datos summary{cursor:pointer;font-size:12.5px;color:var(--azul);font-weight:800}
+  .datos table{margin-top:8px;width:100%;font-size:12px;border-collapse:collapse}
+  .datos td{padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.07);vertical-align:top}
+  .datos td:first-child{color:var(--tinta3);font-weight:800;white-space:nowrap;width:38%}
+  .pie{color:var(--tinta3);font-size:12px;margin-top:24px;text-align:center}
+</style>
+</head>
+<body>
+<div class="caja">
+  <h1>Buscar por teléfono</h1>
+  <p class="sub">Busca el número en <b>todas</b> las casillas de la ficha: celular del acudiente,
+     teléfono, WhatsApp, o donde sea que esté escrito.</p>
+
+  <div class="buscador">
+    <input id="q" placeholder="Escribe el número…" inputmode="numeric" autocomplete="off">
+    <button id="ir">BUSCAR</button>
+  </div>
+  <div class="rapidos" id="rapidos"></div>
+
+  <div id="estado" class="estado">Cargando las fichas…</div>
+  <div id="res"></div>
+  <p class="pie" id="pie"></p>
+</div>
+
+<script>
+const SB  = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
+
+const esc = s => String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* Solo los dígitos: así "300 307 7133", "3003077133" y "(300)3077133" son lo mismo. */
+const soloNum = s => String(s??'').replace(/\D/g,'');
+
+let fichas = [];
+
+function valorDe(f, rx){
+  const c = f.columnas || {};
+  const k = Object.keys(c).find(k => rx.test(k.trim()));
+  return k ? String(c[k] ?? '').trim() : '';
+}
+
+function buscar(texto){
+  const n = soloNum(texto);
+  const res = document.getElementById('res');
+  const est = document.getElementById('estado');
+  if (n.length < 6){
+    est.textContent = 'Escribe al menos 6 números.';
+    est.className = 'estado'; res.innerHTML = ''; return;
+  }
+
+  const hallados = [];
+  for (const f of fichas){
+    const cols = f.columnas || {};
+    for (const [col, val] of Object.entries(cols)){
+      const v = soloNum(val);
+      /* Se compara por el final: así un número guardado con el 57 adelante
+         (5730030771 33) también aparece. */
+      if (v.length >= 7 && (v === n || v.endsWith(n) || n.endsWith(v))){
+        hallados.push({ f, col, val: String(val ?? '') });
+        break;
+      }
+    }
+  }
+
+  est.className = 'estado';
+  if (hallados.length === 0){
+    est.textContent = 'Ningún deportista tiene ese número.';
+    res.innerHTML = ''; return;
+  }
+  est.textContent = hallados.length === 1
+    ? 'Un deportista con ese número:'
+    : hallados.length + ' deportistas con ese número:';
+
+  res.innerHTML = hallados.map(({f, col, val}) => {
+    const cod  = valorDe(f, /^c[oó]d/i) || '—';
+    const prog = valorDe(f, /^program|^categ/i);
+    const proy = valorDe(f, /^proy/i);
+    const sede = valorDe(f, /^sede/i);
+    const est2 = valorDe(f, /^estado$/i);
+    const acud = valorDe(f, /acud/i);
+    const filas = Object.entries(f.columnas || {})
+      .filter(([,v]) => String(v ?? '').trim() !== '')
+      .map(([k,v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+    return `<div class="ficha">
+      <div><span class="cod">${esc(cod)}</span><span class="nom">${esc(f.nombre || '—')}</span></div>
+      <div class="meta">${esc([prog, proy, sede, est2].filter(Boolean).join('  ·  ') || '—')}
+        ${acud ? '<br>Acudiente: ' + esc(acud) : ''}</div>
+      <div class="hallazgo">
+        <div class="et">EL NÚMERO ESTÁ EN LA CASILLA</div>
+        <div class="v">${esc(col)} — ${esc(val)}</div>
+      </div>
+      <details class="datos"><summary>Ver toda la ficha</summary>
+        <table>${filas}</table>
+      </details>
+    </div>`;
+  }).join('');
+}
+
+(async function(){
+  const est = document.getElementById('estado');
+  try {
+    const r = await fetch(`${SB}/rest/v1/deportistas?select=id,nombre,columnas&order=nombre`,
+      { headers: { apikey: KEY, Authorization: 'Bearer ' + KEY }, cache: 'no-store' });
+    if (!r.ok) throw new Error('La base respondió ' + r.status);
+    fichas = await r.json();
+  } catch (e){
+    est.className = 'estado error';
+    est.textContent = 'No se pudieron leer las fichas. Revisa la conexión. (' + (e.message || e) + ')';
+    return;
+  }
+  est.textContent = fichas.length + ' fichas cargadas. Escribe un número y busca.';
+  document.getElementById('pie').textContent =
+    'Leído el ' + new Date().toLocaleDateString('es-CO') + ' a las ' + new Date().toLocaleTimeString('es-CO');
+
+  const q = document.getElementById('q');
+  document.getElementById('ir').onclick = () => buscar(q.value);
+  q.addEventListener('keydown', e => { if (e.key === 'Enter') buscar(q.value); });
+
+  /* Botones rápidos con los dos números que se preguntaron el 26/08/2026 */
+  const rapidos = ['3003077133', '3005450373'];
+  document.getElementById('rapidos').innerHTML =
+    rapidos.map(n => `<button class="sec" data-n="${n}">${n}</button>`).join('');
+  document.querySelectorAll('#rapidos button').forEach(b => {
+    b.onclick = () => { q.value = b.dataset.n; buscar(b.dataset.n); };
+  });
+})();
+</script>
+</body>
+</html>

@@ -824,12 +824,34 @@ export default function GeneralPage() {
     return d._nombre ?? '';
   }, [edits]);
 
+  /* BUSCAR POR TELÉFONO (26/08/2026) — si en la casilla de buscar se escriben
+     7 números o más, deja de buscarse por nombre y se busca el TELÉFONO en
+     TODAS las casillas de la ficha: celular del acudiente, teléfono, WhatsApp,
+     donde sea que esté escrito.
+     Se compara solo con los dígitos y por el final, así que da lo mismo que
+     esté guardado como "300 307 7133", "3003077133" o "+57 3003077133". */
+  const soloDigitos = (v: any) => String(v ?? '').replace(/\D/g, '');
+
+  const tieneTelefono = useCallback((d: Deportista, num: string): boolean => {
+    for (const val of Object.values(d._columnas ?? {})) {
+      const v = soloDigitos(val);
+      if (v.length >= 7 && (v === num || v.endsWith(num) || num.endsWith(v))) return true;
+    }
+    return false;
+  }, []);
+
   // ── Filtro + sort ────────────────────────────────────────────
   const ordenados = useMemo(() => {
     const q    = buscar.trim().toLowerCase();
     const qCod = buscarCod.trim().toLowerCase();
+    const qTel = soloDigitos(buscar);
+    const esTel = qTel.length >= 7 && qTel.length === buscar.replace(/[\s()+.-]/g, '').length;
+
     const lista = deportistas.filter(d => {
-      if (q && !nombreDeDep(d).toLowerCase().includes(q)) return false;
+      if (q) {
+        if (esTel) { if (!tieneTelefono(d, qTel)) return false; }
+        else if (!nombreDeDep(d).toLowerCase().includes(q)) return false;
+      }
       if (qCod) {
         const cod = codigoDeDep(d).toLowerCase();
         if (!cod.includes(qCod)) return false;
@@ -838,7 +860,7 @@ export default function GeneralPage() {
     });
 
     return lista.sort(cmpDeportistasCon(codigoDeDep, nombreDeDep));
-  }, [deportistas, buscar, buscarCod, codigoDeDep, nombreDeDep]);
+  }, [deportistas, buscar, buscarCod, codigoDeDep, nombreDeDep, tieneTelefono]);
 
   /* N° DE FILA FIJO: se calcula sobre el listado COMPLETO, no sobre lo que quedó
      después de buscar o filtrar. Así, al buscar un código, la fila conserva el
@@ -1309,8 +1331,9 @@ export default function GeneralPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/50" />
             <input value={buscar} onChange={e => setBuscar(e.target.value)}
-              placeholder="Buscar deportista…"
-              className="w-44 bg-white/15 text-white placeholder-white/50 text-xs rounded-xl pl-8 pr-3 py-2 outline-none focus:bg-white/25 transition" />
+              placeholder="Nombre o teléfono…"
+              title="Escribe el nombre, o el número de teléfono (7 dígitos o más) para buscar por celular del acudiente."
+              className="w-48 bg-white/15 text-white placeholder-white/50 text-xs rounded-xl pl-8 pr-3 py-2 outline-none focus:bg-white/25 transition" />
           </div>
         </div>
 
