@@ -56,7 +56,9 @@ export async function GET(req: NextRequest) {
   const no = await permitido(req);
   if (no) return no;
   try {
-    const res = await fetch(`${TABLA}?select=id,usuario,nombre,tipo&order=usuario`, {
+    /* Se pide `clave` SOLO para saber si está vacía. El valor no sale de aquí:
+       lo que viaja al navegador es un sí/no. — 26/08/2026 */
+    const res = await fetch(`${TABLA}?select=id,usuario,nombre,tipo,clave&order=usuario`, {
       headers: headersAdmin(), cache: 'no-store',
     });
     if (!res.ok) return NextResponse.json({ ok: false, msg: `Base de datos ${res.status}` }, { status: 502 });
@@ -67,6 +69,7 @@ export async function GET(req: NextRequest) {
       clave:   '',                       // jamás sale del servidor
       nombre:  r.nombre ?? '',
       tipo:    tipoValido(r.tipo),
+      sinClave: limpiar(r.clave) === '',  // sin contraseña = no puede entrar
     })));
   } catch (e: any) {
     return NextResponse.json({ ok: false, msg: String(e?.message ?? e) }, { status: 500 });

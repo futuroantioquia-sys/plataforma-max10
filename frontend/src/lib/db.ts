@@ -2412,6 +2412,12 @@ export interface Admin {
    *   'contabilidad' — edita Finanzas; el resto lo ve en solo lectura
    *   'deportivo'    — todo menos Finanzas */
   tipo:    'total' | 'contabilidad' | 'deportivo';
+  /** true = este administrador NO tiene contraseña guardada, así que NO PUEDE
+   *  ENTRAR con ninguna. Lo calcula el servidor; la contraseña en sí nunca
+   *  sale de allá. Se agregó el 26/08/2026 porque a Diana se le quedó la
+   *  casilla vacía y no había forma de verlo: la pantalla se veía normal y el
+   *  ingreso solo decía "usuario o contraseña incorrectos". */
+  sinClave?: boolean;
 }
 
 /** Normaliza lo que venga de la base a uno de los tres tipos válidos. */
@@ -2422,6 +2428,32 @@ export function tipoAdmin(v: unknown): Admin['tipo'] {
 }
 
 export async function getAdmins(): Promise<Admin[]> {
+  /* Se pide por la ruta del servidor /api/admins y NO directo a la base
+     (26/08/2026). Dos razones:
+       · esa ruta habla con la llave maestra, así que ve la tabla aunque los
+         candados (RLS) estén puestos;
+       · es la única que puede decir si un administrador quedó SIN CONTRASEÑA,
+         porque mira la casilla allá y solo manda un sí/no. La contraseña sigue
+         sin salir nunca del servidor.
+     Si la ruta no responde, se cae al camino anterior para no dejar la
+     pantalla vacía. */
+  try {
+    const res = await fetch('/api/admins', { cache: 'no-store' });
+    if (res.ok) {
+      const lista = await res.json();
+      if (Array.isArray(lista)) {
+        return lista.map((r: any) => ({
+          id:      r.id ?? '',
+          usuario: String(r.usuario ?? '').toUpperCase(),
+          clave:   '',
+          nombre:  r.nombre ?? '',
+          tipo:    tipoAdmin(r.tipo),
+          sinClave: !!r.sinClave,
+        }));
+      }
+    }
+  } catch (e: any) { console.warn('[db] getAdmins por /api/admins:', e?.message); }
+
   try {
     const { data, error } = await supabase()
       .from('admins')

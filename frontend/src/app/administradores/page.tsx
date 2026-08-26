@@ -174,6 +174,23 @@ export default function AdministradoresPage() {
                 </span>
                 {a.id === 'diana' && <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Diana</span>}
               </div>
+
+              {/* AVISO — sin contraseña guardada NO entra con ninguna.
+                  Se puso el 26/08/2026: a Diana se le quedó esa casilla vacía y
+                  no había manera de darse cuenta. La ficha se veía normal y el
+                  ingreso solo decía "usuario o contraseña incorrectos", así que
+                  se perdió un buen rato buscando por el lado equivocado. */}
+              {a.sinClave && (
+                <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 mb-3"
+                  style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
+                  <KeyRound className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#dc2626' }} />
+                  <p className="text-[12.5px] leading-relaxed" style={{ color: '#991b1b' }}>
+                    <b>Sin contraseña: hoy NO puede entrar.</b> Escríbele una aquí
+                    abajo (mínimo 8 caracteres) y oprime Guardar.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Nombre</label>

@@ -840,12 +840,22 @@ export default function GeneralPage() {
     return false;
   }, []);
 
+  /* ¿Lo que hay escrito en la casilla de buscar es un TELÉFONO?
+     Se calcula aparte porque lo necesitan dos cosas: el filtro de abajo y,
+     sobre todo, listaPlana — que tiene que saber que hay una búsqueda de
+     teléfono en curso para hacerse a un lado con los filtros. */
+  const busquedaTelefono = useMemo(() => {
+    const dig = soloDigitos(buscar);
+    const esTel = dig.length >= 7 && dig.length === buscar.replace(/[\s()+.-]/g, '').length;
+    return esTel ? dig : '';
+  }, [buscar]);
+
   // ── Filtro + sort ────────────────────────────────────────────
   const ordenados = useMemo(() => {
     const q    = buscar.trim().toLowerCase();
     const qCod = buscarCod.trim().toLowerCase();
-    const qTel = soloDigitos(buscar);
-    const esTel = qTel.length >= 7 && qTel.length === buscar.replace(/[\s()+.-]/g, '').length;
+    const qTel = busquedaTelefono;
+    const esTel = !!qTel;
 
     const lista = deportistas.filter(d => {
       if (q) {
@@ -945,13 +955,18 @@ export default function GeneralPage() {
      — 25/08/2026 */
   const TANDA = 80;
   const listaPlana = useMemo(() => ordenados.filter(d => {
+    /* Buscando un TELÉFONO se ignoran los filtros de programa, sede, proyecto
+       y año (26/08/2026). Un teléfono señala a UNA familia: si además hubiera
+       que acertarle al programa y a la sede donde está, la búsqueda no serviría
+       de nada — que fue justo lo que pasó la primera vez. */
+    if (busquedaTelefono) return true;
     if (programaFiltro !== null && grupoDep(d) !== programaFiltro) return false;
     if (proyectoFiltro && getColVal(d, RX_PROY).trim() !== proyectoFiltro) return false;
     if (sedeFiltro && sedeCanonica(getColVal(d, /^sede/i)) !== sedeFiltro) return false;
     if (anioFiltro && getColVal(d, /^a[ñn]o$/i).trim() !== anioFiltro) return false;
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [ordenados, programaFiltro, proyectoFiltro, sedeFiltro, anioFiltro, edits]);
+  }), [ordenados, programaFiltro, proyectoFiltro, sedeFiltro, anioFiltro, edits, busquedaTelefono]);
 
   const [visibles, setVisibles] = useState(TANDA);
   const finTablaRef = useRef<HTMLTableRowElement>(null);
@@ -1477,6 +1492,21 @@ export default function GeneralPage() {
                            || !!anioFiltro || !!buscar.trim() || !!buscarCod.trim();
             return (
               <div className="ml-auto self-end flex items-center gap-2 flex-shrink-0">
+                {/* Aviso de búsqueda por teléfono: deja claro que está buscando
+                    por número y que los demás filtros no cuentan. — 26/08/2026 */}
+                {busquedaTelefono && (
+                  <div className="rounded-xl px-3 py-1.5 border text-left"
+                    style={{ background: LIENZO, borderColor: '#E0A33A' }}>
+                    <p className="font-black text-[11px] leading-tight" style={{ color: '#E0A33A' }}>
+                      📞 Buscando por teléfono
+                    </p>
+                    <p className="text-white/55 text-[10px] leading-tight">
+                      {n === 0
+                        ? 'Ninguna ficha tiene ese número'
+                        : 'Se ignoran programa, sede y proyecto'}
+                    </p>
+                  </div>
+                )}
                 {hayFiltro && (
                   <button
                     onClick={() => {

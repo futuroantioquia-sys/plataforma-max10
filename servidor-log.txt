@@ -1817,3 +1817,26 @@ https://nextjs.org/docs/messages/module-not-found
  ○ Compiling /_error ...
  ✓ Compiled /_error in 2.9s (1719 modules)
  GET /administradores 200 in 237ms
+ ✓ Compiled in 934ms (967 modules)
+ ✓ Compiled /api/pagos/soportes in 381ms (782 modules)
+ ✓ Compiled (785 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1240ms
+ GET /api/pagos/soportes?solo=count 200 in 1243ms
+ GET /api/deportistas 200 in 3078ms
+ ○ Compiling /general ...
+ GET /api/deportistas 200 in 3587ms
+ ✓ Compiled /general in 1027ms (793 modules)
+ ✓ Compiled /api/profes in 202ms (795 modules)
+ GET /api/profes 200 in 4579ms
+ GET /api/profes 200 in 6372ms
+ GET /api/profes 200 in 5384ms
+ GET /api/profes 200 in 5620ms
+ GET /api/pagos/soportes?solo=count 200 in 981ms
+ GET /api/pagos/soportes?solo=count 200 in 1036ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 1058ms (790 modules)
+ GET /login 200 in 1428ms
+ ○ Compiling /api/auth/login ...
+ ✓ Compiled /api/auth/login in 552ms (789 modules)
+[login:admin] respaldo:clave-sin-clave
+ POST /api/auth/login 401 in 1592ms
