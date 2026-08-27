@@ -339,7 +339,7 @@ function DashboardAdmin() {
         <AccesoCard titulo="Control de Informes" icono={ClipboardList} href="/control-informes" descripcion="Qué informes hicieron los profes y cuáles faltan" color="verde" />
         <AccesoCard titulo="Microciclo de Entrenamiento" icono={CalendarDays} href="/microciclo" descripcion="Planeación semanal · lunes a domingo" color="verde" />
         <AccesoCard titulo="Postpartido"            icono={Trophy}     href="/postpartido"  descripcion="Resultado y desempeño individual" color="verde" />
-        <AccesoCard titulo="Torneos y Estadísticas" icono={Trophy}     href="/torneos"      descripcion="Deportistas por competencia" color="verde" />
+        <AccesoCard titulo="Torneos y Competencias" icono={Trophy}    href="/torneos"      descripcion="Cuadro de equipos inscritos" color="verde" />
       </CategoriaSection>
 
       {/* Categoría: Finanzas — oculta para el Administrador Deportivo */}

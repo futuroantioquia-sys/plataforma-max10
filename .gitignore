@@ -1,45 +1,75 @@
-# Dependencias
-node_modules/
-.pnp
-.pnp.js
+# ─────────────────────────────────────────────────────────────────────────────
+#  .gitignore  ·  QUÉ NO SE SUBE NUNCA A GITHUB
+#
+#  POR QUÉ EXISTE (27/08/2026): este proyecto NO tenía este archivo, y
+#  SUBIR-AHORA.bat hace `git add -A`, que quiere decir "sube absolutamente
+#  todo". Resultado: frontend/.env.local —donde vive la LLAVE MAESTRA de la
+#  base de datos— se venía publicando en un repositorio que está abierto al
+#  público.
+#
+#  Esta lista es el filtro. Lo que esté aquí, git lo ignora y no lo vuelve a
+#  subir. OJO: esto solo evita lo de aquí en adelante. Lo que YA se subió sigue
+#  en el historial de GitHub hasta que se rote la llave.
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Variables de entorno — NUNCA subir al repositorio.
-# Se ignora TODO .env salvo el ejemplo, que no lleva valores reales.
-# (Antes .env.production quedaba fuera de la regla y sí se subía.)
+# ── LO MÁS IMPORTANTE: las llaves ────────────────────────────────────────────
+# Cualquier archivo de variables de entorno. Aquí viven las contraseñas de la
+# base y de los servicios. NUNCA se suben.
 .env
 .env.*
 !.env.example
-backend/.env
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 
-# Archivos con claves o datos personales que nunca deben ir al repositorio
+# Archivos de claves y certificados
+*.pem
+*.key
+*.p12
+*.pfx
+credenciales*.json
+service-account*.json
+
+# ── SQL con datos o contraseñas ──────────────────────────────────────────────
+# Los scripts que llevan claves adentro no van a un repositorio.
 DEVOLVER-CLAVES.sql
-ARREGLOS-CODIGOS.sql
-deploy-log.txt
-servidor-log.txt
-push_result.txt
+*CLAVES*.sql
+*claves*.sql
+CLAVES-NUEVAS.txt
+*CLAVES*.txt
+*PASSWORD*.sql
+*RESPALDO*.sql
 
-# Next.js
+# ── Dependencias y compilados: se reconstruyen solos, no hay que subirlos ────
+node_modules/
+frontend/node_modules/
+.next/
 frontend/.next/
-frontend/out/
-frontend/.turbo/
-
-# Build
-dist/
+out/
 build/
+dist/
 
-# Logs
-*.log
-npm-debug.log*
+# ── Vercel ───────────────────────────────────────────────────────────────────
+.vercel
 
-# OS
+# ── Basura del sistema y del editor ──────────────────────────────────────────
 .DS_Store
 Thumbs.db
-
-# IDE
-.vscode/
+desktop.ini
+*.log
+servidor-log.txt
+npm-debug.log*
+yarn-error.log*
 .idea/
-*.suo
-*.ntvs*
+.vscode/
+*.swp
+*~
 
-# Prisma
-backend/prisma/migrations/**/migration_lock.toml
+# ── Copias de seguridad locales ──────────────────────────────────────────────
+# Las copias de respaldo se guardan en el computador o en un disco, no en un
+# repositorio de código.
+RESPALDO/
+respaldo/
+*.bak
+*.old
+*_backup.*

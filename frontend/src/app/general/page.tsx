@@ -8,6 +8,7 @@ import { getDeportistas, saveDeportistas, deleteAllDeportistas, eliminarDeportis
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
 import { EST_SOLICITA } from '@/lib/retiro';
+import { getCuadro, type FilaTorneo } from '@/lib/torneos';
 
 // ── Regex reutilizable para columna de proyecto ───────────────
 const RX_PROY = /proyecto|^proy\b/i;
@@ -219,6 +220,9 @@ function grupoCodigo(codRaw: string): number {
    ANTIGUOS verde · NUEVOS naranja · REINGRESOS azul · los B (y MB) en gris. */
 const COD_VERDE   = '#16a34a';  // ANTIGUO
 const COD_NARANJA = '#f97316';  // NUEVO
+/* Las cuatro competencias (C1..C4) van en naranja con letra blanca, para que
+   se vean como un bloque aparte dentro del libro. — dirección, 26/08/2026 */
+const NARANJA_COMP = '#f97316';
 const COD_AZUL    = '#2563eb';  // REINGRESO
 const COD_GRIS    = '#6b7280';  // B / MB institucional y todo lo demás
 
@@ -416,14 +420,53 @@ function consignaA(dep: Deportista): { texto: string; color: string; manual: boo
   return { texto: 'A FUTURO', color: '#00B050', manual: false };
 }
 
-// Etiquetas de columna — renombra COMPITE → TORNEO 1, muestra labels de virtuales
+/* ── LAS CUATRO COMPETENCIAS: C1, C2, C3 y C4 ────────────────────────────────
+   Dirección, 26/08/2026. Cada deportista puede estar inscrito hasta en cuatro
+   torneos. Antes estas columnas se llamaban TORNEO 1..4 y se escribían a mano,
+   que era donde se colaban los errores. Ahora se llaman C1..C4 (competencia
+   uno, dos, tres y cuatro) y se escogen de un desplegable que trae SOLO los
+   torneos del programa del deportista: si está en DESARROLLO, solo ve los
+   torneos de desarrollo.
+
+   Lo que queda guardado es EL NÚMERO DEL TORNEO ("33"), que es el # TOR del
+   cuadro de Torneos y Competencias: la llave de todo el proceso. Con él se
+   arma el pospartido y se cuadra el valor. En el desplegable sí se ve el
+   número con su nombre —"33 · CRISTOREY SUB 11 REGOL"— para no escoger a
+   ciegas, y al pasar el mouse por la casilla también aparece completo. */
+function numCompetencia(col: string): 0 | 1 | 2 | 3 | 4 {
+  const c = String(col ?? '').trim();
+  if (col === VT1 || /^compite$/i.test(c) || /torneo.?1/i.test(c) || /^c\s*1$/i.test(c)) return 1;
+  if (col === VT2 || /torneo.?2/i.test(c) || /^c\s*2$/i.test(c)) return 2;
+  if (col === VT3 || /torneo.?3/i.test(c) || /^c\s*3$/i.test(c)) return 3;
+  if (col === VT4 || /torneo.?4/i.test(c) || /^c\s*4$/i.test(c)) return 4;
+  return 0;
+}
+
+/** El programa, comparable: sin número delante, sin tildes y en mayúsculas.
+ *  "6. Desarrollo" y "DESARROLLO" tienen que dar lo mismo. */
+function llavePrograma(v: any): string {
+  const s = sinTildes(String(v ?? '')).toUpperCase().replace(/^\d+\s*[.\-)]\s*/, '').trim();
+  if (/PASO/.test(s)) return 'FORMACION';
+  return s;
+}
+
+/** "CRISTOREY SUB 11 REGOL" — el torneo en un solo renglón, sin el número. */
+function nombreTorneoCorto(f: FilaTorneo): string {
+  return [f.torneo, f.categoria, f.nombre]
+    .map(x => String(x ?? '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean).join(' ');
+}
+
+/** "33 · CRISTOREY SUB 11 REGOL" — como se ve en el desplegable. */
+function etiquetaTorneo(f: FilaTorneo, numero: number): string {
+  return `${numero} · ${nombreTorneoCorto(f)}`;
+}
+
+// Etiquetas de columna — las cuatro competencias se muestran como C1..C4
 function labelCol(col: string): string {
-  if (/^compite$/i.test(col.trim())) return 'TORNEO 1';
+  const nc = numCompetencia(col);
+  if (nc) return `C${nc}`;
   if (col === VTC)  return 'COMPETENCIA';
-  if (col === VT1)  return 'TORNEO 1';
-  if (col === VT2)  return 'TORNEO 2';
-  if (col === VT3)  return 'TORNEO 3';
-  if (col === VT4)  return 'TORNEO 4';
   if (col === VPOS) return 'POSICIÓN';
   if (col === VMEN) return 'VALOR MENSUALIDAD';
   if (col === VCON) return 'CONSIGNA A';
@@ -741,6 +784,37 @@ export default function GeneralPage() {
     () => columnas.find(c => /^prof/i.test(c.trim())) ?? '',
     [columnas]
   );
+
+  /* ── El cuadro de TORNEOS Y COMPETENCIAS ─────────────────────────────────
+     De aquí salen las opciones de C1..C4. El # TOR de cada torneo es su
+     posición en el cuadro (1, 2, 3…), la misma que se ve allá y la que se
+     escribe en el pospartido. */
+  const [cuadroTorneos, setCuadroTorneos] = useState<FilaTorneo[]>([]);
+  useEffect(() => {
+    getCuadro().then(c => setCuadroTorneos(c ?? [])).catch(() => {});
+  }, []);
+
+  /** Los torneos que puede escoger este deportista: los de SU programa.
+   *  Si su programa no tiene torneos cargados, se muestran todos (para no
+   *  dejar la casilla muerta) y así se ve que falta cargarlos. */
+  const torneosDePrograma = useCallback((programa: string) => {
+    const k = llavePrograma(programa);
+    const conNumero = cuadroTorneos.map((f, i) => ({ f, n: i + 1 }));
+    const suyos = k ? conNumero.filter(({ f }) => llavePrograma(f.programa) === k) : [];
+    const lista = suyos.length ? suyos : conNumero;
+    return lista.map(({ f, n }) => ({
+      num: String(n),
+      etiqueta: etiquetaTorneo(f, n),
+      nombre: nombreTorneoCorto(f),
+    }));
+  }, [cuadroTorneos]);
+
+  /** El nombre del torneo número N, para el globito de ayuda de la casilla. */
+  const nombreDelNumero = useCallback((num: string): string => {
+    const n = parseInt(String(num ?? '').trim(), 10);
+    if (!Number.isFinite(n) || n < 1 || n > cuadroTorneos.length) return '';
+    return etiquetaTorneo(cuadroTorneos[n - 1], n);
+  }, [cuadroTorneos]);
 
   // ── Mapa proyecto → formador (usuario), desde la tabla de formadores ──
   // El PROFE de un deportista se deriva del proyecto en el que está.
@@ -1660,10 +1734,12 @@ export default function GeneralPage() {
                     </th>
                     {colVisibles.map(col => {
                       const esCod = esCodigo(col);
+                      /* Las cuatro competencias llevan encabezado naranja. */
+                      const fondoTh = numCompetencia(col) ? NARANJA_COMP : '#00B050';
                       return (
                         <>
                         <th key={col}
-                          style={{ border: '2px solid #ffffff', background: '#00B050', color: 'white' }}
+                          style={{ border: '2px solid #ffffff', background: fondoTh, color: 'white' }}
                           className={`relative px-2 py-2.5 text-center font-black text-[10px] whitespace-nowrap select-none ${
                             esCod ? 'sticky left-[36px] z-30' : ''
                           }`}>
@@ -1859,6 +1935,59 @@ export default function GeneralPage() {
                                       <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>{auto.texto}</option>
                                       {CONSIGNA_OPCIONES.filter(o => o !== auto.texto).map(o => (
                                         <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                );
+                              }
+
+                              /* C1 · C2 · C3 · C4 — LAS COMPETENCIAS DEL DEPORTISTA
+                                 Desplegable con los torneos de SU programa. Al
+                                 escoger uno, el deportista queda asignado a ese
+                                 torneo y le queda cargado con su número. Un mismo
+                                 torneo no se ofrece dos veces en el mismo
+                                 deportista. — 26/08/2026 */
+                              const nComp = numCompetencia(col);
+                              if (nComp) {
+                                const progDep = getValCelda(dep, colPrograma).trim();
+                                const puesto  = (rawVal && rawVal !== '—') ? rawVal : '';
+                                /* Los que ya escogió en las otras casillas, para no
+                                   repetir el mismo torneo dos veces. */
+                                const yaPuestos = colVisibles
+                                  .filter(c => numCompetencia(c) && c !== col)
+                                  .map(c => getValCelda(dep, c).trim())
+                                  .filter(Boolean);
+                                const opsTorneo = torneosDePrograma(progDep)
+                                  .filter(t => !yaPuestos.includes(t.num));
+                                const ayuda = nombreDelNumero(puesto) ||
+                                  (puesto ? puesto : `Escoge la competencia ${nComp} · solo salen los torneos de ${progDep || 'su programa'}`);
+
+                                if (soloLectura) return (
+                                  <td key={col} style={{ background: NARANJA_COMP, border: '2px solid #ffffff' }}
+                                    className="px-2 py-[7px] text-center" title={ayuda}>
+                                    <span className="block w-full text-[13px] font-black text-white">
+                                      {puesto || '—'}
+                                    </span>
+                                  </td>
+                                );
+                                return (
+                                  <td key={col}
+                                    style={{ background: NARANJA_COMP, border: '2px solid #ffffff' }}
+                                    className="px-0 py-0" title={ayuda}>
+                                    <select
+                                      value={puesto}
+                                      onChange={e => setCelda(dep.id, col, e.target.value)}
+                                      className="w-full text-[13px] font-black py-[6px] px-1 outline-none bg-transparent text-white cursor-pointer text-center">
+                                      <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
+                                      {/* Lo que ya estaba escrito antes (aunque no salga
+                                          en la lista) no se pierde al abrir el desplegable. */}
+                                      {puesto && !opsTorneo.some(t => t.num === puesto) && (
+                                        <option value={puesto} style={{ color: '#111827', backgroundColor: 'white' }}>{puesto}</option>
+                                      )}
+                                      {opsTorneo.map(t => (
+                                        <option key={t.num} value={t.num} style={{ color: '#111827', backgroundColor: 'white' }}>
+                                          {t.etiqueta}
+                                        </option>
                                       ))}
                                     </select>
                                   </td>

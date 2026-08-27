@@ -224,6 +224,122 @@ function getMesAfil(cols: Record<string, string>): number {
 }
 
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA CUENTA DE CADA DEPORTISTA — fuera de la pantalla, a propósito.
+
+   POR QUÉ SE SACÓ DE ADENTRO (dirección, 27/08/2026): esta cuenta es lo más
+   pesado de Control de Pagos —recorre todas las columnas de la ficha, junta los
+   pagos guardados bajo el código y bajo el ID, y arma los doce renglones del
+   año—. Estando adentro de la pantalla se volvía a hacer, para los ~600
+   deportistas, CADA VEZ que algo se movía: una tecla en el buscador, una
+   casilla marcada, el mouse pasando por una fila. Y no una vez: tres, porque
+   se llamaba en el filtro, en la cola de cobro y otra vez al pintar cada fila.
+
+   Ahora vive aquí afuera y la pantalla la manda a hacer UNA sola vez por
+   deportista, y solo cuando de verdad cambia algo (la lista de deportistas o
+   los pagos). El resultado queda guardado en un mapa y todo el mundo lo lee de
+   ahí. La cuenta es exactamente la misma de antes; lo único que cambió es
+   cuántas veces se hace.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* Resumen de pagos por deportista — busca por dep.id Y por todos los códigos numéricos */
+function esBecadoDep(dep: Deportista): boolean {
+  const kCod = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k));
+  const raw  = kCod ? String(dep._columnas[kCod] ?? '').trim() : '';
+  return /^b\d/i.test(raw) && !/^mb/i.test(raw);
+}
+
+function calcularResumen(dep: Deportista, allPagos: AllPagos) {
+  // BECADO: sin pendientes de ningún tipo
+  if (esBecadoDep(dep)) {
+    return { cargados: 0, pagados: 0, pendientes: 0, proximos: 0, total: 1, mesesPendientes: [], mesesPendFull: [], becado: true };
+  }
+
+  // 1. Reunir todos los pagos guardados (dep.id + código numérico)
+  const posKeys: string[] = [dep.id];
+  const seen = new Set(posKeys);
+
+  // Columna CÓDIGO explícita — nunca excluir como año (ej: código "2018" es válido)
+  const kCod = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k));
+  if (kCod) {
+    const digits = String(dep._columnas[kCod] ?? '').replace(/\D/g, '');
+    if (digits.length >= 4 && digits.length <= 5) {
+      const key = String(parseInt(digits, 10));
+      if (!seen.has(key)) { seen.add(key); posKeys.push(key); }
+      if (digits !== key && !seen.has(digits)) { seen.add(digits); posKeys.push(digits); }
+    }
+  }
+  // Otras columnas — sí excluir años (2000-2099)
+  for (const [k, v] of Object.entries(dep._columnas ?? {})) {
+    if (k === kCod) continue;
+    const digits = String(v ?? '').replace(/\D/g, '');
+    if (digits.length >= 4 && digits.length <= 5) {
+      const n = parseInt(digits, 10);
+      if (n >= 2000 && n <= 2099 && digits.length === 4) continue;
+      const key = String(n);
+      if (!seen.has(key)) { seen.add(key); posKeys.push(key); }
+      if (digits !== key && !seen.has(digits)) { seen.add(digits); posKeys.push(digits); }
+    }
+  }
+  /* MISMAS REGLAS QUE EL ESTADO DE CUENTA, para que las dos pantallas digan lo
+     mismo del mismo deportista:
+       1) Base = lo que el libro publicó bajo el CÓDIGO.
+       2) Encima = las ediciones manuales guardadas bajo el ID interno.
+       3) Un PAGÓ real NO lo pisa una fila vieja en PEND/PRÓX (salvo un reverso
+          intencional, que llega marcado con destino 'REVERT').
+     Antes aquí mandaba el código sobre el ID, al revés que en el estado de
+     cuenta: por eso una matrícula marcada a mano se veía pagada en la ficha
+     del deportista y al mismo tiempo aparecía debiendo en este cuadro. */
+  const mergeMap = new Map<string, any>();
+  for (const key of posKeys) {
+    if (key === dep.id) continue;                       // el ID va después
+    for (const r of ((allPagos as any)[key] ?? [])) mergeMap.set(normDet(r.detalle), r);
+  }
+  for (const r of ((allPagos as any)[dep.id] ?? [])) {
+    const det  = normDet(r.detalle);
+    const prev = mergeMap.get(det);
+    if (prev && prev.estado === 'PAGÓ' && r.estado !== 'PAGÓ' && r.destino !== 'REVERT') continue;
+    mergeMap.set(det, r);
+  }
+
+  // 2. Generar todas las filas esperadas del año según mes de afiliación
+  const mesAfil = getMesAfil(dep._columnas);
+  const fullRows = DETALLE_ROWS
+    .filter(det => { const n = MES_NUM[det]; return n === 0 || n >= mesAfil; })
+    .map(det => {
+      const saved = mergeMap.get(det) as any;
+      if (saved?.estado === 'ELIM') return null;
+      if (saved) return saved;
+      return { estado: esFuturo(det) ? 'PROX' : 'PEND' };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  const pagados    = fullRows.filter((r: any) => r.estado === 'PAGÓ').length;
+  const pendientes = fullRows.filter((r: any) => r.estado === 'PEND').length;
+  const proximos   = fullRows.filter((r: any) => r.estado === 'PROX').length;
+  const cargados   = pagados + pendientes + proximos;
+
+  /* Meses pendientes solo hasta el mes en curso (no futuros).
+     Se guardan con el nombre completo ("JULIO 2026") para poder armar el
+     mensaje de cobro, y aparte abreviados para los chips de la tabla. */
+  const mesesPendFull: string[] = DETALLE_ROWS
+    .filter(det => {
+      const n = MES_NUM[det];
+      // incluir MATRÍCULA (n=0) y meses hasta el actual
+      if (n > MES_ACTUAL) return false;
+      /* Se usa el `mesAfil` de arriba. Antes se volvía a buscar la fecha de
+         afiliación DENTRO de este recorrido, o sea doce veces por deportista y
+         para nada: siempre daba lo mismo. — 27/08/2026 */
+      if (n !== 0 && n < mesAfil) return false;
+      const saved = mergeMap.get(det) as any;
+      if (saved?.estado === 'ELIM') return false;
+      if (saved) return saved.estado === 'PEND';
+      return true; // sin registro = PEND
+    });
+  const mesesPendientes: string[] = mesesPendFull.map(det => MES_ABREV[det] ?? det.slice(0, 3));
+
+  return { cargados, pagados, pendientes, proximos, total: fullRows.length, mesesPendientes, mesesPendFull };
+}
+
 function PagosInner() {
   const router      = useRouter();
   const searchParams = useSearchParams();
@@ -244,6 +360,16 @@ function PagosInner() {
 
   // Sincronizar filtros → URL (replace para no apilar historial)
   // Incluye 'mes' para que al ver una cuenta y volver, se regrese al mismo mes filtrado.
+  /* POR QUÉ NO SE USA router.replace (dirección, 27/08/2026): esta pantalla es
+     "force-dynamic", así que cada router.replace le pedía a Next.js rearmar la
+     ruta ENTERA. Como se llamaba en cada tecla del buscador, escribir un nombre
+     de diez letras disparaba diez rearmes seguidos: por eso la letra aparecía
+     tarde y el cuadro se sentía trabado.
+
+     history.replaceState escribe la misma dirección en la barra del navegador
+     SIN rearmar nada. Los filtros se siguen leyendo igual al entrar y al volver
+     de un estado de cuenta —que es para lo único que estaban en la dirección—,
+     pero ahora escribir es instantáneo. */
   const syncURL = useCallback((q: string, cod: string, prog: string, proy: string, mes: string) => {
     const p = new URLSearchParams();
     if (q)    p.set('q',    q);
@@ -252,7 +378,11 @@ function PagosInner() {
     if (proy) p.set('proy', proy);
     if (mes)  p.set('mes',  mes);
     const qs = p.toString();
-    router.replace(qs ? `/pagos?${qs}` : '/pagos', { scroll: false });
+    try {
+      window.history.replaceState(null, '', qs ? `/pagos?${qs}` : '/pagos');
+    } catch {
+      router.replace(qs ? `/pagos?${qs}` : '/pagos', { scroll: false });
+    }
   }, [router]);
   const [cargando,         setCargando]         = useState(true);
   const [pagosListos,      setPagosListos]      = useState(false);
@@ -372,6 +502,42 @@ function PagosInner() {
 
   // Estado DEP es solo lectura en la tabla principal
 
+  /* ── LA CUENTA, HECHA UNA SOLA VEZ ───────────────────────────────────────
+     Se rehace únicamente cuando cambian los deportistas o los pagos. Mientras
+     usted escribe en el buscador o marca casillas, esto NO se vuelve a hacer:
+     se lee del mapa, que es instantáneo. */
+  const resumenes = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const d of deportistas) m.set(d.id, calcularResumen(d, allPagos as any));
+    return m;
+  }, [deportistas, allPagos]);
+
+  /** La cuenta de un deportista. Sale del mapa de arriba. */
+  function resumenPago(dep: Deportista) {
+    return resumenes.get(dep.id) ?? calcularResumen(dep, allPagos as any);
+  }
+
+  /* ── EL BOTÓN DE COBRO, TAMBIÉN UNA SOLA VEZ ─────────────────────────────
+     Armar el botón es caro: escribe el mensaje completo del deportista y lo
+     codifica para el enlace de WhatsApp. Antes eso se hacía ~600 veces por
+     cada movimiento de la pantalla. Ahora se hace una vez y se guarda; solo se
+     rehace si cambian los pagos, los textos que armó administración o algún
+     celular corregido a mano. */
+  const cobros = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const d of deportistas) {
+      const r = resumenes.get(d.id) as any;
+      m.set(d.id, r ? cobroDe(d, r.mesesPendFull, r.becado) : null);
+    }
+    return m;
+  }, [deportistas, resumenes, cfgCobro, telAlt]);
+
+  /** El botón que le toca a este deportista, o null si no hay nada que cobrar. */
+  function cobroDeCache(dep: Deportista) {
+    return cobros.has(dep.id) ? cobros.get(dep.id) : null;
+  }
+
+
   const programas = useMemo(() =>
     [...new Set(deportistas.map(d => getCol(d, /^program/i)).filter(Boolean))].sort(),
     [deportistas]
@@ -402,8 +568,7 @@ function PagosInner() {
       if (filtroMes && !resumenPago(d).mesesPendientes.includes(filtroMes)) return false;
       // Solo los que les toca este botón de cobro
       if (filtroBoton) {
-        const r = resumenPago(d) as any;
-        const c = cobroDe(d, r.mesesPendFull, r.becado);
+        const c = cobroDeCache(d);
         if (!c || c.botonId !== filtroBoton) return false;
       }
       if (!q) return true;
@@ -412,104 +577,12 @@ function PagosInner() {
       const ca = codigoDe(a), cb = codigoDe(b);
       return ca.localeCompare(cb, 'es', { numeric: true });
     });
-  }, [deportistas, busqueda, filtroCodigo, filtroPrograma, filtroProyecto, filtroMes, filtroBoton, cfgCobro, allPagos, depEstados, mostrarRetirados]);
+    /* Ojo con la lista de abajo: ya NO va `allPagos` ni `cfgCobro` sueltos,
+       porque eso entra por `resumenes` y `cobros`, que sí están hechos una sola
+       vez. Poner los dos era rehacer el filtro de balde. */
+  }, [deportistas, resumenes, cobros, busqueda, filtroCodigo, filtroPrograma, filtroProyecto, filtroMes, filtroBoton, depEstados, mostrarRetirados]);
 
-  /* Resumen de pagos por deportista — busca por dep.id Y por todos los códigos numéricos */
-  function esBecadoDep(dep: Deportista): boolean {
-    const kCod = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k));
-    const raw  = kCod ? String(dep._columnas[kCod] ?? '').trim() : '';
-    return /^b\d/i.test(raw) && !/^mb/i.test(raw);
-  }
 
-  function resumenPago(dep: Deportista) {
-    // BECADO: sin pendientes de ningún tipo
-    if (esBecadoDep(dep)) {
-      return { cargados: 0, pagados: 0, pendientes: 0, proximos: 0, total: 1, mesesPendientes: [], mesesPendFull: [], becado: true };
-    }
-
-    // 1. Reunir todos los pagos guardados (dep.id + código numérico)
-    const posKeys: string[] = [dep.id];
-    const seen = new Set(posKeys);
-
-    // Columna CÓDIGO explícita — nunca excluir como año (ej: código "2018" es válido)
-    const kCod = Object.keys(dep._columnas ?? {}).find(k => /^c[oó]d/i.test(k));
-    if (kCod) {
-      const digits = String(dep._columnas[kCod] ?? '').replace(/\D/g, '');
-      if (digits.length >= 4 && digits.length <= 5) {
-        const key = String(parseInt(digits, 10));
-        if (!seen.has(key)) { seen.add(key); posKeys.push(key); }
-        if (digits !== key && !seen.has(digits)) { seen.add(digits); posKeys.push(digits); }
-      }
-    }
-    // Otras columnas — sí excluir años (2000-2099)
-    for (const [k, v] of Object.entries(dep._columnas ?? {})) {
-      if (k === kCod) continue;
-      const digits = String(v ?? '').replace(/\D/g, '');
-      if (digits.length >= 4 && digits.length <= 5) {
-        const n = parseInt(digits, 10);
-        if (n >= 2000 && n <= 2099 && digits.length === 4) continue;
-        const key = String(n);
-        if (!seen.has(key)) { seen.add(key); posKeys.push(key); }
-        if (digits !== key && !seen.has(digits)) { seen.add(digits); posKeys.push(digits); }
-      }
-    }
-    /* MISMAS REGLAS QUE EL ESTADO DE CUENTA, para que las dos pantallas digan lo
-       mismo del mismo deportista:
-         1) Base = lo que el libro publicó bajo el CÓDIGO.
-         2) Encima = las ediciones manuales guardadas bajo el ID interno.
-         3) Un PAGÓ real NO lo pisa una fila vieja en PEND/PRÓX (salvo un reverso
-            intencional, que llega marcado con destino 'REVERT').
-       Antes aquí mandaba el código sobre el ID, al revés que en el estado de
-       cuenta: por eso una matrícula marcada a mano se veía pagada en la ficha
-       del deportista y al mismo tiempo aparecía debiendo en este cuadro. */
-    const mergeMap = new Map<string, any>();
-    for (const key of posKeys) {
-      if (key === dep.id) continue;                       // el ID va después
-      for (const r of ((allPagos as any)[key] ?? [])) mergeMap.set(normDet(r.detalle), r);
-    }
-    for (const r of ((allPagos as any)[dep.id] ?? [])) {
-      const det  = normDet(r.detalle);
-      const prev = mergeMap.get(det);
-      if (prev && prev.estado === 'PAGÓ' && r.estado !== 'PAGÓ' && r.destino !== 'REVERT') continue;
-      mergeMap.set(det, r);
-    }
-
-    // 2. Generar todas las filas esperadas del año según mes de afiliación
-    const mesAfil = getMesAfil(dep._columnas);
-    const fullRows = DETALLE_ROWS
-      .filter(det => { const n = MES_NUM[det]; return n === 0 || n >= mesAfil; })
-      .map(det => {
-        const saved = mergeMap.get(det) as any;
-        if (saved?.estado === 'ELIM') return null;
-        if (saved) return saved;
-        return { estado: esFuturo(det) ? 'PROX' : 'PEND' };
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null);
-
-    const pagados    = fullRows.filter((r: any) => r.estado === 'PAGÓ').length;
-    const pendientes = fullRows.filter((r: any) => r.estado === 'PEND').length;
-    const proximos   = fullRows.filter((r: any) => r.estado === 'PROX').length;
-    const cargados   = pagados + pendientes + proximos;
-
-    /* Meses pendientes solo hasta el mes en curso (no futuros).
-       Se guardan con el nombre completo ("JULIO 2026") para poder armar el
-       mensaje de cobro, y aparte abreviados para los chips de la tabla. */
-    const mesesPendFull: string[] = DETALLE_ROWS
-      .filter(det => {
-        const n = MES_NUM[det];
-        // incluir MATRÍCULA (n=0) y meses hasta el actual
-        if (n > MES_ACTUAL) return false;
-        const mesAfil2 = getMesAfil(dep._columnas);
-        if (n !== 0 && n < mesAfil2) return false;
-        const saved = mergeMap.get(det) as any;
-        if (saved?.estado === 'ELIM') return false;
-        if (saved) return saved.estado === 'PEND';
-        return true; // sin registro = PEND
-      });
-    const mesesPendientes: string[] = mesesPendFull.map(det => MES_ABREV[det] ?? det.slice(0, 3));
-
-    return { cargados, pagados, pendientes, proximos, total: fullRows.length, mesesPendientes, mesesPendFull };
-  }
 
   const BL = '#FFFFFF';
 
@@ -642,17 +715,19 @@ function PagosInner() {
      Los que HOY tienen algo que cobrar, en el mismo orden de la tabla (o sea,
      respetando los filtros que usted tenga puestos). De ahí salen las
      casillitas: solo la tiene el que se le puede cobrar. */
-  const cobrables = filtrados
-    .map(dep => {
-      const r = resumenPago(dep) as any;
-      const c = cobroDe(dep, r.mesesPendFull, r.becado);
-      return c ? { dep, cobro: c } : null;
-    })
-    .filter((x): x is { dep: Deportista; cobro: any } => x !== null);
+  const cobrables = useMemo(() =>
+    filtrados
+      .map(dep => {
+        const c = cobroDeCache(dep);
+        return c ? { dep, cobro: c } : null;
+      })
+      .filter((x): x is { dep: Deportista; cobro: any } => x !== null),
+    [filtrados, cobros],
+  );
 
-  const idsCobrables = cobrables.map(x => x.dep.id);
+  const idsCobrables = useMemo(() => cobrables.map(x => x.dep.id), [cobrables]);
   const todosMarcados = idsCobrables.length > 0 && idsCobrables.every(id => sel.has(id));
-  const cola = cobrables.filter(x => sel.has(x.dep.id));
+  const cola = useMemo(() => cobrables.filter(x => sel.has(x.dep.id)), [cobrables, sel]);
 
   function toggleSel(id: string) {
     setSel(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -886,8 +961,8 @@ function PagosInner() {
                 {filtrados.map((dep) => {
                   const bg  = PANEL;
                   const cod = codigoDe(dep);
-                  const { pendientes, total, mesesPendientes, mesesPendFull, becado } = resumenPago(dep) as any;
-                  const cobro = cobroDe(dep, mesesPendFull, becado);
+                  const { pendientes, total, mesesPendientes, becado } = resumenPago(dep) as any;
+                  const cobro = cobroDeCache(dep);
                   const tieneDatos = total > 0;
 
                   return (

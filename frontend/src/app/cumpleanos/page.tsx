@@ -902,18 +902,18 @@ export default function CumpleanosPage() {
     const kIcono  = compacto ? 'w-3 h-3'                     : 'w-3.5 h-3.5';
     const kChulo  = compacto ? 'w-7 h-7'                     : 'w-9 h-9';
     return (
-    <div className={`flex items-center border ${kFila} ${destacado ? 'border-pink-200 bg-pink-50/40' : 'border-gray-100 bg-white'}`}>
+    <div className={`flex items-center border ${kFila} ${destacado ? 'border-pink-400/45 bg-[rgba(236,72,153,.16)]' : 'border-[#4A5568] bg-[#3C4759]'}`}>
       {verDia && (
         <div className={`${compacto ? 'w-9' : 'w-11'} flex-shrink-0 text-center`}>
-          <span className={`inline-block w-full bg-teal-600 text-white font-black rounded-lg py-1 ${compacto ? 'text-sm' : 'text-base'}`}>{c.dia}</span>
+          <span className={`inline-block w-full bg-[#00B050] text-white font-black rounded-lg py-1 ${compacto ? 'text-sm' : 'text-base'}`}>{c.dia}</span>
         </div>
       )}
-      <div className={`${kFoto} overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200`}>
+      <div className={`${kFoto} overflow-hidden bg-[#2B3547] flex-shrink-0 border border-[#4A5568]`}>
         {c.foto
           ? <img src={c.foto} alt="" className="w-full h-full object-cover" />
           : (!fotosListas || idsConFoto.has(c.id))
-            ? <div className="w-full h-full bg-gray-200 animate-pulse" />
-            : <div className="w-full h-full flex items-center justify-center text-gray-300"><Cake className={compacto ? 'w-4 h-4' : 'w-6 h-6'} /></div>}
+            ? <div className="w-full h-full bg-[#2B3547] animate-pulse" />
+            : <div className="w-full h-full flex items-center justify-center text-white/30"><Cake className={compacto ? 'w-4 h-4' : 'w-6 h-6'} /></div>}
       </div>
       {c.proyecto ? (
         <span
@@ -928,9 +928,9 @@ export default function CumpleanosPage() {
       )}
       <div className="flex-1 min-w-0">
         <div className={`flex items-start gap-2 ${compacto ? 'flex-wrap items-baseline' : ''}`}>
-          <span className={`bg-teal-600 text-white font-black rounded-md flex-shrink-0 ${compacto ? 'text-[10px] px-1.5 py-0.5' : 'text-[11px] px-2 py-0.5 mt-0.5'}`}>{c.codigo || '—'}</span>
+          <span className={`bg-[#00B050] text-white font-black rounded-md flex-shrink-0 ${compacto ? 'text-[10px] px-1.5 py-0.5' : 'text-[11px] px-2 py-0.5 mt-0.5'}`}>{c.codigo || '—'}</span>
           {/* Nombre COMPLETO: no se corta, si es muy largo pasa a la línea siguiente */}
-          <p className={`font-bold text-gray-900 leading-tight break-words ${kNombre}`}>{c.nombre}</p>
+          <p className={`font-bold text-white leading-tight break-words ${kNombre}`}>{c.nombre}</p>
           {esRetirado(c.estado) && (
             <span
               title="Deportista retirado · el saludo le sale como exalumno"
@@ -941,25 +941,25 @@ export default function CumpleanosPage() {
           )}
           {/* En fila delgada la fecha va en la MISMA línea del nombre */}
           {compacto && (
-            <span className="text-[11px] text-gray-500 leading-tight">
+            <span className="text-[11px] text-white/60 leading-tight">
               {c.dia} de {MESES_CAP[c.mes - 1]}
-              {c.edad != null && <span className="ml-1.5 text-pink-600 font-bold">cumple {c.edad} años</span>}
-              {c.sede && <span className="ml-1.5 text-gray-400">· {c.sede}</span>}
+              {c.edad != null && <span className="ml-1.5 text-pink-300 font-bold">cumple {c.edad} años</span>}
+              {c.sede && <span className="ml-1.5 text-white/40">· {c.sede}</span>}
             </span>
           )}
         </div>
         {!compacto && (
-          <p className="text-[12px] text-gray-500 mt-0.5">
+          <p className="text-[12px] text-white/60 mt-0.5">
             {c.dia} de {MESES_CAP[c.mes - 1]}
-            {c.edad != null && <span className="ml-2 text-pink-600 font-bold">cumple {c.edad} años</span>}
-            {c.sede && <span className="ml-2 text-gray-400">· {c.sede}</span>}
+            {c.edad != null && <span className="ml-2 text-pink-300 font-bold">cumple {c.edad} años</span>}
+            {c.sede && <span className="ml-2 text-white/40">· {c.sede}</span>}
           </p>
         )}
       </div>
       <button
         onClick={() => router.push(`/alumnos/${c.id}?volver=/cumpleanos`)}
         title="Abrir la ficha del deportista"
-        className={`flex items-center border border-teal-600 text-teal-700 hover:bg-teal-50 font-black rounded-xl flex-shrink-0 ${kBoton}`}
+        className={`flex items-center border border-[#00B050] text-[#5BE39B] hover:bg-[#2B3547] font-black rounded-xl flex-shrink-0 ${kBoton}`}
       >
         <Eye className={kIcono} />
         Ver
@@ -1003,7 +1003,7 @@ export default function CumpleanosPage() {
         className={`${kChulo} rounded-full flex items-center justify-center flex-shrink-0 border-2 transition ${
           enviados.has(c.id)
             ? 'bg-green-600 border-green-600 text-white hover:bg-green-700'
-            : 'bg-white border-gray-300 text-gray-300 hover:border-green-400 hover:text-green-400'
+            : 'bg-[#3C4759] border-[#4A5568] text-white/30 hover:border-green-400 hover:text-green-400'
         }`}
       >
         <Check className={compacto ? 'w-4 h-4' : 'w-5 h-5'} strokeWidth={4} />
@@ -1016,8 +1016,8 @@ export default function CumpleanosPage() {
           : idsConFoto.has(c.id) ? 'Tiene foto subida' : 'Sin foto: la tarjeta saldrá incompleta'}
         className={`flex items-center disabled:opacity-50 text-white font-black rounded-xl flex-shrink-0 ${kBoton} ${
           !fotosListas
-            ? 'bg-gray-400'
-            : idsConFoto.has(c.id) ? 'bg-teal-600 hover:bg-teal-700' : 'bg-red-600 hover:bg-red-700'
+            ? 'bg-[#7C879A]'
+            : idsConFoto.has(c.id) ? 'bg-[#00B050] hover:brightness-110' : 'bg-red-600 hover:bg-red-700'
         }`}
       >
         <Download className={kIcono} />
@@ -1033,27 +1033,27 @@ export default function CumpleanosPage() {
     const destacado = d.esHoy;
     const vacia = !cargando && lista.length === 0;
     return (
-      <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${destacado ? 'border-pink-300 ring-2 ring-pink-200' : 'border-gray-100'}`}>
+      <div className={`bg-[#3C4759] rounded-2xl border shadow-sm overflow-hidden ${destacado ? 'border-pink-400/60 ring-2 ring-pink-400/40' : 'border-[#4A5568]'}`}>
         <div className={`flex items-center gap-2 px-3 py-2 ${
           destacado ? 'bg-gradient-to-r from-pink-500 to-rose-400'
-                    : vacia ? 'bg-gray-50' : 'bg-teal-600'}`}>
+                    : vacia ? 'bg-[#333F50]' : 'bg-[#00B050]'}`}>
           <span className="text-base leading-none">{d.emoji}</span>
-          <h2 className={`font-black text-[13px] tracking-wide ${destacado ? 'text-white' : vacia ? 'text-gray-500' : 'text-white'}`}>
+          <h2 className={`font-black text-[13px] tracking-wide ${destacado ? 'text-white' : vacia ? 'text-white/60' : 'text-white'}`}>
             {d.titulo}
           </h2>
-          <span className={`text-[11px] font-bold ${destacado ? 'text-white/80' : vacia ? 'text-gray-400' : 'text-white/75'}`}>
+          <span className={`text-[11px] font-bold ${destacado ? 'text-white/80' : vacia ? 'text-white/40' : 'text-white/75'}`}>
             {d.fecha.getDate()} de {MESES_CAP[d.fecha.getMonth()]}
           </span>
           {vacia
-            ? <span className="ml-auto text-[11px] font-bold text-gray-400">Nadie cumple</span>
-            : <span className={`ml-auto text-[11px] font-black px-2 py-0.5 rounded-full ${destacado ? 'bg-white/25 text-white' : 'bg-white/25 text-white'}`}>
+            ? <span className="ml-auto text-[11px] font-bold text-white/40">Nadie cumple</span>
+            : <span className={`ml-auto text-[11px] font-black px-2 py-0.5 rounded-full ${destacado ? 'bg-[#3C4759]/25 text-white' : 'bg-[#3C4759]/25 text-white'}`}>
                 {cargando ? '…' : lista.length}
               </span>}
         </div>
         {!vacia && (
           <div className="p-2 space-y-1.5">
             {cargando
-              ? <p className="text-center text-gray-400 text-sm py-4">Cargando…</p>
+              ? <p className="text-center text-white/40 text-sm py-4">Cargando…</p>
               : lista.map(c => <Tarjeta key={c.id} c={c} destacado={destacado} compacto />)}
           </div>
         )}
@@ -1062,8 +1062,22 @@ export default function CumpleanosPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-teal-600 to-teal-500 px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20">
+    <div className="min-h-screen bg-[#333F50] cumple-oscuro">
+      {/* ── FONDO OSCURO (dirección, 26/08/2026) ─────────────────────────────
+          Cumpleaños era la última pantalla blanca de la app. Ahora usa el mismo
+          gris oscuro con verde de todo lo demás. Lo ÚNICO que se dejó en rojo
+          es lo que avisa que a un deportista le falta la foto —o sea, que su
+          tarjeta va a salir incompleta—, porque ese aviso tiene que gritar.
+          Aquí se le pone color a lo que se escribe: si no, el navegador deja
+          la letra negra sobre fondo oscuro y no se lee nada. */}
+      <style>{`
+        .cumple-oscuro input,
+        .cumple-oscuro select,
+        .cumple-oscuro textarea { color: #ffffff; }
+        .cumple-oscuro input::placeholder { color: rgba(255,255,255,.35); }
+        .cumple-oscuro option { color: #111827; background: #ffffff; }
+      `}</style>
+      <header className="bg-gradient-to-r from-[#00B050] to-[#00B050] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => { window.location.href = '/dashboard'; }} title="Volver al menú principal" className="text-white/80 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <Cake className="w-6 h-6 text-white" />
         <div className="flex-1 min-w-0">
@@ -1092,12 +1106,12 @@ export default function CumpleanosPage() {
         )}
 
         {/* ── Filtros: mes y sede ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-2.5">
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-3 space-y-2.5">
           <div className="flex flex-col sm:flex-row gap-2.5">
             <div className="flex-1">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">Ver</label>
+              <label className="block text-[10px] font-black text-white/40 uppercase tracking-wide mb-1">Ver</label>
               <div className="relative">
-                <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-600 pointer-events-none" />
+                <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5BE39B] pointer-events-none" />
                 <select
                   value={typeof vista === 'number' ? String(vista) : vista}
                   onChange={e => {
@@ -1108,7 +1122,7 @@ export default function CumpleanosPage() {
                         : Number(v)
                     );
                   }}
-                  className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  className="w-full pl-9 pr-3 py-2.5 border border-[#4A5568] rounded-xl text-sm font-bold bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-teal-400"
                 >
                   <option value="dias">📅 Toda la semana (lunes a domingo)</option>
                   <option value="anio">📋 Todo el año — todos los deportistas</option>
@@ -1118,33 +1132,33 @@ export default function CumpleanosPage() {
               </div>
             </div>
             <div className="flex-1">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">Sede</label>
+              <label className="block text-[10px] font-black text-white/40 uppercase tracking-wide mb-1">Sede</label>
               <select
                 value={sede}
                 onChange={e => setSede(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+                className="w-full px-3 py-2.5 border border-[#4A5568] rounded-xl text-sm bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-teal-400"
               >
                 <option value="">Todas las sedes</option>
                 {sedes.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div className="flex-1">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">Proyecto</label>
+              <label className="block text-[10px] font-black text-white/40 uppercase tracking-wide mb-1">Proyecto</label>
               <select
                 value={proyecto}
                 onChange={e => setProyecto(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                className="w-full px-3 py-2.5 border border-[#4A5568] rounded-xl text-sm bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-orange-400"
               >
                 <option value="">Todos los proyectos</option>
                 {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div className="flex-1">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">Programa</label>
+              <label className="block text-[10px] font-black text-white/40 uppercase tracking-wide mb-1">Programa</label>
               <select
                 value={programa}
                 onChange={e => setPrograma(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+                className="w-full px-3 py-2.5 border border-[#4A5568] rounded-xl text-sm bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-teal-400"
               >
                 <option value="">Todos los programas</option>
                 {programas.map(p => <option key={p} value={p}>{p}</option>)}
@@ -1153,20 +1167,20 @@ export default function CumpleanosPage() {
           </div>
 
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre o código…"
-              className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400" />
+              className="w-full pl-9 pr-3 py-2.5 border border-[#4A5568] rounded-xl text-sm bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-teal-400" />
           </div>
 
           <div>
-            <label className="text-[11px] font-black text-gray-500 uppercase">Estado del deportista</label>
+            <label className="text-[11px] font-black text-white/60 uppercase">Estado del deportista</label>
             <select
               value={filtroEstado}
               onChange={e => setFiltroEstado(e.target.value as 'todos' | 'activos' | 'retirados')}
               className={`mt-1 w-full px-3 py-2.5 border rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-400 ${
                 filtroEstado === 'retirados'
-                  ? 'bg-purple-50 border-purple-300 text-purple-800'
-                  : 'bg-white border-gray-200 text-gray-700'
+                  ? 'bg-[rgba(139,114,217,.18)] border-[#8B72D9] text-white'
+                  : 'bg-[#3C4759] border-[#4A5568] text-white'
               }`}
             >
               <option value="todos">Todos los deportistas</option>
@@ -1174,18 +1188,18 @@ export default function CumpleanosPage() {
               <option value="retirados">Solo deportistas RETIRADOS</option>
             </select>
             {filtroEstado === 'retirados' && (
-              <p className="text-[12px] text-purple-700 font-semibold mt-1.5">
+              <p className="text-[12px] text-[#C4B5FD] font-semibold mt-1.5">
                 Ellos también reciben su tarjeta el día del cumpleaños. El saludo de WhatsApp
                 les sale con un texto distinto, de exalumno.
               </p>
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-[13px] text-gray-600 font-semibold cursor-pointer select-none">
+          <label className="flex items-center gap-2 text-[13px] text-white/70 font-semibold cursor-pointer select-none">
             <input type="checkbox" checked={sinFondo} onChange={e => setSinFondo(e.target.checked)}
               className="w-4 h-4 accent-teal-600" />
             Quitar el fondo de la foto en la tarjeta
-            <span className="text-[11px] text-gray-400 font-normal">(el niño queda sobre el estadio)</span>
+            <span className="text-[11px] text-white/40 font-normal">(el niño queda sobre el estadio)</span>
           </label>
         </div>
 
@@ -1193,38 +1207,38 @@ export default function CumpleanosPage() {
           <div className="space-y-3">
             {/* Contadores */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 text-center">
-                <p className="text-2xl font-black text-gray-800 leading-none">{universo.length}</p>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide mt-1">Deportistas</p>
+              <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-3 text-center">
+                <p className="text-2xl font-black text-white leading-none">{universo.length}</p>
+                <p className="text-[10px] font-black text-white/40 uppercase tracking-wide mt-1">Deportistas</p>
               </div>
-              <div className="bg-white rounded-2xl border border-teal-100 shadow-sm p-3 text-center">
-                <p className="text-2xl font-black text-teal-600 leading-none">{conFotoTotal}</p>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide mt-1">Con foto</p>
+              <div className="bg-[#3C4759] rounded-2xl border border-[#00B050]/45 shadow-sm p-3 text-center">
+                <p className="text-2xl font-black text-[#5BE39B] leading-none">{conFotoTotal}</p>
+                <p className="text-[10px] font-black text-white/40 uppercase tracking-wide mt-1">Con foto</p>
               </div>
-              <div className="bg-white rounded-2xl border border-rose-100 shadow-sm p-3 text-center">
-                <p className="text-2xl font-black text-rose-500 leading-none">{sinFotoTotal}</p>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide mt-1">Sin foto</p>
+              <div className="bg-[#3C4759] rounded-2xl border border-[#C0504D]/55 shadow-sm p-3 text-center">
+                <p className="text-2xl font-black text-[#F08A87] leading-none">{sinFotoTotal}</p>
+                <p className="text-[10px] font-black text-white/40 uppercase tracking-wide mt-1">Sin foto</p>
               </div>
             </div>
 
             {/* Barra de avance */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-3">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-black text-gray-500 uppercase tracking-wide">Avance de fotos</span>
-                <span className="text-sm font-black text-teal-600">{pctFoto}%</span>
+                <span className="text-[11px] font-black text-white/60 uppercase tracking-wide">Avance de fotos</span>
+                <span className="text-sm font-black text-[#5BE39B]">{pctFoto}%</span>
               </div>
-              <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2.5 w-full bg-[#2B3547] rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-teal-500 to-teal-400 rounded-full transition-all" style={{ width: `${pctFoto}%` }} />
               </div>
             </div>
 
             {/* Agrupar por */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wide mb-1">Ver quién falta, agrupado por</label>
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-3">
+              <label className="block text-[10px] font-black text-white/40 uppercase tracking-wide mb-1">Ver quién falta, agrupado por</label>
               <select
                 value={agruparPor}
                 onChange={e => { setAgruparPor(e.target.value as any); setAbierto(null); }}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+                className="w-full px-3 py-2.5 border border-[#4A5568] rounded-xl text-sm font-bold bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-teal-400"
               >
                 <option value="proyecto">Proyecto</option>
                 <option value="profe">Profesor</option>
@@ -1235,39 +1249,39 @@ export default function CumpleanosPage() {
 
             {/* Grupos */}
             {cargando ? (
-              <p className="text-center text-gray-400 text-sm py-8">Cargando…</p>
+              <p className="text-center text-white/40 text-sm py-8">Cargando…</p>
             ) : grupos.length === 0 ? (
-              <p className="text-center text-gray-400 text-sm py-8">No hay deportistas con estos filtros.</p>
+              <p className="text-center text-white/40 text-sm py-8">No hay deportistas con estos filtros.</p>
             ) : grupos.map(g => {
               const abiertoAqui = abierto === g.nombre;
               const listo = g.sin.length === 0;
               return (
-                <div key={g.nombre} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${listo ? 'border-teal-100' : 'border-rose-100'}`}>
+                <div key={g.nombre} className={`bg-[#3C4759] rounded-2xl border shadow-sm overflow-hidden ${listo ? 'border-[#00B050]/45' : 'border-[#C0504D]/55'}`}>
                   <button
                     onClick={() => setAbierto(abiertoAqui ? null : g.nombre)}
-                    className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 transition"
+                    className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-[#333F50] transition"
                   >
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${listo ? 'bg-teal-500' : 'bg-rose-500'}`} />
-                    <span className="font-black text-sm text-gray-800 truncate flex-1">{g.nombre}</span>
-                    <span className="text-[11px] text-gray-400 font-bold whitespace-nowrap">{g.total - g.sin.length}/{g.total}</span>
-                    <span className={`text-[11px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${listo ? 'bg-teal-50 text-teal-600' : 'bg-rose-50 text-rose-600'}`}>
+                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${listo ? 'bg-[#00B050]' : 'bg-rose-500'}`} />
+                    <span className="font-black text-sm text-white truncate flex-1">{g.nombre}</span>
+                    <span className="text-[11px] text-white/40 font-bold whitespace-nowrap">{g.total - g.sin.length}/{g.total}</span>
+                    <span className={`text-[11px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${listo ? 'bg-[#2B3547] text-[#5BE39B]' : 'bg-[#2B3547] text-[#F08A87]'}`}>
                       {listo ? 'completo' : `${g.sin.length} sin foto`}
                     </span>
                   </button>
 
                   {abiertoAqui && !listo && (
-                    <div className="border-t border-gray-100 p-3 space-y-1.5">
+                    <div className="border-t border-[#4A5568] p-3 space-y-1.5">
                       <button
                         onClick={() => copiarGrupo(g)}
-                        className="w-full bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-black py-2 rounded-xl mb-1"
+                        className="w-full bg-[#00B050] hover:brightness-110 text-white text-[12px] font-black py-2 rounded-xl mb-1"
                       >
                         {copiado === g.nombre ? '¡Lista copiada!' : 'Copiar lista para WhatsApp'}
                       </button>
                       {g.sin.map(c => (
-                        <div key={c.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50">
-                          <span className="bg-gray-300 text-white text-[10px] font-black px-1.5 py-0.5 rounded">{c.codigo || '—'}</span>
-                          <span className="text-[13px] text-gray-700 font-semibold flex-1 break-words">{c.nombre}</span>
-                          {c.profe && agruparPor !== 'profe' && <span className="text-[11px] text-gray-400 whitespace-nowrap">{c.profe}</span>}
+                        <div key={c.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#333F50]">
+                          <span className="bg-[#7C879A] text-white text-[10px] font-black px-1.5 py-0.5 rounded">{c.codigo || '—'}</span>
+                          <span className="text-[13px] text-white font-semibold flex-1 break-words">{c.nombre}</span>
+                          {c.profe && agruparPor !== 'profe' && <span className="text-[11px] text-white/40 whitespace-nowrap">{c.profe}</span>}
                         </div>
                       ))}
                     </div>
@@ -1281,23 +1295,23 @@ export default function CumpleanosPage() {
             {semana.map(d => <Seccion key={d.clave} d={d} />)}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-2 px-4 py-3 rounded-t-2xl bg-gradient-to-r from-teal-600 to-teal-500">
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm">
+            <div className="flex items-center gap-2 px-4 py-3 rounded-t-2xl bg-gradient-to-r from-[#00B050] to-[#00B050]">
               <span className="text-lg">🎈</span>
               <h2 className="font-black text-sm text-white uppercase">
                 {vista === 'anio' ? 'Todo el año' : MESES_CAP[(vista as number) - 1]}
               </h2>
               <span className="ml-auto flex items-center gap-1.5">
-                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-white/25 text-white">{listaMes.length} en total</span>
-                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-white/25 text-white">{conFotoMes} con foto</span>
+                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-[#3C4759]/25 text-white">{listaMes.length} en total</span>
+                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-[#3C4759]/25 text-white">{conFotoMes} con foto</span>
                 <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-green-500 text-white">{enviadasMes} enviadas ✓</span>
               </span>
             </div>
             <div className="p-3 space-y-2">
               {cargando
-                ? <p className="text-center text-gray-400 text-sm py-6">Cargando…</p>
+                ? <p className="text-center text-white/40 text-sm py-6">Cargando…</p>
                 : listaMes.length === 0
-                  ? <p className="text-center text-gray-400 text-sm py-6">
+                  ? <p className="text-center text-white/40 text-sm py-6">
                       No hay deportistas {vista === 'anio' ? '' : `de ${MESES_CAP[(vista as number) - 1]} `}con estos filtros.
                     </p>
                   : listaMes.map(c => <Tarjeta key={c.id} c={c} verDia />)}
@@ -1315,7 +1329,7 @@ export default function CumpleanosPage() {
           onClick={() => !guardandoTel && setEditandoTel(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+            className="bg-[#3C4759] rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 px-4 py-3 bg-green-600">
@@ -1332,21 +1346,21 @@ export default function CumpleanosPage() {
 
             <div className="p-4 space-y-4">
               <div className="flex items-center gap-2">
-                <span className="bg-teal-600 text-white text-[11px] font-black px-2 py-0.5 rounded-md">
+                <span className="bg-[#00B050] text-white text-[11px] font-black px-2 py-0.5 rounded-md">
                   {editandoTel.codigo || '—'}
                 </span>
-                <p className="font-black text-gray-900 break-words">{editandoTel.nombre}</p>
+                <p className="font-black text-white break-words">{editandoTel.nombre}</p>
               </div>
 
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
-                <p className="text-[11px] font-black text-gray-500 uppercase">Celular que está en la ficha</p>
-                <p className="text-lg font-black text-gray-800 mt-0.5">
+              <div className="bg-[#333F50] border border-[#4A5568] rounded-xl p-3">
+                <p className="text-[11px] font-black text-white/60 uppercase">Celular que está en la ficha</p>
+                <p className="text-lg font-black text-white mt-0.5">
                   {editandoTel.celular || 'No tiene celular registrado'}
                 </p>
               </div>
 
               <div>
-                <label className="text-[11px] font-black text-gray-500 uppercase">
+                <label className="text-[11px] font-black text-white/60 uppercase">
                   Número al que se enviará el WhatsApp
                 </label>
                 <input
@@ -1356,21 +1370,21 @@ export default function CumpleanosPage() {
                   onChange={(e) => setBorradorTel(e.target.value)}
                   placeholder="3001234567"
                   autoFocus
-                  className="mt-1 w-full border-2 border-gray-300 focus:border-green-500 outline-none
-                             rounded-xl px-3 py-3 text-2xl font-black tracking-wide text-gray-900"
+                  className="mt-1 w-full border-2 border-[#4A5568] focus:border-green-500 outline-none
+                             rounded-xl px-3 py-3 text-2xl font-black tracking-wide text-white"
                 />
-                <p className="text-[12px] text-gray-500 mt-1.5">
+                <p className="text-[12px] text-white/60 mt-1.5">
                   Escríbelo con los 10 dígitos, sin espacios ni guiones. Si es de Colombia, el 57 se pone solo.
                 </p>
               </div>
 
               {telAlt[editandoTel.id] && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                  <p className="text-[12px] text-amber-800 font-bold">
+                <div className="bg-[rgba(224,163,58,.16)] border border-[#E0A33A]/60 rounded-xl p-3">
+                  <p className="text-[12px] text-[#F3C46A] font-bold">
                     Este deportista ya tiene un número corregido guardado por la institución.
                   </p>
                   {telAlt[editandoTel.id].telefonoFicha && (
-                    <p className="text-[12px] text-amber-700 mt-0.5">
+                    <p className="text-[12px] text-[#F3C46A] mt-0.5">
                       El de la ficha era: {telAlt[editandoTel.id].telefonoFicha}
                     </p>
                   )}
@@ -1390,7 +1404,7 @@ export default function CumpleanosPage() {
                   <button
                     onClick={quitarTel}
                     disabled={guardandoTel}
-                    className="border-2 border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50
+                    className="border-2 border-[#4A5568] text-white/70 hover:bg-[#333F50] disabled:opacity-50
                                font-black text-sm px-3 py-3 rounded-xl"
                   >
                     Usar el de la ficha
@@ -1398,7 +1412,7 @@ export default function CumpleanosPage() {
                 )}
               </div>
 
-              <p className="text-[12px] text-gray-500 text-center">
+              <p className="text-[12px] text-white/60 text-center">
                 Al guardar, cierra esta ventana y vuelve a hacer clic en WhatsApp:
                 el mensaje se irá al número nuevo.
               </p>

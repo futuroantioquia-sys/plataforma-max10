@@ -37,11 +37,17 @@ const LS_LIBRO = 'futuro_libro_pagos';
 // ── Caché en memoria (evita re-fetch en cada navegación) ─────
 let _cacheDeportistas: Deportista[] | null = null;
 let _cachePagos:       AllPagos    | null = null;
+/* Mientras la primera lectura de pagos está en camino, cualquier otra parte de
+   la pantalla que también los pida se PEGA a esa misma lectura en vez de
+   arrancar otra. Antes, dos módulos abiertos al tiempo bajaban la tabla dos
+   veces. — 27/08/2026 */
+let _pagosEnCamino: Promise<AllPagos> | null = null;
 
 /** Invalida la caché para forzar recarga desde Supabase */
 export function invalidarCache() {
   _cacheDeportistas = null;
   _cachePagos       = null;
+  _pagosEnCamino    = null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -136,28 +142,85 @@ function lsSetDeps(_deps: Deportista[]) {
   // sigue funcionando mientras la pestaña esté abierta.
 }
 
-/** Fetch paginado: recorre páginas de 1000 hasta agotar todos los registros */
+/** Fetch paginado: trae TODAS las páginas.
+ *
+ *  POR QUÉ SE CAMBIÓ (dirección, 27/08/2026): Control de Pagos se demoraba en
+ *  abrir. La causa era esta función: pedía la página 1, ESPERABA a que llegara,
+ *  pedía la página 2, esperaba, y así. Con ~7.000 pagos guardados eran siete
+ *  viajes al servidor, uno detrás de otro, y el usuario esperando los siete.
+ *
+ *  Ahora se pide la primera página preguntando de una cuántos registros hay en
+ *  total (eso lo contesta el servidor en el encabezado Content-Range). Sabiendo
+ *  el total, las páginas que faltan se piden TODAS AL TIEMPO. Siete viajes en
+ *  fila se convierten en uno más una tanda simultánea: el tiempo pasa a ser el
+ *  de la página más lenta, no el de la suma de todas.
+ *
+ *  Si el servidor no contesta el total (un espejo viejo, un proxy que corta el
+ *  encabezado), se sigue como antes, de página en página. Nunca se queda sin
+ *  datos por esto.
+ */
 async function fetchAllPages(
   baseUrl: string,
   headers: Record<string, string>,
   pageSize = 1000
 ): Promise<any[]> {
-  const all: any[] = [];
-  let offset = 0;
-  for (let i = 0; i < 60; i++) {           // máximo 60 páginas = 60 000 filas
-    const from = offset;
-    const to   = offset + pageSize - 1;
+  const MAX_PAGINAS = 60;                  // tope de seguridad: 60 000 filas
+
+  const pedir = async (offset: number, contar: boolean): Promise<Response | null> => {
     try {
-      const res = await fetch(`${baseUrl}&offset=${offset}&limit=${pageSize}`, {
-        headers: { ...headers, 'Range': `${from}-${to}`, 'Prefer': 'count=none' },
+      return await fetch(`${baseUrl}&offset=${offset}&limit=${pageSize}`, {
+        headers: {
+          ...headers,
+          'Range':  `${offset}-${offset + pageSize - 1}`,
+          'Prefer': contar ? 'count=exact' : 'count=none',
+        },
       });
-      if (!res.ok) break;
-      const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) break;
-      all.push(...data);
-      if (data.length < pageSize) break;    // última página
-      offset += pageSize;
-    } catch { break; }
+    } catch { return null; }
+  };
+
+  /* ── Primera página, pidiendo el total ── */
+  const primera = await pedir(0, true);
+  if (!primera || !primera.ok) return [];
+  let cabeza: any[] = [];
+  try { cabeza = await primera.json(); } catch { return []; }
+  if (!Array.isArray(cabeza) || cabeza.length === 0) return [];
+  if (cabeza.length < pageSize) return cabeza;          // cabía todo en una
+
+  /* ── ¿Cuántos hay en total? Viene como "0-999/7231" ── */
+  const rango = primera.headers.get('content-range') || '';
+  const total = Number((rango.split('/')[1] || '').trim());
+
+  if (Number.isFinite(total) && total > 0) {
+    // Se sabe el total: se piden de una vez TODAS las páginas que faltan.
+    const offsets: number[] = [];
+    for (let o = pageSize; o < total && offsets.length < MAX_PAGINAS; o += pageSize) {
+      offsets.push(o);
+    }
+    const respuestas = await Promise.all(offsets.map(async o => {
+      const r = await pedir(o, false);
+      if (!r || !r.ok) return [] as any[];
+      try {
+        const d = await r.json();
+        return Array.isArray(d) ? d : [];
+      } catch { return [] as any[]; }
+    }));
+    const todo = cabeza.slice();
+    for (const trozo of respuestas) todo.push(...trozo);
+    return todo;
+  }
+
+  /* ── Sin total: como antes, una página detrás de otra ── */
+  const all: any[] = cabeza.slice();
+  let offset = pageSize;
+  for (let i = 1; i < MAX_PAGINAS; i++) {
+    const res = await pedir(offset, false);
+    if (!res || !res.ok) break;
+    let data: any;
+    try { data = await res.json(); } catch { break; }
+    if (!Array.isArray(data) || data.length === 0) break;
+    all.push(...data);
+    if (data.length < pageSize) break;    // última página
+    offset += pageSize;
   }
   return all;
 }
@@ -660,8 +723,44 @@ export async function updateColumnasDeportista(id: string, columnas: Record<stri
 
 // ── PAGOS ────────────────────────────────────────────────────
 
-/** Lee todos los pagos: fetch() directo → SDK → localStorage. */
-export async function getPagos(): Promise<AllPagos> {
+/** Lee todos los pagos: fetch() directo → SDK → localStorage.
+ *
+ *  SE RECUERDA LO YA LEÍDO (dirección, 27/08/2026). Antes, cada vez que se
+ *  entraba a Control de Pagos —o se volvía de mirar un estado de cuenta— se
+ *  bajaba otra vez la tabla ENTERA de pagos. Son miles de filas y la espera se
+ *  sentía completa cada vez.
+ *
+ *  Ahora la lista queda guardada en la memoria de la pestaña: la primera vez se
+ *  baja, y de ahí en adelante aparece de una. Cuando se marca un pago, se
+ *  publica el libro o se borra todo, la memoria se bota sola y la próxima
+ *  lectura vuelve a traer lo fresco (ver `olvidarPagos`), así que NUNCA se ve
+ *  un dato viejo. Al recargar la página también se empieza de cero.
+ *
+ *  `getPagos(true)` obliga a bajarlos otra vez, por si se necesita.
+ */
+export async function getPagos(forzar = false): Promise<AllPagos> {
+  if (!forzar && _cachePagos) return _cachePagos;
+  if (!forzar && _pagosEnCamino) return _pagosEnCamino;
+
+  const tarea = leerPagosDeVerdad();
+  _pagosEnCamino = tarea;
+  try {
+    const res = await tarea;
+    _cachePagos = res;
+    return res;
+  } finally {
+    if (_pagosEnCamino === tarea) _pagosEnCamino = null;
+  }
+}
+
+/** Bota lo que se tenga recordado de los pagos. Se llama sola después de
+ *  cualquier cambio; también sirve para el botón de "actualizar". */
+export function olvidarPagos(): void {
+  _cachePagos     = null;
+  _pagosEnCamino  = null;
+}
+
+async function leerPagosDeVerdad(): Promise<AllPagos> {
   /* Helper: leer localStorage como base completa (última importación) */
   const lsBase = (): AllPagos => {
     const libroAll = lsGet<AllPagos>(LS_LIBRO, {});
@@ -825,6 +924,10 @@ export async function savePagosDeportista(depId: string, filas: FilaPago[]): Pro
   all[depId] = filas;
   lsSet(LS_PAGOS, all);
 
+  /* Cambió un pago: lo que se tenía recordado ya no sirve. La próxima pantalla
+     que pida los pagos los vuelve a bajar frescos. — 27/08/2026 */
+  olvidarPagos();
+
   try {
     const rows = filas.map(f => ({
       deportista_id: depId,
@@ -856,6 +959,7 @@ export async function publicarPagosEstado(
   rows: { deportista_id: string; detalle: string; vPagado: string; destino: string; fecha: string }[],
 ): Promise<{ ok: boolean; n: number; msg?: string }> {
   if (!rows.length) return { ok: true, n: 0 };
+  olvidarPagos();                    // se publicó: lo recordado ya no sirve
   const payload = rows.map(r => ({
     deportista_id: r.deportista_id,
     detalle:       r.detalle,
@@ -907,7 +1011,7 @@ export async function deleteAllPagos(): Promise<void> {
   /* 1. Limpiar localStorage */
   try { localStorage.removeItem(LS_LIBRO);  } catch {}
   try { localStorage.removeItem(LS_PAGOS);  } catch {}
-  _cachePagos = null;
+  olvidarPagos();
 
   /* 2. Borrar en Supabase — fetch() directo */
   try {
@@ -938,6 +1042,7 @@ export async function deleteAllPagos(): Promise<void> {
  *  - Claves numéricas también → LS_LIBRO (caché local rápida)
  *  - Claves dep.id → LS_PAGOS (caché local rápida) */
 export async function saveAllPagos(all: AllPagos): Promise<void> {
+  olvidarPagos();                    // se importó el libro: hay que releer
   /* Separar claves numéricas (Libro Contable) de claves dep.id (manual) */
   const libroEntries: AllPagos = {};
   const depEntries:   AllPagos = {};

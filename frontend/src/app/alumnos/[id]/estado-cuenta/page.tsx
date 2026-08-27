@@ -741,48 +741,68 @@ function EstadoCuentaInner() {
   const pagados    = becado ? pagosVista.length : pagosVista.filter(p => p.estado === 'PAGÓ').length;
   const pendientes = becado ? 0 : pagosVista.filter(p => p.estado === 'PEND').length;
   const proximos   = becado ? 0 : pagosVista.filter(p => p.estado === 'PROX').length;
+  /* `cargados` y `totalPendiente` ya no se pintan —las cuatro casillas de
+     arriba se quitaron el 27/08/2026— pero se dejan calculados: son la cuenta
+     buena de esta pantalla y sirven el día que se vuelvan a necesitar. */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const cargados   = pagados + pendientes + proximos;
   const totalPagado = becado ? 0 : pagosVista.reduce((s, p) => {
     const n = parseInt((p.vPagado || '0').replace(/\D/g, ''));
     return s + (isNaN(n) ? 0 : n);
   }, 0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const totalPendiente = becado ? 0 : pagosVista.reduce((s, p) => {
     if (p.estado !== 'PEND') return s;
     const n = parseInt((p.vCargado || '0').replace(/\D/g, ''));
     return s + (isNaN(n) ? 0 : n);
   }, 0);
 
-  const G    = '#16a34a';  // verde  — columna DETALLE + V.PAGADO pagado
+  const G    = '#00B050';  // verde institucional de la plataforma
   const GRAY = '#4b5563';  // gris   — encabezados datos + totales
-  const ROW  = '#f1f5f9';  // gris claro — filas
+  const ROW  = '#3C4759';
+  const CAMPO= '#2B3547';  // gris hondo: columna DETALLE y casillas de valores
   const BW   = '1px solid white';
 
   return (
-    <div className="min-h-screen bg-[#f1f5f9]">
+    <div className="min-h-screen bg-[#333F50] cuenta-oscura">
 
-      {/* ── HEADER ── */}
-      <header className="relative bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none select-none" aria-hidden>
-          <svg className="absolute inset-0 w-full h-full opacity-[0.08]" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="sp-ec" x="0" y="0" width="72" height="72" patternUnits="userSpaceOnUse">
-                <circle cx="36" cy="36" r="18" fill="none" stroke="white" strokeWidth="1.2"/>
-                <polygon points="36,28 43,33 41,42 31,42 29,33" fill="none" stroke="white" strokeWidth="1.2"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#sp-ec)"/>
-          </svg>
-        </div>
-        <button onClick={() => searchParams.get('from') === 'contabilidad' ? router.push('/contabilidad') : (window.history.length > 1 ? router.back() : router.push(`/alumnos/${id}`))} className="relative text-white/70 hover:text-white transition">
+      {/* ── LA LETRA DE LOS CAMPOS EN EL FONDO OSCURO ────────────────────────
+          Los cuadros de escribir y los desplegables traen letra negra de
+          fábrica. Sobre el gris oscuro eso no se lee. Aquí se les pone la
+          letra blanca de una vez, en toda la pantalla, sin tener que ir campo
+          por campo. Las opciones del desplegable, cuando el navegador las
+          abre, sí van con letra oscura sobre blanco: esa lista la pinta el
+          sistema, no la página. — dirección, 27/08/2026 */}
+      <style>{`
+        .cuenta-oscura input,
+        .cuenta-oscura select,
+        .cuenta-oscura textarea { color: #ffffff; }
+        .cuenta-oscura input::placeholder,
+        .cuenta-oscura textarea::placeholder { color: rgba(255,255,255,.35); }
+        .cuenta-oscura option { color: #111827; background: #ffffff; }
+        .cuenta-oscura input[type="date"]::-webkit-calendar-picker-indicator {
+          filter: invert(1) brightness(1.6);
+        }
+      `}</style>
+
+      {/* ── HEADER ────────────────────────────────────────────────────────────
+          EL MISMO DE CONTROL DE ASISTENCIA, exacto (dirección, 27/08/2026):
+          la franja que va del gris del lienzo al verde, sin el fondo de
+          balones que tenía antes. Así toda la plataforma abre igual y el
+          usuario no siente que cambió de programa al pasar de un módulo a
+          otro. Si algún día se cambia el encabezado de Asistencia, este hay
+          que cambiarlo igual. */}
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 z-20">
+        <button onClick={() => searchParams.get('from') === 'contabilidad' ? router.push('/contabilidad') : (window.history.length > 1 ? router.back() : router.push(`/alumnos/${id}`))} className="text-white/70 hover:text-white transition flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="relative flex-1">
-          <h1 className="text-white font-black text-lg">Estado de Cuenta</h1>
-          <p className="text-white/60 text-xs">Control de pagos individual</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-white font-black text-base sm:text-lg leading-tight">Estado de Cuenta</h1>
+          <p className="text-white/60 text-xs truncate">Control de pagos individual</p>
         </div>
         {searchParams.get('from') === 'contabilidad' && (
           <button onClick={() => router.push('/contabilidad')}
-            className="relative flex items-center gap-1.5 text-xs font-black text-white bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg transition flex-shrink-0">
+            className="flex items-center gap-1.5 text-xs font-black text-white bg-white/20 hover:bg-white/35 border border-white/30 px-3 py-1.5 rounded-xl transition flex-shrink-0">
             <ArrowLeft className="w-4 h-4" /> Libro contable
           </button>
         )}
@@ -795,18 +815,51 @@ function EstadoCuentaInner() {
       <main className="max-w-2xl mx-auto px-3 py-4 space-y-4">
 
         {/* ── TARJETA HERO ── */}
-        <div className="rounded-2xl bg-gradient-to-br from-[#0a2e12] via-[#052a10] to-black p-4 shadow-xl">
+        <div className="rounded-2xl bg-[#3C4759] border border-[#4A5568] p-4 shadow-xl">
           <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={subirFoto}/>
 
-          {/* Fila superior: foto 3×4 + info + código */}
-          <div className="flex items-stretch gap-3">
+          {/* Fila superior: foto + datos + código.
+              EN CELULAR se parte en dos renglones (dirección, 27/08/2026):
+              arriba la foto con los datos al lado, y abajo el código con sus
+              botones a lo ancho. Antes las tres columnas se repartían 390
+              píxeles y el nombre del deportista quedaba en una tira de 90:
+              ilegible justo en el aparato donde más se usa. */}
+          <div className="flex flex-col sm:flex-row items-stretch gap-3">
 
-            {/* Foto 3×4 */}
+            {/* Foto + datos: van juntos siempre, en celular y en computador */}
+            <div className="flex items-stretch gap-3 flex-1 min-w-0">
+
+            {/* ── LA FOTO: SIEMPRE CABEZA Y ESCUDOS ────────────────────────
+                Orden de la dirección (27/08/2026): "que esto NUNCA suceda, que
+                siempre se vea cabeza y escudos".
+
+                El intento anterior acercaba la imagen un número fijo (1,8) y
+                por eso fallaba: ese acercamiento sirve para una foto de lejos y
+                le come la cara a una foto de cerca. No hay un número que sirva
+                para las dos, porque cada foto está tomada a una distancia.
+
+                La regla nueva NO acerca nada. El recuadro tiene una forma fija
+                de 4 de ancho por 5 de alto, y la foto se ajusta para llenarlo
+                anclada ARRIBA. Con eso el recorte se corrige solo:
+
+                  · Foto de lejos (más alargada): sobra mucho por abajo y se
+                    corta el patrocinador y el pasto.
+                  · Foto de cerca (más cuadrada): casi no sobra nada y se ve
+                    completa.
+
+                En los dos casos el borde de arriba no se mueve, así que la
+                cabeza NUNCA se corta. Probado con una foto de cerca y una de
+                cuerpo entero: en las dos se ven cabeza y escudos.
+
+                El 8% baja el encuadre un pelo para no dejar aire muerto encima
+                de la cabeza. Es el único número que habría que mover. */}
             <button onClick={() => fotoInputRef.current?.click()}
               className="relative flex-shrink-0 group">
-              <div className="w-[72px] h-[96px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex flex-col items-center justify-center">
+              <div className="w-[112px] h-[140px] sm:w-[144px] sm:h-[180px] rounded-xl overflow-hidden bg-[#2B3547] border border-[#4A5568] flex flex-col items-center justify-center">
                 {foto
-                  ? <img src={foto} alt="" className="w-full h-full object-cover object-top"/>
+                  ? <img src={foto} alt=""
+                      className="w-full h-full object-cover"
+                      style={{ objectPosition: '50% 8%' }} />
                   : <>
                       <span className="text-white font-black text-3xl select-none">{initials}</span>
                       <Camera className="w-4 h-4 text-white/40 mt-1"/>
@@ -820,19 +873,38 @@ function EstadoCuentaInner() {
 
             {/* Nombre + filas de datos */}
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide">
-                {nombre}
-              </h1>
+              {/* EL NOMBRE VIVE EN UNA FRANJA DE ALTO FIJO (dirección,
+                  27/08/2026). Tiene que medir lo mismo que la franja del CÓDIGO
+                  de la derecha; si no, las dos listas de abajo arrancarían a
+                  distinta altura y los renglones no se alinearían con los
+                  botones. Se le pone tope de dos renglones para que un nombre
+                  muy largo no le rompa la cuenta a toda la tarjeta. */}
+              <div className="min-h-[54px] sm:h-[54px] flex items-center">
+                <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide line-clamp-2">
+                  {nombre}
+                </h1>
+              </div>
 
-              {/* Filas de datos */}
-              <div className="space-y-[5px]">
+              {/* ── LOS CUATRO RENGLONES, EMPAREJADOS CON LOS CUATRO BOTONES ──
+                  Orden de la dirección: PROGRAMA a la altura de PAGOS, y los
+                  cuatro de la izquierda alineados con los cuatro de la derecha.
+
+                  Cómo se logra: las dos listas arrancan a la misma altura
+                  (la franja de 54 de arriba, igual en los dos lados), miden lo
+                  mismo (`flex-1` hasta abajo), llevan la misma separación
+                  (gap-1.5) y CADA renglón lleva `flex-1`. Al repartirse en
+                  partes iguales, el renglón 1 de la izquierda ocupa exactamente
+                  la misma banda que el botón 1 de la derecha, y así los cuatro.
+                  No hay ni un número puesto a ojo: si mañana cambia el alto de
+                  la foto, los dos lados se reacomodan juntos. */}
+              <div className="flex-1 flex flex-col gap-1.5 pb-0.5">
                 {[
                   { label: 'PROGRAMA',    val: catVal },
                   { label: 'PROYECTO',    val: proyecto },
                   { label: 'FECHA AFIL.', val: fechaAfil ? formatFecha(fechaAfil) : '' },
                 ].filter(r => r.val).map(({ label, val }) => (
-                  <div key={label} className="flex items-center gap-2">
-                    <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
+                  <div key={label} className="flex-1 flex items-center gap-2">
+                    <span className="bg-[#00B050] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[94px] text-center flex-shrink-0 tracking-wide">
                       {label}
                     </span>
                     <span className="text-white text-[11px] font-semibold truncate">
@@ -842,8 +914,8 @@ function EstadoCuentaInner() {
                 ))}
 
                 {/* MENSUALIDAD — editable a mano (acuerdo con la familia). Aplica a toda la plataforma. */}
-                <div className="flex items-center gap-2">
-                  <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[80px] text-center flex-shrink-0 tracking-wide">
+                <div className="flex-1 flex items-center gap-2">
+                  <span className="bg-[#00B050] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[94px] text-center flex-shrink-0 tracking-wide">
                     MENSUALIDAD
                   </span>
                   {editMens && puedeEditar ? (
@@ -854,10 +926,10 @@ function EstadoCuentaInner() {
                         onKeyDown={e => { if (e.key === 'Enter') confirmarMensualidad(); if (e.key === 'Escape') setEditMens(false); }}
                         autoFocus
                         placeholder="138000"
-                        className="w-[90px] text-[11px] font-bold text-[#111827] bg-white rounded px-2 py-[3px] focus:outline-none"
+                        className="w-[90px] text-[11px] font-bold text-white bg-[#2B3547] border border-[#4A5568] rounded px-2 py-[3px] focus:outline-none"
                       />
                       <button onClick={confirmarMensualidad} disabled={guardandoMens}
-                        className="bg-white text-[#16a34a] text-[10px] font-black px-2 py-[3px] rounded hover:bg-green-50 transition disabled:opacity-60">
+                        className="bg-[#00B050] text-white text-[10px] font-black px-2 py-[3px] rounded hover:opacity-85 transition disabled:opacity-60">
                         {guardandoMens ? '…' : 'Confirmar'}
                       </button>
                       <button onClick={() => setEditMens(false)} className="text-white/70 hover:text-white text-[12px] px-1">✕</button>
@@ -876,26 +948,47 @@ function EstadoCuentaInner() {
               </div>
             </div>
 
-            {/* CÓDIGO + botones 2×2 debajo */}
+            {/* CÓDIGO arriba y los BOTONES abajo del todo (dirección, 27/08/2026).
+                Antes iban apelotonados arriba, en dos columnas, con las
+                palabras cortadas —ASIST., INF., MENS.— y un vacío debajo.
+
+                Ahora van UNO DEBAJO DE OTRO y REPARTIDOS: cada botón lleva
+                `flex-1`, así que los cuatro se dividen en partes iguales todo
+                el alto que queda bajo el código, sin huecos ni apretujones. Al
+                ir en una sola columna caben los nombres completos, que era lo
+                que pedía la dirección: ASISTENCIA, VALORACIONES, MENSAJES.
+                — dirección, 27/08/2026 */}
+            </div>{/* fin de foto + datos */}
+
             {codVal && (
-              <div className="flex-shrink-0 flex flex-col items-center gap-1.5 self-start">
-                <p className="text-white/60 text-[9px] font-black tracking-widest uppercase">CÓDIGO</p>
-                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
-                  {codVal}
+              /* EN CELULAR este bloque es un renglón horizontal debajo de la
+                 foto: el código a la izquierda y los botones ocupando el resto
+                 del ancho. En computador vuelve a ser la columna de siempre. */
+              <div className="flex-shrink-0 w-full sm:w-[136px] flex flex-row sm:flex-col items-center gap-3 sm:gap-1.5 self-stretch">
+                {/* LA FRANJA DEL CÓDIGO mide lo mismo que la del nombre, al
+                    otro lado (54). De ahí para abajo las dos listas arrancan
+                    parejas y los botones quedan a la altura de los renglones.
+                    En celular no hace falta: ahí este bloque va acostado. */}
+                <div className="flex flex-col items-center justify-center gap-1 shrink-0 sm:h-[54px] sm:w-full">
+                  <p className="text-white/60 text-[9px] font-black tracking-widest uppercase leading-none">CÓDIGO</p>
+                  <div className="bg-[#00B050] text-white font-black text-lg px-3 py-1.5 rounded-xl min-w-[60px] text-center shadow-md leading-none">
+                    {codVal}
+                  </div>
                 </div>
-                {/* Botones nav: siempre 4 secciones accesibles */}
-                <div className="grid grid-cols-2 gap-1 w-full">
+                {/* Botones nav: siempre las secciones accesibles, con su
+                    nombre completo y repartidos en el alto que queda. */}
+                <div className="grid grid-cols-2 sm:flex sm:flex-col gap-1.5 w-full flex-1 sm:pb-0.5">
                   {(esDeportista
                     ? [
-                        { label: 'PAGOS',  href: null,                               active: true,  accion: '' },
-                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false, accion: '' },
-                        { label: 'MENS.',  href: null,                               active: false, accion: 'msg' },
+                        { label: 'PAGOS',      href: null,                               active: true,  accion: '' },
+                        { label: 'ASISTENCIA', href: `/alumnos/${id}/asistencia`,        active: false, accion: '' },
+                        { label: 'MENSAJES',   href: null,                               active: false, accion: 'msg' },
                       ]
                     : [
-                        { label: 'PAGOS',  href: null,                               active: true,  accion: '' },
-                        { label: 'ASIST.', href: `/alumnos/${id}/asistencia`,        active: false, accion: '' },
-                        { label: 'INF.',   href: codVal ? `/evaluaciones?cod=${encodeURIComponent(codVal)}` : '/evaluaciones', active: false, accion: '' },
-                        { label: 'MENS.',  href: '/mensajes',                        active: false, accion: '' },
+                        { label: 'PAGOS',        href: null,                               active: true,  accion: '' },
+                        { label: 'ASISTENCIA',   href: `/alumnos/${id}/asistencia`,        active: false, accion: '' },
+                        { label: 'VALORACIONES', href: codVal ? `/evaluaciones?cod=${encodeURIComponent(codVal)}` : '/evaluaciones', active: false, accion: '' },
+                        { label: 'MENSAJES',     href: '/mensajes',                        active: false, accion: '' },
                       ]
                   ).map(({ label, href, active, accion }) => (
                     <button key={label}
@@ -904,10 +997,11 @@ function EstadoCuentaInner() {
                         if (href) router.push(href);
                       }}
                       className={cn(
-                        'transition rounded-lg py-1.5 px-1 text-[9px] font-black tracking-wide text-center w-full',
+                        'transition rounded-lg px-2 text-[9.5px] font-black tracking-wide text-center w-full',
+                        'flex-1 min-h-[26px] flex items-center justify-center',
                         active
-                          ? 'bg-[#16a34a] text-white'
-                          : 'bg-white/15 hover:bg-white/25 border border-white/20 text-white'
+                          ? 'bg-[#00B050] text-white'
+                          : 'bg-[#2B3547] hover:bg-[#4A5568] border border-[#4A5568] text-white'
                       )}>
                       {label}
                     </button>
@@ -919,50 +1013,28 @@ function EstadoCuentaInner() {
 
         </div>
 
-        {/* ── RESUMEN KPI ── */}
-        <div className="grid grid-cols-4 gap-1.5">
-          <div className="bg-gray-100 border border-gray-300 rounded-xl p-2 flex flex-col items-center gap-1">
-            <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-sm">{cargados}</span>
-            </div>
-            <p className="text-gray-600 font-black text-[9px] leading-tight text-center">Cargados</p>
-          </div>
-          <div className="bg-green-50 border border-green-200 rounded-xl p-2 flex flex-col items-center gap-1">
-            <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-sm">{pagados}</span>
-            </div>
-            <p className="text-green-700 font-black text-[9px] leading-tight text-center">Pagados</p>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-xl p-2 flex flex-col items-center gap-1">
-            <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-sm">{pendientes}</span>
-            </div>
-            <p className="text-red-700 font-black text-[9px] leading-tight text-center">Pendientes</p>
-            {totalPendiente > 0 && <p className="text-red-500 text-[8px] font-bold text-center">${totalPendiente.toLocaleString('es-CO').replace(/,/g,'.')}</p>}
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-2 flex flex-col items-center gap-1">
-            <div className="w-8 h-8 bg-blue-400 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-black text-sm">{proximos}</span>
-            </div>
-            <p className="text-blue-700 font-black text-[9px] leading-tight text-center">Próximos</p>
-          </div>
-        </div>
+        {/* Las cuatro casillas de arriba —Cargados · Pagados · Pendientes ·
+            Próximos— se quitaron el 27/08/2026 por orden de la dirección: el
+            cuadro de abajo ya lo dice todo, mes por mes, y repetirlo arriba
+            solo alejaba la tabla de la vista. Si algún día se quieren de
+            vuelta, las cuentas siguen calculadas más arriba (`cargados`,
+            `pagados`, `pendientes`, `proximos`, `totalPendiente`). */}
 
         {/* ── SELECTOR AÑO ── */}
         <div className="flex items-center justify-between">
-          <h3 className="text-[#111827] font-black text-base tracking-wide">
+          <h3 className="text-white font-black text-base tracking-wide">
             ESTADO DE CUENTA DEL DEPORTISTA
           </h3>
           <select
             value={anio}
             onChange={e => setAnio(Number(e.target.value))}
-            className="border border-green-300 rounded-xl px-3 py-1.5 text-sm font-black text-[#111827] focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
+            className="border border-[rgba(0,176,80,.45)] rounded-xl px-3 py-1.5 text-sm font-black text-white focus:outline-none focus:ring-2 focus:ring-green-400 bg-[#3C4759]">
             {[2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
 
         {/* ── TABLA ── */}
-        <div className="rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+        <div className="rounded-2xl shadow-md border border-[#4A5568] overflow-hidden">
           <div className="overflow-x-auto w-full -webkit-overflow-scrolling-touch">
           <table className="border-collapse" style={{ width: '100%', minWidth: 300 }}>
             <thead>
@@ -974,7 +1046,7 @@ function EstadoCuentaInner() {
                   { label: 'DETALLE',    pct: '27%' },
                   { label: 'ESTADO',     pct: '18%' },
                 ].map(({ label, pct }) => (
-                  <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '9px 5px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', width: pct }}>
+                  <th key={label} style={{ background: '#00B050', color: 'white', border: BW, padding: '9px 5px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', width: pct }}>
                     {label}
                   </th>
                 ))}
@@ -993,11 +1065,20 @@ function EstadoCuentaInner() {
                 const hasSoporte   = !isPaid && soportes.some(s =>
                   !s.meses || s.meses.length === 0 || s.meses.includes(row.detalle)
                 );
-                const rowBg        = (isProx && (!hasSoporte || esProfesor || esReadonly)) ? '#f9fafb' : ROW;
-                const detBg        = becado ? '#374151' : (isPaid || esNoPaga) ? '#374151'
+                const rowBg        = (isProx && (!hasSoporte || esProfesor || esReadonly)) ? '#333F50' : ROW;
+                /* EL COLOR DE LA COLUMNA DETALLE.
+                   La direccion la quiso en gris oscuro (27/08/2026): antes el
+                   mes pagado iba en un gris claro (#4A5568) y el proximo en uno
+                   mas claro todavia (#7C879A), y los dos se veian mas claros que
+                   la propia fila. Ahora los dos van en el gris hondo de la
+                   plataforma. Que un mes sea PROXIMO se sigue notando: toda esa
+                   fila va con opacidad 0,6 y su casilla de estado dice PROX.
+                   El ROJO del mes debido y el AMBAR del que esta por confirmar
+                   NO se tocan: ahi el color si esta diciendo algo. */
+                const detBg        = becado ? CAMPO : (isPaid || esNoPaga) ? CAMPO
                   : (esProfesor || esReadonly)
-                    ? (isProx ? '#9ca3af' : '#dc2626')
-                    : hasSoporte ? '#d97706' : isProx ? '#9ca3af' : '#dc2626';
+                    ? (isProx ? CAMPO : '#dc2626')
+                    : hasSoporte ? '#d97706' : isProx ? CAMPO : '#dc2626';
                 return (
                   <tr key={idx} style={{ opacity: isProx ? 0.6 : 1 }}>
 
@@ -1007,17 +1088,17 @@ function EstadoCuentaInner() {
                         <input
                           value={formatFecha(row.fecha)}
                           onChange={e => { const u = pagos.map((r,i) => i===idx ? {...r, fecha: e.target.value} : r); savePagos(u); }}
-                          className="w-full text-center font-semibold text-[9px] text-[#111827] bg-transparent focus:outline-none focus:bg-white focus:rounded px-1 py-1"
+                          className="w-full text-center font-semibold text-[9px] text-white bg-transparent focus:outline-none focus:bg-[#3C4759] focus:rounded px-1 py-1"
                           placeholder="DD/MM/AAAA"
                         />
                       ) : (
-                        <span className="text-[9px] font-semibold text-[#111827]">{formatFecha(row.fecha) || '—'}</span>
+                        <span className="text-[9px] font-semibold text-white">{formatFecha(row.fecha) || '—'}</span>
                       )}
                     </td>
 
                     {/* V. CARGADO — valor de la cuota del mes (matrícula = lo que pagó exacto) */}
-                    <td style={{ background: '#f3f4f6', border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                      <span className="text-[9px] font-bold text-[#374151]">
+                    <td style={{ background: '#2B3547', border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                      <span className="text-[9px] font-bold text-white">
                         {(() => {
                           // MATRÍCULA: el valor exacto que pagó. Mensualidades: SIEMPRE la cuota
                           // del programa (tarifa). (El ajuste manual con Confirmar llega después.)
@@ -1030,18 +1111,18 @@ function EstadoCuentaInner() {
                     </td>
 
                     {/* V. PAGADO — gris claro, número con $ y puntos */}
-                    <td style={{ background: '#e5e7eb', border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                    <td style={{ background: '#2B3547', border: BW, padding: '4px 6px', textAlign: 'center' }}>
                       {puedeEditar ? (
                         <input
                           value={ensurePeso(row.vPagado)}
                           readOnly={!isPaid}
                           onChange={e => { if (!isPaid) return; const u = pagos.map((r,i) => i===idx ? {...r, vPagado: e.target.value} : r); savePagos(u); }}
                           className={cn('w-full text-center font-bold text-[9px] bg-transparent focus:outline-none px-1 py-1',
-                            isPaid ? 'text-[#374151]' : 'text-[#9ca3af] cursor-default')}
+                            isPaid ? 'text-white' : 'text-white/40 cursor-default')}
                           placeholder="—"
                         />
                       ) : (
-                        <span className={cn('text-[9px] font-bold', isPaid ? 'text-[#374151]' : 'text-[#9ca3af]')}>
+                        <span className={cn('text-[9px] font-bold', isPaid ? 'text-white' : 'text-white/40')}>
                           {ensurePeso(row.vPagado) || '—'}
                         </span>
                       )}
@@ -1062,7 +1143,7 @@ function EstadoCuentaInner() {
                                 NO PAGA OK
                               </button>
                             : <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white"
-                                style={{ background: '#16a34a' }}>NO PAGA OK</span>)
+                                style={{ background: '#00B050' }}>NO PAGA OK</span>)
                         : becado
                         ? (puedeEditar
                             // El admin SÍ puede editar un becado y registrarle un pago si es necesario
@@ -1073,7 +1154,7 @@ function EstadoCuentaInner() {
                               </button>
                             // Calidosos / profesor / lectura: BECADO fijo
                             : <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center text-white"
-                                style={{ background: '#16a34a' }}>BECADO</span>)
+                                style={{ background: '#00B050' }}>BECADO</span>)
                         : puedeEditar
                           ? <button onClick={() => (isPaid && malDesc ? setMalDescModal(idx) : toggleEstado(idx))}
                               title={isPaid && malDesc ? 'Clic para validar el descuento o revertir el pago' : undefined}
@@ -1093,17 +1174,17 @@ function EstadoCuentaInner() {
                               : (esProfesor || esReadonly)
                                 ? isProx
                                   ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
-                                      style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
+                                      style={{ background:'#2B3547', color:'#9AA5B5' }}>PRÓX</span>
                                   : <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
-                                      style={{ background:'#fee2e2', color:'#dc2626' }}>PEND</span>
+                                      style={{ background:'rgba(192,80,77,.18)', color:'#F08A87' }}>PEND</span>
                                 : hasSoporte
                                   ? <span className="px-1 py-[5px] rounded-lg font-black text-[9px] w-full block text-center leading-tight whitespace-nowrap"
-                                      style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24' }}>
+                                      style={{ background: 'rgba(224,163,58,.16)', color: '#E0A33A', border: '1px solid rgba(224,163,58,.65)' }}>
                                       ⏳ POR CONFIRMAR
                                     </span>
                                   : isProx
                                     ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
-                                        style={{ background:'#e5e7eb', color:'#9ca3af' }}>PRÓX</span>
+                                        style={{ background:'#2B3547', color:'#9AA5B5' }}>PRÓX</span>
                                     : <button
                                         onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
                                         className="px-1 py-2 rounded-lg font-black text-[11px] w-full block text-center text-white shadow-sm active:scale-95 transition-transform animate-pulse whitespace-nowrap"
@@ -1123,14 +1204,14 @@ function EstadoCuentaInner() {
 
         {/* ── NOTA ── */}
         {puedeEditar
-          ? <p className="text-center text-[11px] text-gray-400 pb-4">
+          ? <p className="text-center text-[11px] text-white/40 pb-4">
               Toca <strong>PEND</strong> para registrar pago · Toca <strong>PAGÓ</strong> para revertir
             </p>
           : soportes.length > 0
-            ? <p className="text-center text-[11px] text-amber-600 font-semibold pb-2">
+            ? <p className="text-center text-[11px] text-[#E0A33A] font-semibold pb-2">
                 ⏳ Soporte(s) subidos · En revisión por el área contable
               </p>
-            : <p className="text-center text-[11px] text-amber-500 font-semibold pb-2">
+            : <p className="text-center text-[11px] text-[#E0A33A] font-semibold pb-2">
                 Solo lectura · Edición disponible desde Control de Pagos
               </p>
         }
@@ -1140,19 +1221,19 @@ function EstadoCuentaInner() {
           <div className="mb-4">
             {/* Header */}
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-black text-sm text-gray-700 uppercase tracking-wide flex items-center gap-1">
+              <h3 className="font-black text-sm text-white uppercase tracking-wide flex items-center gap-1">
                 <span>📦</span> Otros Pagos
               </h3>
               {esAdmin && (
                 <div className="flex gap-2">
                   <input ref={xlsxInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={importarXlsx}/>
                   <button onClick={() => xlsxInputRef.current?.click()}
-                    className="text-[10px] font-black px-2 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition">
+                    className="text-[10px] font-black px-2 py-1 rounded-lg border border-[#4A5568] text-white/70 hover:bg-[#333F50] transition">
                     📥 Excel
                   </button>
                   <button onClick={() => setShowAddOtro(true)}
                     className="text-[10px] font-black px-2 py-1 rounded-lg text-white transition"
-                    style={{ background: '#16a34a' }}>
+                    style={{ background: '#00B050' }}>
                     + Agregar
                   </button>
                 </div>
@@ -1161,11 +1242,11 @@ function EstadoCuentaInner() {
 
             {/* Tabla — mismo layout que mensualidades */}
             {otrosPagos.length === 0 ? (
-              <p className="text-center text-[11px] text-gray-400 py-3 border border-dashed border-gray-200 rounded-xl">
+              <p className="text-center text-[11px] text-white/40 py-3 border border-dashed border-[#4A5568] rounded-xl">
                 Sin otros pagos registrados
               </p>
             ) : (
-              <div className="rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+              <div className="rounded-2xl shadow-md border border-[#4A5568] overflow-hidden">
                 <div className="overflow-x-auto w-full">
                 <table className="border-collapse" style={{ width: '100%', minWidth: 280 }}>
                   <thead>
@@ -1176,27 +1257,27 @@ function EstadoCuentaInner() {
                         { label: 'DETALLE',   pct: esAdmin ? '34%' : '32%' },
                         { label: 'ESTADO',    pct: esAdmin ? '18%' : '26%' },
                       ].map(({ label, pct }) => (
-                        <th key={label} style={{ background: '#111827', color: 'white', border: BW, padding: '9px 5px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', width: pct }}>
+                        <th key={label} style={{ background: '#00B050', color: 'white', border: BW, padding: '9px 5px', textAlign: 'center', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', width: pct }}>
                           {label}
                         </th>
                       ))}
-                      {esAdmin && <th style={{ background: '#111827', border: BW, padding: '9px 4px', width: '6%' }}></th>}
+                      {esAdmin && <th style={{ background: '#00B050', border: BW, padding: '9px 4px', width: '6%' }}></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {otrosPagos.map(op => {
                       const isPaidO  = op.estado === 'PAGÓ';
-                      const detBgO   = isPaidO ? '#374151' : '#dc2626';
+                      const detBgO   = isPaidO ? CAMPO : '#dc2626';
                       const rowBgO   = ROW;
                       return (
                         <tr key={op.id}>
                           {/* FECHA */}
                           <td style={{ background: rowBgO, border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                            <span className="text-[9px] font-semibold text-[#111827]">{op.fecha || 'DD/MM/AAAA'}</span>
+                            <span className="text-[9px] font-semibold text-white">{op.fecha || 'DD/MM/AAAA'}</span>
                           </td>
                           {/* V. PAGADO */}
-                          <td style={{ background: '#e5e7eb', border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                            <span className={cn('text-[9px] font-bold', isPaidO ? 'text-[#374151]' : 'text-[#9ca3af]')}>
+                          <td style={{ background: '#2B3547', border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                            <span className={cn('text-[9px] font-bold', isPaidO ? 'text-white' : 'text-white/40')}>
                               {isPaidO ? `$${Number(op.valor).toLocaleString('es-CO')}` : '—'}
                             </span>
                           </td>
@@ -1204,7 +1285,7 @@ function EstadoCuentaInner() {
                           <td style={{ background: detBgO, color: 'white', border: BW, padding: '6px 8px', textAlign: 'center', fontWeight: 900, fontSize: 10 }}>
                             <span className="block leading-tight">{op.descripcion}</span>
                             <span className={cn('text-[8px] font-black px-1.5 py-0.5 rounded-full mt-0.5 inline-block',
-                              op.tipo === 'torneo' ? 'bg-blue-200 text-blue-900' : 'bg-purple-200 text-purple-900')}>
+                              op.tipo === 'torneo' ? 'bg-blue-200 text-[#8FBEF0]' : 'bg-[rgba(139,114,217,.25)] text-[#C3B4F0]')}>
                               {op.tipo === 'torneo' ? 'Torneo' : 'Implemento'} · ${Number(op.valor).toLocaleString('es-CO')}
                             </span>
                           </td>
@@ -1225,7 +1306,7 @@ function EstadoCuentaInner() {
                           {esAdmin && (
                             <td style={{ background: rowBgO, border: BW, padding: '4px' }}>
                               <button onClick={() => eliminarOtroPago(op)}
-                                className="w-6 h-6 rounded bg-red-50 hover:bg-red-100 flex items-center justify-center transition text-red-400 text-xs mx-auto">✕</button>
+                                className="w-6 h-6 rounded bg-[rgba(192,80,77,.14)] hover:bg-[rgba(192,80,77,.20)] flex items-center justify-center transition text-red-400 text-xs mx-auto">✕</button>
                             </td>
                           )}
                         </tr>
@@ -1240,12 +1321,12 @@ function EstadoCuentaInner() {
             {/* Modal agregar */}
             {showAddOtro && (
               <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-4">
-                <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
-                  <h3 className="font-black text-gray-800">Agregar Otro Pago</h3>
+                <div className="bg-[#3C4759] rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+                  <h3 className="font-black text-white">Agregar Otro Pago</h3>
                   <div>
-                    <label className="text-xs font-black text-gray-500 uppercase tracking-wide block mb-1">Producto</label>
+                    <label className="text-xs font-black text-white/70 uppercase tracking-wide block mb-1">Producto</label>
                     <select value={selProdId} onChange={e => setSelProdId(e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none focus:border-green-500">
+                      className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-green-500">
                       <option value="">— Selecciona un producto —</option>
                       {productosLst.map(p => (
                         <option key={p.id} value={p.id}>
@@ -1256,10 +1337,10 @@ function EstadoCuentaInner() {
                   </div>
                   <div className="flex gap-2 pt-1">
                     <button onClick={() => { setShowAddOtro(false); setSelProdId(''); }}
-                      className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-black text-sm hover:bg-gray-50">Cancelar</button>
+                      className="flex-1 py-3 rounded-xl border-2 border-[#4A5568] text-white/70 font-black text-sm hover:bg-[#333F50]">Cancelar</button>
                     <button onClick={agregarOtroPago} disabled={!selProdId || guardandoOtro}
                       className="flex-1 py-3 rounded-xl font-black text-sm text-white transition"
-                      style={{ background: selProdId && !guardandoOtro ? '#16a34a' : '#9ca3af' }}>
+                      style={{ background: selProdId && !guardandoOtro ? '#00B050' : '#7C879A' }}>
                       {guardandoOtro ? 'Guardando...' : 'AGREGAR'}
                     </button>
                   </div>
@@ -1283,7 +1364,7 @@ function EstadoCuentaInner() {
             <button
               onClick={() => soporteInputRef.current?.click()}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm text-white transition active:scale-95"
-              style={{ background: '#16a34a' }}>
+              style={{ background: '#00B050' }}>
               📎 Subir soporte
             </button>
             <button
@@ -1298,7 +1379,7 @@ function EstadoCuentaInner() {
         {/* ── COMUNICACIÓN (solo calidoso): Área de Pagos / Formador / Director ── */}
         {esDeportista && !esReadonly && (
           <div id="canales-msg" className="pb-6" style={{ scrollMarginTop: 80 }}>
-            <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2 px-1">
+            <p className="text-[11px] font-black text-white/70 uppercase tracking-widest mb-2 px-1">
               ¿Tienes una duda, solicitud o reclamo? Deja tu mensaje:
             </p>
             <div className="flex flex-col gap-2">
@@ -1322,7 +1403,7 @@ function EstadoCuentaInner() {
         {/* ── FACTURACIÓN: cuadro aparte, al final (solo calidoso) ── */}
         {esDeportista && !esReadonly && (
           <div className="pb-8">
-            <div className="rounded-2xl border-2 border-dashed border-[#0f766e]/50 bg-[#f0fdfa] p-4 text-center">
+            <div className="rounded-2xl border-2 border-dashed border-[#0f766e]/50 bg-[rgba(0,176,80,.12)] p-4 text-center">
               <p className="text-[13px] font-black text-[#0f766e] mb-3">De requerir Factura, solicítala ahora</p>
               <button type="button" onClick={() => router.push(`/alumnos/${id}/factura`)}
                 className="w-full rounded-xl py-3 text-sm font-black text-white transition active:scale-95 flex items-center justify-center gap-2"
@@ -1337,33 +1418,33 @@ function EstadoCuentaInner() {
         {msgDestino && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
             onClick={() => !enviandoPagos && setMsgDestino(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-[#3C4759] rounded-2xl w-full max-w-md p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
               {pagosMsgOk ? (
                 <div className="text-center py-6">
                   <div className="text-4xl mb-3">✅</div>
-                  <p className="font-black text-gray-900 text-lg">¡Mensaje enviado!</p>
-                  <p className="text-gray-500 text-sm mt-1">Revisaremos tu mensaje y te contactaremos.</p>
+                  <p className="font-black text-white text-lg">¡Mensaje enviado!</p>
+                  <p className="text-white/70 text-sm mt-1">Revisaremos tu mensaje y te contactaremos.</p>
                 </div>
               ) : (
                 <>
-                  <p className="font-black text-gray-900 text-base mb-1">Mensaje a {msgDestino.titulo}</p>
-                  <p className="text-gray-500 text-xs mb-4">Escribe tu duda, solicitud o reclamo. Quedará registrado en la plataforma.</p>
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1">Tu mensaje</label>
+                  <p className="font-black text-white text-base mb-1">Mensaje a {msgDestino.titulo}</p>
+                  <p className="text-white/70 text-xs mb-4">Escribe tu duda, solicitud o reclamo. Quedará registrado en la plataforma.</p>
+                  <label className="block text-[11px] font-bold text-white/70 uppercase tracking-wide mb-1">Tu mensaje</label>
                   <textarea value={pagosMsgTexto} onChange={e => setPagosMsgTexto(e.target.value)} rows={4}
                     placeholder="Escribe aquí tu mensaje..."
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 resize-none mb-3"
+                    className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 resize-none mb-3"
                     style={{ ['--tw-ring-color' as any]: msgDestino.color }} />
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1">WhatsApp de contacto</label>
+                  <label className="block text-[11px] font-bold text-white/70 uppercase tracking-wide mb-1">WhatsApp de contacto</label>
                   <input value={pagosMsgWa} onChange={e => setPagosMsgWa(e.target.value)} inputMode="tel"
                     placeholder="Ej: 3001234567"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 mb-4"
+                    className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 mb-4"
                     style={{ ['--tw-ring-color' as any]: msgDestino.color }} />
                   <div className="flex gap-3">
                     <button onClick={() => setMsgDestino(null)} disabled={enviandoPagos}
-                      className="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancelar</button>
+                      className="flex-1 border border-[#4A5568] rounded-xl py-3 text-sm font-bold text-white/70 hover:bg-[#333F50] transition">Cancelar</button>
                     <button onClick={enviarMensajePagos} disabled={enviandoPagos || !pagosMsgTexto.trim()}
                       className="flex-1 rounded-xl py-3 text-sm font-black text-white transition"
-                      style={{ background: enviandoPagos || !pagosMsgTexto.trim() ? '#9ca3af' : msgDestino.color }}>
+                      style={{ background: enviandoPagos || !pagosMsgTexto.trim() ? '#7C879A' : msgDestino.color }}>
                       {enviandoPagos ? 'Enviando...' : 'Enviar mensaje'}
                     </button>
                   </div>
@@ -1380,18 +1461,18 @@ function EstadoCuentaInner() {
         const row = pagosVista[confirmRevert];
         return (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="bg-[#3C4759] rounded-2xl shadow-2xl p-6 w-full max-w-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-red-600 text-xl font-black">!</span>
+                <div className="w-10 h-10 bg-[rgba(192,80,77,.20)] rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-[#F08A87] text-xl font-black">!</span>
                 </div>
                 <div>
-                  <h3 className="font-black text-gray-900 text-base leading-tight">¿Revertir este pago?</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{row?.detalle}</p>
+                  <h3 className="font-black text-white text-base leading-tight">¿Revertir este pago?</h3>
+                  <p className="text-xs text-white/70 mt-0.5">{row?.detalle}</p>
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mb-2">Esta acción eliminará la información registrada:</p>
-              <div className="bg-red-50 border border-red-100 rounded-xl p-3 mb-5 text-xs text-gray-700 space-y-1">
+              <p className="text-sm text-white/70 mb-2">Esta acción eliminará la información registrada:</p>
+              <div className="bg-[rgba(192,80,77,.14)] border border-[rgba(192,80,77,.45)] rounded-xl p-3 mb-5 text-xs text-white space-y-1">
                 {row?.vPagado && <p><span className="font-bold">Valor:</span> {row.vPagado}</p>}
                 {row?.destino && <p><span className="font-bold">Destino:</span> {row.destino}</p>}
                 {row?.fecha   && <p><span className="font-bold">Fecha:</span>  {row.fecha}</p>}
@@ -1399,7 +1480,7 @@ function EstadoCuentaInner() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setConfirmRevert(null)}
-                  className="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
+                  className="flex-1 border border-[#4A5568] rounded-xl py-3 text-sm font-bold text-white/70 hover:bg-[#333F50] transition">
                   Cancelar
                 </button>
                 <button
@@ -1419,17 +1500,17 @@ function EstadoCuentaInner() {
         const debe = Math.max(0, tarifaNum - montoNum(row?.vPagado || ''));
         return (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="bg-[#3C4759] rounded-2xl shadow-2xl p-6 w-full max-w-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-orange-600 text-xl font-black">!</span>
+                <div className="w-10 h-10 bg-[rgba(224,163,58,.20)] rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-[#E0A33A] text-xl font-black">!</span>
                 </div>
                 <div>
-                  <h3 className="font-black text-gray-900 text-base leading-tight">Pagó con mal descuento</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{row?.detalle}</p>
+                  <h3 className="font-black text-white text-base leading-tight">Pagó con mal descuento</h3>
+                  <p className="text-xs text-white/70 mt-0.5">{row?.detalle}</p>
                 </div>
               </div>
-              <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 mb-5 text-xs text-gray-700 space-y-1">
+              <div className="bg-[rgba(224,163,58,.14)] border border-[rgba(224,163,58,.45)] rounded-xl p-3 mb-5 text-xs text-white space-y-1">
                 {row?.vPagado && <p><span className="font-bold">Pagó:</span> {ensurePeso(row.vPagado)}</p>}
                 <p><span className="font-bold">Debe:</span> {ensurePeso(String(debe))}</p>
                 {row?.fecha && <p><span className="font-bold">Fecha:</span> {row.fecha}</p>}
@@ -1447,7 +1528,7 @@ function EstadoCuentaInner() {
                 </button>
                 <button
                   onClick={() => setMalDescModal(null)}
-                  className="w-full border border-gray-200 rounded-xl py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
+                  className="w-full border border-[#4A5568] rounded-xl py-2.5 text-sm font-bold text-white/70 hover:bg-[#333F50] transition">
                   Cancelar
                 </button>
               </div>
@@ -1570,23 +1651,23 @@ function EstadoCuentaInner() {
       {verSoportes && (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
              onClick={() => setVerSoportes(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[80vh] overflow-hidden flex flex-col"
+          <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-sm max-h-[80vh] overflow-hidden flex flex-col"
                onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h3 className="font-black text-[#111827] text-base">Soportes de pago</h3>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#4A5568]">
+              <h3 className="font-black text-white text-base">Soportes de pago</h3>
               <button onClick={() => setVerSoportes(false)}
-                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold text-gray-500 text-sm transition">
+                className="w-7 h-7 rounded-full bg-[#2B3547] hover:bg-[#2B3547] flex items-center justify-center font-bold text-white/70 text-sm transition">
                 ✕
               </button>
             </div>
             <div className="overflow-y-auto flex-1 p-4 space-y-3">
               {soportes.length === 0 ? (
-                <p className="text-center text-gray-400 text-sm font-semibold py-8">
+                <p className="text-center text-white/40 text-sm font-semibold py-8">
                   No hay soportes subidos aún
                 </p>
               ) : (
                 soportes.map((s, i) => (
-                  <div key={i} className="rounded-xl border border-gray-200 overflow-hidden">
+                  <div key={i} className="rounded-xl border border-[#4A5568] overflow-hidden">
                     {s.data.startsWith('data:image') ? (
                       <img src={s.data} alt={s.name} className="w-full object-contain max-h-48"/>
                     ) : (
@@ -1594,32 +1675,32 @@ function EstadoCuentaInner() {
                          no pasaba nada al tocarlo. Se abre como archivo temporal. */
                       <button type="button"
                         onClick={() => abrirSoporte(s.data, s.name)}
-                        className="w-full bg-gray-50 p-4 text-center hover:bg-gray-100 transition cursor-pointer">
+                        className="w-full bg-[#333F50] p-4 text-center hover:bg-[#2B3547] transition cursor-pointer">
                         <p className="text-2xl mb-1">📄</p>
-                        <p className="text-sm font-semibold text-gray-600 truncate">{s.name}</p>
-                        <p className="text-[11px] font-black text-blue-600 mt-1">
+                        <p className="text-sm font-semibold text-white/70 truncate">{s.name}</p>
+                        <p className="text-[11px] font-black text-[#8FBEF0] mt-1">
                           {esPdfDato(s.data) ? 'Toca para abrir el PDF ↗' : 'Toca para abrir el archivo ↗'}
                         </p>
                       </button>
                     )}
-                    <div className="px-3 pt-2 pb-1 bg-gray-50">
-                      <p className="text-[10px] font-black text-gray-700 truncate">{s.name}</p>
+                    <div className="px-3 pt-2 pb-1 bg-[#333F50]">
+                      <p className="text-[10px] font-black text-white truncate">{s.name}</p>
                       {s.meses && s.meses.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {s.meses.map(m => (
                             <span key={m} className="text-[9px] font-black px-2 py-0.5 rounded-full"
-                              style={{ background: '#d1fae5', color: '#065f46' }}>
+                              style={{ background: 'rgba(0,176,80,.16)', color: '#065f46' }}>
                               {m.replace(' 2026','').replace(' 2027','')}
                             </span>
                           ))}
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-gray-100">
-                      <p className="text-[10px] text-gray-400 font-semibold">{s.date}</p>
+                    <div className="flex items-center justify-between px-3 py-2 bg-[#333F50] border-t border-[#4A5568]">
+                      <p className="text-[10px] text-white/40 font-semibold">{s.date}</p>
                       <button
                         onClick={() => eliminarSoporte(i)}
-                        className="text-red-400 hover:text-red-600 text-[10px] font-bold transition">
+                        className="text-red-400 hover:text-[#F08A87] text-[10px] font-bold transition">
                         Eliminar
                       </button>
                     </div>
@@ -1634,32 +1715,32 @@ function EstadoCuentaInner() {
       {/* ── MODAL REGISTRAR PAGO ── */}
       {editIdx !== null && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 w-full max-w-sm">
-            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5 sm:hidden"/>
-            <h3 className="font-black text-[#111827] text-base mb-1">Registrar Pago</h3>
-            <p className="text-gray-400 text-xs mb-5 font-semibold">{pagosVista[editIdx]?.detalle} — {anio}</p>
+          <div className="bg-[#3C4759] rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="w-10 h-1 bg-[#2B3547] rounded-full mx-auto mb-5 sm:hidden"/>
+            <h3 className="font-black text-white text-base mb-1">Registrar Pago</h3>
+            <p className="text-white/40 text-xs mb-5 font-semibold">{pagosVista[editIdx]?.detalle} — {anio}</p>
 
             <div className="space-y-3">
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor Cargado</label>
+                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Valor Cargado</label>
                 <input
                   value={editForm.vCargado || ''}
                   onChange={e => setEditForm(f => ({ ...f, vCargado: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-[#111827]"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
                   placeholder="$138.000"
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Descripción</label>
+                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Descripción</label>
                 <input
                   value={editForm.destino || ''}
                   onChange={e => setEditForm(f => ({ ...f, destino: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-[#111827]"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
                   placeholder="Ej: Transferencia, efectivo..."
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Fecha de Pago</label>
+                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Fecha de Pago</label>
                 <input
                   type="date"
                   onChange={e => {
@@ -1669,18 +1750,18 @@ function EstadoCuentaInner() {
                       setEditForm(f => ({ ...f, fecha: `${day}/${m}/${y.slice(2)}` }));
                     }
                   }}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-[#111827]"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
                 />
                 {editForm.fecha && (
-                  <p className="text-[11px] text-green-600 font-bold mt-1">→ {editForm.fecha}</p>
+                  <p className="text-[11px] text-[#5BE39B] font-bold mt-1">→ {editForm.fecha}</p>
                 )}
               </div>
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor Pagado</label>
+                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Valor Pagado</label>
                 <input
                   value={editForm.vPagado || ''}
                   onChange={e => setEditForm(f => ({ ...f, vPagado: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-[#111827]"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
                   placeholder="$138.000"
                 />
               </div>
@@ -1689,7 +1770,7 @@ function EstadoCuentaInner() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => { setEditIdx(null); setEditForm({}); }}
-                className="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">
+                className="flex-1 border border-[#4A5568] rounded-xl py-3 text-sm font-bold text-white/70 hover:bg-[#333F50] transition">
                 Cancelar
               </button>
               <button
@@ -1700,10 +1781,10 @@ function EstadoCuentaInner() {
             </div>
 
             {/* Eliminar mes — opción discreta al fondo del modal */}
-            <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+            <div className="mt-4 pt-4 border-t border-[#4A5568] text-center">
               <button
                 onClick={() => editIdx !== null && eliminarMes(editIdx)}
-                className="text-red-400 hover:text-red-600 text-xs font-bold transition underline underline-offset-2">
+                className="text-red-400 hover:text-[#F08A87] text-xs font-bold transition underline underline-offset-2">
                 No cobrar este mes
               </button>
             </div>
@@ -1713,7 +1794,7 @@ function EstadoCuentaInner() {
 
       {/* ── TOAST SOPORTE GUARDADO ── */}
       {toastSoporte && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[#16a34a] text-white px-5 py-3.5 rounded-2xl shadow-2xl animate-fade-in-up"
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[#00B050] text-white px-5 py-3.5 rounded-2xl shadow-2xl animate-fade-in-up"
           style={{ animation: 'fadeInUp 0.3s ease' }}>
           <span className="text-xl">✅</span>
           <div>
@@ -1747,13 +1828,13 @@ function EstadoCuentaInner() {
             className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center p-4 pb-6"
             onClick={() => { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); }}>
             <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+              className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
               onClick={e => e.stopPropagation()}>
 
               {/* Encabezado */}
-              <div className="px-5 pt-5 pb-3 border-b border-gray-100">
-                <h3 className="font-black text-gray-900 text-base leading-tight">📎 Soporte de pago</h3>
-                <p className="text-xs text-gray-400 mt-0.5">
+              <div className="px-5 pt-5 pb-3 border-b border-[#4A5568]">
+                <h3 className="font-black text-white text-base leading-tight">📎 Soporte de pago</h3>
+                <p className="text-xs text-white/40 mt-0.5">
                   {pendingFiles.length > 1 ? `${pendingFiles.length} archivos` : pendingFiles[0]?.name}
                 </p>
               </div>
@@ -1763,7 +1844,7 @@ function EstadoCuentaInner() {
                 {/* Selección de mes(es) */}
                 {mesesDisp.length > 0 && (
                   <div>
-                    <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                    <p className="text-[11px] font-black text-white/70 uppercase tracking-widest mb-2">
                       ¿Qué mes(es) estás pagando?
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -1778,10 +1859,10 @@ function EstadoCuentaInner() {
                             className="px-3 py-1.5 rounded-xl font-black text-[11px] transition border-2 active:scale-95"
                             style={
                               esConflicto
-                                ? { background: '#fef2f2', color: '#991b1b', borderColor: '#ef4444' }
+                                ? { background: 'rgba(192,80,77,.14)', color: '#991b1b', borderColor: '#ef4444' }
                                 : sel
-                                  ? { background: '#16a34a', color: 'white', borderColor: '#16a34a' }
-                                  : { background: '#f1f5f9', color: '#374151', borderColor: '#d1d5db' }
+                                  ? { background: '#00B050', color: 'white', borderColor: '#00B050' }
+                                  : { background: '#3C4759', color: '#4A5568', borderColor: '#d1d5db' }
                             }>
                             {r.detalle.replace(' 2026','').replace(' 2027','')}
                             {r.estado === 'PROX' && !esConflicto && <span className="ml-1 opacity-60">(Próx.)</span>}
@@ -1794,15 +1875,15 @@ function EstadoCuentaInner() {
 
                     {/* Aviso de conflicto */}
                     {mesConflicto && (
-                      <div className="mt-3 rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 flex items-start gap-2">
-                        <span className="text-red-500 text-lg leading-none mt-0.5">⛔</span>
+                      <div className="mt-3 rounded-xl border-2 border-red-400 bg-[rgba(192,80,77,.14)] px-4 py-3 flex items-start gap-2">
+                        <span className="text-[#F08A87] text-lg leading-none mt-0.5">⛔</span>
                         <div>
-                          <p className="text-red-700 font-black text-[11px] leading-snug">
+                          <p className="text-[#F08A87] font-black text-[11px] leading-snug">
                             Primero debes pagar <span className="underline underline-offset-2">
                               {mesConflicto.detalle.replace(' 2026','').replace(' 2027,','')}
                             </span>
                           </p>
-                          <p className="text-red-500 text-[10px] mt-0.5">
+                          <p className="text-[#F08A87] text-[10px] mt-0.5">
                             No puedes seleccionar meses posteriores mientras haya meses anteriores pendientes. Si tienes dudas, deja tu mensaje al Área de Pagos más abajo.
                           </p>
                         </div>
@@ -1811,7 +1892,7 @@ function EstadoCuentaInner() {
 
                     {/* Aviso selección vacía */}
                     {mesesSelSoporte.length === 0 && !mesConflicto && (
-                      <p className="text-[10px] text-amber-500 font-semibold mt-2">
+                      <p className="text-[10px] text-[#E0A33A] font-semibold mt-2">
                         Selecciona al menos un mes para continuar
                       </p>
                     )}
@@ -1820,7 +1901,7 @@ function EstadoCuentaInner() {
 
                 {/* Nombre del soporte */}
                 <div>
-                  <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                  <p className="text-[11px] font-black text-white/70 uppercase tracking-widest mb-2">
                     Nombre del soporte
                   </p>
                   <input
@@ -1832,7 +1913,7 @@ function EstadoCuentaInner() {
                       if (e.key === 'Escape') { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); }
                     }}
                     placeholder="Ej: Pago julio 2026"
-                    className="w-full border-2 border-green-300 rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-800 focus:outline-none focus:border-green-600"
+                    className="w-full border-2 border-[rgba(0,176,80,.45)] rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-green-600"
                   />
                 </div>
 
@@ -1840,14 +1921,14 @@ function EstadoCuentaInner() {
                 <div className="flex gap-3 pt-1">
                   <button
                     onClick={() => { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); }}
-                    className="flex-1 py-3 rounded-xl font-bold text-sm text-gray-600 bg-gray-100 active:scale-95 transition">
+                    className="flex-1 py-3 rounded-xl font-bold text-sm text-white/70 bg-[#2B3547] active:scale-95 transition">
                     Cancelar
                   </button>
                   <button
                     onClick={confirmarNombreSoporte}
                     disabled={!puedeGuardar}
                     className="flex-1 py-3 rounded-xl font-black text-sm text-white active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ background: '#16a34a' }}>
+                    style={{ background: '#00B050' }}>
                     ✅ Guardar
                   </button>
                 </div>
