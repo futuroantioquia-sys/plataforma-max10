@@ -354,10 +354,20 @@ export default function AsistenciaAtletaPage() {
   const BW   = '1px solid white';
 
   return (
-    <div className="min-h-screen bg-[#f1f5f9]">
+    <div className="min-h-screen bg-[#333F50] pant-oscura">
+
+      {/* La letra de los campos, blanca sobre el gris. Las opciones que abre el
+          navegador sí van oscuras sobre blanco: esa lista la pinta el sistema,
+          no la página. — 27/08/2026 */}
+      <style>{`
+        .pant-oscura input, .pant-oscura select, .pant-oscura textarea { color:#ffffff; }
+        .pant-oscura input::placeholder,
+        .pant-oscura textarea::placeholder { color: rgba(255,255,255,.35); }
+        .pant-oscura option { color:#111827; background:#ffffff; }
+      `}</style>
 
       {/* ── HEADER ── */}
-      <header className="relative bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
+      <header className="relative bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
         <div className="absolute inset-0 pointer-events-none select-none" aria-hidden>
           <svg className="absolute inset-0 w-full h-full opacity-[0.08]" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -460,12 +470,12 @@ export default function AsistenciaAtletaPage() {
         </div>
 
         {/* ── TABS ── */}
-        <div className="flex bg-white rounded-2xl border border-gray-200 p-1 gap-1 shadow-sm">
+        <div className="flex bg-[#3C4759] rounded-2xl border border-[#4A5568] p-1 gap-1 shadow-sm">
           {(['mes','consolidado'] as const).map(v => (
             <button key={v} onClick={() => setVista(v)}
               className={cn(
                 'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-sm transition',
-                vista === v ? 'bg-[#16a34a] text-white shadow-sm' : 'text-gray-400 hover:text-[#16a34a]'
+                vista === v ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white/40 hover:text-[#16a34a]'
               )}>
               {v === 'mes'
                 ? <><Calendar className="w-4 h-4" /> Mes actual</>
@@ -478,22 +488,22 @@ export default function AsistenciaAtletaPage() {
         {vista === 'mes' && (
           <>
             {/* Navegador */}
-            <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-200 px-4 py-3 shadow-sm">
+            <div className="flex items-center justify-between bg-[#3C4759] rounded-2xl border border-[#4A5568] px-4 py-3 shadow-sm">
               <button onClick={() => { if (mes===0){setMes(11);setAnio(a=>a-1);}else setMes(m=>m-1); }}
-                className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition">
-                <ChevronLeft className="w-4 h-4 text-gray-600"/>
+                className="w-8 h-8 rounded-lg bg-[#2B3547] hover:bg-[#2B3547] flex items-center justify-center transition">
+                <ChevronLeft className="w-4 h-4 text-white/70"/>
               </button>
               <div className="text-center">
-                <p className="font-black text-[#111827] text-base">{MESES[mes]} {anio}</p>
+                <p className="font-black text-white text-base">{MESES[mes]} {anio}</p>
                 {resumenMes.total > 0 && (
-                  <p className="text-xs text-gray-400 font-semibold">
+                  <p className="text-xs text-white/40 font-semibold">
                     {resumenMes.asistio} asistencias · {resumenMes.falto} ausencias
                   </p>
                 )}
               </div>
               <button onClick={() => { if (mes===11){setMes(0);setAnio(a=>a+1);}else setMes(m=>m+1); }}
-                className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition">
-                <ChevronRight className="w-4 h-4 text-gray-600"/>
+                className="w-8 h-8 rounded-lg bg-[#2B3547] hover:bg-[#2B3547] flex items-center justify-center transition">
+                <ChevronRight className="w-4 h-4 text-white/70"/>
               </button>
             </div>
 
@@ -501,14 +511,14 @@ export default function AsistenciaAtletaPage() {
             {(() => {
               const diasEnt = diasMes.filter(d => getEstado(d) !== '');
               if (diasEnt.length === 0) return (
-                <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
-                  <Calendar className="w-10 h-10 text-gray-200 mx-auto mb-2"/>
-                  <p className="text-gray-400 text-sm font-semibold">Sin entrenamientos registrados en {MESES[mes]}</p>
+                <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] p-8 text-center">
+                  <Calendar className="w-10 h-10 text-white/40 mx-auto mb-2"/>
+                  <p className="text-white/40 text-sm font-semibold">Sin entrenamientos registrados en {MESES[mes]}</p>
                 </div>
               );
               return (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-                  <p className="font-black text-[#111827] text-xs uppercase tracking-widest mb-3">
+                <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
+                  <p className="font-black text-white text-xs uppercase tracking-widest mb-3">
                     Entrenamientos · {MESES[mes]} {anio}
                   </p>
                   <div className="grid grid-cols-4 gap-2">
@@ -541,9 +551,9 @@ export default function AsistenciaAtletaPage() {
                       ES:'Estudio',FA:'Familia',NQ:'No quizo',CAN:'Cancelado',SE:'Sin empezar',
                     };
                     return (
-                      <div className="flex flex-wrap gap-x-3 gap-y-1.5 justify-center mt-3 pt-3 border-t border-gray-100">
+                      <div className="flex flex-wrap gap-x-3 gap-y-1.5 justify-center mt-3 pt-3 border-t border-[#4A5568]">
                         {presentes.map(e => (
-                          <span key={e} className="flex items-center gap-1 text-[10px] font-semibold text-gray-500">
+                          <span key={e} className="flex items-center gap-1 text-[10px] font-semibold text-white/70">
                             <span className="w-5 h-5 rounded flex items-center justify-center text-white text-[8px] font-black"
                               style={{ background: estadoColor(e) }}>{estadoTexto(e)}</span>
                             {labels[e] ?? e}
@@ -559,15 +569,15 @@ export default function AsistenciaAtletaPage() {
             {/* KPIs */}
             {resumenMes.total > 0 ? (
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-                  <p className="text-green-700 font-black text-2xl">{resumenMes.asistio}</p>
-                  <p className="text-green-600 text-[11px] font-semibold">Asistencias</p>
+                <div className="bg-[rgba(0,176,80,.14)] border border-[rgba(0,176,80,.45)] rounded-xl p-3 text-center">
+                  <p className="text-[#5BE39B] font-black text-2xl">{resumenMes.asistio}</p>
+                  <p className="text-[#5BE39B] text-[11px] font-semibold">Asistencias</p>
                 </div>
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-                  <p className="text-red-600 font-black text-2xl">{resumenMes.falto}</p>
-                  <p className="text-red-500 text-[11px] font-semibold">Ausencias</p>
+                <div className="bg-[rgba(192,80,77,.14)] border border-[rgba(192,80,77,.45)] rounded-xl p-3 text-center">
+                  <p className="text-[#F08A87] font-black text-2xl">{resumenMes.falto}</p>
+                  <p className="text-[#F08A87] text-[11px] font-semibold">Ausencias</p>
                 </div>
-                <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
+                <div className="bg-[rgba(0,176,80,.14)] border border-[rgba(0,176,80,.45)] rounded-xl p-3 text-center">
                   <p className="text-[#16a34a] font-black text-2xl">{resumenMes.pct ?? 0}%</p>
                   <p className="text-[#16a34a] text-[11px] font-semibold">Asistencia</p>
                 </div>
@@ -580,18 +590,18 @@ export default function AsistenciaAtletaPage() {
         {/* ══════════ CONSOLIDADO ══════════ */}
         {vista === 'consolidado' && (
           <>
-            <div className="flex items-center justify-center gap-4 bg-white rounded-2xl border border-gray-200 px-4 py-3 shadow-sm">
-              <button onClick={() => setAnio(a=>a-1)} className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
-                <ChevronLeft className="w-4 h-4 text-gray-600"/>
+            <div className="flex items-center justify-center gap-4 bg-[#3C4759] rounded-2xl border border-[#4A5568] px-4 py-3 shadow-sm">
+              <button onClick={() => setAnio(a=>a-1)} className="w-8 h-8 rounded-lg bg-[#2B3547] hover:bg-[#2B3547] flex items-center justify-center">
+                <ChevronLeft className="w-4 h-4 text-white/70"/>
               </button>
-              <p className="font-black text-[#111827] text-base">{anio}</p>
-              <button onClick={() => setAnio(a=>a+1)} className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center">
-                <ChevronRight className="w-4 h-4 text-gray-600"/>
+              <p className="font-black text-white text-base">{anio}</p>
+              <button onClick={() => setAnio(a=>a+1)} className="w-8 h-8 rounded-lg bg-[#2B3547] hover:bg-[#2B3547] flex items-center justify-center">
+                <ChevronRight className="w-4 h-4 text-white/70"/>
               </button>
             </div>
 
             {/* Tabla */}
-            <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-200">
+            <div className="rounded-2xl overflow-hidden shadow-sm border border-[#4A5568]">
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr>
@@ -643,18 +653,18 @@ export default function AsistenciaAtletaPage() {
             </div>
 
             {/* Barras */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-              <p className="font-black text-[#111827] text-xs uppercase tracking-widest mb-3">% Asistencia por mes</p>
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
+              <p className="font-black text-white text-xs uppercase tracking-widest mb-3">% Asistencia por mes</p>
               <div className="space-y-2">
                 {consolidado.filter(r=>r.total>0).length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center py-4 font-semibold">Sin registros en {anio}</p>
+                  <p className="text-white/40 text-sm text-center py-4 font-semibold">Sin registros en {anio}</p>
                 ) : (
                   consolidado.filter(r=>r.total>0).map(r => {
                     const pct = r.pct ?? 0;
                     return (
                       <div key={r.mes} className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-gray-500 w-8 flex-shrink-0">{r.mes.substring(0,3)}</span>
-                        <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                        <span className="text-[10px] font-black text-white/70 w-8 flex-shrink-0">{r.mes.substring(0,3)}</span>
+                        <div className="flex-1 bg-[#2B3547] rounded-full h-5 overflow-hidden">
                           <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-500"
                             style={{ width:`${pct}%`, background: pct>=80?G:pct>=60?'#ca8a04':'#dc2626' }}>
                             <span className="text-white text-[9px] font-black">{pct}%</span>
@@ -668,27 +678,27 @@ export default function AsistenciaAtletaPage() {
             </div>
 
             {/* ── CERTIFICADO DE ASISTENCIA ── */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-              <p className="font-black text-[#111827] text-xs uppercase tracking-widest mb-3">
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
+              <p className="font-black text-white text-xs uppercase tracking-widest mb-3">
                 Descarga tu certificado de asistencia
               </p>
               <div className="flex gap-3 mb-3">
                 <div className="flex-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Desde</label>
+                  <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">Desde</label>
                   <select
                     value={certDesde}
                     onChange={e => setCertDesde(Number(e.target.value))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
+                    className="w-full border border-[#4A5568] rounded-xl px-3 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
                   >
                     {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
                   </select>
                 </div>
                 <div className="flex-1">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Hasta</label>
+                  <label className="text-[10px] font-bold text-white/70 uppercase tracking-wider block mb-1">Hasta</label>
                   <select
                     value={certHasta}
                     onChange={e => setCertHasta(Number(e.target.value))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
+                    className="w-full border border-[#4A5568] rounded-xl px-3 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
                   >
                     {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
                   </select>

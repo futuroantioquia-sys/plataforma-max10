@@ -135,7 +135,7 @@ export default function ImportarPage() {
   }, [procesarArchivo]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-6 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
         <button onClick={() => router.push('/alumnos')} className="text-white/70 hover:text-white text-sm">← Volver</button>
         <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -159,11 +159,11 @@ export default function ImportarPage() {
             return (
               <div key={label} className="flex items-center gap-2">
                 <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
-                  hecho ? 'bg-[#16a34a] text-white' : activo ? 'bg-[#16a34a] text-white ring-4 ring-green-100' : 'bg-gray-200 text-gray-400')}>
+                  hecho ? 'bg-[#16a34a] text-white' : activo ? 'bg-[#16a34a] text-white ring-4 ring-green-100' : 'bg-[#2B3547] text-white/40')}>
                   {hecho ? '✓' : i + 1}
                 </div>
-                <span className={cn('text-sm', activo ? 'font-semibold text-gray-900' : 'text-gray-400')}>{label}</span>
-                {i < 2 && <ArrowRight className="w-4 h-4 text-gray-200 mx-1" />}
+                <span className={cn('text-sm', activo ? 'font-semibold text-white' : 'text-white/40')}>{label}</span>
+                {i < 2 && <ArrowRight className="w-4 h-4 text-white/40 mx-1" />}
               </div>
             );
           })}
@@ -177,8 +177,8 @@ export default function ImportarPage() {
             onDrop={onDrop}
             onClick={() => document.getElementById('fileInput')?.click()}
             className={cn(
-              'bg-white rounded-2xl border-2 border-dashed p-14 text-center cursor-pointer transition',
-              arrastrando ? 'border-[#16a34a] bg-green-50' : 'border-gray-200 hover:border-[#22c55e]'
+              'bg-[#3C4759] rounded-2xl border-2 border-dashed p-14 text-center cursor-pointer transition',
+              arrastrando ? 'border-[#16a34a] bg-[rgba(0,176,80,.14)]' : 'border-[#4A5568] hover:border-[#22c55e]'
             )}
           >
             <input id="fileInput" type="file" accept=".xlsx,.xls" className="hidden"
@@ -186,14 +186,14 @@ export default function ImportarPage() {
             {procesando ? (
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="w-10 h-10 text-[#16a34a] animate-spin" />
-                <p className="text-gray-500">Leyendo Excel...</p>
+                <p className="text-white/70">Leyendo Excel...</p>
               </div>
             ) : (
               <>
-                <Upload className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-lg font-semibold text-gray-700">Arrastra tu archivo Excel aquí</p>
-                <p className="text-sm text-gray-400 mt-1">o haz clic para seleccionarlo</p>
-                <p className="text-xs text-gray-300 mt-3">.xlsx · .xls</p>
+                <Upload className="w-12 h-12 text-white/40 mx-auto mb-4" />
+                <p className="text-lg font-semibold text-white">Arrastra tu archivo Excel aquí</p>
+                <p className="text-sm text-white/40 mt-1">o haz clic para seleccionarlo</p>
+                <p className="text-xs text-white/40 mt-3">.xlsx · .xls</p>
               </>
             )}
           </div>
@@ -203,30 +203,30 @@ export default function ImportarPage() {
         {paso === 'elegir' && (
           <div className="space-y-5">
             {/* Vista previa del Excel */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
               <div className="px-5 py-3.5 border-b border-gray-50">
-                <p className="font-bold text-gray-800 text-sm">Vista previa — {columnas.length} columnas detectadas</p>
-                <p className="text-xs text-gray-400 mt-0.5">Así llegaron tus datos del Excel</p>
+                <p className="font-bold text-white text-sm">Vista previa — {columnas.length} columnas detectadas</p>
+                <p className="text-xs text-white/40 mt-0.5">Así llegaron tus datos del Excel</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="text-xs w-full">
-                  <thead className="bg-gray-50 sticky top-0">
+                  <thead className="bg-[#333F50] sticky top-0">
                     <tr>
                       {columnas.map(c => (
                         <th key={c} className={cn(
-                          'px-3 py-2.5 text-left font-bold truncate max-w-[140px] border-b border-gray-100',
-                          c === colNombre ? 'text-[#16a34a] bg-green-50' : 'text-gray-500'
+                          'px-3 py-2.5 text-left font-bold truncate max-w-[140px] border-b border-[#4A5568]',
+                          c === colNombre ? 'text-[#16a34a] bg-[rgba(0,176,80,.14)]' : 'text-white/70'
                         )}>{c}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {muestra.map((fila, i) => (
-                      <tr key={i} className="border-t border-gray-50 hover:bg-gray-50/50">
+                      <tr key={i} className="border-t border-gray-50 hover:bg-[#333F50]/50">
                         {columnas.map(c => (
                           <td key={c} className={cn(
                             'px-3 py-2 truncate max-w-[140px]',
-                            c === colNombre ? 'text-[#16a34a] font-semibold bg-green-50/50' : 'text-gray-600'
+                            c === colNombre ? 'text-[#16a34a] font-semibold bg-[rgba(0,176,80,.14)]/50' : 'text-white/70'
                           )}>{String(fila[c] ?? '')}</td>
                         ))}
                       </tr>
@@ -237,18 +237,18 @@ export default function ImportarPage() {
             </div>
 
             {/* Solo pregunta: cuál columna es el nombre */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <p className="font-bold text-gray-800 mb-1">¿Cuál columna tiene el nombre del deportista?</p>
-              <p className="text-sm text-gray-400 mb-4">Esta columna se usará para identificar a cada deportista en la plataforma. Todas las demás columnas se guardan automáticamente.</p>
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-5">
+              <p className="font-bold text-white mb-1">¿Cuál columna tiene el nombre del deportista?</p>
+              <p className="text-sm text-white/40 mb-4">Esta columna se usará para identificar a cada deportista en la plataforma. Todas las demás columnas se guardan automáticamente.</p>
               <select
                 value={colNombre}
                 onChange={e => setColNombre(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                className="w-full border border-[#4A5568] rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
               >
                 {columnas.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               {colNombre && muestra[0] && (
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-white/40 mt-2">
                   Ejemplo: <span className="font-bold text-[#16a34a]">{String(muestra[0][colNombre] ?? '')}</span>
                 </p>
               )}
@@ -266,12 +266,12 @@ export default function ImportarPage() {
         {/* ── PASO 3: Confirmación ── */}
         {paso === 'confirmar' && resultado && (
           <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-6 text-center">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
-              <h2 className="text-xl font-black text-gray-900">¡Importación exitosa!</h2>
-              <p className="text-gray-500 mt-1">
+              <h2 className="text-xl font-black text-white">¡Importación exitosa!</h2>
+              <p className="text-white/70 mt-1">
                 <span className="text-3xl font-black text-[#16a34a]">{resultado.total}</span> deportistas cargados con todas sus columnas
               </p>
               {resultado.errores > 0 && (

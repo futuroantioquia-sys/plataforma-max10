@@ -228,15 +228,15 @@ export default function ControlInformesPage() {
 
   const th: React.CSSProperties = { background: '#6d28d9', color: '#fff', border: '1px solid #fff', padding: '9px 10px', fontSize: 11, fontWeight: 900, letterSpacing: '0.03em', textAlign: 'left', whiteSpace: 'nowrap' };
   const td: React.CSSProperties = { border: '1px solid #ede9fe', padding: '7px 10px', fontSize: 13, color: '#111827', whiteSpace: 'nowrap' };
-  const selCls = 'w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-400';
+  const selCls = 'w-full text-sm border border-[#4A5568] rounded-xl px-3 py-2 bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-purple-400';
 
   function chipInf(val: string) {
-    if (val) return <span className="inline-block bg-green-100 text-green-800 border border-green-200 text-[11px] font-black px-2 py-0.5 rounded-md">✓ {val}</span>;
-    return <span className="inline-block text-gray-300 text-[13px] font-black">—</span>;
+    if (val) return <span className="inline-block bg-green-100 text-green-800 border border-[rgba(0,176,80,.45)] text-[11px] font-black px-2 py-0.5 rounded-md">✓ {val}</span>;
+    return <span className="inline-block text-white/40 text-[13px] font-black">—</span>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
       <header className="bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => { window.location.href = '/dashboard'; }} title="Volver al menú principal" className="text-white/80 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <ClipboardList className="w-6 h-6 text-white" />
@@ -250,31 +250,31 @@ export default function ControlInformesPage() {
 
       <main className="max-w-6xl mx-auto px-3 py-4 space-y-4">
         {/* Filtros */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Programa</label>
+              <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Programa</label>
               <select value={fPrograma} onChange={e => setFPrograma(e.target.value)} className={selCls}>
                 <option value="">Todos</option>
                 {programas.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Proyecto</label>
+              <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Proyecto</label>
               <select value={fProyecto} onChange={e => setFProyecto(e.target.value)} className={selCls}>
                 <option value="">Todos</option>
                 {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Formador (profe)</label>
+              <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Formador (profe)</label>
               <select value={fProfe} onChange={e => setFProfe(e.target.value)} className={selCls}>
                 <option value="">Todos</option>
                 {formadores.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Estado</label>
+              <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Estado</label>
               <select value={fEstado} onChange={e => setFEstado(e.target.value)} className={selCls}>
                 <option value="">Todos</option>
                 <option value="con">Con informe</option>
@@ -284,12 +284,12 @@ export default function ControlInformesPage() {
           </div>
           <div className="flex items-center gap-2 mt-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por código o nombre…"
-                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                className="w-full pl-9 pr-3 py-2 border border-[#4A5568] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
             </div>
             {hayFiltro && (
-              <button onClick={limpiar} className="flex items-center gap-1 text-[12px] font-bold text-gray-500 hover:text-gray-800 border border-gray-200 rounded-xl px-3 py-2">
+              <button onClick={limpiar} className="flex items-center gap-1 text-[12px] font-bold text-white/70 hover:text-white border border-[#4A5568] rounded-xl px-3 py-2">
                 <X className="w-3.5 h-3.5" /> Limpiar
               </button>
             )}
@@ -299,24 +299,24 @@ export default function ControlInformesPage() {
         {/* Resumen */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { n: totDeport,    l: 'Activos',       c: 'text-gray-900' },
-            { n: conInforme,   l: 'Con informe',   c: 'text-green-700' },
-            { n: sinInforme,   l: 'Sin informe',   c: 'text-red-600' },
+            { n: totDeport,    l: 'Activos',       c: 'text-white' },
+            { n: conInforme,   l: 'Con informe',   c: 'text-[#5BE39B]' },
+            { n: sinInforme,   l: 'Sin informe',   c: 'text-[#F08A87]' },
             { n: totInformes,  l: 'Total informes', c: 'text-purple-700' },
           ].map(s => (
-            <div key={s.l} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 text-center">
+            <div key={s.l} className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-3 text-center">
               <p className={`font-black text-2xl leading-none ${s.c}`}>{s.n}</p>
-              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wide mt-1">{s.l}</p>
+              <p className="text-white/40 text-[10px] font-bold uppercase tracking-wide mt-1">{s.l}</p>
             </div>
           ))}
         </div>
 
         {/* Tabla */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
           {cargando ? (
-            <p className="text-center text-gray-400 text-sm py-12">Cargando informes…</p>
+            <p className="text-center text-white/40 text-sm py-12">Cargando informes…</p>
           ) : filtradas.length === 0 ? (
-            <p className="text-center text-gray-400 text-sm py-12">No hay deportistas activos para estos filtros.</p>
+            <p className="text-center text-white/40 text-sm py-12">No hay deportistas activos para estos filtros.</p>
           ) : (
             <div className="overflow-x-auto">
               <table style={{ borderCollapse: 'collapse', width: '100%' }}>
@@ -337,24 +337,24 @@ export default function ControlInformesPage() {
                 <tbody>
                   {filtradas.map(f => (
                     <tr key={f.id} className="hover:bg-purple-50/50">
-                      <td style={td}><span className="inline-block bg-green-100 text-green-800 border border-green-200 text-[11px] font-black px-2 py-0.5 rounded-md">{f.estado || 'Activo'}</span></td>
+                      <td style={td}><span className="inline-block bg-green-100 text-green-800 border border-[rgba(0,176,80,.45)] text-[11px] font-black px-2 py-0.5 rounded-md">{f.estado || 'Activo'}</span></td>
                       <td style={td}><span className="bg-purple-600 text-white text-[11px] font-black px-2 py-0.5 rounded-md">{f.codigo || '—'}</span></td>
                       <td style={{ ...td, whiteSpace: 'normal', minWidth: 180 }}>
-                        <button onClick={() => router.push(`/alumnos/${f.id}?volver=${encodeURIComponent(urlRegreso())}`)} className="font-bold text-gray-900 hover:text-purple-700 text-left">{f.nombre}</button>
+                        <button onClick={() => router.push(`/alumnos/${f.id}?volver=${encodeURIComponent(urlRegreso())}`)} className="font-bold text-white hover:text-purple-700 text-left">{f.nombre}</button>
                       </td>
                       <td style={td}>{f.programa || '—'}</td>
                       <td style={td}>{f.proyecto || '—'}</td>
-                      <td style={{ ...td, whiteSpace: 'normal' }}>{f.profe || <span className="text-gray-300">sin asignar</span>}</td>
+                      <td style={{ ...td, whiteSpace: 'normal' }}>{f.profe || <span className="text-white/40">sin asignar</span>}</td>
                       <td style={{ ...td, textAlign: 'center' }}>{chipInf(f.inf1)}</td>
                       <td style={{ ...td, textAlign: 'center' }}>{chipInf(f.inf2)}</td>
                       <td style={{ ...td, textAlign: 'center' }}>
-                        <span className={`inline-block min-w-[28px] text-[12px] font-black px-2 py-0.5 rounded-md ${f.total > 0 ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-400'}`}>{f.total}</span>
+                        <span className={`inline-block min-w-[28px] text-[12px] font-black px-2 py-0.5 rounded-md ${f.total > 0 ? 'bg-purple-100 text-purple-800' : 'bg-[#2B3547] text-white/40'}`}>{f.total}</span>
                       </td>
                       <td style={{ ...td, textAlign: 'center' }}>
                         {f.total > 0 ? (
                           <button onClick={() => router.push(`/valoracion-dinamica?cod=${encodeURIComponent(f.codigo)}&volver=${encodeURIComponent(urlRegreso())}`)}
                             className="bg-green-600 hover:bg-green-700 text-white text-[11px] font-black px-2.5 py-1 rounded-lg">📊 Ver</button>
-                        ) : <span className="text-gray-300 text-[13px]">—</span>}
+                        ) : <span className="text-white/40 text-[13px]">—</span>}
                       </td>
                     </tr>
                   ))}

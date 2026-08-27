@@ -212,6 +212,9 @@ function EstadoCuentaInner() {
   const [anio,     setAnio]    = useState(new Date().getFullYear());
   const [confirmRevert, setConfirmRevert] = useState<number | null>(null);
   const [malDescModal,  setMalDescModal]  = useState<number | null>(null); // modal mal descuento (validar/revertir)
+  /* Cuánto hay que acercar la foto. Lo decide la propia foto al cargarse
+     (ver el onLoad de la imagen). 1 = no se toca. */
+  const [fotoZoom, setFotoZoom] = useState(1);
   const [editMens,      setEditMens]      = useState(false);   // editando la mensualidad del encabezado
   const [mensInput,     setMensInput]     = useState('');
   const [guardandoMens, setGuardandoMens] = useState(false);
@@ -607,9 +610,14 @@ function EstadoCuentaInner() {
 
   /* ─── Canales de comunicación del calidoso ─── */
   const CANALES_MSG: (CanalMsg & { emoji: string; desc: string; boton: string })[] = [
-    { titulo: 'Área de Pagos', boton: 'Escríbele al Área de Pagos',    para: 'institucion', prefijo: 'ACLARACIÓN PAGOS',   color: '#7c3aed', emoji: '💬',   desc: 'Duda, solicitud o reclamo sobre pagos.' },
-    { titulo: 'Formador',      boton: 'Escríbele al Formador de tu hijo', para: 'profesor', prefijo: 'MENSAJE AL FORMADOR', color: '#0f766e', emoji: '👨‍🏫', desc: 'Escríbele al entrenador del deportista.' },
-    { titulo: 'Director',      boton: 'Escríbele al Director',         para: 'institucion', prefijo: 'MENSAJE AL DIRECTOR', color: '#1e3a8a', emoji: '🎓',   desc: 'Comunícate con la dirección.' },
+    /* LOS TRES VAN DEL MISMO COLOR (dirección, 27/08/2026): son un grupo —
+       "escríbele a alguien"— y antes cada uno llevaba un color distinto
+       (morado, verde azulado, azul) que no era de la paleta y no significaba
+       nada. Van en el gris más claro; lo que los distingue es el dibujito y
+       el texto, que es lo que la persona de verdad lee. */
+    { titulo: 'Área de Pagos', boton: 'Escríbele al Área de Pagos',    para: 'institucion', prefijo: 'ACLARACIÓN PAGOS',   color: '#4A5568', emoji: '💬',   desc: 'Duda, solicitud o reclamo sobre pagos.' },
+    { titulo: 'Formador',      boton: 'Escríbele al Formador de tu hijo', para: 'profesor', prefijo: 'MENSAJE AL FORMADOR', color: '#4A5568', emoji: '👨‍🏫', desc: 'Escríbele al entrenador del deportista.' },
+    { titulo: 'Director',      boton: 'Escríbele al Director',         para: 'institucion', prefijo: 'MENSAJE AL DIRECTOR', color: '#4A5568', emoji: '🎓',   desc: 'Comunícate con la dirección.' },
   ];
 
   /* ─── Enviar mensaje al canal elegido (queda en la plataforma) ─── */
@@ -858,8 +866,34 @@ function EstadoCuentaInner() {
               <div className="w-[112px] h-[140px] sm:w-[144px] sm:h-[180px] rounded-xl overflow-hidden bg-[#2B3547] border border-[#4A5568] flex flex-col items-center justify-center">
                 {foto
                   ? <img src={foto} alt=""
+                      onLoad={e => {
+                        /* AQUI SE MIDE LA FOTO DE VERDAD (dirección, 27/08/2026).
+                           El problema que se veía: si la foto original es
+                           APAISADA (más ancha que alta), el recuadro la muestra
+                           completa de arriba a abajo —cielo, niño chiquito y
+                           pasto— y mover el recorte vertical no hace NADA,
+                           porque no sobra nada por arriba ni por abajo: sobra
+                           por los LADOS. Por eso los dos intentos anteriores
+                           fallaron; el número no era el problema.
+
+                           Entonces, ya con la foto cargada, se mira su forma y
+                           SOLO a las apaisadas se les acerca lo justo para que
+                           llenen por ancho: ahí sí sobra por arriba y por abajo
+                           y el recorte vuelve a servir. A las verticales no se
+                           les toca nada. */
+                        const im = e.currentTarget;
+                        const forma = im.naturalWidth / Math.max(1, im.naturalHeight);
+                        const cajaForma = 4 / 5;
+                        setFotoZoom(forma > cajaForma
+                          ? Math.min(2, Math.max(1, (forma / cajaForma) * 0.75))
+                          : 1);
+                      }}
                       className="w-full h-full object-cover"
-                      style={{ objectPosition: '50% 8%' }} />
+                      style={{
+                        objectPosition: '50% 22%',
+                        transform: fotoZoom > 1 ? `scale(${fotoZoom})` : undefined,
+                        transformOrigin: '50% 22%',
+                      }} />
                   : <>
                       <span className="text-white font-black text-3xl select-none">{initials}</span>
                       <Camera className="w-4 h-4 text-white/40 mt-1"/>
@@ -1363,14 +1397,14 @@ function EstadoCuentaInner() {
             />
             <button
               onClick={() => soporteInputRef.current?.click()}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm text-white transition active:scale-95"
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black text-sm text-white transition active:scale-95"
               style={{ background: '#00B050' }}>
               📎 Subir soporte
             </button>
             <button
               onClick={() => setVerSoportes(true)}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm text-white transition active:scale-95"
-              style={{ background: '#1e3a8a' }}>
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black text-sm text-white transition active:scale-95 border"
+              style={{ background: '#2B3547', borderColor: '#4A5568' }}>
               🖼️ Ver soportes{soportes.length > 0 ? ` (${soportes.length})` : ''}
             </button>
           </div>
@@ -1386,7 +1420,7 @@ function EstadoCuentaInner() {
               {CANALES_MSG.map(c => (
                 <button key={c.titulo}
                   onClick={() => { setMsgDestino(c); setPagosMsgOk(false); setPagosMsgTexto(''); setPagosMsgWa(''); }}
-                  className="w-full text-left flex items-center gap-3 py-3 px-4 rounded-2xl font-bold text-sm text-white transition active:scale-95"
+                  className="w-full text-left flex items-center gap-3 py-3 px-4 rounded-xl font-bold text-sm text-white transition active:scale-95 border border-[#5A6478]"
                   style={{ background: c.color }}>
                   <span className="text-lg leading-none">{c.emoji}</span>
                   <span className="flex-1">
@@ -1403,11 +1437,11 @@ function EstadoCuentaInner() {
         {/* ── FACTURACIÓN: cuadro aparte, al final (solo calidoso) ── */}
         {esDeportista && !esReadonly && (
           <div className="pb-8">
-            <div className="rounded-2xl border-2 border-dashed border-[#0f766e]/50 bg-[rgba(0,176,80,.12)] p-4 text-center">
-              <p className="text-[13px] font-black text-[#0f766e] mb-3">De requerir Factura, solicítala ahora</p>
+            <div className="rounded-2xl border-2 border-dashed border-[rgba(0,176,80,.5)] bg-[rgba(0,176,80,.10)] p-4 text-center">
+              <p className="text-[13px] font-black text-[#5BE39B] mb-3">De requerir Factura, solicítala ahora</p>
               <button type="button" onClick={() => router.push(`/alumnos/${id}/factura`)}
                 className="w-full rounded-xl py-3 text-sm font-black text-white transition active:scale-95 flex items-center justify-center gap-2"
-                style={{ background: '#0f766e' }}>
+                style={{ background: '#00B050' }}>
                 🧾 Solicitar factura
               </button>
             </div>

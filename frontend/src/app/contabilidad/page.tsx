@@ -318,9 +318,9 @@ const PASTEL_SEM: Record<string, { bg: string; borde: string }> = {
 };
 
 const COLOR_SEM: Record<string, { et: string; cls: string; act: string }> = {
-  verde:    { et: 'Verde',    cls: 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100',       act: 'bg-green-600 text-white border-green-600' },
-  amarillo: { et: 'Amarillo', cls: 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100',       act: 'bg-amber-500 text-white border-amber-500' },
-  rojo:     { et: 'Rojo',     cls: 'text-red-700 bg-red-50 border-red-200 hover:bg-red-100',               act: 'bg-red-600 text-white border-red-600' },
+  verde:    { et: 'Verde',    cls: 'text-[#5BE39B] bg-[rgba(0,176,80,.14)] border-[rgba(0,176,80,.45)] hover:bg-green-100',       act: 'bg-green-600 text-white border-green-600' },
+  amarillo: { et: 'Amarillo', cls: 'text-[#E0A33A] bg-[rgba(224,163,58,.14)] border-amber-200 hover:bg-amber-100',       act: 'bg-amber-500 text-white border-amber-500' },
+  rojo:     { et: 'Rojo',     cls: 'text-[#F08A87] bg-[rgba(192,80,77,.14)] border-[rgba(192,80,77,.45)] hover:bg-[rgba(192,80,77,.20)]',               act: 'bg-red-600 text-white border-red-600' },
   morado:   { et: 'Morado',   cls: 'text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100',   act: 'bg-purple-600 text-white border-purple-600' },
 };
 
@@ -1889,7 +1889,7 @@ export default function ContabilidadPage() {
   const dup = revision.filter(r => r.id === '__DUP__').length;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
       <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/dashboard')} className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition">
@@ -1913,9 +1913,9 @@ export default function ContabilidadPage() {
 
       {/* Barra de cambios pendientes del libro: nada se graba hasta pulsar "Guardar ahora" */}
       {vista === 'libro' && dirtyIds.size > 0 && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 sm:gap-3 bg-white border-2 border-[#16a34a] shadow-2xl rounded-full pl-4 pr-2 py-2">
-          <span className="text-sm font-black text-gray-800">{dirtyIds.size} cambio(s) sin guardar</span>
-          <button onClick={descartarCambiosLibro} disabled={guardandoCambios} className="text-xs font-bold text-gray-500 hover:text-gray-800 px-2 py-1.5 disabled:opacity-60">Descartar</button>
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 sm:gap-3 bg-[#3C4759] border-2 border-[#16a34a] shadow-2xl rounded-full pl-4 pr-2 py-2">
+          <span className="text-sm font-black text-white">{dirtyIds.size} cambio(s) sin guardar</span>
+          <button onClick={descartarCambiosLibro} disabled={guardandoCambios} className="text-xs font-bold text-white/70 hover:text-white px-2 py-1.5 disabled:opacity-60">Descartar</button>
           <button onClick={guardarCambiosLibro} disabled={guardandoCambios} className="flex items-center gap-1.5 bg-[#16a34a] text-white text-sm font-black px-4 py-2 rounded-full hover:bg-[#064e1e] transition disabled:opacity-60">
             <Save className="w-4 h-4" /> {guardandoCambios ? 'Guardando…' : 'Guardar ahora'}
           </button>
@@ -1925,7 +1925,7 @@ export default function ContabilidadPage() {
       {/* Estado de cuenta EN VENTANA sobre el libro — al cerrar, sigues en la misma fila */}
       {estadoCuentaUrl && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-1 sm:p-3">
-          <div className="bg-white rounded-2xl shadow-2xl w-full h-full max-w-5xl flex flex-col overflow-hidden">
+          <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full h-full max-w-5xl flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-2 bg-[#064e1e] text-white flex-shrink-0">
               <span className="font-black text-sm">Estado de cuenta del deportista</span>
               <div className="flex items-center gap-2">
@@ -1944,10 +1944,10 @@ export default function ContabilidadPage() {
       <main className={`${vista === 'libro' ? 'max-w-none' : 'max-w-6xl'} mx-auto px-3 sm:px-6 py-5 space-y-4`}>
 
         {/* Controles */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-end gap-3">
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4 flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Cuenta bancaria</label>
-            <select value={banco} onChange={e => setBanco(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+            <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Cuenta bancaria</label>
+            <select value={banco} onChange={e => setBanco(e.target.value)} className="border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 bg-[#3C4759]">
               {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
@@ -1955,19 +1955,19 @@ export default function ContabilidadPage() {
             <Upload className="w-4 h-4" /> {cargando ? 'Leyendo…' : 'Subir extracto'}
             <input type="file" accept=".xlsx,.xls" className="hidden" onChange={onArchivo} disabled={cargando} />
           </label>
-          <div className="ml-auto flex items-center gap-1.5 bg-gray-100 rounded-xl p-1">
+          <div className="ml-auto flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
             {([['subir', 'Movimientos'], ['libro', 'Libro'], ['desconocidas', 'Por asignar'], ['cuentas', 'Cuentas']] as const).map(([v, l]) => (
               <button key={v} onClick={() => setVista(v)}
-                className={`text-sm font-black px-3 py-1.5 rounded-lg transition ${vista === v ? 'bg-[#16a34a] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'}`}>{l}</button>
+                className={`text-sm font-black px-3 py-1.5 rounded-lg transition ${vista === v ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white/70 hover:bg-[#2B3547]'}`}>{l}</button>
             ))}
           </div>
           {mapeoCount < 100 && (
-            <button onClick={sembrar} disabled={sembrando} className="flex items-center gap-1.5 border border-amber-300 text-amber-700 bg-amber-50 text-xs font-black px-3 py-2 rounded-xl hover:bg-amber-100 transition disabled:opacity-60">
+            <button onClick={sembrar} disabled={sembrando} className="flex items-center gap-1.5 border border-amber-300 text-[#E0A33A] bg-[rgba(224,163,58,.14)] text-xs font-black px-3 py-2 rounded-xl hover:bg-amber-100 transition disabled:opacity-60">
               <Database className="w-4 h-4" /> {sembrando ? progreso || 'Sembrando…' : 'Sembrar diccionario'}
             </button>
           )}
           {movCount === 0 && (
-            <button onClick={importarHist} disabled={importando} className="flex items-center gap-1.5 border border-blue-300 text-blue-700 bg-blue-50 text-xs font-black px-3 py-2 rounded-xl hover:bg-blue-100 transition disabled:opacity-60">
+            <button onClick={importarHist} disabled={importando} className="flex items-center gap-1.5 border border-blue-300 text-[#8FBEF0] bg-[rgba(78,143,214,.14)] text-xs font-black px-3 py-2 rounded-xl hover:bg-blue-100 transition disabled:opacity-60">
               <BookOpen className="w-4 h-4" /> {importando ? progreso || 'Importando…' : 'Importar histórico'}
             </button>
           )}
@@ -1977,30 +1977,30 @@ export default function ContabilidadPage() {
         {vista === 'subir' && (
           revision.length === 0 ? (
             cargando ? (
-              <div className="bg-white rounded-2xl border-2 border-dashed border-green-200 p-12 text-center">
-                <div className="w-10 h-10 border-4 border-green-200 border-t-[#16a34a] rounded-full animate-spin mx-auto mb-3" />
+              <div className="bg-[#3C4759] rounded-2xl border-2 border-dashed border-[rgba(0,176,80,.45)] p-12 text-center">
+                <div className="w-10 h-10 border-4 border-[rgba(0,176,80,.45)] border-t-[#16a34a] rounded-full animate-spin mx-auto mb-3" />
                 <p className="text-[#16a34a] font-black">Leyendo el archivo, un momento…</p>
-                <p className="text-gray-400 text-sm mt-1">Separando débito/crédito y cruzando cada pago con su deportista.</p>
+                <p className="text-white/40 text-sm mt-1">Separando débito/crédito y cruzando cada pago con su deportista.</p>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center">
-                <Calculator className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                <p className="text-gray-500 font-bold">Sube el Excel del banco para empezar</p>
-                <p className="text-gray-400 text-sm mt-1">El sistema separa débito/crédito, cruza cada pago con el deportista y arma el libro.</p>
+              <div className="bg-[#3C4759] rounded-2xl border-2 border-dashed border-[#4A5568] p-12 text-center">
+                <Calculator className="w-12 h-12 text-white/40 mx-auto mb-3" />
+                <p className="text-white/70 font-bold">Sube el Excel del banco para empezar</p>
+                <p className="text-white/40 text-sm mt-1">El sistema separa débito/crédito, cruza cada pago con el deportista y arma el libro.</p>
               </div>
             )
           ) : (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[['Movimientos', totRev, '#374151'], ['Automáticos', autom, '#16a34a'], ['Por revisar', pend, '#f97316'], ['Ya existían', dup, '#6b7280']].map(([l, v, c]) => (
-                  <div key={l as string} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 text-center">
+                  <div key={l as string} className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-3 text-center">
                     <p className="text-2xl font-black" style={{ color: c as string }}>{v as number}</p>
-                    <p className="text-xs text-gray-400 font-medium">{l as string}</p>
+                    <p className="text-xs text-white/40 font-medium">{l as string}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
                 <div className="overflow-x-auto" style={{ maxHeight: '62vh' }}>
                   <table className="w-full border-collapse text-xs" style={{ minWidth: 920 }}>
                     <thead>
@@ -2030,20 +2030,20 @@ export default function ContabilidadPage() {
 
         {/* ── Vista LIBRO ── */}
         {vista === 'libro' && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-100">
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
+            <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#4A5568]">
               {/* Selector de cuenta: TODAS pega las tres cuentas */}
-              <div className="flex items-center gap-1.5 bg-gray-100 rounded-xl p-1">
+              <div className="flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
                 {['TODAS', ...BANCOS].map(b => (
                   <button key={b} onClick={() => setLibroBanco(b)}
-                    className={`text-xs font-black px-2.5 py-1.5 rounded-lg transition ${libroBanco === b ? 'bg-[#16a34a] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'}`}>
+                    className={`text-xs font-black px-2.5 py-1.5 rounded-lg transition ${libroBanco === b ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white/70 hover:bg-[#2B3547]'}`}>
                     {b === 'TODAS' ? 'Todas las cuentas' : b.replace('Bancolombia ', '')}
                   </button>
                 ))}
               </div>
-              <p className="font-black text-gray-700 text-sm">
+              <p className="font-black text-white text-sm">
                 {hayFiltro || soloEgresoSinConc || soloIngresoSinConc || soloSinDetalle || soloSospechosas
-                  ? <>{libroFiltrado.length.toLocaleString('es-CO')} <span className="text-gray-400 font-semibold">de {libro.length.toLocaleString('es-CO')}</span></>
+                  ? <>{libroFiltrado.length.toLocaleString('es-CO')} <span className="text-white/40 font-semibold">de {libro.length.toLocaleString('es-CO')}</span></>
                   : <>{libro.length.toLocaleString('es-CO')}</>} movimientos
               </p>
               {/* Trabajo pendiente por clasificar, separado por lado.
@@ -2052,12 +2052,12 @@ export default function ContabilidadPage() {
                   Se pueden prender los dos a la vez: ahí salen todas las filas sin concepto. */}
               <button onClick={() => setSoloEgresoSinConc(v => !v)}
                 title="EGRESOS sin clasificar: filas con DÉBITO (plata que salió) a las que todavía les falta el CONCEPTO"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloEgresoSinConc ? 'bg-red-600 text-white border-red-600' : 'text-red-700 bg-red-50 border-red-200 hover:bg-red-100'}`}>
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloEgresoSinConc ? 'bg-red-600 text-white border-red-600' : 'text-[#F08A87] bg-[rgba(192,80,77,.14)] border-[rgba(192,80,77,.45)] hover:bg-[rgba(192,80,77,.20)]'}`}>
                 {soloEgresoSinConc ? '✓ ' : '↑ '}Egresos sin concepto ({egresoSinConcCount.toLocaleString('es-CO')})
               </button>
               <button onClick={() => setSoloIngresoSinConc(v => !v)}
                 title="INGRESOS sin clasificar: filas con CRÉDITO (plata que entró) a las que todavía les falta el CONCEPTO"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloIngresoSinConc ? 'bg-emerald-600 text-white border-emerald-600' : 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'}`}>
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloIngresoSinConc ? 'bg-emerald-600 text-white border-emerald-600' : 'text-[#5BE39B] bg-emerald-50 border-emerald-200 hover:bg-emerald-100'}`}>
                 {soloIngresoSinConc ? '✓ ' : '↓ '}Ingresos sin concepto ({ingresoSinConcCount.toLocaleString('es-CO')})
               </button>
               <button onClick={() => setSoloSinDetalle(v => !v)}
@@ -2068,7 +2068,7 @@ export default function ContabilidadPage() {
               {numProblemas > 0 && (
                 <button onClick={() => setSoloSospechosas(v => !v)}
                   title="Filas en ROJO por revisar: codigo que no corresponde a ningun deportista, o pagos del mismo mes que suman mas que la mensualidad. No se publican hasta que usted las confirme."
-                  className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSospechosas ? 'bg-red-600 text-white border-red-600' : 'text-red-700 bg-red-50 border-red-200 hover:bg-red-100'}`}>
+                  className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSospechosas ? 'bg-red-600 text-white border-red-600' : 'text-[#F08A87] bg-[rgba(192,80,77,.14)] border-[rgba(192,80,77,.45)] hover:bg-[rgba(192,80,77,.20)]'}`}>
                   {soloSospechosas ? '✓ ' : '⚠ '}Sospechosas ({numProblemas.toLocaleString('es-CO')})
                 </button>
               )}
@@ -2091,12 +2091,12 @@ export default function ContabilidadPage() {
                   Los cuatro contadores de color (verde/amarillo/rojo/morado) se
                   quitaron el 20/08/2026 por pedido de la dirección. El color se
                   sigue viendo en la celda del mes de cada fila. */}
-              <span className="w-px h-6 bg-gray-200 mx-1" />
+              <span className="w-px h-6 bg-[#2B3547] mx-1" />
               {/* Confirmados: ya publicados en el estado de cuenta. Pierden el color
                   del semaforo; aqui se pueden volver a ver cuando se necesiten. */}
               <button onClick={() => setFilChulo(v => (v === 'verde' ? 'todos' : 'verde'))}
                 title="Pagos ya confirmados en el estado de cuenta. Se les apaga el color del semaforo."
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${filChulo === 'verde' ? 'bg-gray-700 text-white border-gray-700' : 'text-gray-600 bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${filChulo === 'verde' ? 'bg-gray-700 text-white border-gray-700' : 'text-white/70 bg-[#333F50] border-[#4A5568] hover:bg-[#2B3547]'}`}>
                 {filChulo === 'verde' ? '✓ ' : ''}Confirmados ({confirmadosCount.toLocaleString('es-CO')})
               </button>
               <button onClick={confirmarVerdes} disabled={publicandoVerdes || !verdesPendientes.length}
@@ -2109,10 +2109,10 @@ export default function ContabilidadPage() {
                 className="flex items-center gap-1.5 text-sm font-black text-white bg-indigo-600 border border-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50">
                 🎓 {publicandoMatr ? 'Confirmando…' : `Confirmar ${matriculasPendientes.length.toLocaleString('es-CO')} matrículas`}
               </button>
-              <span className="w-px h-6 bg-gray-200 mx-1" />
+              <span className="w-px h-6 bg-[#2B3547] mx-1" />
               {(hayFiltro || soloEgresoSinConc || soloIngresoSinConc || soloSinDetalle || soloSospechosas) && (
                 <button onClick={() => { setFil(filVacio); setSoloEgresoSinConc(false); setSoloIngresoSinConc(false); setSoloSinDetalle(false); setSoloSospechosas(false); }}
-                  className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition">
+                  className="flex items-center gap-1 text-xs font-bold text-white/70 hover:text-white border border-[#4A5568] rounded-lg px-2 py-1.5 hover:bg-[#333F50] transition">
                   <X className="w-3.5 h-3.5" /> Limpiar filtros
                 </button>
               )}
@@ -2120,15 +2120,15 @@ export default function ContabilidadPage() {
                   TODOS los movimientos de TODAS las cuentas de un solo golpe, sin
                   respetar el semaforo. Ahora se publica con "Confirmar verdes",
                   "Confirmar matriculas" o el chulo de cada fila. */}
-              <button onClick={() => setPanelCols(v => !v)} className={`ml-auto flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${panelCols ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-100'}`}>
+              <button onClick={() => setPanelCols(v => !v)} className={`ml-auto flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${panelCols ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'text-white/70 bg-[#3C4759] border-[#4A5568] hover:bg-[#2B3547]'}`}>
                 ⚙ Columnas
               </button>
-              <button onClick={exportarLibro} disabled={!libroFiltrado.length} className="flex items-center gap-1.5 text-sm font-black text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 transition disabled:opacity-50">
+              <button onClick={exportarLibro} disabled={!libroFiltrado.length} className="flex items-center gap-1.5 text-sm font-black text-[#5BE39B] bg-[rgba(0,176,80,.14)] border border-[rgba(0,176,80,.45)] px-3 py-1.5 rounded-lg hover:bg-green-100 transition disabled:opacity-50">
                 <Download className="w-4 h-4" /> Exportar Excel
               </button>
               <button onClick={eliminarFilasPorNumero} disabled={borrandoFilas}
                 title="Eliminar filas basura del libro escribiendo su N° (la columna gris de la izquierda)"
-                className="flex items-center gap-1.5 text-sm font-black text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition disabled:opacity-50">
+                className="flex items-center gap-1.5 text-sm font-black text-[#F08A87] bg-[rgba(192,80,77,.14)] border border-[rgba(192,80,77,.45)] px-3 py-1.5 rounded-lg hover:bg-[rgba(192,80,77,.20)] transition disabled:opacity-50">
                 <Trash2 className="w-4 h-4" /> {borrandoFilas ? 'Eliminando…' : 'Eliminar filas'}
               </button>
               <button onClick={abrirNuevaFila} title="Agregar un movimiento manualmente al libro (no vino del Excel del banco)"
@@ -2139,24 +2139,24 @@ export default function ContabilidadPage() {
 
             {/* Panel para ajustar el ancho de columnas con − / + (sin arrastrar) */}
             {panelCols && (
-              <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <div className="px-4 py-3 border-b border-[#4A5568] bg-[#333F50]">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-black text-gray-600">Ajustar ancho de columnas</p>
-                  <button onClick={resetTodasCols} className="text-[11px] font-black text-gray-600 bg-white border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-100 transition">Restablecer todo</button>
+                  <p className="text-xs font-black text-white/70">Ajustar ancho de columnas</p>
+                  <button onClick={resetTodasCols} className="text-[11px] font-black text-white/70 bg-[#3C4759] border border-[#4A5568] px-2.5 py-1 rounded-lg hover:bg-[#2B3547] transition">Restablecer todo</button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {colsVis.filter(c => c.label).map(c => (
-                    <div key={c.key} className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1">
-                      <span className="text-[11px] font-bold text-gray-600 mr-1">{c.label}</span>
-                      <button onClick={() => pasoCol(c.key, -20)} className="w-6 h-6 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-black">−</button>
-                      <span className="text-[11px] text-gray-400 w-8 text-center tabular-nums">{colW[c.key] ?? c.def}</span>
-                      <button onClick={() => pasoCol(c.key, 20)} className="w-6 h-6 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-black">+</button>
+                    <div key={c.key} className="flex items-center gap-1 bg-[#3C4759] border border-[#4A5568] rounded-lg px-2 py-1">
+                      <span className="text-[11px] font-bold text-white/70 mr-1">{c.label}</span>
+                      <button onClick={() => pasoCol(c.key, -20)} className="w-6 h-6 flex items-center justify-center rounded bg-[#2B3547] hover:bg-[#2B3547] text-white font-black">−</button>
+                      <span className="text-[11px] text-white/40 w-8 text-center tabular-nums">{colW[c.key] ?? c.def}</span>
+                      <button onClick={() => pasoCol(c.key, 20)} className="w-6 h-6 flex items-center justify-center rounded bg-[#2B3547] hover:bg-[#2B3547] text-white font-black">+</button>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            <p className="px-4 py-1.5 text-[11px] text-gray-400 bg-gray-50 border-b border-gray-100">
+            <p className="px-4 py-1.5 text-[11px] text-white/40 bg-[#333F50] border-b border-[#4A5568]">
               💡 ¿Ajustar columnas? Usa el botón <b>⚙ Columnas</b> (botones − / +, sin arrastrar). También puedes arrastrar la línea blanca del borde del encabezado.
             </p>
             <datalist id="codigos-libro">
@@ -2235,11 +2235,11 @@ export default function ContabilidadPage() {
                 </thead>
                 <tbody>
                   {cargandoLibro ? (
-                    <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-gray-400 font-semibold">Cargando…</td></tr>
+                    <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-white/40 font-semibold">Cargando…</td></tr>
                   ) : libro.length === 0 ? (
-                    <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-gray-400 font-semibold">Este libro aún no tiene movimientos.</td></tr>
+                    <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-white/40 font-semibold">Este libro aún no tiene movimientos.</td></tr>
                   ) : libroFiltrado.length === 0 ? (
-                    <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-gray-400 font-semibold">Ningún movimiento coincide con el filtro.</td></tr>
+                    <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-white/40 font-semibold">Ningún movimiento coincide con el filtro.</td></tr>
                   ) : visiblesVista.map((m, i) => (
                     <tr key={m.id || i} id={'mov-' + (m.id || '')}
                       title={semaforo[m.id || '']?.motivo || filasProblema[m.id || ''] || undefined}
@@ -2248,7 +2248,7 @@ export default function ContabilidadPage() {
                       style={{ background: hoverId === m.id ? '#cfe3ff' : resaltarId === m.id ? '#bbf7d0' : filasProblema[m.id || ''] ? '#fee2e2' : dirtyIds.has(m.id || '') ? '#fef9c3' : (i % 2 ? '#f8fafc' : '#fff'), transition: 'background 0.12s', outline: hoverId === m.id ? '2px solid #3b82f6' : resaltarId === m.id ? '2px solid #16a34a' : filasProblema[m.id || ''] ? '1px solid #ef4444' : undefined }}>
                       <td style={{ ...tdC, padding: '1px' }}>
                         <div className="flex items-center justify-center gap-0.5">
-                          <button onClick={() => abrirEditor(m)} title="Editar / dividir" className="text-gray-400 hover:text-green-700 p-0.5 rounded hover:bg-green-50 transition">
+                          <button onClick={() => abrirEditor(m)} title="Editar / dividir" className="text-white/40 hover:text-[#5BE39B] p-0.5 rounded hover:bg-[rgba(0,176,80,.14)] transition">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           {(() => {
@@ -2256,7 +2256,7 @@ export default function ContabilidadPage() {
                             return (
                               <button onClick={() => { if (!esNoAplica(m)) actualizarPagoFila(m); }}
                                 title={esIngresoFinanciero(m) ? 'Interés / rendimiento del banco — no es de ningún deportista, no va a estado de cuenta' : esInstitucional(m) ? 'Confirmado ✓ — INSTITUCIONAL (no va a estado de cuenta)' : yaPub ? 'Confirmado ✓ — ya está en el estado de cuenta (clic para volver a publicar)' : 'Sin confirmar — clic para actualizar este pago en el estado de cuenta'}
-                                className={`p-0.5 rounded transition ${yaPub ? 'text-green-600 hover:text-green-700 hover:bg-green-50' : 'text-red-500 hover:text-red-700 hover:bg-red-50'}`}>
+                                className={`p-0.5 rounded transition ${yaPub ? 'text-[#5BE39B] hover:text-[#5BE39B] hover:bg-[rgba(0,176,80,.14)]' : 'text-[#F08A87] hover:text-[#F08A87] hover:bg-[rgba(192,80,77,.14)]'}`}>
                                 <CheckCircle className="w-3.5 h-3.5" />
                               </button>
                             );
@@ -2317,7 +2317,7 @@ export default function ContabilidadPage() {
                           if (nombreDep && depId) {
                             return (
                               <button onClick={() => setEstadoCuentaUrl(`/alumnos/${depId}/estado-cuenta?edit=1`)}
-                                className="text-left text-green-700 hover:text-green-900 hover:underline font-semibold w-full truncate"
+                                className="text-left text-[#5BE39B] hover:text-green-900 hover:underline font-semibold w-full truncate"
                                 title={`Ver estado de cuenta de ${nombreDep} (se abre en ventana, sin salir del libro)`}>
                                 {nombreDep}
                               </button>
@@ -2441,19 +2441,19 @@ export default function ContabilidadPage() {
               </table>
             </div>
             {!cargandoLibro && libroFiltrado.length > 0 && (
-              <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-                <span className="text-xs font-bold text-gray-500">
+              <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-3 border-t border-[#4A5568] bg-[#333F50]">
+                <span className="text-xs font-bold text-white/70">
                   Mostrando {visibles.length.toLocaleString('es-CO')} de {libroFiltrado.length.toLocaleString('es-CO')}
                 </span>
                 {visibles.length < libroFiltrado.length && (
                   <>
-                    <button onClick={() => setLimite(l => l + 100)} className="text-xs font-black text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 transition">
+                    <button onClick={() => setLimite(l => l + 100)} className="text-xs font-black text-[#5BE39B] bg-[rgba(0,176,80,.14)] border border-[rgba(0,176,80,.45)] px-3 py-1.5 rounded-lg hover:bg-green-100 transition">
                       Mostrar 100 más (hacia atrás)
                     </button>
                     <button onClick={() => setLimite(libroFiltrado.length)} className="text-xs font-black text-white bg-[#16a34a] border border-[#16a34a] px-3 py-1.5 rounded-lg hover:bg-[#064e1e] transition">
                       Mostrar todos ({libroFiltrado.length.toLocaleString('es-CO')})
                     </button>
-                    <span className="text-[11px] text-gray-400">— o usa los filtros de arriba para acotar (por código, cifra, nombre…)</span>
+                    <span className="text-[11px] text-white/40">— o usa los filtros de arriba para acotar (por código, cifra, nombre…)</span>
                   </>
                 )}
               </div>
@@ -2488,15 +2488,15 @@ export default function ContabilidadPage() {
         const inp: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 6, padding: '4px 6px', fontSize: 12, outline: 'none' };
         return (
           <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !guardandoEd && setEditRow(null)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
-                <h3 className="font-black text-gray-800">Editar / dividir movimiento</h3>
-                <button onClick={() => setEditRow(null)} className="text-gray-400 hover:text-gray-700 p-1"><X className="w-5 h-5" /></button>
+            <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-[#4A5568] sticky top-0 bg-[#3C4759] z-10">
+                <h3 className="font-black text-white">Editar / dividir movimiento</h3>
+                <button onClick={() => setEditRow(null)} className="text-white/40 hover:text-white p-1"><X className="w-5 h-5" /></button>
               </div>
-              <div className="px-5 py-2 text-[12px] text-gray-500 bg-gray-50 border-b border-gray-100">
-                <b>{editRow.orig.banco}</b> · {editRow.orig.fecha} · <span className="text-gray-600">{editRow.orig.descripcion}</span>
-                <br />Valor original: {origDeb ? <span className="text-red-600 font-bold">débito {fmt(origDeb)}</span> : <span className="text-green-700 font-bold">crédito {fmt(origCred)}</span>}
-                <span className="text-gray-400"> — La primera fila edita el movimiento original; las que agregues se crean como nuevas.</span>
+              <div className="px-5 py-2 text-[12px] text-white/70 bg-[#333F50] border-b border-[#4A5568]">
+                <b>{editRow.orig.banco}</b> · {editRow.orig.fecha} · <span className="text-white/70">{editRow.orig.descripcion}</span>
+                <br />Valor original: {origDeb ? <span className="text-[#F08A87] font-bold">débito {fmt(origDeb)}</span> : <span className="text-[#5BE39B] font-bold">crédito {fmt(origCred)}</span>}
+                <span className="text-white/40"> — La primera fila edita el movimiento original; las que agregues se crean como nuevas.</span>
               </div>
               <div className="p-5 space-y-3">
                 <table className="w-full border-collapse text-xs">
@@ -2533,7 +2533,7 @@ export default function ContabilidadPage() {
                         <td style={{ ...td, padding: 3 }}><input value={r.debito || ''} onChange={e => editarSplit(i, 'debito', numVal(e.target.value))} style={{ ...inp, textAlign: 'right', color: '#dc2626' }} /></td>
                         <td style={{ ...td, padding: 3 }}><input value={r.credito || ''} onChange={e => editarSplit(i, 'credito', numVal(e.target.value))} style={{ ...inp, textAlign: 'right', color: '#16a34a' }} /></td>
                         <td style={{ ...td, padding: 3 }}>
-                          {i > 0 && <button onClick={() => quitarSplit(i)} title="Quitar fila" className="text-gray-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>}
+                          {i > 0 && <button onClick={() => quitarSplit(i)} title="Quitar fila" className="text-white/40 hover:text-[#F08A87] p-1"><Trash2 className="w-4 h-4" /></button>}
                         </td>
                       </tr>
                     ))}
@@ -2549,17 +2549,17 @@ export default function ContabilidadPage() {
                 </table>
 
                 {(!okDeb || !okCred) && (
-                  <p className="text-[12px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <p className="text-[12px] font-bold text-[#E0A33A] bg-[rgba(224,163,58,.14)] border border-amber-200 rounded-lg px-3 py-2">
                     ⚠ La suma de las filas no coincide con el valor original. Puedes guardar igual, pero revisa que sea lo que quieres.
                   </p>
                 )}
 
                 <div className="flex items-center gap-2">
-                  <button onClick={agregarFila} className="flex items-center gap-1.5 text-sm font-black text-green-700 bg-green-50 border border-green-200 px-3 py-2 rounded-xl hover:bg-green-100 transition">
+                  <button onClick={agregarFila} className="flex items-center gap-1.5 text-sm font-black text-[#5BE39B] bg-[rgba(0,176,80,.14)] border border-[rgba(0,176,80,.45)] px-3 py-2 rounded-xl hover:bg-green-100 transition">
                     <Plus className="w-4 h-4" /> Agregar fila
                   </button>
                   <div className="ml-auto flex items-center gap-2">
-                    <button onClick={() => setEditRow(null)} disabled={guardandoEd} className="text-sm font-bold text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-100 transition disabled:opacity-60">Cancelar</button>
+                    <button onClick={() => setEditRow(null)} disabled={guardandoEd} className="text-sm font-bold text-white/70 px-4 py-2 rounded-xl hover:bg-[#2B3547] transition disabled:opacity-60">Cancelar</button>
                     <button onClick={guardarEditor} disabled={guardandoEd} className="flex items-center gap-2 bg-[#16a34a] text-white font-black px-5 py-2 rounded-xl hover:bg-[#064e1e] transition disabled:opacity-60">
                       <Save className="w-4 h-4" /> {guardandoEd ? 'Guardando…' : 'Guardar'}
                     </button>
@@ -2574,16 +2574,16 @@ export default function ContabilidadPage() {
       {/* ── Modal: AGREGAR FILA MANUAL al libro ── */}
       {nuevaFila && (() => {
         const inp: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' };
-        const lbl = 'block text-[11px] font-black text-gray-500 uppercase tracking-wide mb-1';
+        const lbl = 'block text-[11px] font-black text-white/70 uppercase tracking-wide mb-1';
         return (
           <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4" onClick={() => !guardandoManual && setNuevaFila(null)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
-                <h3 className="font-black text-gray-800">Agregar fila al libro</h3>
-                <button onClick={() => setNuevaFila(null)} className="text-gray-400 hover:text-gray-700 p-1"><X className="w-5 h-5" /></button>
+            <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-[#4A5568] sticky top-0 bg-[#3C4759] z-10">
+                <h3 className="font-black text-white">Agregar fila al libro</h3>
+                <button onClick={() => setNuevaFila(null)} className="text-white/40 hover:text-white p-1"><X className="w-5 h-5" /></button>
               </div>
-              <div className="px-5 py-2 text-[12px] text-gray-500 bg-gray-50 border-b border-gray-100">
-                Movimiento agregado manualmente (no vino del Excel del banco). Ingresa el valor en <b className="text-red-600">Débito</b> (salida) o en <b className="text-green-700">Crédito</b> (entrada).
+              <div className="px-5 py-2 text-[12px] text-white/70 bg-[#333F50] border-b border-[#4A5568]">
+                Movimiento agregado manualmente (no vino del Excel del banco). Ingresa el valor en <b className="text-[#F08A87]">Débito</b> (salida) o en <b className="text-[#5BE39B]">Crédito</b> (entrada).
               </div>
               <div className="p-5 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -2645,7 +2645,7 @@ export default function ContabilidadPage() {
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
-                  <button onClick={() => setNuevaFila(null)} disabled={guardandoManual} className="ml-auto text-sm font-bold text-gray-600 px-4 py-2 rounded-xl hover:bg-gray-100 transition disabled:opacity-60">Cancelar</button>
+                  <button onClick={() => setNuevaFila(null)} disabled={guardandoManual} className="ml-auto text-sm font-bold text-white/70 px-4 py-2 rounded-xl hover:bg-[#2B3547] transition disabled:opacity-60">Cancelar</button>
                   <button onClick={guardarNuevaFila} disabled={guardandoManual} className="flex items-center gap-2 bg-[#16a34a] text-white font-black px-5 py-2 rounded-xl hover:bg-[#064e1e] transition disabled:opacity-60">
                     <Save className="w-4 h-4" /> {guardandoManual ? 'Guardando…' : 'Agregar al libro'}
                   </button>
@@ -2694,7 +2694,7 @@ function FilaRevision({ r, i, deportistas, conceptos, onAsignar, onEditar }: {
       <td style={{ ...td, textAlign: 'right', color: '#16a34a' }}>{r.credito ? fmt(r.credito) : ''}</td>
       <td style={{ ...td }}>
         <select value={r.concepto} onChange={e => onEditar(i, 'concepto', e.target.value)}
-          className="w-36 border border-gray-200 rounded px-1.5 py-1 text-[11px] font-semibold text-gray-700 bg-white">
+          className="w-36 border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold text-white bg-[#3C4759]">
           <option value="">—</option>
           {conceptos.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
           {r.concepto && !conceptos.some(c => c.nombre === r.concepto) && (
@@ -2703,27 +2703,27 @@ function FilaRevision({ r, i, deportistas, conceptos, onAsignar, onEditar }: {
         </select>
       </td>
       <td style={{ ...td, textAlign: 'left', minWidth: 200 }}>
-        {dup ? <span className="text-[10px] font-bold text-gray-400">ya en el libro</span>
+        {dup ? <span className="text-[10px] font-bold text-white/40">ya en el libro</span>
           : r.codigo ? (
             <span className="inline-flex items-center gap-1.5">
-              <span className="text-[10px] font-black text-green-700 bg-green-100 px-2 py-0.5 rounded-full">{r.codigo}</span>
-              <span className="text-[11px] font-semibold text-gray-700 truncate max-w-[150px]">{r.deportista}</span>
+              <span className="text-[10px] font-black text-[#5BE39B] bg-green-100 px-2 py-0.5 rounded-full">{r.codigo}</span>
+              <span className="text-[11px] font-semibold text-white truncate max-w-[150px]">{r.deportista}</span>
             </span>
           ) : (
             <div className="relative">
-              <div className="flex items-center gap-1 border border-orange-300 rounded px-1.5 py-1 bg-white">
+              <div className="flex items-center gap-1 border border-orange-300 rounded px-1.5 py-1 bg-[#3C4759]">
                 <Search className="w-3 h-3 text-orange-400" />
                 <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar deportista…" className="w-32 text-[11px] focus:outline-none" />
               </div>
               {sug.length > 0 && (
-                <div className="absolute z-20 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                <div className="absolute z-20 mt-1 w-56 bg-[#3C4759] border border-[#4A5568] rounded-lg shadow-lg max-h-52 overflow-y-auto">
                   {sug.map(d => {
                     const cod = getCod(d);
                     return (
                       <button key={d.id} onClick={() => { onAsignar(i, cod, d._nombre); setQ(''); }}
-                        className="w-full text-left px-2.5 py-1.5 hover:bg-green-50 text-[11px] flex items-center gap-2">
-                        <span className="font-black text-green-700">{cod}</span>
-                        <span className="text-gray-700 truncate">{d._nombre}</span>
+                        className="w-full text-left px-2.5 py-1.5 hover:bg-[rgba(0,176,80,.14)] text-[11px] flex items-center gap-2">
+                        <span className="font-black text-[#5BE39B]">{cod}</span>
+                        <span className="text-white truncate">{d._nombre}</span>
                       </button>
                     );
                   })}
@@ -2813,38 +2813,38 @@ function DiccionarioEditor({ codMap, flash, onCount }: {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-100">
-        <p className="font-black text-gray-700 text-sm">Diccionario de cuentas y códigos <span className="text-gray-400 font-semibold">({rows.length.toLocaleString('es-CO')})</span></p>
-        <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
-          <Search className="w-3.5 h-3.5 text-gray-400" />
+    <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#4A5568]">
+        <p className="font-black text-white text-sm">Diccionario de cuentas y códigos <span className="text-white/40 font-semibold">({rows.length.toLocaleString('es-CO')})</span></p>
+        <div className="flex items-center gap-1.5 border border-[#4A5568] rounded-lg px-2 py-1.5 bg-[#3C4759]">
+          <Search className="w-3.5 h-3.5 text-white/40" />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cuenta, código o deportista…" className="w-56 text-xs focus:outline-none" />
         </div>
-        <button onClick={cargar} disabled={cargando} className="ml-auto text-xs font-black text-gray-600 bg-white border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition disabled:opacity-60">{cargando ? 'Cargando…' : 'Actualizar'}</button>
+        <button onClick={cargar} disabled={cargando} className="ml-auto text-xs font-black text-white/70 bg-[#3C4759] border border-[#4A5568] px-3 py-1.5 rounded-lg hover:bg-[#2B3547] transition disabled:opacity-60">{cargando ? 'Cargando…' : 'Actualizar'}</button>
       </div>
       {/* Agregar un cruce nuevo a mano */}
-      <div className="flex flex-wrap items-end gap-2 px-4 py-3 border-b border-gray-100 bg-green-50/40">
+      <div className="flex flex-wrap items-end gap-2 px-4 py-3 border-b border-[#4A5568] bg-[rgba(0,176,80,.14)]/40">
         <div className="flex flex-col">
-          <label className="text-[10px] font-black text-gray-500 mb-0.5">CUENTA O NOMBRE</label>
+          <label className="text-[10px] font-black text-white/70 mb-0.5">CUENTA O NOMBRE</label>
           <input value={nuevaClave} onChange={e => setNuevaClave(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') agregarCruce(); }}
             placeholder="Ej: 10202589777  o  MARIA MEZA 4155"
-            className="w-64 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-green-500" />
+            className="w-64 border border-[#4A5568] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-green-500" />
         </div>
         <div className="flex flex-col">
-          <label className="text-[10px] font-black text-gray-500 mb-0.5">CÓDIGO</label>
+          <label className="text-[10px] font-black text-white/70 mb-0.5">CÓDIGO</label>
           <input list="codigos-libro" value={nuevoCodigo} onChange={e => setNuevoCodigo(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') agregarCruce(); }}
             placeholder="25277"
-            className="w-28 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-center focus:outline-none focus:border-green-500" />
+            className="w-28 border border-[#4A5568] rounded-lg px-2 py-1.5 text-xs font-bold text-center focus:outline-none focus:border-green-500" />
         </div>
         <button onClick={agregarCruce} disabled={agregando}
           className="flex items-center gap-1.5 text-xs font-black text-white bg-[#16a34a] border border-[#16a34a] px-3 py-2 rounded-lg hover:bg-[#064e1e] transition disabled:opacity-60">
           <Plus className="w-3.5 h-3.5" /> {agregando ? 'Agregando…' : 'Agregar al diccionario'}
         </button>
-        <span className="text-[11px] text-gray-400">Si es número = cuenta; si es texto = nombre. Se usará para cruzar el próximo extracto.</span>
+        <span className="text-[11px] text-white/40">Si es número = cuenta; si es texto = nombre. Se usará para cruzar el próximo extracto.</span>
       </div>
-      <p className="px-4 py-2 text-[11px] text-gray-400 bg-gray-50 border-b border-gray-100">
+      <p className="px-4 py-2 text-[11px] text-white/40 bg-[#333F50] border-b border-[#4A5568]">
         Cada fila es un cruce aprendido: cuando en un extracto llega una cuenta o nombre igual, se le pone este código automáticamente. Puedes corregir un código o eliminar un cruce equivocado.
       </p>
       <div className="overflow-x-auto" style={{ maxHeight: '62vh' }}>
@@ -2856,24 +2856,24 @@ function DiccionarioEditor({ codMap, flash, onCount }: {
           </tr></thead>
           <tbody>
             {cargando ? (
-              <tr><td colSpan={5} className="text-center py-10 text-gray-400 font-semibold">Cargando…</td></tr>
+              <tr><td colSpan={5} className="text-center py-10 text-white/40 font-semibold">Cargando…</td></tr>
             ) : filtradas.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-10 text-gray-400 font-semibold">No hay cruces que coincidan.</td></tr>
+              <tr><td colSpan={5} className="text-center py-10 text-white/40 font-semibold">No hay cruces que coincidan.</td></tr>
             ) : vis.map((r, i) => (
               <tr key={r.id} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
                 <td style={{ ...td, fontSize: 10, color: '#64748b', fontWeight: 700 }}>{r.tipo === 'cuenta' ? 'CUENTA' : 'NOMBRE'}</td>
                 <td style={{ ...td, textAlign: 'left' }} title={r.clave}>
                   <input value={r.clave} onChange={e => editarLocalClave(r.id, e.target.value)}
-                    className="w-full border border-gray-200 rounded px-1.5 py-1 text-[11px] font-semibold" />
+                    className="w-full border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold" />
                 </td>
                 <td style={{ ...td, width: 110 }}>
-                  <input value={r.codigo} onChange={e => editarLocal(r.id, e.target.value)} className="w-24 border border-gray-200 rounded px-1.5 py-1 text-[11px] text-center font-bold" />
+                  <input value={r.codigo} onChange={e => editarLocal(r.id, e.target.value)} className="w-24 border border-[#4A5568] rounded px-1.5 py-1 text-[11px] text-center font-bold" />
                 </td>
-                <td style={{ ...td, textAlign: 'left' }} title={codMap[r.codigo] || ''}>{codMap[r.codigo] || <span className="text-gray-300">—</span>}</td>
+                <td style={{ ...td, textAlign: 'left' }} title={codMap[r.codigo] || ''}>{codMap[r.codigo] || <span className="text-white/40">—</span>}</td>
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>
                   <div className="flex items-center gap-1 justify-center">
                     <button onClick={() => guardar(r)} disabled={guardandoId === r.id} className="text-[11px] font-black text-white bg-[#16a34a] px-2.5 py-1 rounded-lg hover:bg-[#064e1e] transition disabled:opacity-60">{guardandoId === r.id ? '…' : 'Guardar'}</button>
-                    <button onClick={() => eliminar(r)} title="Eliminar" className="text-gray-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition"><X className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => eliminar(r)} title="Eliminar" className="text-white/40 hover:text-[#F08A87] p-1 rounded-lg hover:bg-[rgba(192,80,77,.14)] transition"><X className="w-3.5 h-3.5" /></button>
                   </div>
                 </td>
               </tr>
@@ -2882,9 +2882,9 @@ function DiccionarioEditor({ codMap, flash, onCount }: {
         </table>
       </div>
       {!cargando && filtradas.length > vis.length && (
-        <div className="flex items-center justify-center gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50">
-          <span className="text-xs font-bold text-gray-500">Mostrando {vis.length.toLocaleString('es-CO')} de {filtradas.length.toLocaleString('es-CO')}</span>
-          <button onClick={() => setLimite(l => l + 500)} className="text-xs font-black text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 transition">Mostrar 500 más</button>
+        <div className="flex items-center justify-center gap-3 px-4 py-3 border-t border-[#4A5568] bg-[#333F50]">
+          <span className="text-xs font-bold text-white/70">Mostrando {vis.length.toLocaleString('es-CO')} de {filtradas.length.toLocaleString('es-CO')}</span>
+          <button onClick={() => setLimite(l => l + 500)} className="text-xs font-black text-[#5BE39B] bg-[rgba(0,176,80,.14)] border border-[rgba(0,176,80,.45)] px-3 py-1.5 rounded-lg hover:bg-green-100 transition">Mostrar 500 más</button>
         </div>
       )}
     </div>
@@ -2948,16 +2948,16 @@ function DesconocidasEditor({ deportistas, conceptos, flash }: {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-100">
-        <p className="font-black text-gray-700 text-sm">
-          Cuentas por asignar <span className="text-gray-400 font-semibold">({grupos.length} · {totalMovs.toLocaleString('es-CO')} movimientos)</span>
+    <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#4A5568]">
+        <p className="font-black text-white text-sm">
+          Cuentas por asignar <span className="text-white/40 font-semibold">({grupos.length} · {totalMovs.toLocaleString('es-CO')} movimientos)</span>
         </p>
-        <button onClick={cargar} disabled={cargando} className="ml-auto text-xs font-black text-gray-600 bg-white border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition disabled:opacity-60">
+        <button onClick={cargar} disabled={cargando} className="ml-auto text-xs font-black text-white/70 bg-[#3C4759] border border-[#4A5568] px-3 py-1.5 rounded-lg hover:bg-[#2B3547] transition disabled:opacity-60">
           {cargando ? 'Cargando…' : 'Actualizar'}
         </button>
       </div>
-      <p className="px-4 py-2 text-[11px] text-gray-400 bg-gray-50 border-b border-gray-100">
+      <p className="px-4 py-2 text-[11px] text-white/40 bg-[#333F50] border-b border-[#4A5568]">
         Son pagos recibidos que el sistema no pudo cruzar con un deportista. Asigna cada cuenta: se corrige en el libro y queda guardado en el diccionario para que el próximo extracto se cruce solo.
       </p>
       <div className="overflow-x-auto" style={{ maxHeight: '64vh' }}>
@@ -2971,9 +2971,9 @@ function DesconocidasEditor({ deportistas, conceptos, flash }: {
           </thead>
           <tbody>
             {cargando ? (
-              <tr><td colSpan={6} className="text-center py-10 text-gray-400 font-semibold">Cargando…</td></tr>
+              <tr><td colSpan={6} className="text-center py-10 text-white/40 font-semibold">Cargando…</td></tr>
             ) : grupos.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-10 text-green-600 font-semibold">🎉 No hay cuentas por asignar. Todos los pagos están cruzados.</td></tr>
+              <tr><td colSpan={6} className="text-center py-10 text-[#5BE39B] font-semibold">🎉 No hay cuentas por asignar. Todos los pagos están cruzados.</td></tr>
             ) : grupos.map(g => (
               <FilaDesconocida key={g.key} g={g} deportistas={deportistas} conceptos={conceptos} onAsignar={asignar} busy={asignando === g.key} />
             ))}
@@ -3006,7 +3006,7 @@ function FilaDesconocida({ g, deportistas, conceptos, onAsignar, busy }: {
       <td style={{ ...td, textAlign: 'left', maxWidth: 240 }} className="truncate" title={g.ejemplo}>{g.ejemplo}</td>
       <td style={{ ...td }}>
         <select value={concepto} onChange={e => setConcepto(e.target.value)}
-          className="w-36 border border-gray-200 rounded px-1.5 py-1 text-[11px] font-semibold text-gray-700 bg-white">
+          className="w-36 border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold text-white bg-[#3C4759]">
           <option value="APORTE FORMACIÓN">APORTE FORMACIÓN</option>
           {conceptos.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
           {concepto && concepto !== 'APORTE FORMACIÓN' && !conceptos.some(c => c.nombre === concepto) && (
@@ -3015,21 +3015,21 @@ function FilaDesconocida({ g, deportistas, conceptos, onAsignar, busy }: {
         </select>
       </td>
       <td style={{ ...td, textAlign: 'left', minWidth: 220 }}>
-        {busy ? <span className="text-[11px] font-bold text-gray-400">Asignando…</span> : (
+        {busy ? <span className="text-[11px] font-bold text-white/40">Asignando…</span> : (
           <div className="relative">
-            <div className="flex items-center gap-1 border border-orange-300 rounded px-1.5 py-1 bg-white">
+            <div className="flex items-center gap-1 border border-orange-300 rounded px-1.5 py-1 bg-[#3C4759]">
               <Search className="w-3 h-3 text-orange-400" />
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar deportista o código…" className="w-44 text-[11px] focus:outline-none" />
             </div>
             {sug.length > 0 && (
-              <div className="absolute z-20 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+              <div className="absolute z-20 mt-1 w-64 bg-[#3C4759] border border-[#4A5568] rounded-lg shadow-lg max-h-52 overflow-y-auto">
                 {sug.map(d => {
                   const cod = getCod(d);
                   return (
                     <button key={d.id} onClick={() => { onAsignar(g, cod, d._nombre, concepto); setQ(''); }}
-                      className="w-full text-left px-2.5 py-1.5 hover:bg-green-50 text-[11px] flex items-center gap-2">
-                      <span className="font-black text-green-700">{cod}</span>
-                      <span className="text-gray-700 truncate">{d._nombre}</span>
+                      className="w-full text-left px-2.5 py-1.5 hover:bg-[rgba(0,176,80,.14)] text-[11px] flex items-center gap-2">
+                      <span className="font-black text-[#5BE39B]">{cod}</span>
+                      <span className="text-white truncate">{d._nombre}</span>
                     </button>
                   );
                 })}
@@ -3086,18 +3086,18 @@ function CuentasEditor({ conceptos, onCambio, flash }: {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-100">
-        <p className="font-black text-gray-700 text-sm">Cuentas / conceptos <span className="text-gray-400 font-semibold">({conceptos.length})</span></p>
-        <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
-          <Search className="w-3.5 h-3.5 text-gray-400" />
+    <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#4A5568]">
+        <p className="font-black text-white text-sm">Cuentas / conceptos <span className="text-white/40 font-semibold">({conceptos.length})</span></p>
+        <div className="flex items-center gap-1.5 border border-[#4A5568] rounded-lg px-2 py-1.5 bg-[#3C4759]">
+          <Search className="w-3.5 h-3.5 text-white/40" />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar cuenta…" className="w-40 text-xs focus:outline-none" />
         </div>
         <button onClick={nueva} className="ml-auto flex items-center gap-1.5 bg-[#16a34a] text-white text-sm font-black px-4 py-2 rounded-xl hover:bg-[#064e1e] transition">
           + Nueva cuenta
         </button>
       </div>
-      <p className="px-4 py-2 text-[11px] text-gray-400 bg-gray-50 border-b border-gray-100">
+      <p className="px-4 py-2 text-[11px] text-white/40 bg-[#333F50] border-b border-[#4A5568]">
         Estas son las opciones que aparecen en la lista desplegable de <b>CONCEPTO</b> al revisar los movimientos. Edita el nombre, el tipo o el código y pulsa Guardar.
       </p>
       <div className="overflow-x-auto" style={{ maxHeight: '62vh' }}>
@@ -3111,27 +3111,27 @@ function CuentasEditor({ conceptos, onCambio, flash }: {
           </thead>
           <tbody>
             {lista.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-10 text-gray-400 font-semibold">No hay cuentas. Crea una con “+ Nueva cuenta”.</td></tr>
+              <tr><td colSpan={5} className="text-center py-10 text-white/40 font-semibold">No hay cuentas. Crea una con “+ Nueva cuenta”.</td></tr>
             ) : lista.map((c, i) => (
               <tr key={c.id} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
                 <td style={{ ...td, width: 70 }}>
                   <input type="number" value={c.orden} onChange={e => editarLocal(c.id, 'orden', e.target.value)}
-                    className="w-14 border border-gray-200 rounded px-1 py-1 text-[11px] text-center" />
+                    className="w-14 border border-[#4A5568] rounded px-1 py-1 text-[11px] text-center" />
                 </td>
                 <td style={{ ...td, textAlign: 'left' }}>
                   <input value={c.nombre} onChange={e => editarLocal(c.id, 'nombre', e.target.value)}
-                    className="w-full min-w-[200px] border border-gray-200 rounded px-2 py-1 text-[11px] font-bold text-gray-700 uppercase" placeholder="Nombre de la cuenta" />
+                    className="w-full min-w-[200px] border border-[#4A5568] rounded px-2 py-1 text-[11px] font-bold text-white uppercase" placeholder="Nombre de la cuenta" />
                 </td>
                 <td style={{ ...td }}>
                   <select value={c.tipo} onChange={e => editarLocal(c.id, 'tipo', e.target.value)}
-                    className="border border-gray-200 rounded px-1.5 py-1 text-[11px] font-semibold text-gray-700 bg-white">
+                    className="border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold text-white bg-[#3C4759]">
                     {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
                     {c.tipo && !TIPOS.includes(c.tipo) && <option value={c.tipo}>{c.tipo}</option>}
                   </select>
                 </td>
                 <td style={{ ...td }}>
                   <input value={c.codcuenta} onChange={e => editarLocal(c.id, 'codcuenta', e.target.value)}
-                    className="w-24 border border-gray-200 rounded px-1.5 py-1 text-[11px] text-center" placeholder="—" />
+                    className="w-24 border border-[#4A5568] rounded px-1.5 py-1 text-[11px] text-center" placeholder="—" />
                 </td>
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>
                   <div className="flex items-center gap-1 justify-center">
@@ -3140,7 +3140,7 @@ function CuentasEditor({ conceptos, onCambio, flash }: {
                       {guardandoId === c.id ? '…' : 'Guardar'}
                     </button>
                     <button onClick={() => eliminar(c)} title="Eliminar"
-                      className="text-gray-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition">
+                      className="text-white/40 hover:text-[#F08A87] p-1 rounded-lg hover:bg-[rgba(192,80,77,.14)] transition">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>

@@ -161,7 +161,7 @@ export default function VistaContablePage() {
   const W_NOM = 200;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
 
       {/* HEADER */}
       <header className="relative bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
@@ -203,12 +203,12 @@ export default function VistaContablePage() {
       {/* SIN DATOS */}
       {filas.length === 0 ? (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-4">
-          <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center">
+          <div className="w-20 h-20 bg-[rgba(78,143,214,.14)] rounded-3xl flex items-center justify-center">
             <BookOpen className="w-10 h-10 text-blue-300" />
           </div>
           <div className="text-center max-w-xs">
             <h2 className="font-black text-[#1e3a8a] text-lg mb-1">Sin datos contables</h2>
-            <p className="text-gray-400 text-sm mb-4">
+            <p className="text-white/40 text-sm mb-4">
               Sube el archivo <strong>VISTA CONTABLE</strong> para ver la información aquí.
             </p>
             <button onClick={() => router.push('/pagos/importar-valores')}
@@ -220,12 +220,12 @@ export default function VistaContablePage() {
       ) : (
         <>
           {/* FILTROS */}
-          <div className="px-4 py-3 bg-white border-b border-gray-100 shadow-sm flex flex-wrap gap-3 items-end">
+          <div className="px-4 py-3 bg-[#3C4759] border-b border-[#4A5568] shadow-sm flex flex-wrap gap-3 items-end">
             <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Buscar</p>
+              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Buscar</p>
               <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
                 placeholder="Nombre, código..."
-                className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-blue-400 w-40"/>
+                className="border border-[#4A5568] rounded-xl px-3 py-2 text-sm font-semibold text-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-blue-400 w-40"/>
             </div>
             {[
               { label:'Programa', val:programa, set:(v:string)=>{setPrograma(v);setProyecto('');}, opts:programas },
@@ -233,23 +233,23 @@ export default function VistaContablePage() {
               { label:'Estado',   val:estado,   set:setEstado,   opts:estados   },
             ].map(f => (
               <div key={f.label}>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{f.label}</p>
+                <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">{f.label}</p>
                 <select value={f.val} onChange={e => f.set(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white min-w-[110px]">
+                  className="border border-[#4A5568] rounded-xl px-3 py-2 text-sm font-bold text-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-blue-400 bg-[#3C4759] min-w-[110px]">
                   <option value="">Todos</option>
                   {f.opts.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
             ))}
             <div className="ml-auto text-right">
-              <p className="text-[10px] font-bold text-gray-400 uppercase">Deportistas</p>
+              <p className="text-[10px] font-bold text-white/40 uppercase">Deportistas</p>
               <p className="text-xl font-black text-[#1e3a8a]">{filtradas.length}</p>
             </div>
           </div>
 
           {/* TABLA */}
           <main className="px-3 py-3">
-            <div className="overflow-auto rounded-2xl shadow border border-gray-200"
+            <div className="overflow-auto rounded-2xl shadow border border-[#4A5568]"
               style={{ maxHeight: 'calc(100vh - 220px)' }}>
               <table className="border-collapse text-xs" style={{ minWidth: 1600 }}>
 
@@ -448,7 +448,7 @@ export default function VistaContablePage() {
                 </tfoot>
               </table>
             </div>
-            <p className="text-center text-[11px] text-gray-400 mt-3">
+            <p className="text-center text-[11px] text-white/40 mt-3">
               {filtradas.length} de {filas.length} deportistas · Archivo VISTA CONTABLE
             </p>
           </main>

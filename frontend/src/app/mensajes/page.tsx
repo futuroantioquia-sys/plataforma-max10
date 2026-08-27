@@ -225,7 +225,7 @@ export default function MensajesPage() {
     : 'Mensajes para la institución';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-6 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
         <button onClick={() => router.back()} className="text-white/80 hover:text-white flex items-center gap-1">
@@ -262,19 +262,19 @@ export default function MensajesPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-2 sm:px-6 py-4 sm:py-6">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex h-[calc(100vh-150px)]">
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden flex h-[calc(100vh-150px)]">
 
           {/* Lista de conversaciones */}
-          <div className={cn('border-r border-gray-100 flex flex-col flex-shrink-0 w-full sm:w-72', conv && 'hidden sm:flex')}>
+          <div className={cn('border-r border-[#4A5568] flex flex-col flex-shrink-0 w-full sm:w-72', conv && 'hidden sm:flex')}>
             {!esCalidoso && (
-              <div className="p-3 border-b border-gray-100 space-y-2">
+              <div className="p-3 border-b border-[#4A5568] space-y-2">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
                   <input
                     placeholder="Buscar deportista o código..."
                     value={busqueda}
                     onChange={e => setBusqueda(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-gray-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
+                    className="w-full pl-9 pr-3 py-2 bg-[#333F50] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
                   />
                 </div>
                 {/* Resumen: cuántas faltan por responder y cuántas no se han leído */}
@@ -286,20 +286,20 @@ export default function MensajesPage() {
                       'text-[11px] font-black px-2.5 py-1 rounded-full border transition',
                       soloPendientes
                         ? 'bg-amber-400 border-amber-400 text-[#064e1e]'
-                        : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                        : 'bg-[rgba(224,163,58,.14)] border-amber-200 text-[#E0A33A] hover:bg-amber-100'
                     )}
                   >
                     {totalPendientes} por responder
                   </button>
-                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-[#2B3547] text-white/70">
                     {totalSinLeer} sin leer
                   </span>
-                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                  <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-[#2B3547] text-white/70">
                     {conversaciones.length} en total
                   </span>
                 </div>
                 {soloPendientes && (
-                  <p className="text-[11px] text-amber-700 font-semibold">
+                  <p className="text-[11px] text-[#E0A33A] font-semibold">
                     Viendo solo pendientes. Vuelve a tocar el botón para ver todas.
                   </p>
                 )}
@@ -307,7 +307,7 @@ export default function MensajesPage() {
             )}
             <div className="overflow-y-auto flex-1">
               {convsFiltradas.length === 0 && (
-                <div className="p-6 text-center text-gray-400 text-sm">
+                <div className="p-6 text-center text-white/40 text-sm">
                   {soloPendientes ? '¡No queda ninguna conversación por responder!'
                     : esProfe ? 'Aún no tienes mensajes de tus deportistas.' : 'Aún no hay mensajes.'}
                 </div>
@@ -319,7 +319,7 @@ export default function MensajesPage() {
                 return (
                   <button key={c.key} onClick={() => abrir(c.key)}
                     className={cn(
-                      'w-full p-4 flex items-start gap-3 text-left hover:bg-gray-50 transition border-b border-gray-50',
+                      'w-full p-4 flex items-start gap-3 text-left hover:bg-[#333F50] transition border-b border-[#4A5568]',
                       pend && 'border-l-4 border-l-amber-400',
                       convActiva === c.key && 'bg-[#E8F5E9]'
                     )}>
@@ -330,13 +330,13 @@ export default function MensajesPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{c.titulo}</p>
-                        {ultimo && <span className="text-[10px] text-gray-400 flex-shrink-0">{horaCorta(ultimo.createdAt)}</span>}
+                        <p className="text-sm font-semibold text-white truncate">{c.titulo}</p>
+                        {ultimo && <span className="text-[10px] text-white/40 flex-shrink-0">{horaCorta(ultimo.createdAt)}</span>}
                       </div>
                       {!esCalidoso && c.codigo && (
                         <p className="text-[10px] font-bold text-[#16a34a] mt-0.5 truncate">Código {c.codigo}</p>
                       )}
-                      <p className="text-xs text-gray-400 truncate mt-0.5">{ultimo ? ultimo.texto : c.subtitulo}</p>
+                      <p className="text-xs text-white/40 truncate mt-0.5">{ultimo ? ultimo.texto : c.subtitulo}</p>
                       {pend && (
                         <span className="inline-block mt-1 bg-amber-400 text-[#064e1e] text-[10px] font-black px-2 py-0.5 rounded-full">
                           {esCalidoso ? 'ESPERANDO RESPUESTA' : 'FALTA RESPONDER'}
@@ -356,16 +356,16 @@ export default function MensajesPage() {
           {conv ? (
             <div className="flex-1 flex flex-col min-w-0">
               {/* Cabecera chat */}
-              <div className="p-4 border-b border-gray-100 flex items-center gap-3">
-                <button onClick={() => setConvActiva(null)} className="sm:hidden text-gray-500"><ArrowLeft className="w-5 h-5" /></button>
+              <div className="p-4 border-b border-[#4A5568] flex items-center gap-3">
+                <button onClick={() => setConvActiva(null)} className="sm:hidden text-white/70"><ArrowLeft className="w-5 h-5" /></button>
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#064e1e] to-[#16a34a] flex items-center justify-center flex-shrink-0">
                   {conv.icono === 'profe' ? <GraduationCap className="w-5 h-5 text-white" />
                     : conv.icono === 'inst' ? <Building2 className="w-5 h-5 text-white" />
                     : <span className="text-white text-xs font-bold">{conv.avatar}</span>}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm truncate">{conv.titulo}</p>
-                  <p className="text-xs text-gray-400 truncate">{conv.subtitulo}</p>
+                  <p className="font-semibold text-white text-sm truncate">{conv.titulo}</p>
+                  <p className="text-xs text-white/40 truncate">{conv.subtitulo}</p>
                 </div>
                 {clavesPendientes.has(conv.key) && (
                   <span className="ml-auto bg-amber-400 text-[#064e1e] text-[10px] font-black px-2.5 py-1 rounded-full flex-shrink-0">
@@ -377,7 +377,7 @@ export default function MensajesPage() {
               {/* Mensajes */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#f7faf8]">
                 {hilo.length === 0 && (
-                  <div className="h-full flex items-center justify-center text-center text-gray-400">
+                  <div className="h-full flex items-center justify-center text-center text-white/40">
                     <div>
                       <MessageCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
                       <p className="text-sm">{esCalidoso ? 'Escribe el primer mensaje.' : 'Sin mensajes todavía.'}</p>
@@ -390,7 +390,7 @@ export default function MensajesPage() {
                     <div key={m.id} className={cn('flex', yo ? 'justify-end' : 'justify-start')}>
                       <div className={cn(
                         'max-w-[78%] px-4 py-2.5 rounded-2xl text-sm',
-                        yo ? 'bg-[#16a34a] text-white rounded-br-sm' : 'bg-white border border-gray-100 text-gray-800 rounded-bl-sm'
+                        yo ? 'bg-[#16a34a] text-white rounded-br-sm' : 'bg-[#3C4759] border border-[#4A5568] text-white rounded-bl-sm'
                       )}>
                         {!yo && !esCalidoso && (
                           <p className="text-[10px] font-bold text-[#16a34a] mb-0.5">{m.nombre || 'Calidoso'}</p>
@@ -399,7 +399,7 @@ export default function MensajesPage() {
                           <p className="text-[10px] font-bold text-[#16a34a] mb-0.5">{m.de === 'profesor' ? 'Profesor' : 'Institución'}</p>
                         )}
                         <p className="whitespace-pre-wrap break-words">{m.texto}</p>
-                        <p className={cn('text-[10px] mt-1', yo ? 'text-white/60' : 'text-gray-400')}>{horaCorta(m.createdAt)}</p>
+                        <p className={cn('text-[10px] mt-1', yo ? 'text-white/60' : 'text-white/40')}>{horaCorta(m.createdAt)}</p>
                       </div>
                     </div>
                   );
@@ -408,14 +408,14 @@ export default function MensajesPage() {
               </div>
 
               {/* Input */}
-              <div className="p-3 border-t border-gray-100 flex gap-2 items-end">
+              <div className="p-3 border-t border-[#4A5568] flex gap-2 items-end">
                 <textarea
                   rows={1}
                   placeholder={esCalidoso ? `Mensaje para ${conv.titulo.toLowerCase()}...` : 'Escribe una respuesta...'}
                   value={nuevoMsg}
                   onChange={e => setNuevoMsg(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } }}
-                  className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#16a34a] max-h-28"
+                  className="flex-1 border border-[#4A5568] rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#16a34a] max-h-28"
                 />
                 <button onClick={enviar} disabled={enviando || !nuevoMsg.trim()}
                   className="w-10 h-10 bg-[#16a34a] text-white rounded-xl flex items-center justify-center hover:bg-[#064e1e] transition disabled:opacity-40 flex-shrink-0">
@@ -424,7 +424,7 @@ export default function MensajesPage() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 hidden sm:flex items-center justify-center text-gray-400">
+            <div className="flex-1 hidden sm:flex items-center justify-center text-white/40">
               <div className="text-center">
                 <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">Selecciona una conversación</p>

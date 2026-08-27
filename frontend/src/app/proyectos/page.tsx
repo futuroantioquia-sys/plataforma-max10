@@ -284,10 +284,10 @@ export default function GestionProyectosPage() {
   const AZUL  = '#4b5563';
   const AZULM = '#4b5563';
   const G     = '#16a34a';
-  const inputCls = 'w-full bg-transparent outline-none text-[#111827] font-semibold text-sm px-2 py-1.5 rounded-lg hover:bg-gray-100 focus:bg-gray-100 transition placeholder-gray-300';
+  const inputCls = 'w-full bg-transparent outline-none text-white font-semibold text-sm px-2 py-1.5 rounded-lg hover:bg-[#2B3547] focus:bg-[#2B3547] transition placeholder-gray-300';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
 
       {/* ── Header ── */}
       <header className="relative bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
@@ -318,7 +318,7 @@ export default function GestionProyectosPage() {
             guardado
               ? 'bg-green-400 text-white'
               : hayEdits
-              ? 'bg-white text-[#16a34a] hover:bg-green-50 shadow'
+              ? 'bg-[#3C4759] text-[#16a34a] hover:bg-[rgba(0,176,80,.14)] shadow'
               : 'bg-white/20 text-white/40 cursor-not-allowed'
           }`}>
           {guardado
@@ -341,7 +341,7 @@ export default function GestionProyectosPage() {
             className={`px-5 py-2 rounded-xl font-bold text-sm transition border ${
               tab === t
                 ? 'bg-[#16a34a] text-white border-[#16a34a] shadow'
-                : 'bg-white text-[#111827] border-gray-200 hover:bg-gray-50'
+                : 'bg-[#3C4759] text-white border-[#4A5568] hover:bg-[#333F50]'
             }`}>
             {t === 'proyectos' ? 'Proyectos' : 'Sedes'}
           </button>
@@ -352,16 +352,16 @@ export default function GestionProyectosPage() {
       <main className="px-3 py-4 space-y-6 max-w-[1300px] mx-auto">
 
         {grupos.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
-            <ClipboardList className="w-14 h-14 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 font-semibold">No hay deportistas cargados.</p>
-            <p className="text-gray-300 text-sm mt-1">Importa el Excel desde el módulo de Deportistas.</p>
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-16 text-center">
+            <ClipboardList className="w-14 h-14 text-white/40 mx-auto mb-3" />
+            <p className="text-white/40 font-semibold">No hay deportistas cargados.</p>
+            <p className="text-white/40 text-sm mt-1">Importa el Excel desde el módulo de Deportistas.</p>
           </div>
 
         ) : tab === 'proyectos' ? (
           /* ══ TAB PROYECTOS ══ */
           grupos.map(({ programa, filas }) => (
-            <div key={programa} className="rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div key={programa} className="rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
               <div style={{ background: AZUL }} className="px-5 py-3 flex items-center gap-3">
                 <span className="text-white font-black text-sm uppercase tracking-widest">
                   {programa === '__SIN_PROGRAMA__' ? 'Sin Programa' : programa}
@@ -398,7 +398,7 @@ export default function GestionProyectosPage() {
                           style={{ background: '#f1f5f9', borderTop: '2px solid white' }}
                           className="transition">
                           {/* PROYECTO — auto-ajusta al texto */}
-                          <td className="px-3 py-2 font-black text-[#111827] whitespace-nowrap" style={{ border: '2px solid white', width: '1px' }}>
+                          <td className="px-3 py-2 font-black text-white whitespace-nowrap" style={{ border: '2px solid white', width: '1px' }}>
                             {row.proyecto === '__SIN_PROYECTO__' ? '— Sin Proyecto —' : row.proyecto}
                           </td>
                           {/* FORMADOR */}
@@ -429,7 +429,7 @@ export default function GestionProyectosPage() {
                                 return (
                                   <button key={jsDay} onClick={() => toggleDiaRow(row, jsDay)}
                                     className={`w-6 h-6 rounded text-[9px] font-black transition select-none ${
-                                      sel ? 'bg-[#16a34a] text-white shadow-sm' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                      sel ? 'bg-[#16a34a] text-white shadow-sm' : 'bg-[#2B3547] text-white/70 hover:bg-[#4A5568]'
                                     }`}>
                                     {DIAS_SEMANA[i].slice(0, 2)}
                                   </button>
@@ -478,7 +478,7 @@ export default function GestionProyectosPage() {
                           </td>
                           {/* DEP COUNT */}
                           <td className="px-2 py-2 text-center whitespace-nowrap" style={{ background: '#f1f5f9', border: '2px solid white', width: 60 }}>
-                            <span className="font-black text-[#111827] text-sm">{row.count}</span>
+                            <span className="font-black text-white text-sm">{row.count}</span>
                           </td>
                         </tr>
                       );
@@ -496,7 +496,7 @@ export default function GestionProyectosPage() {
             const totalDep  = sedes.reduce((s, [, rows]) => s + rows.reduce((ss, r) => ss + r.count, 0), 0);
 
             return (
-              <div key={programa} className="rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div key={programa} className="rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
 
                 {/* Cabecera programa */}
                 <div style={{ background: AZUL }} className="px-5 py-3 flex items-center gap-3">
@@ -518,9 +518,9 @@ export default function GestionProyectosPage() {
                         {/* Cabecera sede — clickeable */}
                         <button
                           onClick={() => toggleAbierto(aKey)}
-                          className="w-full flex items-center gap-3 px-5 py-3 bg-[#f1f5f9] hover:bg-[#e2e8f0] transition text-left">
+                          className="w-full flex items-center gap-3 px-5 py-3 bg-[#333F50] hover:bg-[#e2e8f0] transition text-left">
                           <MapPin className="w-4 h-4 text-[#16a34a] flex-shrink-0" />
-                          <span className="flex-1 font-black text-[#111827] text-sm">{sede}</span>
+                          <span className="flex-1 font-black text-white text-sm">{sede}</span>
                           <span className="text-xs text-[#4b5563] font-semibold mr-2">
                             {filas.length} proyecto{filas.length !== 1 ? 's' : ''} · {total} deportistas
                           </span>
@@ -531,7 +531,7 @@ export default function GestionProyectosPage() {
 
                         {/* Proyectos de la sede */}
                         {open && (
-                          <div className="bg-white">
+                          <div className="bg-[#3C4759]">
                             <table className="w-full border-collapse text-sm">
                               <thead>
                                 <tr style={{ background: G }}>
@@ -548,17 +548,17 @@ export default function GestionProyectosPage() {
                                 {filas.map((row, idx) => (
                                   <tr key={row.proyecto}
                                     style={{ background: '#f1f5f9', borderTop: '2px solid white' }}>
-                                    <td className="px-4 py-2 font-black text-[#111827] whitespace-nowrap" style={{ border: '2px solid white' }}>
+                                    <td className="px-4 py-2 font-black text-white whitespace-nowrap" style={{ border: '2px solid white' }}>
                                       {row.proyecto === '__SIN_PROYECTO__' ? '— Sin Proyecto —' : row.proyecto}
                                     </td>
-                                    <td className="px-4 py-2 text-[#111827] whitespace-nowrap" style={{ border: '2px solid white' }}>{row.profe || '—'}</td>
-                                    <td className="px-4 py-2 text-[#111827] whitespace-nowrap" style={{ border: '2px solid white' }}>
+                                    <td className="px-4 py-2 text-white whitespace-nowrap" style={{ border: '2px solid white' }}>{row.profe || '—'}</td>
+                                    <td className="px-4 py-2 text-white whitespace-nowrap" style={{ border: '2px solid white' }}>
                                       {row.dias.length > 0
                                         ? row.dias.map(d => DIAS_SEMANA[d === 0 ? 6 : d - 1]).join(', ')
                                         : '—'}
                                     </td>
-                                    <td className="px-4 py-2 text-[#111827] whitespace-nowrap" style={{ border: '2px solid white' }}>{row.horario || '—'}</td>
-                                    <td className="px-4 py-2 text-center font-black text-[#111827]" style={{ background: '#f1f5f9', border: '2px solid white' }}>
+                                    <td className="px-4 py-2 text-white whitespace-nowrap" style={{ border: '2px solid white' }}>{row.horario || '—'}</td>
+                                    <td className="px-4 py-2 text-center font-black text-white" style={{ background: '#f1f5f9', border: '2px solid white' }}>
                                       {row.count}
                                     </td>
                                   </tr>

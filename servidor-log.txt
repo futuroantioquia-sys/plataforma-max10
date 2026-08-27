@@ -298,3 +298,499 @@
  GET /postpartido 200 in 130ms
  GET /api/deportistas 200 in 1632ms
  GET /api/deportistas 200 in 1872ms
+ ✓ Compiled in 1368ms (1451 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /postpartido 200 in 228ms
+ ✓ Compiled /api/deportistas in 183ms (742 modules)
+ GET /api/deportistas 200 in 2482ms
+ GET /api/deportistas 200 in 2557ms
+ ✓ Compiled /api/pagos/soportes in 272ms (745 modules)
+ GET /api/pagos/soportes?solo=count 200 in 698ms
+ GET /api/pagos/soportes?solo=count 200 in 732ms
+ ✓ Compiled in 1895ms (1453 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /postpartido 200 in 260ms
+ ✓ Compiled /api/deportistas in 305ms (743 modules)
+ GET /api/deportistas 200 in 2203ms
+ GET /api/deportistas 200 in 2277ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1162ms (1453 modules)
+ GET /postpartido 200 in 825ms
+ ✓ Compiled /api/deportistas in 180ms (743 modules)
+ GET /api/deportistas 200 in 3251ms
+ GET /api/deportistas 200 in 3370ms
+ ✓ Compiled /api/pagos/soportes in 446ms (744 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1175ms
+ GET /api/pagos/soportes?solo=count 200 in 1171ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1859ms (1455 modules)
+ GET /postpartido 200 in 1080ms
+ ✓ Compiled /api/deportistas in 155ms (744 modules)
+ GET /api/deportistas 200 in 2146ms
+ GET /api/deportistas 200 in 2350ms
+ ✓ Compiled in 1243ms (1487 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /postpartido 200 in 224ms
+ GET /api/deportistas 200 in 2751ms
+ GET /api/deportistas 200 in 2832ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 916ms (1487 modules)
+ GET /postpartido 200 in 551ms
+ GET /api/deportistas 200 in 2397ms
+ GET /api/deportistas 200 in 2450ms
+ ✓ Compiled /api/pagos/soportes in 287ms (747 modules)
+ GET /api/pagos/soportes?solo=count 200 in 681ms
+ GET /api/pagos/soportes?solo=count 200 in 699ms
+ GET /api/pagos/soportes?solo=count 200 in 541ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1460ms (1455 modules)
+ GET /postpartido 200 in 1035ms
+ ✓ Compiled /api/deportistas in 147ms (744 modules)
+ GET /api/deportistas 200 in 2167ms
+ GET /api/deportistas 200 in 2343ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1741ms (1455 modules)
+ GET /postpartido 200 in 1201ms
+ ✓ Compiled /api/deportistas in 176ms (744 modules)
+ GET /api/deportistas 200 in 3503ms
+ GET /api/deportistas 200 in 3678ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1419ms (1455 modules)
+ GET /postpartido 200 in 959ms
+ ✓ Compiled /api/deportistas in 212ms (744 modules)
+ GET /api/deportistas 200 in 2177ms
+ GET /api/deportistas 200 in 2358ms
+ ✓ Compiled /api/pagos/soportes in 367ms (745 modules)
+ GET /api/pagos/soportes?solo=count 200 in 843ms
+ GET /api/pagos/soportes?solo=count 200 in 854ms
+ GET /api/pagos/soportes?solo=count 200 in 636ms
+ GET /api/pagos/soportes?solo=count 200 in 669ms
+ GET /postpartido 200 in 262ms
+ ✓ Compiled /api/deportistas in 337ms (744 modules)
+ GET /api/deportistas 200 in 2431ms
+ GET /api/deportistas 200 in 2537ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1332ms (1455 modules)
+ GET /postpartido 200 in 965ms
+ ✓ Compiled /api/deportistas in 196ms (744 modules)
+ GET /api/deportistas 200 in 2054ms
+ GET /api/deportistas 200 in 2093ms
+ ✓ Compiled /api/pagos/soportes in 335ms (745 modules)
+ GET /api/pagos/soportes?solo=count 200 in 747ms
+ GET /api/pagos/soportes?solo=count 200 in 738ms
+ GET /postpartido 200 in 283ms
+ ✓ Compiled /api/deportistas in 324ms (744 modules)
+ GET /api/deportistas 200 in 3143ms
+ GET /api/deportistas 200 in 3194ms
+ ✓ Compiled /api/pagos/soportes in 187ms (747 modules)
+ GET /api/pagos/soportes?solo=count 200 in 595ms
+ GET /api/pagos/soportes?solo=count 200 in 611ms
+ GET /dashboard 200 in 178ms
+ GET /api/pagos/soportes?solo=count 200 in 388ms
+ GET /api/pagos/soportes?solo=count 200 in 642ms
+ GET /api/deportistas 200 in 1894ms
+ GET /api/deportistas 200 in 2025ms
+ GET /api/deportistas 200 in 1462ms
+ GET /api/deportistas 200 in 1504ms
+ GET /api/pagos/soportes?solo=count 200 in 342ms
+ GET /api/pagos/soportes?solo=count 200 in 345ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1814ms (1455 modules)
+ GET /postpartido 200 in 1185ms
+ ✓ Compiled /api/deportistas in 179ms (744 modules)
+ GET /api/deportistas 200 in 2216ms
+ GET /api/deportistas 200 in 2284ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1209ms (1455 modules)
+ GET /postpartido 200 in 941ms
+ ✓ Compiled /api/deportistas in 186ms (744 modules)
+ GET /api/deportistas 200 in 2118ms
+ GET /api/deportistas 200 in 2143ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1061ms (1487 modules)
+ GET /postpartido 200 in 815ms
+ GET /api/deportistas 200 in 2134ms
+ GET /api/deportistas 200 in 2160ms
+ ✓ Compiled in 916ms (1487 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /postpartido 200 in 211ms
+ GET /api/deportistas 200 in 1726ms
+ GET /api/deportistas 200 in 1834ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1347ms (1455 modules)
+ GET /postpartido 200 in 964ms
+ ✓ Compiled /api/deportistas in 183ms (744 modules)
+ GET /api/deportistas 200 in 2082ms
+ GET /api/deportistas 200 in 2119ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1624ms (1455 modules)
+ GET /postpartido 200 in 1070ms
+ ✓ Compiled /api/deportistas in 173ms (744 modules)
+ GET /api/deportistas 200 in 2306ms
+ GET /api/deportistas 200 in 2386ms
+ ⨯ ./src/app/postpartido/page.tsx
+Error: 
+  [31mx[0m Unexpected token `div`. Expected jsx identifier
+      ,-[[36;1;4mC:\Users\futur\Claude\Projects\Plataforma max 100\frontend\src\app\postpartido\page.tsx[0m:1154:1]
+ [2m1154[0m | 
+ [2m1155[0m |   /* ═══════════════════════════════════════════════════════════════════════ */
+ [2m1156[0m |   return (
+ [2m1157[0m |     <div className="min-h-screen pb-16" style={{ background: LIENZO }}>
+      : [31;1m     ^^^[0m
+ [2m1158[0m | 
+ [2m1159[0m |       {/* ── Encabezado ── */}
+ [2m1160[0m |       <header className="sticky top-0 z-30 px-4 py-3 flex items-center gap-3"
+      `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/postpartido/page.tsx
+ ○ Compiling /_error ...
+ ⨯ ./src/app/postpartido/page.tsx
+Error: 
+  [31mx[0m Unexpected token `div`. Expected jsx identifier
+      ,-[[36;1;4mC:\Users\futur\Claude\Projects\Plataforma max 100\frontend\src\app\postpartido\page.tsx[0m:1154:1]
+ [2m1154[0m | 
+ [2m1155[0m |   /* ═══════════════════════════════════════════════════════════════════════ */
+ [2m1156[0m |   return (
+ [2m1157[0m |     <div className="min-h-screen pb-16" style={{ background: LIENZO }}>
+      : [31;1m     ^^^[0m
+ [2m1158[0m | 
+ [2m1159[0m |       {/* ── Encabezado ── */}
+ [2m1160[0m |       <header className="sticky top-0 z-30 px-4 py-3 flex items-center gap-3"
+      `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/postpartido/page.tsx
+ GET /postpartido 500 in 42ms
+ GET /login 500 in 26ms
+ ✓ Compiled /_not-found in 2.3s (1671 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/4ce562c1a97e5518.webpack.hot-update.json 404 in 2509ms
+ GET /login 200 in 140ms
+ ✓ Compiled /api/auth/login in 277ms (789 modules)
+ POST /api/auth/login 200 in 404ms
+ ✓ Compiled /api/pagos/soportes in 326ms (792 modules)
+ ✓ Compiled (794 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1000ms
+ GET /api/pagos/soportes?solo=count 200 in 1021ms
+ GET /api/deportistas 200 in 2477ms
+ GET /api/deportistas 200 in 2608ms
+ GET /api/deportistas 200 in 1544ms
+ GET /api/deportistas 200 in 1917ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1334ms (1682 modules)
+ GET /postpartido 200 in 977ms
+ ✓ Compiled /api/deportistas in 158ms (785 modules)
+ GET /api/deportistas 200 in 3008ms
+ GET /api/deportistas 200 in 3081ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1009ms (1714 modules)
+ GET /postpartido 200 in 659ms
+ GET /api/deportistas 200 in 1830ms
+ GET /api/deportistas 200 in 1861ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1100ms (1682 modules)
+ GET /postpartido 200 in 840ms
+ ✓ Compiled /api/deportistas in 168ms (785 modules)
+ GET /api/deportistas 200 in 4502ms
+ GET /api/deportistas 200 in 4595ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1472ms (1713 modules)
+ GET /postpartido 200 in 839ms
+ GET /api/deportistas 200 in 1879ms
+ GET /api/deportistas 200 in 1911ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1845ms (1679 modules)
+ GET /postpartido 200 in 1120ms
+ ✓ Compiled /api/deportistas in 183ms (783 modules)
+ GET /api/deportistas 200 in 2066ms
+ GET /api/deportistas 200 in 2100ms
+ GET /login 200 in 164ms
+ ✓ Compiled /api/auth/login in 407ms (786 modules)
+ POST /api/auth/login 200 in 473ms
+ ✓ Compiled /api/pagos/soportes in 185ms (789 modules)
+ ✓ Compiled (791 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1346ms
+ GET /api/pagos/soportes?solo=count 200 in 1350ms
+ GET /api/deportistas 200 in 1869ms
+ GET /api/deportistas 200 in 3755ms
+ GET /api/deportistas 200 in 3969ms
+ GET /api/deportistas 200 in 2227ms
+ ✓ Compiled in 1529ms (1679 modules)
+ ✓ Compiled /api/pagos/soportes in 194ms (784 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1150ms
+ GET /api/pagos/soportes?solo=count 200 in 1155ms
+ GET /api/pagos/soportes?solo=count 200 in 434ms
+ ✓ Compiled in 1404ms (1679 modules)
+ ✓ Compiled /api/pagos/soportes in 355ms (784 modules)
+ GET /api/pagos/soportes?solo=count 200 in 749ms
+ GET /api/pagos/soportes?solo=count 200 in 768ms
+ GET /api/pagos/soportes?solo=count 200 in 312ms
+ GET /api/pagos/soportes?solo=count 200 in 348ms
+ GET /api/pagos/soportes?solo=count 200 in 308ms
+ ○ Compiling /evaluaciones ...
+ ✓ Compiled /evaluaciones in 1634ms (1727 modules)
+ ✓ Compiled /api/profes in 213ms (795 modules)
+ GET /api/profes 200 in 2846ms
+ GET /api/profes 200 in 3069ms
+ GET /api/pagos/soportes?solo=count 200 in 415ms
+ GET /api/pagos/soportes?solo=count 200 in 420ms
+ GET /login 200 in 191ms
+ ✓ Compiled /api/auth/login in 259ms (800 modules)
+ POST /api/auth/login 200 in 1164ms
+ ✓ Compiled /api/deportistas in 231ms (802 modules)
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 986ms
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 1004ms
+ ○ Compiling /alumnos ...
+ ✓ Compiled /alumnos in 752ms (811 modules)
+ GET /api/pagos/soportes?solo=count 403 in 76ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 364ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 402ms
+ GET /api/profes 200 in 9225ms
+ ✓ Compiled /asistencia in 455ms (818 modules)
+ ✓ Compiled /api/jornada-proyecto in 262ms (820 modules)
+ GET /api/jornada-proyecto?proyecto=SUB%208A 200 in 2542ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 2617ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 2630ms
+ GET /api/profes 200 in 14154ms
+ GET /api/profes 200 in 8331ms
+ GET /api/profes 200 in 12901ms
+ GET /api/pagos/soportes?solo=count 403 in 24ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 357ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 402ms
+ ○ Compiling /microciclo ...
+ ✓ Compiled /microciclo in 1845ms (1777 modules)
+ GET /api/deportistas 200 in 3201ms
+ GET /api/deportistas 200 in 3864ms
+ GET /api/profes 200 in 6742ms
+ GET /api/profes 200 in 7234ms
+ GET /api/pagos/soportes?solo=count 403 in 28ms
+ GET /api/pagos/soportes?solo=count 403 in 27ms
+ GET /api/pagos/soportes?solo=count 403 in 25ms
+ GET /api/pagos/soportes?solo=count 403 in 28ms
+ GET /api/pagos/soportes?solo=count 403 in 25ms
+ GET /api/pagos/soportes?solo=count 403 in 22ms
+ GET /api/pagos/soportes?solo=count 403 in 32ms
+ GET /api/pagos/soportes?solo=count 403 in 25ms
+ GET /api/pagos/soportes?solo=count 403 in 28ms
+ GET /api/pagos/soportes?solo=count 403 in 22ms
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 358ms
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 397ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 1795ms
+ GET /api/deportistas?proyecto=SUB%208A 200 in 1809ms
+ GET /api/profes 200 in 7828ms
+ GET /api/profes 200 in 8175ms
+ GET /api/profes 200 in 9505ms
+ GET /api/profes 200 in 9890ms
+ GET /login 200 in 166ms
+ POST /api/auth/login 200 in 28ms
+ GET /api/pagos/soportes?solo=count 200 in 633ms
+ GET /api/pagos/soportes?solo=count 200 in 694ms
+ GET /api/deportistas 200 in 2362ms
+ GET /api/deportistas 200 in 2525ms
+ GET /api/pagos/soportes?solo=count 200 in 665ms
+ GET /api/profes 200 in 3702ms
+ GET /api/profes 200 in 3804ms
+ GET /api/pagos/soportes?solo=count 200 in 472ms
+ GET /api/pagos/soportes?solo=count 200 in 475ms
+ ○ Compiling /facturas ...
+ ✓ Compiled /facturas in 1517ms (1755 modules)
+ GET /api/pagos/soportes?solo=count 200 in 782ms
+ GET /api/pagos/soportes?solo=count 200 in 798ms
+ ○ Compiling /cumpleanos ...
+ ✓ Compiled /cumpleanos in 1338ms (1751 modules)
+ GET /dashboard 200 in 200ms
+ ✓ Compiled /api/deportistas in 226ms (791 modules)
+ GET /api/pagos/soportes?solo=count 200 in 796ms
+ GET /api/pagos/soportes?solo=count 200 in 797ms
+ GET /api/deportistas 200 in 2249ms
+ GET /api/deportistas 200 in 2273ms
+ GET /api/pagos/soportes?solo=count 200 in 354ms
+ ○ Compiling /contabilidad ...
+ ✓ Compiled /contabilidad in 1681ms (1758 modules)
+ GET /api/pagos/soportes?solo=count 200 in 428ms
+ GET /api/pagos/soportes?solo=count 200 in 295ms
+ GET /api/pagos/soportes?solo=count 200 in 295ms
+ ○ Compiling /pagos ...
+ ✓ Compiled /pagos in 1340ms (1763 modules)
+ ○ Compiling /alumnos/[id]/estado-cuenta ...
+ ✓ Compiled /alumnos/[id]/estado-cuenta in 1403ms (1756 modules)
+ GET /api/pagos/soportes?solo=count 200 in 331ms
+ GET /api/pagos/soportes?solo=count 200 in 346ms
+ GET /api/pagos/soportes?solo=count 200 in 349ms
+ GET /api/pagos/soportes?solo=count 200 in 340ms
+ GET /api/pagos/soportes?solo=count 200 in 337ms
+ ○ Compiling /postpartido ...
+ ✓ Compiled /postpartido in 863ms (798 modules)
+ ✓ Compiled in 1213ms (1723 modules)
+ ✓ Compiled /api/pagos/soportes in 436ms (791 modules)
+ GET /api/pagos/soportes?solo=count 200 in 2231ms
+ GET /api/pagos/soportes?solo=count 200 in 2390ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 3.2s (1709 modules)
+ GET /postpartido 200 in 2686ms
+ ✓ Compiled /api/deportistas in 406ms (790 modules)
+ GET /api/deportistas 200 in 2447ms
+ GET /api/deportistas 200 in 2510ms
+ ✓ Compiled /api/pagos/soportes in 464ms (791 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1052ms
+ GET /api/pagos/soportes?solo=count 200 in 1069ms
+ GET /api/pagos/soportes?solo=count 200 in 673ms
+ GET /api/pagos/soportes?solo=count 200 in 688ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 2.6s (1745 modules)
+ GET /postpartido 200 in 1396ms
+ ✓ Compiled /api/deportistas in 207ms (795 modules)
+ GET /api/deportistas 200 in 1977ms
+ GET /api/deportistas 200 in 2017ms
+ ✓ Compiled in 1393ms (1726 modules)
+ ○ Compiling /api/pagos/soportes ...
+ ✓ Compiled /api/pagos/soportes in 2.5s (793 modules)
+ GET /api/pagos/soportes?solo=count 200 in 3136ms
+ GET /api/pagos/soportes?solo=count 200 in 3203ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 2.4s (1759 modules)
+ GET /alumnos/dep-1783987075174-406/estado-cuenta?edit=1 200 in 1339ms
+ ✓ Compiled /api/deportistas in 422ms (795 modules)
+ GET /api/deportistas 200 in 2732ms
+ GET /api/deportistas 200 in 2761ms
+ GET /api/pagos/soportes?solo=count 200 in 346ms
+ GET /api/pagos/soportes?solo=count 200 in 349ms
+ ○ Compiling /asistencia ...
+ ✓ Compiled /asistencia in 792ms (802 modules)
+ ✓ Compiled /api/profes in 228ms (804 modules)
+ GET /api/profes 200 in 4678ms
+ GET /api/profes 200 in 4857ms
+ ○ Compiling /api/jornada-proyecto ...
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled /api/jornada-proyecto in 1773ms (1759 modules)
+ GET /asistencia 200 in 1046ms
+ GET /api/jornada-proyecto?proyecto=12B 200 in 2309ms
+ GET /api/deportistas 200 in 3833ms
+ GET /api/deportistas 200 in 3868ms
+ GET /api/profes 200 in 4714ms
+ GET /api/profes 200 in 5375ms
+ GET /api/pagos/soportes?solo=count 200 in 904ms
+ GET /api/pagos/soportes?solo=count 200 in 913ms
+ GET /api/pagos/soportes?solo=count 200 in 312ms
+ ✓ Compiled in 1995ms (1720 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 2.1s (1720 modules)
+ GET /postpartido 200 in 1004ms
+ ✓ Compiled /api/deportistas in 420ms (786 modules)
+ GET /api/deportistas 200 in 3009ms
+ GET /api/deportistas 200 in 3060ms
+ ✓ Compiled /api/pagos/soportes in 409ms (787 modules)
+ GET /api/pagos/soportes?solo=count 200 in 1398ms
+ GET /api/pagos/soportes?solo=count 200 in 1390ms
+ GET /api/pagos/soportes?solo=count 200 in 363ms
+ GET /api/pagos/soportes?solo=count 200 in 428ms
+ ○ Compiling /torneos ...
+ ✓ Compiled /torneos in 616ms (794 modules)
+ GET /api/pagos/soportes?solo=count 200 in 535ms
+ GET /api/pagos/soportes?solo=count 200 in 540ms
+ GET /api/pagos/soportes?solo=count 200 in 321ms
+ ○ Compiling /facturas ...
+ ✓ Compiled /facturas in 772ms (791 modules)
+ GET /api/pagos/soportes?solo=count 200 in 327ms
+ GET /api/pagos/soportes?solo=count 200 in 343ms
+ ✓ Compiled /pagos in 427ms (799 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1518ms (1701 modules)
+ GET /alumnos/dep-1783987075174-406/estado-cuenta?edit=1 200 in 1078ms
+ ✓ Compiled /api/deportistas in 369ms (767 modules)
+ GET /api/deportistas 200 in 2262ms
+ GET /api/deportistas 200 in 2325ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1312ms (1701 modules)
+ GET /alumnos/dep-1783987075174-406/estado-cuenta?edit=1 200 in 910ms
+ ✓ Compiled /api/deportistas in 177ms (767 modules)
+ GET /api/deportistas 200 in 3202ms
+ GET /api/deportistas 200 in 3319ms
+ ✓ Compiled in 3.3s (1701 modules)
+ ✓ Compiled in 482ms (966 modules)
+ GET /alumnos/dep-1783987075174-406/estado-cuenta?edit=1 200 in 901ms
+ ○ Compiling /api/deportistas ...
+ ✓ Compiled /api/deportistas in 1182ms (767 modules)
+ GET /api/deportistas 200 in 5445ms
+ GET /api/deportistas 200 in 5805ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1583ms (1701 modules)
+ GET /alumnos/dep-1783987075174-406/estado-cuenta?edit=1 200 in 1314ms
+ ✓ Compiled /api/deportistas in 440ms (767 modules)
+ GET /api/deportistas 200 in 2806ms
+ GET /api/deportistas 200 in 3051ms
+ ○ Compiling /mensajes ...
+ ✓ Compiled /mensajes in 1501ms (1747 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1462ms (1706 modules)
+ GET /alumnos/dep-1783987075185-764/estado-cuenta?edit=1 200 in 1029ms
+ ✓ Compiled /api/deportistas in 190ms (767 modules)
+ GET /api/deportistas 200 in 2490ms
+ GET /api/deportistas 200 in 2535ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 978ms (792 modules)
+ ✓ Compiled /api/pagos/soportes in 395ms (795 modules)
+ GET /api/pagos/soportes?solo=count 200 in 831ms
+ GET /api/pagos/soportes?solo=count 200 in 834ms
+ ✓ Compiled in 1676ms (1706 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /alumnos/dep-1783987075175-432/estado-cuenta?edit=1 200 in 244ms
+ ✓ Compiled /api/deportistas in 169ms (767 modules)
+ GET /api/deportistas 200 in 2799ms
+ GET /api/deportistas 200 in 2843ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled in 1267ms (1706 modules)
+ GET /alumnos/dep-1783987075175-432/estado-cuenta?edit=1 200 in 860ms
+ ✓ Compiled /api/deportistas in 178ms (767 modules)
+ GET /api/deportistas 200 in 2787ms
+ GET /api/deportistas 200 in 2821ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 933ms (760 modules)
+ ✓ Compiled /api/pagos/soportes in 371ms (793 modules)
+ GET /api/pagos/soportes?solo=count 200 in 804ms
+ GET /api/pagos/soportes?solo=count 200 in 814ms
+ ○ Compiling /general ...
+ ✓ Compiled /general in 589ms (801 modules)
+ ✓ Compiled /api/profes in 207ms (803 modules)
+ GET /api/profes 200 in 5001ms
+ GET /api/profes 200 in 5239ms
+ ✓ Compiled in 2s (1756 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /general 200 in 229ms
+ ✓ Compiled /api/deportistas in 284ms (787 modules)
+ GET /api/deportistas 200 in 10686ms
+ GET /api/deportistas 200 in 10636ms
+ GET /api/profes 200 in 12429ms
+ GET /api/profes 200 in 12613ms
+ GET /api/pagos/soportes?solo=count 200 in 396ms
+ GET /api/pagos/soportes?solo=count 200 in 412ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 595ms (758 modules)
+ ✓ Compiled /api/auth/login in 223ms (793 modules)
+ POST /api/auth/login 200 in 1190ms
+ ✓ Compiled /mis-proyectos in 410ms (790 modules)
+ ✓ Compiled /api/profes in 212ms (793 modules)
+ ✓ Compiled (795 modules)
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 778ms
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 815ms
+ GET /api/profes 200 in 3878ms
+ GET /api/profes 200 in 3970ms
+ ○ Compiling /asistencia ...
+ ✓ Compiled /asistencia in 558ms (804 modules)
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 362ms
+ GET /api/deportistas?conteo=SUB%208A%7CSUB%208B 200 in 368ms
+ GET /api/profes 200 in 5832ms
+ GET /api/profes 200 in 6197ms
+ GET /api/profes 200 in 7912ms
+ GET /api/profes 200 in 8552ms
+ ✓ Compiled /api/auth/calidoso in 341ms (807 modules)
+ POST /api/auth/calidoso 200 in 1228ms
+ ○ Compiling /alumnos/[id] ...
+ ✓ Compiled /alumnos/[id] in 1546ms (1790 modules)

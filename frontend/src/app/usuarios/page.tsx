@@ -419,7 +419,7 @@ export default function UsuariosPage() {
   const hayEdits = Object.keys(metaEdits).length > 0 || Object.keys(profeEdits).length > 0 || profesDirty;
   const G  = '#16a34a';
   const BW = '2px solid white';
-  const inputCls = 'w-full bg-transparent outline-none text-[#111827] font-semibold text-[11px] px-1.5 py-1 rounded hover:bg-gray-100 focus:bg-gray-100 transition';
+  const inputCls = 'w-full bg-transparent outline-none text-white font-semibold text-[11px] px-1.5 py-1 rounded hover:bg-[#2B3547] focus:bg-[#2B3547] transition';
 
   function toggleAbierto(prog: string) {
     setAbiertos(prev => {
@@ -430,7 +430,7 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
 
       {/* Header */}
       <header className="relative bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
@@ -465,9 +465,9 @@ export default function UsuariosPage() {
           <div className="flex flex-col items-end gap-0.5">
             <button onClick={guardar} disabled={guardando}
               className={`flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl transition shadow-sm ${
-                guardado   ? 'bg-white text-green-700'
+                guardado   ? 'bg-[#3C4759] text-[#5BE39B]'
                 : errorGuard ? 'bg-red-500 text-white'
-                : 'bg-white text-green-700 hover:bg-gray-100'}`}>
+                : 'bg-[#3C4759] text-[#5BE39B] hover:bg-[#2B3547]'}`}>
               {guardando ? 'Guardando…' : guardado ? <><CheckCircle className="w-3.5 h-3.5" />¡Guardado!</> : <><Save className="w-3.5 h-3.5" />Guardar cambios</>}
             </button>
             {errorGuard && <span className="text-red-200 text-[9px] max-w-[180px] text-right leading-tight">{errorGuard}</span>}
@@ -479,34 +479,34 @@ export default function UsuariosPage() {
       {/* Modal nuevo formador */}
       {agregando && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
-            <h2 className="font-black text-gray-900 text-lg mb-4">Nuevo formador</h2>
+          <div className="bg-[#3C4759] rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <h2 className="font-black text-white text-lg mb-4">Nuevo formador</h2>
             <div className="space-y-3">
               <div>
-                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Nombre completo</label>
+                <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Nombre completo</label>
                 <input value={nuevo.nombre}
                   onChange={e => setNuevo(p => ({ ...p, nombre: e.target.value.toUpperCase() }))}
                   placeholder="NOMBRE Y APELLIDOS"
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  className="mt-1 w-full border border-[#4A5568] rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
               <div>
-                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Usuario (apellido)</label>
+                <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Usuario (apellido)</label>
                 <input value={nuevo.usuario}
                   onChange={e => setNuevo(p => ({ ...p, usuario: e.target.value.toUpperCase() }))}
                   placeholder="APELLIDO"
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  className="mt-1 w-full border border-[#4A5568] rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
               <div>
-                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Contraseña</label>
+                <label className="text-[11px] font-black text-white/40 uppercase tracking-widest">Contraseña</label>
                 <input value={nuevo.clave}
                   onChange={e => setNuevo(p => ({ ...p, clave: e.target.value }))}
                   placeholder="Número de cédula"
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  className="mt-1 w-full border border-[#4A5568] rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setAgregando(false)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancelar</button>
+                className="flex-1 py-2.5 rounded-xl border border-[#4A5568] text-sm font-bold text-white/70 hover:bg-[#333F50] transition">Cancelar</button>
               <button onClick={agregarProfe}
                 className="flex-1 py-2.5 rounded-xl bg-[#16a34a] text-white text-sm font-bold hover:bg-[#064e1e] transition">Agregar</button>
             </div>
@@ -517,68 +517,68 @@ export default function UsuariosPage() {
       {/* Modal: lista de formadores creados (ver / editar usuario y contraseña) */}
       {verFormadores && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setVerFormadores(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+          <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#4A5568] flex items-center justify-between flex-shrink-0">
               <div>
-                <h2 className="font-black text-gray-900 text-lg">Formadores creados</h2>
-                <p className="text-xs text-gray-400">{profes.length} formadores · edita nombre, usuario y contraseña</p>
+                <h2 className="font-black text-white text-lg">Formadores creados</h2>
+                <p className="text-xs text-white/40">{profes.length} formadores · edita nombre, usuario y contraseña</p>
               </div>
-              <button onClick={() => setVerFormadores(false)} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
+              <button onClick={() => setVerFormadores(false)} className="text-white/40 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
 
             <div className="p-4 space-y-3 overflow-y-auto">
-              {profes.length === 0 && <p className="text-center text-sm text-gray-400 py-6">Aún no hay formadores creados.</p>}
+              {profes.length === 0 && <p className="text-center text-sm text-white/40 py-6">Aún no hay formadores creados.</p>}
               {[...profes].sort((a, b) => a.usuario.localeCompare(b.usuario, 'es')).map(p => {
                 const u = profeEdits[p.id]?.usuario ?? p.usuario;
                 const c = profeEdits[p.id]?.clave ?? p.clave;
                 const vis = !!claveVis['fm-' + p.id];
                 return (
-                  <div key={p.id} className="rounded-xl border border-gray-200 p-3 bg-gray-50">
+                  <div key={p.id} className="rounded-xl border border-[#4A5568] p-3 bg-[#333F50]">
                     <div className="flex items-end gap-2 mb-2">
                       <div className="flex-1 min-w-0">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre completo</label>
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Nombre completo</label>
                         <input value={profeEdits[p.id]?.nombre ?? nombreDeProfe(p)}
                           onChange={e => setProfeEdits(prev => ({ ...prev, [p.id]: { ...prev[p.id], nombre: e.target.value.toUpperCase() } }))}
                           placeholder="NOMBRE Y APELLIDOS"
-                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-[#111827] bg-white focus:outline-none focus:ring-2 focus:ring-green-500" />
+                          className="mt-1 w-full border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-bold text-white bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-green-500" />
                       </div>
                       <button type="button" onClick={() => eliminarProfe(p.id, p.usuario)}
                         title="Eliminar formador"
-                        className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition">
+                        className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-[rgba(192,80,77,.14)] text-[#F08A87] hover:bg-[rgba(192,80,77,.20)] border border-[rgba(192,80,77,.45)] transition">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                     <div className="flex gap-2">
                       <div className="flex-1 min-w-0">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Usuario (apellido)</label>
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Usuario (apellido)</label>
                         <input value={u}
                           onChange={e => setProfeEdits(prev => ({ ...prev, [p.id]: { ...prev[p.id], usuario: e.target.value.toUpperCase() } }))}
-                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-[#111827] bg-white focus:outline-none focus:ring-2 focus:ring-green-500" />
+                          className="mt-1 w-full border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-bold text-white bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-green-500" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contraseña</label>
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Contraseña</label>
                         <div className="relative mt-1">
                           <input type={vis ? 'text' : 'password'} value={c}
                             onChange={e => setProfeEdits(prev => ({ ...prev, [p.id]: { ...prev[p.id], clave: e.target.value } }))}
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-9 text-sm font-bold text-[#111827] bg-white focus:outline-none focus:ring-2 focus:ring-green-500" />
+                            className="w-full border border-[#4A5568] rounded-lg px-3 py-2 pr-9 text-sm font-bold text-white bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-green-500" />
                           <button type="button" onClick={() => setClaveVis(prev => ({ ...prev, ['fm-' + p.id]: !prev['fm-' + p.id] }))}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
                             {vis ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
                         </div>
                       </div>
                     </div>
                     {p.proyectos && p.proyectos.length > 0 && (
-                      <p className="text-[11px] text-gray-500 mt-2 truncate">📋 Proyectos: {p.proyectos.join(', ')}</p>
+                      <p className="text-[11px] text-white/70 mt-2 truncate">📋 Proyectos: {p.proyectos.join(', ')}</p>
                     )}
                   </div>
                 );
               })}
             </div>
 
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">
+            <div className="px-5 py-3 border-t border-[#4A5568] flex justify-end gap-2 flex-shrink-0">
               <button onClick={() => setVerFormadores(false)}
-                className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cerrar</button>
+                className="px-4 py-2 rounded-xl border border-[#4A5568] text-sm font-bold text-white/70 hover:bg-[#333F50] transition">Cerrar</button>
               <button onClick={() => { guardar(); setVerFormadores(false); }} disabled={guardando || !hayEdits}
                 className="px-4 py-2 rounded-xl bg-[#16a34a] text-white text-sm font-bold hover:bg-[#064e1e] disabled:opacity-40 transition flex items-center gap-1.5">
                 <Save className="w-4 h-4" /> Guardar cambios
@@ -592,17 +592,17 @@ export default function UsuariosPage() {
 
         {/* Filtro programa */}
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Programa:</span>
+          <span className="text-[10px] font-black text-white/70 uppercase tracking-widest">Programa:</span>
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => setFiltroPrograma('')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black border transition ${
-                !filtroPrograma ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#16a34a]'}`}>
+                !filtroPrograma ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'bg-[#3C4759] text-white/70 border-[#4A5568] hover:border-[#16a34a]'}`}>
               Todos
             </button>
             {programas.map(p => (
               <button key={p} onClick={() => setFiltroPrograma(p)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black border transition ${
-                  filtroPrograma === p ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#16a34a]'}`}>
+                  filtroPrograma === p ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'bg-[#3C4759] text-white/70 border-[#4A5568] hover:border-[#16a34a]'}`}>
                 {p}
               </button>
             ))}
@@ -610,32 +610,32 @@ export default function UsuariosPage() {
 
           {/* Toggle Activos / Todos (por defecto: Activos) */}
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contar:</span>
-            <div className="flex bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <span className="text-[10px] font-black text-white/70 uppercase tracking-widest">Contar:</span>
+            <div className="flex bg-[#3C4759] border border-[#4A5568] rounded-xl overflow-hidden">
               <button onClick={() => setModoConteo('act')}
-                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'act' ? 'bg-[#16a34a] text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Activos</button>
+                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'act' ? 'bg-[#16a34a] text-white' : 'text-white/70 hover:bg-[#333F50]'}`}>Activos</button>
               <button onClick={() => setModoConteo('tot')}
-                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'tot' ? 'bg-[#064e1e] text-white' : 'text-gray-500 hover:bg-gray-50'}`}>Todos</button>
+                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'tot' ? 'bg-[#064e1e] text-white' : 'text-white/70 hover:bg-[#333F50]'}`}>Todos</button>
             </div>
           </div>
         </div>
 
         {/* Tabla por programa */}
         {gruposDisplay.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-16 text-center">
             {cargando ? (
-              <p className="text-gray-400 font-semibold text-sm">Cargando proyectos…</p>
+              <p className="text-white/40 font-semibold text-sm">Cargando proyectos…</p>
             ) : errorCarga ? (
               <div className="space-y-3">
-                <p className="text-red-600 font-black text-sm">No se pudo cargar la lista de proyectos.</p>
-                <p className="text-gray-500 text-xs max-w-md mx-auto break-words">{errorCarga}</p>
+                <p className="text-[#F08A87] font-black text-sm">No se pudo cargar la lista de proyectos.</p>
+                <p className="text-white/70 text-xs max-w-md mx-auto break-words">{errorCarga}</p>
                 <button onClick={() => window.location.reload()}
                   className="bg-[#16a34a] text-white font-black text-xs px-4 py-2 rounded-lg hover:bg-[#15803d] transition">
                   Reintentar
                 </button>
               </div>
             ) : (
-              <p className="text-gray-400 font-semibold text-sm">
+              <p className="text-white/40 font-semibold text-sm">
                 Se leyeron los deportistas, pero ninguno tiene proyecto asignado.<br/>
                 Revisa la columna PROY en el consolidado de afiliados.
               </p>
@@ -644,7 +644,7 @@ export default function UsuariosPage() {
         ) : gruposDisplay.map(([programa, filas]) => {
           const pc = conteos.prog[programa]?.[modoConteo] ?? 0;
           return (
-          <div key={programa} className="rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div key={programa} className="rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
 
             {/* Cabecera programa (título fijo) */}
             <div style={{ background: 'linear-gradient(90deg, #064e1e, #16a34a)' }}
@@ -745,7 +745,7 @@ export default function UsuariosPage() {
                               return (
                                 <button key={jsDay} onClick={() => toggleDia(row, jsDay)}
                                   className={`w-7 h-7 rounded text-[9px] font-black transition select-none ${
-                                    sel ? 'bg-[#16a34a] text-white shadow-sm' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                    sel ? 'bg-[#16a34a] text-white shadow-sm' : 'bg-[#2B3547] text-white/70 hover:bg-[#4A5568]'
                                   }`}>
                                   {DIAS_SEMANA_LABELS[i].slice(0, 2)}
                                 </button>
@@ -757,8 +757,8 @@ export default function UsuariosPage() {
                         {/* NOMBRE FORMADOR — solo lectura (se edita en "Ver formadores") */}
                         <td style={{ border: BW, padding: '8px 12px' }}>
                           {getNombreFormador(row)
-                            ? <span className="font-semibold text-[#111827] text-[11px]">{getNombreFormador(row)}</span>
-                            : <span className="text-gray-400 text-[10px] italic">— (edítalo en Ver formadores)</span>}
+                            ? <span className="font-semibold text-white text-[11px]">{getNombreFormador(row)}</span>
+                            : <span className="text-white/40 text-[10px] italic">— (edítalo en Ver formadores)</span>}
                         </td>
 
                         {/* USUARIO */}
@@ -784,15 +784,15 @@ export default function UsuariosPage() {
                                 onChange={e => setProfeEdit(row, 'clave', e.target.value)}
                                 placeholder="•••• (vacío = no cambiar)"
                                 title="Por seguridad la contraseña no se muestra. Escribe una nueva solo si quieres cambiarla."
-                                className={`flex-1 bg-transparent outline-none font-semibold text-[11px] px-1.5 py-1 rounded hover:bg-gray-100 focus:bg-gray-100 transition text-[#111827]`}
+                                className={`flex-1 bg-transparent outline-none font-semibold text-[11px] px-1.5 py-1 rounded hover:bg-[#2B3547] focus:bg-[#2B3547] transition text-white`}
                               />
                               <button onClick={() => setClaveVis(v => ({ ...v, [idVis]: !v[idVis] }))}
-                                className="text-gray-400 hover:text-gray-600 p-0.5 flex-shrink-0">
+                                className="text-white/40 hover:text-white/70 p-0.5 flex-shrink-0">
                                 {visible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                               </button>
                             </div>
                           ) : (
-                            <span className="text-gray-300 text-[10px] italic px-1.5">—</span>
+                            <span className="text-white/40 text-[10px] italic px-1.5">—</span>
                           )}
                         </td>
                       </tr>
@@ -809,8 +809,8 @@ export default function UsuariosPage() {
 
       {/* Barra inferior fija con botón Guardar (solo para quien puede editar) */}
       {!soloLectura && (
-      <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur border-t border-gray-200 px-4 py-3 flex items-center justify-between gap-3">
-        <span className="text-xs font-bold text-gray-500">
+      <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur border-t border-[#4A5568] px-4 py-3 flex items-center justify-between gap-3">
+        <span className="text-xs font-bold text-white/70">
           {hayEdits ? '⚠️ Tienes cambios sin guardar' : '✓ Todo guardado'}
         </span>
         <button onClick={guardar} disabled={guardando}

@@ -54,6 +54,12 @@ export type PlanillaGuardada = {
   goles_ellos: string;
   autogoles: string;        // autogoles del rival, que suman a nuestro marcador
   filas: any[];
+  /* ¿ESTÁ CERRADO O VA A MEDIAS? (dirección, 27/08/2026)
+     false = GUARDAR AVANCE. El formador va llenando y puede seguir después.
+     true  = GUARDAR DEFINITIVO. El partido quedó cerrado y revisado.
+     De aquí sale el módulo de seguimiento: permite ver de un vistazo cuáles
+     pospartidos están cerrados de verdad y cuáles siguen a medias. */
+  definitivo: boolean;
   actualizada_en: string;   // fecha ISO
 };
 
@@ -65,11 +71,12 @@ export type FichaBanco = {
   rival: string;
   goles_nos: string;
   goles_ellos: string;
+  definitivo: boolean;      // cerrado (true) o a medias (false)
   actualizada_en: string;
 };
 
 const FALTA_TABLA =
-  'Todavía no existe la tabla del pospartido. Corre PASO-BANCO-POSPARTIDO.bat.';
+  'A la tabla del pospartido le falta algo. Corre ARREGLAR-LA-BASE.bat.';
 
 /* ── Cómo se lee y se escribe la # FECHA ──────────────────────────────────── */
 
@@ -153,6 +160,7 @@ function aPlanilla(f: any, n: string, j: string): PlanillaGuardada {
     goles_ellos:   String(f?.goles_ellos ?? ''),
     autogoles:     String(f?.autogoles ?? ''),
     filas:         Array.isArray(f?.filas) ? f.filas : [],
+    definitivo:    f?.definitivo === true,
     actualizada_en: String(f?.actualizada_en ?? ''),
   };
 }
@@ -211,7 +219,7 @@ export async function getBanco(): Promise<FichaBanco[] | undefined> {
   try {
     const res = await fetch(
       `${SB_URL}/rest/v1/${TABLA_POSPARTIDO}` +
-      `?select=torneo_num,jornada,fecha,rival,goles_nos,goles_ellos,actualizada_en` +
+      `?select=torneo_num,jornada,fecha,rival,goles_nos,goles_ellos,definitivo,actualizada_en` +
       `&order=actualizada_en.desc&limit=1000`,
       { headers: HDR, cache: 'no-store' },
     );
@@ -229,6 +237,7 @@ export async function getBanco(): Promise<FichaBanco[] | undefined> {
       rival:          String(f?.rival ?? ''),
       goles_nos:      String(f?.goles_nos ?? ''),
       goles_ellos:    String(f?.goles_ellos ?? ''),
+      definitivo:     f?.definitivo === true,
       actualizada_en: String(f?.actualizada_en ?? ''),
     })).filter(f => f.torneo_num);
   } catch {

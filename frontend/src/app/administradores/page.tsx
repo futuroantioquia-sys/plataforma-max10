@@ -95,11 +95,11 @@ export default function AdministradoresPage() {
 
   function flash(t: string) { setMsg(t); setTimeout(() => setMsg(null), 3000); }
 
-  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500';
-  const labelCls = 'text-[10px] font-black text-gray-400 uppercase tracking-widest';
+  const inputCls = 'w-full border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-green-500';
+  const labelCls = 'text-[10px] font-black text-white/40 uppercase tracking-widest';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
       <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/dashboard')}
@@ -115,7 +115,7 @@ export default function AdministradoresPage() {
           </div>
         </div>
         <button onClick={() => setCreando(true)}
-          className="flex items-center gap-2 bg-white text-green-700 px-4 py-2 rounded-xl text-sm font-black hover:bg-green-50 transition shadow-sm">
+          className="flex items-center gap-2 bg-[#3C4759] text-[#5BE39B] px-4 py-2 rounded-xl text-sm font-black hover:bg-[rgba(0,176,80,.14)] transition shadow-sm">
           <Plus className="w-4 h-4" /> Nuevo admin
         </button>
       </header>
@@ -133,13 +133,13 @@ export default function AdministradoresPage() {
           {(['total', 'deportivo', 'contabilidad'] as const).map(t => {
             const info = TIPO_INFO[t]; const Ico = info.icono;
             return (
-              <div key={t} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-start gap-3">
+              <div key={t} className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4 flex items-start gap-3">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: info.color + '1a', color: info.color }}>
                   <Ico className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="font-black text-gray-800 text-sm">Administrador {info.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{info.desc}</p>
+                  <p className="font-black text-white text-sm">Administrador {info.label}</p>
+                  <p className="text-xs text-white/70 mt-0.5">{info.desc}</p>
                 </div>
               </div>
             );
@@ -147,8 +147,8 @@ export default function AdministradoresPage() {
         </div>
 
         {/* Nota ADMON */}
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-amber-600 flex-shrink-0" />
+        <div className="bg-[rgba(224,163,58,.14)] border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-[#E0A33A] flex-shrink-0" />
           <p className="text-xs text-amber-800 font-semibold">
             Un administrador de <strong>acceso total</strong> entra a toda la plataforma, Finanzas incluida.
             Lo único reservado al super-administrador (ADMON) es <strong>esta pantalla</strong>: crear, editar
@@ -158,21 +158,21 @@ export default function AdministradoresPage() {
 
         {/* Lista de administradores */}
         {cargando ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center text-gray-400 font-semibold text-sm">Cargando…</div>
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-12 text-center text-white/40 font-semibold text-sm">Cargando…</div>
         ) : lista.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center text-gray-400 font-semibold text-sm">
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-12 text-center text-white/40 font-semibold text-sm">
             No hay administradores creados. Usa “Nuevo admin”.
           </div>
         ) : lista.map(a => {
           const info = TIPO_INFO[a.tipo] || TIPO_INFO.deportivo;
           const vis = !!verClave[a.id];
           return (
-            <div key={a.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div key={a.id} className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1 rounded-full" style={{ background: info.color + '1a', color: info.color }}>
                   <info.icono className="w-3.5 h-3.5" /> {info.label}
                 </span>
-                {a.id === 'diana' && <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Diana</span>}
+                {a.id === 'diana' && <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Diana</span>}
               </div>
 
               {/* AVISO — sin contraseña guardada NO entra con ninguna.
@@ -205,7 +205,7 @@ export default function AdministradoresPage() {
                   <div className="relative">
                     <input type={vis ? 'text' : 'password'} value={a.clave} onChange={e => editar(a.id, 'clave', e.target.value)} className={inputCls + ' pr-9'} placeholder="•••• (vacío = no cambiar)" title="Por seguridad la contraseña no se muestra. Escribe una nueva solo si quieres cambiarla." />
                     <button type="button" onClick={() => setVerClave(p => ({ ...p, [a.id]: !p[a.id] }))}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white">
                       {vis ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
@@ -224,7 +224,7 @@ export default function AdministradoresPage() {
                 </button>
                 {a.id !== 'diana' && (
                   <button onClick={() => eliminar(a)} disabled={guardando === a.id}
-                    className="flex items-center gap-1.5 border border-red-200 text-red-500 text-sm font-black px-3 py-2 rounded-xl hover:bg-red-50 transition disabled:opacity-60">
+                    className="flex items-center gap-1.5 border border-[rgba(192,80,77,.45)] text-[#F08A87] text-sm font-black px-3 py-2 rounded-xl hover:bg-[rgba(192,80,77,.14)] transition disabled:opacity-60">
                     <Trash2 className="w-4 h-4" /> Eliminar
                   </button>
                 )}
@@ -237,10 +237,10 @@ export default function AdministradoresPage() {
       {/* Modal: nuevo administrador */}
       {creando && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setCreando(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-black text-gray-900 text-lg">Nuevo administrador</h2>
-              <button onClick={() => setCreando(false)} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
+              <h2 className="font-black text-white text-lg">Nuevo administrador</h2>
+              <button onClick={() => setCreando(false)} className="text-white/40 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-3">
               <div>
@@ -260,11 +260,11 @@ export default function AdministradoresPage() {
                 <select value={nuevo.tipo} onChange={e => setNuevo(p => ({ ...p, tipo: e.target.value as Admin['tipo'] }))} className={inputCls}>
                   {OPCIONES_TIPO.map(o => <option key={o.valor} value={o.valor}>{o.texto}</option>)}
                 </select>
-                <p className="text-[11px] text-gray-500 mt-1 leading-snug">{TIPO_INFO[nuevo.tipo]?.desc}</p>
+                <p className="text-[11px] text-white/70 mt-1 leading-snug">{TIPO_INFO[nuevo.tipo]?.desc}</p>
               </div>
             </div>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setCreando(false)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancelar</button>
+              <button onClick={() => setCreando(false)} className="flex-1 py-2.5 rounded-xl border border-[#4A5568] text-sm font-bold text-white/70 hover:bg-[#333F50] transition">Cancelar</button>
               <button onClick={crear} disabled={guardando === 'nuevo'}
                 className="flex-1 py-2.5 rounded-xl bg-[#16a34a] text-white text-sm font-black hover:bg-[#064e1e] transition disabled:opacity-60">
                 {guardando === 'nuevo' ? 'Creando…' : 'Crear'}

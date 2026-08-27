@@ -123,34 +123,94 @@ export async function getCuadro(): Promise<FilaTorneo[] | null> {
 /* ── Escritura ───────────────────────────────────────────────────────────── */
 
 const FALTA_TABLA =
-  'Todavía no existe la tabla del cuadro de torneos. Corre PASO-CREAR-TABLA-TORNEOS.bat.';
+  'Todavía no existe la tabla del cuadro de torneos. Corre ARREGLAR-LA-BASE.bat.';
+
+/* ── LA RED DE SEGURIDAD DEL CUADRO ─────────────────────────────────────────
+   POR QUÉ EXISTE (27/08/2026): a la base le faltaba la casilla `valor`, y por
+   eso NO se podía guardar NADA del cuadro — ni un torneo nuevo, ni un cambio
+   de formador. Una casilla que faltaba bloqueaba el módulo entero, y el
+   trabajo hecho en pantalla se quedaba sin ningún respaldo: al recargar, se
+   perdía.
+
+   Ahora, pase lo que pase, lo escrito queda guardado en este computador antes
+   de intentar mandarlo a la base. Si la base rechaza, se puede reintentar sin
+   haber perdido nada. */
+const LLAVE_LOCAL = 'torneos-cuadro-respaldo';
+
+export function guardarRespaldoLocal(filas: FilaTorneo[]): void {
+  try { localStorage.setItem(LLAVE_LOCAL, JSON.stringify(filas)); } catch { /* nada */ }
+}
+
+export function leerRespaldoLocal(): FilaTorneo[] | null {
+  try {
+    const t = localStorage.getItem(LLAVE_LOCAL);
+    const v = t ? JSON.parse(t) : null;
+    return Array.isArray(v) && v.length ? v as FilaTorneo[] : null;
+  } catch { return null; }
+}
+
+/** ¿De qué casilla se está quejando la base? "…the 'valor' column…" → valor */
+function casillaQueFalta(txt: string): string | null {
+  const m = txt.match(/Could not find the '([^']+)' column/i);
+  return m ? m[1] : null;
+}
 
 /** Guarda (crea o actualiza) uno o varios renglones de una sola vez. */
 export async function guardarFilas(filas: FilaTorneo[]): Promise<void> {
   if (!filas.length) return;
-  const cuerpo = filas.map(f => ({
-    id:        f.id,
-    orden:     f.orden,
-    torneo:    limpiar(f.torneo),
-    programa:  limpiar(f.programa),
-    categoria: limpiar(f.categoria),
-    nombre:    limpiar(f.nombre),
-    formador:  limpiar(f.formador),
-    valor:     Math.max(0, Math.round(Number(f.valor) || 0)),
-  }));
-  const res = await fetch(`${SB_URL}/rest/v1/${TABLA_TORNEOS}`, {
+
+  // 1. Primero el respaldo local. Aunque la base falle, el trabajo no se pierde.
+  guardarRespaldoLocal(filas);
+
+  const armar = (sinCasilla?: string) => filas.map(f => {
+    const fila: Record<string, any> = {
+      id:        f.id,
+      orden:     f.orden,
+      torneo:    limpiar(f.torneo),
+      programa:  limpiar(f.programa),
+      categoria: limpiar(f.categoria),
+      nombre:    limpiar(f.nombre),
+      formador:  limpiar(f.formador),
+      valor:     Math.max(0, Math.round(Number(f.valor) || 0)),
+    };
+    if (sinCasilla) delete fila[sinCasilla];
+    return fila;
+  });
+
+  const mandar = (cuerpo: any[]) => fetch(`${SB_URL}/rest/v1/${TABLA_TORNEOS}`, {
     method: 'POST',
     headers: { ...HDR, Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify(cuerpo),
   });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(
-      res.status === 404 || /does not exist/i.test(txt)
-        ? FALTA_TABLA
-        : `No se pudo guardar (${res.status}). ${txt.slice(0, 160)}`,
-    );
+
+  let res = await mandar(armar());
+  if (res.ok) return;
+
+  let txt = await res.text().catch(() => '');
+
+  /* 2. SI A LA BASE LE FALTA UNA CASILLA, SE GUARDA SIN ELLA.
+        Que falte el precio no puede impedir guardar el torneo: es mejor
+        perder un dato que perder el trabajo entero. Se avisa cuál se quedó
+        por fuera para que se pueda arreglar la base y volver a ponerlo. */
+  const falta = casillaQueFalta(txt);
+  if (falta) {
+    const res2 = await mandar(armar(falta));
+    if (res2.ok) {
+      throw new Error(
+        `Se guardaron los torneos, PERO sin la casilla "${falta}": la base todavía no la tiene. ` +
+        'Corre ARREGLAR-LA-BASE.bat y vuelve a guardar para que quede también ese dato.',
+      );
+    }
+    txt = await res2.text().catch(() => txt);
+    res = res2;
   }
+
+  throw new Error(
+    res.status === 404 || /does not exist/i.test(txt)
+      ? FALTA_TABLA
+      : `No se pudo guardar (${res.status}). ${txt.slice(0, 160)} ` +
+        'Tranquilo: lo escrito quedó guardado en este computador y se puede reintentar.',
+  );
 }
 
 /** Borra un renglón. */

@@ -201,7 +201,13 @@ export default function LoginPage() {
 
   /* La plataforma es una sola: el color NO cambia según el perfil.
      Gris oscuro de fondo y el verde institucional como único acento. */
-  const LIENZO = '#333F50';
+  /* LA PANTALLA DE ENTRADA VA MÁS OSCURA que el resto (dirección, 27/08/2026).
+     Adentro, el gris #333F50 es el fondo sobre el que descansan las tarjetas.
+     Aquí afuera no hay tarjetas que sostener: es la puerta de la casa, y se
+     ve mejor un gris más hondo, con el escudo y el verde encima. Los paneles
+     y los campos siguen con los mismos grises de siempre, así que la escalera
+     de tonos se mantiene: fondo hondo → panel → campo. */
+  const LIENZO = '#232B37';
   const PANEL  = '#3C4759';
   const CAMPO  = '#2B3547';
   const BORDE  = '#4A5568';

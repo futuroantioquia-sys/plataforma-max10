@@ -49,7 +49,7 @@ export default function CertificadosPage() {
   const td: React.CSSProperties = { border: '1px solid #fff', padding: '8px 12px', fontSize: 13, color: '#111827' };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
       <header className="bg-gradient-to-r from-[#0f766e] to-[#14b8a6] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => router.push('/dashboard')} className="text-white/80 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <FileCheck className="w-6 h-6 text-white" />
@@ -72,22 +72,22 @@ export default function CertificadosPage() {
 
       <main className="max-w-4xl mx-auto px-3 py-4">
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre o código…"
-            className="w-full border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white" />
+            className="w-full border border-[#4A5568] rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-[#3C4759]" />
         </div>
 
         {cargando ? (
-          <p className="text-center text-gray-400 py-16">Cargando…</p>
+          <p className="text-center text-white/40 py-16">Cargando…</p>
         ) : filtradas.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
-            <FileCheck className="w-14 h-14 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 font-semibold">
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-16 text-center">
+            <FileCheck className="w-14 h-14 text-white/40 mx-auto mb-3" />
+            <p className="text-white/40 font-semibold">
               {log.length === 0 ? 'Aún nadie ha descargado el certificado de asistencia.' : 'Sin resultados para la búsqueda.'}
             </p>
           </div>
         ) : (
-          <div className="overflow-auto rounded-2xl shadow-sm border border-gray-200 bg-white">
+          <div className="overflow-auto rounded-2xl shadow-sm border border-[#4A5568] bg-[#3C4759]">
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-10">
                 <tr>

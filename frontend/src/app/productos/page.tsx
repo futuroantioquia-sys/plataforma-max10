@@ -439,19 +439,19 @@ export default function ProductosPage() {
             Borra los cobros de torneo que están en el Estado de Cuenta de los
             deportistas (la sección "Otros pagos"). No toca el catálogo de
             abajo, ni los implementos, ni las mensualidades. — 26/08/2026 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100" style={{ background: '#fff7ed' }}>
+        <div className="bg-[#3C4759] rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#4A5568]" style={{ background: '#fff7ed' }}>
             <h2 className="font-black text-sm uppercase tracking-wide" style={{ color: '#9a3412' }}>
               🧹 Limpiar los torneos ya cargados
             </h2>
           </div>
           <div className="p-5 space-y-3">
-            <p className="text-[12.5px] text-gray-600 leading-relaxed">
+            <p className="text-[12.5px] text-white/70 leading-relaxed">
               Quita los cobros de torneo que ya se le cargaron a los deportistas —los
               que salen abajo del Estado de Cuenta, en <b>Otros pagos</b>— para volver
               a cargarlos desde cero.
               <br />
-              <span className="text-gray-500">
+              <span className="text-white/70">
                 No toca el catálogo de aquí abajo, ni los implementos, ni las mensualidades.
               </span>
             </p>
@@ -509,7 +509,7 @@ export default function ProductosPage() {
                 <button
                   onClick={() => setConteoTor(null)}
                   disabled={limpiando}
-                  className="w-full py-2 rounded-xl font-bold text-[12.5px] text-gray-500 border border-gray-200 hover:bg-gray-50 transition">
+                  className="w-full py-2 rounded-xl font-bold text-[12.5px] text-white/70 border border-[#4A5568] hover:bg-[#333F50] transition">
                   Cancelar
                 </button>
               </>
@@ -518,10 +518,10 @@ export default function ProductosPage() {
         </div>
 
         {/* Formulario */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100"
+        <div className="bg-[#3C4759] rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#4A5568]"
             style={{ background: '#f8fafc' }}>
-            <h2 className="font-black text-sm text-gray-700 uppercase tracking-wide">
+            <h2 className="font-black text-sm text-white uppercase tracking-wide">
               {editId ? '✏️ Editar Producto' : '➕ Nuevo Producto'}
             </h2>
           </div>
@@ -529,7 +529,7 @@ export default function ProductosPage() {
 
             {/* Tipo */}
             <div>
-              <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-2">
+              <label className="block text-xs font-black text-white/70 uppercase tracking-wide mb-2">
                 Tipo de Producto
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -541,7 +541,7 @@ export default function ProductosPage() {
                         ? t === 'torneo'
                           ? 'bg-blue-600 border-blue-600 text-white'
                           : 'bg-purple-600 border-purple-600 text-white'
-                        : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                        : 'bg-[#3C4759] border-[#4A5568] text-white/70 hover:border-[#4A5568]'
                     )}>
                     {t === 'torneo' ? '🏆 Torneo' : '👟 Implemento'}
                   </button>
@@ -551,44 +551,44 @@ export default function ProductosPage() {
 
             {/* Descripción */}
             <div>
-              <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-2">
+              <label className="block text-xs font-black text-white/70 uppercase tracking-wide mb-2">
                 Descripción
               </label>
               <input
                 value={desc}
                 onChange={e => setDesc(e.target.value)}
                 placeholder="Ej: Copa Ciudad 2026, Medias de fútbol..."
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
+                className="w-full border border-[#4A5568] rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
               />
             </div>
 
             {/* Valor */}
             <div>
-              <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-2">
+              <label className="block text-xs font-black text-white/70 uppercase tracking-wide mb-2">
                 Valor (COP)
               </label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">$</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-bold text-sm">$</span>
                 <input
                   value={valor}
                   onChange={e => setValor(e.target.value)}
                   placeholder="0"
                   type="number"
                   min={0}
-                  className="w-full border border-gray-200 rounded-xl pl-8 pr-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
+                  className="w-full border border-[#4A5568] rounded-xl pl-8 pr-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
                 />
               </div>
             </div>
 
             {/* Mensajes */}
-            {error && <p className="text-red-600 text-xs font-bold bg-red-50 rounded-lg px-3 py-2">{error}</p>}
-            {exito && <p className="text-green-700 text-xs font-bold bg-green-50 rounded-lg px-3 py-2">✅ {exito}</p>}
+            {error && <p className="text-[#F08A87] text-xs font-bold bg-[rgba(192,80,77,.14)] rounded-lg px-3 py-2">{error}</p>}
+            {exito && <p className="text-[#5BE39B] text-xs font-bold bg-[rgba(0,176,80,.14)] rounded-lg px-3 py-2">✅ {exito}</p>}
 
             {/* Botones */}
             <div className="flex gap-2 pt-1">
               {editId && (
                 <button onClick={limpiarForm}
-                  className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-black text-sm hover:bg-gray-50 transition">
+                  className="flex-1 py-3 rounded-xl border-2 border-[#4A5568] text-white/70 font-black text-sm hover:bg-[#333F50] transition">
                   Cancelar
                 </button>
               )}
@@ -602,29 +602,29 @@ export default function ProductosPage() {
         </div>
 
         {/* Lista de productos */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between"
+        <div className="bg-[#3C4759] rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#4A5568] flex items-center justify-between"
             style={{ background: '#f8fafc' }}>
-            <h2 className="font-black text-sm text-gray-700 uppercase tracking-wide">
+            <h2 className="font-black text-sm text-white uppercase tracking-wide">
               Productos Registrados
             </h2>
-            <span className="bg-gray-200 text-gray-600 text-xs font-black px-2 py-1 rounded-full">
+            <span className="bg-[#2B3547] text-white/70 text-xs font-black px-2 py-1 rounded-full">
               {productos.length}
             </span>
           </div>
 
           {cargando ? (
-            <div className="p-8 text-center text-gray-400 text-sm">Cargando...</div>
+            <div className="p-8 text-center text-white/40 text-sm">Cargando...</div>
           ) : productos.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">
+            <div className="p-8 text-center text-white/40 text-sm">
               No hay productos registrados aún
             </div>
           ) : (
             <div className="divide-y divide-gray-50">
               {productos.map(p => (
-                <div key={p.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition">
+                <div key={p.id} className="flex items-center gap-3 px-5 py-3 hover:bg-[#333F50] transition">
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm text-gray-800 truncate">{p.descripcion}</p>
+                    <p className="font-bold text-sm text-white truncate">{p.descripcion}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className={cn('text-[10px] font-black px-2 py-0.5 rounded-full', TIPO_COLOR[p.tipo])}>
                         {TIPO_LABEL[p.tipo]}
@@ -634,14 +634,14 @@ export default function ProductosPage() {
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={() => editar(p)}
-                      className="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 flex items-center justify-center transition text-blue-600">
+                      className="w-8 h-8 rounded-lg bg-[rgba(78,143,214,.14)] hover:bg-blue-100 flex items-center justify-center transition text-[#8FBEF0]">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                           d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                       </svg>
                     </button>
                     <button onClick={() => eliminar(p.id)}
-                      className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 flex items-center justify-center transition text-red-500">
+                      className="w-8 h-8 rounded-lg bg-[rgba(192,80,77,.14)] hover:bg-[rgba(192,80,77,.20)] flex items-center justify-center transition text-[#F08A87]">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                           d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
@@ -671,17 +671,17 @@ export default function ProductosPage() {
       {/* ── Modal Carga Masiva ────────────────────────────────────────────── */}
       {showMasiva && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
+          <div className="bg-[#3C4759] rounded-t-3xl sm:rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
             style={{ maxHeight: '90vh' }}>
 
             {/* Header modal */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#4A5568] flex-shrink-0">
               <div>
-                <h3 className="font-black text-gray-800 text-base">Carga Masiva</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Asigna un producto a varios deportistas desde Excel</p>
+                <h3 className="font-black text-white text-base">Carga Masiva</h3>
+                <p className="text-xs text-white/40 mt-0.5">Asigna un producto a varios deportistas desde Excel</p>
               </div>
               <button onClick={() => setShowMasiva(false)}
-                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition text-gray-500 font-black text-lg leading-none">
+                className="w-8 h-8 rounded-full bg-[#2B3547] hover:bg-[#2B3547] flex items-center justify-center transition text-white/70 font-black text-lg leading-none">
                 ×
               </button>
             </div>
@@ -691,10 +691,10 @@ export default function ProductosPage() {
 
               {/* 1. Cargar Excel — primero */}
               <div>
-                <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5">
+                <label className="block text-xs font-black text-white/70 uppercase tracking-wide mb-1.5">
                   1. Cargar Excel
                 </label>
-                <p className="text-[11px] text-gray-400 mb-2">
+                <p className="text-[11px] text-white/40 mb-2">
                   Acepta dos formatos:<br/>
                   <strong>· 2 cols:</strong> CÓDIGO, NOMBRE → selecciona el producto abajo.<br/>
                   <strong>· 4 cols:</strong> CÓDIGO, DEPORTISTA, TORNEO, VALOR → se detecta automáticamente.
@@ -712,8 +712,8 @@ export default function ProductosPage() {
                 {masivaFilas.length > 0 && (
                   <div className={cn('mt-2 px-3 py-2 rounded-lg text-[11px] font-black',
                     masivaMode === 'libre'
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                      : 'bg-gray-50 text-gray-600 border border-gray-200')}>
+                      ? 'bg-[rgba(78,143,214,.14)] text-[#8FBEF0] border border-[rgba(78,143,214,.45)]'
+                      : 'bg-[#333F50] text-white/70 border border-[#4A5568]')}>
                     {masivaMode === 'libre'
                       ? '🏆 Formato libre detectado — torneo y valor tomados del Excel por fila'
                       : '📦 Formato producto — selecciona el producto a asignar abajo'}
@@ -724,13 +724,13 @@ export default function ProductosPage() {
               {/* 2. Seleccionar producto (solo en modo producto) */}
               {masivaMode === 'producto' && (
                 <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5">
+                  <label className="block text-xs font-black text-white/70 uppercase tracking-wide mb-1.5">
                     2. Seleccionar Producto
                   </label>
                   <select
                     value={masivaProd}
                     onChange={e => setMasivaProd(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition bg-white">
+                    className="w-full border border-[#4A5568] rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition bg-[#3C4759]">
                     <option value="">-- Elige un producto --</option>
                     {productos.map(p => (
                       <option key={p.id} value={p.id}>
@@ -745,7 +745,7 @@ export default function ProductosPage() {
                       type="button"
                       onClick={eliminarCargasProducto}
                       disabled={masivaSubiendo}
-                      className="mt-2 w-full py-2.5 rounded-xl border-2 border-red-200 text-red-600 font-black text-[11px] uppercase tracking-wide hover:bg-red-50 transition disabled:opacity-40 flex items-center justify-center gap-1.5">
+                      className="mt-2 w-full py-2.5 rounded-xl border-2 border-[rgba(192,80,77,.45)] text-[#F08A87] font-black text-[11px] uppercase tracking-wide hover:bg-[rgba(192,80,77,.14)] transition disabled:opacity-40 flex items-center justify-center gap-1.5">
                       🗑 Eliminar cargas de este producto y volver a subir
                     </button>
                   )}
@@ -755,24 +755,24 @@ export default function ProductosPage() {
               {/* 3. Preview */}
               {masivaFilas.length > 0 && (
                 <div>
-                  <p className="text-xs font-black text-gray-500 uppercase tracking-wide mb-2">
+                  <p className="text-xs font-black text-white/70 uppercase tracking-wide mb-2">
                     {masivaMode === 'producto' ? '3' : '2'}. Vista Previa — {masivaFilas.length} deportistas
                   </p>
-                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="border border-[#4A5568] rounded-xl overflow-hidden">
                     {masivaMode === 'libre' ? (
                       <>
-                        <div className="grid grid-cols-4 bg-gray-100 px-3 py-1.5 text-[10px] font-black text-gray-500 uppercase tracking-wide">
+                        <div className="grid grid-cols-4 bg-[#2B3547] px-3 py-1.5 text-[10px] font-black text-white/70 uppercase tracking-wide">
                           <span>Código</span><span>Deportista</span><span>Torneo</span><span>Valor / Estado</span>
                         </div>
                         <div className="divide-y divide-gray-50 max-h-52 overflow-y-auto">
                           {masivaFilas.map((f, i) => (
                             <div key={i} className="grid grid-cols-4 px-3 py-1.5 text-xs">
-                              <span className="font-mono font-bold text-gray-700">{f.codigo}</span>
-                              <span className="text-gray-500 truncate">{f.nombre || '—'}</span>
-                              <span className="text-blue-700 font-bold truncate">{f.torneo || '—'}</span>
+                              <span className="font-mono font-bold text-white">{f.codigo}</span>
+                              <span className="text-white/70 truncate">{f.nombre || '—'}</span>
+                              <span className="text-[#8FBEF0] font-bold truncate">{f.torneo || '—'}</span>
                               <span className={cn('font-bold text-[11px]', f.msg
-                                ? (f.ok ? 'text-green-600' : 'text-red-500')
-                                : 'text-gray-500')}>
+                                ? (f.ok ? 'text-[#5BE39B]' : 'text-[#F08A87]')
+                                : 'text-white/70')}>
                                 {f.msg ? f.msg : (f.valorPropio ? `$${f.valorPropio.toLocaleString('es-CO')}` : '—')}
                               </span>
                             </div>
@@ -781,17 +781,17 @@ export default function ProductosPage() {
                       </>
                     ) : (
                       <>
-                        <div className="grid grid-cols-3 bg-gray-100 px-3 py-1.5 text-[10px] font-black text-gray-500 uppercase tracking-wide">
+                        <div className="grid grid-cols-3 bg-[#2B3547] px-3 py-1.5 text-[10px] font-black text-white/70 uppercase tracking-wide">
                           <span>Código</span><span>Nombre Excel</span><span>Estado</span>
                         </div>
                         <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
                           {masivaFilas.map((f, i) => (
                             <div key={i} className="grid grid-cols-3 px-3 py-1.5 text-xs">
-                              <span className="font-mono font-bold text-gray-700">{f.codigo}</span>
-                              <span className="text-gray-500 truncate">{f.nombre || '—'}</span>
+                              <span className="font-mono font-bold text-white">{f.codigo}</span>
+                              <span className="text-white/70 truncate">{f.nombre || '—'}</span>
                               <span className={cn('font-bold text-[11px]', f.msg
-                                ? (f.ok ? 'text-green-600' : 'text-red-500')
-                                : 'text-gray-400')}>
+                                ? (f.ok ? 'text-[#5BE39B]' : 'text-[#F08A87]')
+                                : 'text-white/40')}>
                                 {f.msg || '—'}
                               </span>
                             </div>
@@ -805,16 +805,16 @@ export default function ProductosPage() {
 
               {/* Resumen */}
               {masivaResumen && (
-                <p className="text-sm font-black text-center py-2 rounded-xl bg-gray-50 text-gray-700">
+                <p className="text-sm font-black text-center py-2 rounded-xl bg-[#333F50] text-white">
                   {masivaResumen}
                 </p>
               )}
             </div>
 
             {/* Footer modal */}
-            <div className="px-5 py-4 border-t border-gray-100 flex gap-2 flex-shrink-0">
+            <div className="px-5 py-4 border-t border-[#4A5568] flex gap-2 flex-shrink-0">
               <button onClick={() => setShowMasiva(false)}
-                className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-black text-sm hover:bg-gray-50 transition">
+                className="flex-1 py-3 rounded-xl border-2 border-[#4A5568] text-white/70 font-black text-sm hover:bg-[#333F50] transition">
                 Cerrar
               </button>
               <button

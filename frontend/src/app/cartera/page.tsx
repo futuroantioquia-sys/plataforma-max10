@@ -204,8 +204,8 @@ export default function CarteraPage() {
   }, [seleccion, esMes, deportistas, allPagos, otrosPend, busqueda, depEstados]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
+    <div className="min-h-screen bg-[#333F50]">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => router.push('/dashboard')} className="text-white/70 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <div className="flex-1 min-w-0">
           <h1 className="text-white font-black text-lg leading-tight">Cartera</h1>
@@ -223,12 +223,12 @@ export default function CarteraPage() {
         ) : (
           <>
             {/* Selector */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-              <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">Pago pendiente</label>
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
+              <label className="block text-[11px] font-black text-white/70 uppercase tracking-widest mb-2">Pago pendiente</label>
               <select
                 value={seleccion}
                 onChange={e => setSeleccion(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#16a34a]">
+                className="w-full border border-[#4A5568] rounded-xl px-4 py-3 text-sm font-semibold text-white bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-[#16a34a]">
                 <option value="">— Elige qué pago revisar —</option>
                 <optgroup label="Mensualidad">
                   {DETALLE_ROWS.map(m => (
@@ -264,22 +264,22 @@ export default function CarteraPage() {
             {/* Buscador dentro del resultado */}
             {seleccion && deudores.length > 0 && (
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
                 <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar en la lista…"
-                  className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white" />
+                  className="w-full pl-9 pr-4 py-2.5 border border-[#4A5568] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-[#3C4759]" />
               </div>
             )}
 
             {/* Lista */}
             {seleccion && (
               deudores.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
-                  <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl">✅</div>
-                  <p className="font-black text-gray-800">Nadie debe esto</p>
-                  <p className="text-gray-400 text-sm mt-1">Ningún deportista tiene pendiente este pago.</p>
+                <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-10 text-center">
+                  <div className="w-14 h-14 bg-[rgba(0,176,80,.14)] rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl">✅</div>
+                  <p className="font-black text-white">Nadie debe esto</p>
+                  <p className="text-white/40 text-sm mt-1">Ningún deportista tiene pendiente este pago.</p>
                 </div>
               ) : (
-                <div className="rounded-2xl overflow-x-auto shadow-sm border border-gray-200 bg-white">
+                <div className="rounded-2xl overflow-x-auto shadow-sm border border-[#4A5568] bg-[#3C4759]">
                   <table className="w-full border-collapse text-sm">
                     <thead>
                       <tr className="bg-[#064e1e] text-white text-[11px] font-black uppercase tracking-wide">
@@ -294,14 +294,14 @@ export default function CarteraPage() {
                     </thead>
                     <tbody>
                       {deudores.map((d, i) => (
-                        <tr key={d.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="px-3 py-2.5 text-center text-gray-400 font-bold">{i + 1}</td>
-                          <td className="px-3 py-2.5 text-center font-black text-green-700">{codigoDe(d) || '—'}</td>
-                          <td className="px-3 py-2.5 font-semibold text-gray-800 whitespace-nowrap">{d._nombre}</td>
-                          <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{getCol(d, /^program/i) || '—'}</td>
-                          <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{getCol(d, /^proy/i) || '—'}</td>
+                        <tr key={d.id} className={i % 2 === 0 ? 'bg-[#3C4759]' : 'bg-[#333F50]'}>
+                          <td className="px-3 py-2.5 text-center text-white/40 font-bold">{i + 1}</td>
+                          <td className="px-3 py-2.5 text-center font-black text-[#5BE39B]">{codigoDe(d) || '—'}</td>
+                          <td className="px-3 py-2.5 font-semibold text-white whitespace-nowrap">{d._nombre}</td>
+                          <td className="px-3 py-2.5 text-white/70 whitespace-nowrap">{getCol(d, /^program/i) || '—'}</td>
+                          <td className="px-3 py-2.5 text-white/70 whitespace-nowrap">{getCol(d, /^proy/i) || '—'}</td>
                           <td className="px-3 py-2.5 text-center">
-                            <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full">{depEstados[d.id] ?? 'ACTIVO'}</span>
+                            <span className="bg-green-100 text-[#5BE39B] text-[10px] font-black px-2 py-0.5 rounded-full">{depEstados[d.id] ?? 'ACTIVO'}</span>
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <button onClick={() => router.push(`/alumnos/${d.id}/estado-cuenta?edit=1`)}
@@ -316,10 +316,10 @@ export default function CarteraPage() {
             )}
 
             {!seleccion && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
-                <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl">💰</div>
-                <p className="font-black text-gray-800">Selecciona un pago</p>
-                <p className="text-gray-400 text-sm mt-1">Elige matrícula, un mes o un producto en el desplegable para ver quiénes lo deben y cuántos son.</p>
+              <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-10 text-center">
+                <div className="w-14 h-14 bg-[rgba(0,176,80,.14)] rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl">💰</div>
+                <p className="font-black text-white">Selecciona un pago</p>
+                <p className="text-white/40 text-sm mt-1">Elige matrícula, un mes o un producto en el desplegable para ver quiénes lo deben y cuántos son.</p>
               </div>
             )}
           </>

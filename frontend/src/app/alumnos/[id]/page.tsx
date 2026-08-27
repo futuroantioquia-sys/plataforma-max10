@@ -179,6 +179,9 @@ export default function PerfilDeportista() {
   const [dep,           setDep]          = useState<Deportista | null>(null);
   const [loading,       setLoading]      = useState(true);
   const [foto,          setFoto]          = useState<string | null>(null);
+  /* Cuánto hay que acercar la foto para que se vea de la cabeza a los
+     escudos. Lo decide la propia foto al cargarse (ver su onLoad). */
+  const [fotoZoom, setFotoZoom] = useState(1);
   const [editando,      setEditando]      = useState(false);
   const [edits,         setEdits]         = useState<Record<string, string>>({});
   const [tab,           setTab]           = useState(0);
@@ -652,39 +655,6 @@ export default function PerfilDeportista() {
             ))}
           </div>
 
-          {/* ── SOLICITUD DE RETIRO (26/08/2026) ─────────────────────────────
-              Va aparte y en tono discreto: no compite con los cuatro botones
-              de arriba, pero se encuentra sin tener que preguntar. Si el caso
-              ya está en estudio, el botón lo dice en vez de invitar otra vez. */}
-          {(() => {
-            const cols = dep._columnas ?? {};
-            const kEst = Object.keys(cols).find(k => /^estado$/i.test(k.trim()));
-            const est  = kEst ? String(cols[kEst] ?? '') : '';
-            const enEstudio = /solicit/i.test(est);
-            const yaSalio   = /retir/i.test(est) && !enEstudio;
-            const resaltado = enEstudio || yaSalio;
-            return (
-              <button
-                onClick={() => router.push('/retiro')}
-                style={{
-                  width: '100%', marginTop: 10, minHeight: 44,
-                  background: resaltado ? 'rgba(224,163,58,0.16)' : 'rgba(255,255,255,0.05)',
-                  border: resaltado ? '1.5px solid rgba(224,163,58,0.65)' : '1.5px solid rgba(255,255,255,0.16)',
-                  borderRadius: 13,
-                  color: resaltado ? '#E0A33A' : 'rgba(255,255,255,0.72)',
-                  fontWeight: 900, fontSize: 11.5, letterSpacing: '0.05em',
-                  textTransform: 'uppercase', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                }}>
-                <span>{enEstudio ? '⏳' : yaSalio ? '📄' : '📄'}</span>
-                <span>
-                  {enEstudio ? 'Solicitud de retiro · en estudio'
-                    : yaSalio ? 'Mi retiro y paz y salvo'
-                    : 'Solicitud de retiro'}
-                </span>
-              </button>
-            );
-          })()}
         </div>
 
         {/* ── MENSAJES: elegir canal y escribir (queda en la plataforma) ── */}
@@ -783,20 +753,83 @@ export default function PerfilDeportista() {
 
           {!procesandoFoto && (foto ? (
             <>
-              <img
-                src={foto}
-                alt={dep._nombre}
+              {/* ── LA FOTO, DENTRO DE UN MARCO ──────────────────────────────
+                  Corregido el 27/08/2026 por orden de la dirección.
+
+                  Antes la foto iba suelta: ancho completo de la tarjeta, sin
+                  recuadro y con alto libre hasta el 62% de la pantalla. Eso
+                  traía tres problemas:
+
+                    · Se comía la ficha entera. La foto pesaba más que los
+                      datos del deportista, que es a lo que uno entra.
+                    · Cada ficha se veía de un tamaño distinto, porque el alto
+                      dependía de la forma de cada foto.
+                    · `objectFit: cover` no hacía nada —sin un alto fijo no hay
+                      nada que recortar—, así que si la foto original traía una
+                      franja negra arriba (pasa cuando la recortan o la giran
+                      en el celular), la franja salía tal cual.
+
+                  Ahora hay un marco de verdad: ancho máximo, forma fija de 4x5
+                  —la misma del resto de la plataforma— y la foto se ajusta
+                  dentro anclada al centro. Todas las fichas se ven iguales y
+                  las franjas negras quedan por fuera del recorte. */}
+              <div
                 onClick={() => inputFotoRef.current?.click()}
+                title="Clic para cambiar la foto"
                 style={{
+                  /* GRANDE, como estaba antes: todo el ancho de la tarjeta.
+                     En celular eso es prácticamente toda la pantalla de ancho. */
                   width: '100%',
+                  margin: '0 auto',
+                  aspectRatio: '3 / 4',
                   borderRadius: 14,
-                  objectFit: 'cover', objectPosition: 'top',
+                  overflow: 'hidden',
+                  border: '1px solid #4A5568',
+                  background: '#2B3547',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.45)',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
-                  display: 'block',
-                  maxHeight: '62vh',
                 }}
-              />
+              >
+                <img
+                  src={foto}
+                  alt={dep._nombre}
+                  onLoad={e => {
+                    /* ── EL RECORTE SE CALCULA, NO SE ADIVINA ─────────────────
+                       Lo que pidió la dirección: de la cabeza hasta debajo de
+                       los escudos. Eso es, más o menos, la MITAD DE ARRIBA de
+                       la foto — el 55%.
+
+                       Los intentos anteriores fallaron porque usaban un
+                       acercamiento fijo, y un número fijo solo sirve para fotos
+                       tomadas a la misma distancia. Aquí se mide la foto de
+                       verdad al cargarse y se calcula cuánto hay que acercarla
+                       para que quede a la vista justo ese 55% de arriba:
+
+                         · Foto vertical normal → se acerca casi el doble.
+                         · Foto apaisada → igual, porque también se ve entera.
+                         · Foto muy alargada → casi no se acerca; el recuadro
+                           ya le está cortando lo de abajo.
+
+                       Y como se ancla ARRIBA, la cabeza no se puede cortar.
+                       El 0,55 es el único número con significado aquí: súbalo
+                       para ver más cuerpo, bájelo para acercarse a la cara.
+                       — dirección, 27/08/2026 */
+                    const im = e.currentTarget;
+                    const formaFoto = im.naturalWidth / Math.max(1, im.naturalHeight);
+                    const formaCaja = 3 / 4;
+                    const seVeAhora = Math.min(1, formaFoto / formaCaja);
+                    setFotoZoom(Math.min(2.5, Math.max(1, seVeAhora / 0.55)));
+                  }}
+                  style={{
+                    width: '100%', height: '100%',
+                    objectFit: 'cover',
+                    objectPosition: '50% 0%',
+                    transform: fotoZoom > 1 ? `scale(${fotoZoom})` : undefined,
+                    transformOrigin: '50% 5%',
+                    display: 'block',
+                  }}
+                />
+              </div>
               {/* Pie de foto — cambiar + eliminar */}
               <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                 <button
@@ -1009,6 +1042,46 @@ export default function PerfilDeportista() {
             {subiendoCalif ? 'Subiendo…' : '📎 Subir calificaciones escolares'}
           </button>
         </div>
+
+        {/* ── SOLICITUD DE RETIRO ──────────────────────────────────────────
+            Se bajó hasta el final, después de documentos y calificaciones, y
+            se dejó pequeño y discreto (dirección, 27/08/2026). Antes iba
+            arriba, junto a los cuatro botones grandes, y era lo segundo que
+            veía un acudiente al abrir la ficha de su hijo: retirarse. Eso no
+            es lo que la persona viene a hacer, y ponerlo de primero casi que
+            lo sugiere. Aquí abajo se encuentra igual cuando de verdad se
+            necesita, sin invitar a nada.
+            Si el caso ya está en estudio, el botón se prende en ámbar: ahí sí
+            hay algo pendiente que la persona necesita ver. */}
+        {(() => {
+          const cols = dep._columnas ?? {};
+          const kEst = Object.keys(cols).find(k => /^estado$/i.test(k.trim()));
+          const est  = kEst ? String(cols[kEst] ?? '') : '';
+          const enEstudio = /solicit/i.test(est);
+          const yaSalio   = /retir/i.test(est) && !enEstudio;
+          const resaltado = enEstudio || yaSalio;
+          return (
+            <button
+              onClick={() => router.push('/retiro')}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                margin: '4px auto 0', padding: '0 16px', height: 32,
+                background: resaltado ? 'rgba(224,163,58,0.14)' : 'transparent',
+                border: resaltado ? '1px solid rgba(224,163,58,0.55)' : '1px solid rgba(255,255,255,0.14)',
+                borderRadius: 10,
+                color: resaltado ? '#E0A33A' : 'rgba(255,255,255,0.45)',
+                fontWeight: 800, fontSize: 10, letterSpacing: '0.06em',
+                textTransform: 'uppercase', cursor: 'pointer',
+              }}>
+              <span style={{ fontSize: 11 }}>{enEstudio ? '⏳' : '📄'}</span>
+              <span>
+                {enEstudio ? 'Retiro · en estudio'
+                  : yaSalio ? 'Mi retiro y paz y salvo'
+                  : 'Solicitud de retiro'}
+              </span>
+            </button>
+          );
+        })()}
 
       </div>
     );

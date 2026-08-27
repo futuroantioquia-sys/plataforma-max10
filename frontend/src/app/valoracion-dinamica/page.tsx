@@ -556,7 +556,7 @@ function ValoracionDinamicaInner() {
           .print\\:hidden { display: none !important; }
         }
       ` }} />
-      <header className="print:hidden bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
+      <header className="print:hidden bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button
           title={volverA.startsWith('/control-informes') ? 'Volver a Control de Informes' : 'Volver'}
           onClick={() => {

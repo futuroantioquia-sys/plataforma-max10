@@ -891,6 +891,13 @@ export default function CrearPospartidoPage() {
      GUARDAR lo manda a la base para poder seguirlo desde otro lado.
      — dirección, 26/08/2026 */
   const [sinGuardar, setSinGuardar] = useState(false);
+  /* ¿ESTE PARTIDO YA QUEDÓ CERRADO? (dirección, 27/08/2026)
+     Mientras es false, el formador va llenando y guarda avances cuantas veces
+     quiera. Al oprimir GUARDAR DEFINITIVO pasa a true: el partido queda
+     cerrado, la planilla se bloquea y en el banco aparece con su sello verde.
+     Para volver a tocarlo hay que oprimir EDITAR, que lo reabre. De aquí sale
+     el módulo de seguimiento: qué partidos están cerrados y cuáles a medias. */
+  const [definitivo, setDefinitivo] = useState(false);
   const [guardandoPlanilla, setGuardandoPlanilla] = useState(false);
   const [guardadoEn, setGuardadoEn] = useState('');     // cuándo quedó en la base
   const [avisoGuardado, setAvisoGuardado] = useState('');
@@ -957,6 +964,7 @@ export default function CrearPospartidoPage() {
       goles_ellos: golesEllos,
       autogoles: String(autogoles),
       filas,
+      definitivo,
       actualizada_en: new Date().toISOString(),
     };
   }
@@ -970,6 +978,7 @@ export default function CrearPospartidoPage() {
     setGolesNos(p.goles_nos ?? '');
     setGolesEllos(p.goles_ellos ?? '');
     setAutogoles(parseInt(String((p as any).autogoles ?? '0'), 10) || 0);
+    setDefinitivo((p as any).definitivo === true);
     if (Array.isArray(p.filas) && p.filas.length) setFilas(p.filas as FilaPlanilla[]);
   }
 
@@ -987,7 +996,8 @@ export default function CrearPospartidoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filas, jornada, fecha, llegar, rival, golesNos, golesEllos, autogoles, numTorneo]);
 
-  async function guardarAvance() {
+  /** Guarda. `cerrar` = true es GUARDAR DEFINITIVO; false es GUARDAR AVANCE. */
+  async function guardarAvance(cerrar = false) {
     if (!numTorneo) {
       setError('Primero escribe el número del torneo.');
       return;
@@ -999,15 +1009,24 @@ export default function CrearPospartidoPage() {
       setError('Falta escoger la # FECHA. Es la que le pone nombre al partido en el banco (FECHA 1, FECHA 2…). Lo que ya escribiste está a salvo en este aparato.');
       return;
     }
-    const p = planillaDeAhora();
+    /* CERRAR ES UNA DECISIÓN, ASÍ QUE SE PREGUNTA. Después de esto la planilla
+       queda bloqueada y hay que oprimir EDITAR para volver a tocarla. */
+    if (cerrar && !confirm(
+      `¿Cerrar como DEFINITIVO ${etiquetaFecha(jornada)} ${nombreTorneo}?\n\n` +
+      'La planilla queda bloqueada y aparece como cerrada en el banco.\n' +
+      'Si necesita corregir algo después, se oprime EDITAR y se vuelve a abrir.',
+    )) return;
+
+    const p = { ...planillaDeAhora(), definitivo: cerrar };
     guardarBorradorLocal(p);             // primero lo seguro, sin internet
     setGuardandoPlanilla(true);
     setError('');
     try {
       await guardarPlanilla(p);
       setSinGuardar(false);
+      setDefinitivo(cerrar);
       setGuardadoEn(p.actualizada_en);
-      setAvisoGuardado('Guardado');
+      setAvisoGuardado(cerrar ? 'Cerrado' : 'Guardado');
       setTimeout(() => setAvisoGuardado(''), 2200);
       refrescarBanco();                  // que aparezca de una en el archivo
     } catch (e: any) {
@@ -1058,6 +1077,7 @@ export default function CrearPospartidoPage() {
     setGolesNos(''); setGolesEllos(''); setAutogoles(0);
     setGuardadoEn('');
     setSinGuardar(false);
+    setDefinitivo(false);
     setFilas(convocables.map((d, i) => ({
       ...filaNueva(i),
       posicion: posicionDe(d),
@@ -1123,12 +1143,19 @@ export default function CrearPospartidoPage() {
       .sort((a, b) => (parseInt(a.num, 10) || 0) - (parseInt(b.num, 10) || 0));
   }, [banco, nombreDeTorneoNum]);
 
-  /** Abre en la planilla de arriba un partido del banco. */
-  function abrirDelBanco(f: FichaBanco) {
+  /** Abre en la planilla de arriba un partido del banco.
+   *  Con `paraEditar` además le quita el candado, que es lo que hace el botón
+   *  EDITAR: uno espera poder escribir de una, sin un segundo clic. */
+  function abrirDelBanco(f: FichaBanco, paraEditar = false) {
     setError('');
     ultimoArmado.current = '';        // que el armado vuelva a correr
     setNumTorneo(f.torneo_num);
     setJornada(f.jornada);
+    if (paraEditar) {
+      /* Se abre desbloqueado. Va con un respiro porque la planilla se carga
+         sola un instante después y ella también toca este mismo dato. */
+      setTimeout(() => setDefinitivo(false), 400);
+    }
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { /* nada */ }
   }
 
@@ -1294,16 +1321,50 @@ export default function CrearPospartidoPage() {
             {nombreTorneo || 'Escribe el número del torneo para armar la planilla'}
           </p>
         </div>
+        {/* ── LOS DOS GUARDADOS (dirección, 27/08/2026) ─────────────────────
+            Antes había un solo botón GUARDAR y no se sabía si un partido
+            estaba terminado o el formador iba por la mitad. Ahora son dos
+            cosas distintas:
+
+              GUARDAR AVANCE      · voy llenando, sigo después.
+              GUARDAR DEFINITIVO  · este partido quedó cerrado.
+
+            Cuando ya está cerrado, los dos botones desaparecen y queda EDITAR,
+            que lo vuelve a abrir. Así el sello no se pierde por un clic sin
+            querer, y el módulo de seguimiento puede confiar en él. */}
         {!!numTorneo && (
-          <button onClick={guardarAvance} disabled={guardandoPlanilla}
-            title="Guardar el avance de esta planilla"
-            className="rounded-lg flex items-center gap-1.5 px-2.5 shrink-0 text-white font-black text-[11px] disabled:opacity-60"
-            style={{ height: 32, background: sinGuardar ? AMBAR : VERDE }}>
-            {guardandoPlanilla
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : avisoGuardado ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            {avisoGuardado || 'GUARDAR'}
-          </button>
+          definitivo ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="rounded-lg flex items-center gap-1 px-2 text-white font-black text-[10px]"
+                style={{ height: 32, background: 'rgba(0,176,80,.18)', border: `1px solid ${VERDE}`, color: '#5BE39B' }}>
+                <Check className="w-3.5 h-3.5" /> DEFINITIVO
+              </span>
+              <button onClick={() => { setDefinitivo(false); setAvisoGuardado(''); }}
+                title="Volver a abrir esta planilla para corregirla"
+                className="rounded-lg flex items-center gap-1.5 px-2.5 text-white font-black text-[11px]"
+                style={{ height: 32, background: CAMPO, border: `1px solid ${BORDE}` }}>
+                <Save className="w-3.5 h-3.5" /> EDITAR
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => guardarAvance(false)} disabled={guardandoPlanilla}
+                title="Guardar lo que lleva. Puede seguir llenándolo después."
+                className="rounded-lg flex items-center gap-1.5 px-2.5 text-white font-black text-[11px] disabled:opacity-60"
+                style={{ height: 32, background: sinGuardar ? AMBAR : CAMPO, border: `1px solid ${sinGuardar ? AMBAR : BORDE}` }}>
+                {guardandoPlanilla
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : avisoGuardado ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                {avisoGuardado || 'GUARDAR AVANCE'}
+              </button>
+              <button onClick={() => guardarAvance(true)} disabled={guardandoPlanilla}
+                title="Cerrar el partido: queda como terminado y revisado"
+                className="rounded-lg flex items-center gap-1.5 px-2.5 text-white font-black text-[11px] disabled:opacity-60"
+                style={{ height: 32, background: VERDE }}>
+                <Check className="w-3.5 h-3.5" /> GUARDAR DEFINITIVO
+              </button>
+            </div>
+          )
         )}
 
         {esAdmon && (
@@ -1816,30 +1877,59 @@ export default function CrearPospartidoPage() {
                         const res = comoQuedo(f);
                         const abierto = numTorneo === f.torneo_num && jornada === f.jornada;
                         return (
-                          <button
+                          <div
                             key={`${f.torneo_num}|${f.jornada}`}
-                            onClick={() => abrirDelBanco(f)}
-                            title={`Abrir ${etiquetaFecha(f.jornada)} ${g.titulo}`}
-                            className="text-left rounded-lg px-3 py-2 transition hover:brightness-125"
+                            className="rounded-lg px-3 py-2 transition"
                             style={{
                               background: PANEL,
                               border: `1px solid ${abierto ? VERDE : BORDE}`,
                               boxShadow: res ? `inset 4px 0 0 0 ${res.color}` : undefined,
-                              minWidth: 150,
+                              minWidth: 168,
                             }}>
-                            <div className="text-white font-black text-[12.5px]">
-                              {etiquetaFecha(f.jornada)}
-                            </div>
-                            <div className="text-white/55 text-[10.5px] font-semibold truncate"
-                                 style={{ maxWidth: 190 }}>
-                              {f.rival ? `vs ${f.rival.toUpperCase()}` : 'sin rival'}
-                            </div>
-                            {res && (
-                              <div className="text-[10.5px] font-black mt-0.5" style={{ color: res.color }}>
-                                {f.goles_nos || '0'} — {f.goles_ellos || '0'}
+                            <button onClick={() => abrirDelBanco(f)}
+                              title={`Abrir ${etiquetaFecha(f.jornada)} ${g.titulo}`}
+                              className="text-left w-full hover:brightness-125">
+                              <div className="text-white font-black text-[12.5px]">
+                                {etiquetaFecha(f.jornada)}
                               </div>
-                            )}
-                          </button>
+                              <div className="text-white/55 text-[10.5px] font-semibold truncate"
+                                   style={{ maxWidth: 190 }}>
+                                {f.rival ? `vs ${f.rival.toUpperCase()}` : 'sin rival'}
+                              </div>
+                              {res && (
+                                <div className="text-[10.5px] font-black mt-0.5" style={{ color: res.color }}>
+                                  {f.goles_nos || '0'} — {f.goles_ellos || '0'}
+                                </div>
+                              )}
+                            </button>
+
+                            {/* ── EL SELLO Y EL BOTÓN DE ABRIRLO ──────────────
+                                Verde con chulo = cerrado. Ámbar = va a medias.
+                                De un vistazo se ve cuáles partidos están de
+                                verdad terminados; eso es lo que va a leer el
+                                módulo de seguimiento. — dirección, 27/08/2026 */}
+                            <div className="flex items-center gap-1.5 mt-2 pt-1.5"
+                                 style={{ borderTop: `1px solid ${BORDE}` }}>
+                              {f.definitivo ? (
+                                <span className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black"
+                                  style={{ background: 'rgba(0,176,80,.16)', border: `1px solid ${VERDE}`, color: '#5BE39B' }}>
+                                  <Check className="w-3 h-3" /> DEFINITIVO
+                                </span>
+                              ) : (
+                                <span className="rounded px-1.5 py-0.5 text-[9px] font-black"
+                                  style={{ background: 'rgba(224,163,58,.16)', border: `1px solid ${AMBAR}`, color: AMBAR }}>
+                                  A MEDIAS
+                                </span>
+                              )}
+                              <button
+                                onClick={() => abrirDelBanco(f, true)}
+                                title="Abrirlo para corregirlo"
+                                className="ml-auto rounded px-2 py-0.5 text-[9px] font-black text-white/70 hover:text-white transition"
+                                style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                                EDITAR
+                              </button>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>

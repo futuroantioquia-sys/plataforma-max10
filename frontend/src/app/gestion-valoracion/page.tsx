@@ -58,7 +58,7 @@ export default function GestionValoracionPage() {
   FUNDAMENTOS.forEach(f => { if (!categorias.includes(f.categoria)) categorias.push(f.categoria); });
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] to-[#16a34a] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 shadow">
         <button onClick={() => router.push('/dashboard')} className="text-white/80 hover:text-white transition">
@@ -69,29 +69,29 @@ export default function GestionValoracionPage() {
           <p className="text-white/70 text-[11px]">Edita el texto de cada nivel · se refleja en el informe del formador</p>
         </div>
         <button onClick={guardar} disabled={guardando || cargando}
-          className="flex items-center gap-2 bg-white text-[#064e1e] font-black text-sm rounded-xl px-4 py-2 hover:bg-gray-100 transition disabled:opacity-60">
+          className="flex items-center gap-2 bg-[#3C4759] text-[#064e1e] font-black text-sm rounded-xl px-4 py-2 hover:bg-[#2B3547] transition disabled:opacity-60">
           {guardado ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
           {guardado ? '¡Guardado!' : guardando ? 'Guardando…' : 'Guardar'}
         </button>
       </header>
 
       <main className="max-w-4xl mx-auto px-3 py-5 space-y-6">
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[13px] text-blue-800">
+        <div className="bg-[rgba(78,143,214,.14)] border border-[rgba(78,143,214,.45)] rounded-xl p-3 text-[13px] text-blue-800">
           Aquí editas la <b>base de textos</b> de cada nivel. Al guardar, las <b>próximas valoraciones</b> que
           haga el formador usarán estos textos, y así también los verá el padre de familia.
         </div>
 
         {!cargando && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
             <p className="text-[#064e1e] font-black text-sm mb-1">Nombres de los componentes</p>
-            <p className="text-gray-500 text-[12px] mb-3">Estos nombres aparecen en el informe (Valoración Dinámica), incluido el consolidado del final. Edítalos y presiona Guardar.</p>
+            <p className="text-white/70 text-[12px] mb-3">Estos nombres aparecen en el informe (Valoración Dinámica), incluido el consolidado del final. Edítalos y presiona Guardar.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {COMPONENTES.map(c => (
                 <div key={c.key}>
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wide mb-1">{c.nombre}</label>
+                  <label className="block text-[10px] font-black text-white/70 uppercase tracking-wide mb-1">{c.nombre}</label>
                   <input value={catNombres[c.key] ?? ''} onChange={e => setCatNombres(prev => ({ ...prev, [c.key]: e.target.value }))}
                     placeholder={c.nombre}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#16a34a]" />
+                    className="w-full border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#16a34a]" />
                 </div>
               ))}
             </div>
@@ -99,14 +99,14 @@ export default function GestionValoracionPage() {
         )}
 
         {cargando ? (
-          <div className="text-center text-gray-400 py-16 font-semibold">Cargando textos…</div>
+          <div className="text-center text-white/40 py-16 font-semibold">Cargando textos…</div>
         ) : categorias.map(cat => (
           <section key={cat} className="space-y-3">
             <h2 className="text-lg font-black text-[#064e1e] flex items-center gap-2">
               <span>{CAT_EMOJI[cat] ?? '•'}</span> {cat}
             </h2>
             {FUNDAMENTOS.filter(f => f.categoria === cat).map(f => (
-              <div key={f.key} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <div key={f.key} className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-[#16a34a]">
                   <div className="min-w-0">
                     <p className="text-white font-black text-sm uppercase tracking-wide truncate">{meta[f.key]?.titulo || f.titulo}</p>
@@ -119,29 +119,29 @@ export default function GestionValoracionPage() {
                 </div>
                 <div className="p-3 space-y-2.5">
                   {/* Editar el COMPONENTE: nombre, subtítulo y definición */}
-                  <div className="bg-green-50/60 border border-green-100 rounded-lg p-2.5 space-y-2">
+                  <div className="bg-[rgba(0,176,80,.14)]/60 border border-green-100 rounded-lg p-2.5 space-y-2">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wide mb-1">Nombre del componente</label>
+                        <label className="block text-[10px] font-black text-white/70 uppercase tracking-wide mb-1">Nombre del componente</label>
                         <input value={meta[f.key]?.titulo ?? ''} onChange={e => setMetaCampo(f.key, 'titulo', e.target.value)}
                           placeholder={f.titulo}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#16a34a]" />
+                          className="w-full border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#16a34a]" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wide mb-1">Subtítulo</label>
+                        <label className="block text-[10px] font-black text-white/70 uppercase tracking-wide mb-1">Subtítulo</label>
                         <input value={meta[f.key]?.subtitulo ?? ''} onChange={e => setMetaCampo(f.key, 'subtitulo', e.target.value)}
                           placeholder={f.subtitulo}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#16a34a]" />
+                          className="w-full border border-[#4A5568] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#16a34a]" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wide mb-1">Definición del componente (opcional)</label>
+                      <label className="block text-[10px] font-black text-white/70 uppercase tracking-wide mb-1">Definición del componente (opcional)</label>
                       <textarea value={meta[f.key]?.definicion ?? ''} onChange={e => setMetaCampo(f.key, 'definicion', e.target.value)}
                         rows={2} placeholder="Explica de qué trata este componente…"
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#16a34a] resize-y" />
+                        className="w-full border border-[#4A5568] rounded-lg px-3 py-2 text-sm text-white leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#16a34a] resize-y" />
                     </div>
                   </div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide pt-1">Textos por nivel</p>
+                  <p className="text-[10px] font-black text-white/40 uppercase tracking-wide pt-1">Textos por nivel</p>
                   {NIVELES_LABELS.map((label, i) => (
                     <div key={label}>
                       <label className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide mb-1"
@@ -154,7 +154,7 @@ export default function GestionValoracionPage() {
                         onChange={e => setTexto(f.key, label, e.target.value)}
                         rows={2}
                         placeholder="Escribe la descripción de este nivel…"
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#16a34a] resize-y"
+                        className="w-full border border-[#4A5568] rounded-lg px-3 py-2 text-sm text-white leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#16a34a] resize-y"
                       />
                     </div>
                   ))}
