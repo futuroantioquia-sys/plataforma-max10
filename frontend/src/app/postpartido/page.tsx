@@ -35,7 +35,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, AlertTriangle, Loader2, ChevronDown, FileDown, Save, Check, Trash2,
-  Archive, RefreshCw,
+  Archive, RefreshCw, X,
 } from 'lucide-react';
 import { getCuadro, limpiar, type FilaTorneo } from '@/lib/torneos';
 import { esSuperAdmin, esAccesoTotal, esProfesor } from '@/lib/permisos';
@@ -411,7 +411,7 @@ function CeldaPosiciones({ valor, onChange }: {
           className="rounded-xl py-1.5">
           <p className="text-[9.5px] font-black text-white/45 uppercase tracking-widest px-3 pb-1"
             style={{ borderBottom: `1px solid ${BORDE}` }}>
-            Marca hasta {MAX_POS} · o escríbela en la casilla
+            Marca hasta {MAX_POS}
           </p>
           {lista.map(pos => {
             const marcada = puestas.includes(pos);
@@ -420,7 +420,7 @@ function CeldaPosiciones({ valor, onChange }: {
               <button key={pos} type="button"
                 onMouseDown={e => e.stopPropagation()}
                 onClick={() => marcar(pos)}
-                title={llena ? 'Ya hay tres marcadas. Quita una, o escríbela a mano en la casilla.' : ''}
+                title={llena ? 'Ya hay tres marcadas. Quita una para poder marcar otra.' : ''}
                 style={{ background: marcada ? 'rgba(0,176,80,.18)' : 'transparent' }}
                 className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-white text-left
                   ${marcada ? 'font-black' : 'font-semibold'}
@@ -467,16 +467,19 @@ function CeldaPosiciones({ valor, onChange }: {
           background: (foco || abierta) ? CAMPO : encimaRaton ? 'rgba(0,0,0,.18)' : 'transparent',
           border: `1px solid ${(foco || abierta) ? VERDE : encimaRaton ? BORDE : 'transparent'}`,
         }}>
-        {/* Escribir directo: manda lo que el formador teclee. */}
-        <input
-          value={valor}
-          onChange={e => onChange(e.target.value.toUpperCase())}
-          onFocus={() => setFoco(true)}
-          onBlur={() => setFoco(false)}
-          placeholder="—"
-          title="Escribe la posición que quieras, o déjala en blanco. La flechita abre la lista, pero no es obligatoria."
-          className="flex-1 min-w-0 bg-transparent outline-none text-[11px] font-bold text-white placeholder:text-white/25 cursor-text"
-        />
+        {/* LA POSICIÓN YA NO SE ESCRIBE A MANO (dirección, 27/08/2026).
+            Se escoge de la lista y punto. Escribiéndola entraban "EXTREMO",
+            "extremo", "EXTREM0" y "EXT" como si fueran cuatro posiciones
+            distintas, y después ningún conteo cuadraba. Tocando la casilla se
+            abre la lista, igual que con la flechita. */}
+        <button
+          type="button"
+          onClick={abrir}
+          title="Toca para escoger la posición de la lista"
+          className="flex-1 min-w-0 text-left bg-transparent outline-none text-[11px] font-bold
+            text-white truncate cursor-pointer">
+          {valor || <span className="text-white/25">—</span>}
+        </button>
         <button ref={btnRef} type="button" onClick={abrir}
           title="Ver la lista de posiciones"
           className="shrink-0 flex items-center justify-center"
@@ -1157,6 +1160,28 @@ export default function CrearPospartidoPage() {
     }
   }
 
+  /* ── CONVOCAR A TODOS DE UNA ──────────────────────────────────────────────
+     (dirección, 27/08/2026)
+
+     Casi siempre va convocado el equipo entero y solo faltan uno o dos. Marcar
+     23 casillas de a una, en el celular y con el partido encima, era el trabajo
+     más largo de la planilla.
+
+     Ahora: al marcar la casilla CONVOCADO del PRIMER renglón, se pregunta si se
+     le pone lo mismo a todos. Se hace desde el primero a propósito —no desde
+     cualquiera— para que nadie lo dispare sin querer estando en la mitad de la
+     lista. Después se destildan los dos o tres que no fueron.
+
+     No se manda nada a la base: queda como cambio pendiente, igual que si se
+     hubiera marcado a mano, y se guarda con GUARDAR AVANCE. */
+  const [pedirTodosConv, setPedirTodosConv] = useState<'' | 'Convocado' | 'No convocado'>('');
+
+  function ponerConvocadoATodos(valor: '' | 'Convocado' | 'No convocado') {
+    setFilas(fs => fs.map(f => ({ ...f, convocado: valor })));
+    setSinGuardar(true);
+    setPedirTodosConv('');
+  }
+
   const [bajandoPdf, setBajandoPdf] = useState(false);
   async function bajarPDF() {
     if (!esAdmon) {
@@ -1576,8 +1601,14 @@ export default function CrearPospartidoPage() {
       case 'convocado':
         return (
           <Escoger valor={f.convocado} opciones={OPC_CON} colores={COLOR_CON} grande
-            titulo="Clic para cambiar: Convocado o No convocado"
-            onChange={v => editar(f.id, 'convocado', v)} />
+            titulo={i === 0
+              ? 'Clic para cambiar. Desde este primer renglón se puede poner lo mismo a todos.'
+              : 'Clic para cambiar: Convocado o No convocado'}
+            onChange={v => {
+              editar(f.id, 'convocado', v);
+              /* Solo desde el PRIMER renglón, y solo si hay más de uno. */
+              if (i === 0 && v && filas.length > 1) setPedirTodosConv(v);
+            }} />
         );
       case 'actua':
         return (
@@ -1805,8 +1836,12 @@ export default function CrearPospartidoPage() {
                 value={numTorneo}
                 onChange={e => setNumTorneo(e.target.value)}
                 title="Escoge tu torneo"
-                style={{ height: 44, background: CAMPO, border: `1px solid ${BORDE}`, maxWidth: 460 }}
-                className="rounded-xl px-3 text-white font-black text-[15px] outline-none cursor-pointer">
+                /* En el celular ocupa todo el renglón: con ancho fijo se salía
+                   de la pantalla y tocaba deslizar solo para verla.
+                   — 27/08/2026 */
+                style={{ height: 44, background: CAMPO, border: `1px solid ${BORDE}` }}
+                className="w-full sm:w-auto sm:max-w-[460px] min-w-0 rounded-xl px-3
+                  text-white font-black text-[13px] sm:text-[15px] outline-none cursor-pointer">
                 <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>
                   — Escoge tu torneo —
                 </option>
@@ -1944,6 +1979,15 @@ export default function CrearPospartidoPage() {
         <style>{`
           /* En el celular el nombre se angosta, para que quede pantalla
              para las columnas que vienen detrás. */
+          /* Los dos cuadros del marcador, del mismo tamaño siempre. En el
+             celular más chicos, para que el nombre del rival quepa al lado
+             y no se caiga al renglón de abajo. — 27/08/2026 */
+          .marcador-caja { width: 68px; height: 68px; }
+          .marcador-num  { font-size: 30px; }
+          @media (max-width: 640px) {
+            .marcador-caja { width: 52px !important; height: 52px !important; }
+            .marcador-num  { font-size: 24px !important; }
+          }
           @media (max-width: 700px) {
             .plan-fija-dep { width: 132px !important; max-width: 132px; }
             .plan-fija-dep input { font-size: 10.5px; }
@@ -2215,56 +2259,129 @@ export default function CrearPospartidoPage() {
           </table>
         </div>
 
-        {/* ── MARCADOR ── */}
-        <div className="rounded-2xl p-4 mt-2 flex flex-wrap items-center justify-center gap-4"
+        {/* ── ¿SE LO PONGO A TODOS? (CONVOCADO) ───────────────────────────
+            Sale al marcar el primer renglón. — dirección, 27/08/2026 */}
+        {pedirTodosConv && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,.6)' }}>
+            <div className="rounded-2xl p-5 w-full max-w-sm relative"
+              style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+
+              <button
+                onClick={() => setPedirTodosConv('')}
+                title="Cerrar y dejar solo el primero"
+                className="absolute top-3 right-3 w-8 h-8 rounded-lg flex items-center justify-center
+                  text-white/50 hover:text-white transition"
+                style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                <X className="w-4 h-4" />
+              </button>
+
+              <h3 className="text-white font-black text-[15px] mb-1 pr-10">
+                ¿Se lo pongo a todos?
+              </h3>
+              <p className="text-white/45 text-[12px] font-semibold mb-4">
+                Acabas de marcar{' '}
+                <b style={{ color: pedirTodosConv === 'Convocado' ? VERDE : ROJO }}>
+                  {pedirTodosConv}
+                </b>{' '}
+                en el primer renglón.
+              </p>
+
+              <div className="rounded-xl px-3 py-3 mb-4"
+                style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                <p className="text-white text-[12.5px] font-bold">
+                  Son {filas.length} deportistas en esta planilla.
+                </p>
+                <p className="text-white/40 text-[11px] mt-1.5 leading-snug">
+                  Se les pone lo mismo a todos y después destildas los que no fueron.
+                  Queda como cambio pendiente — se guarda con GUARDAR AVANCE.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPedirTodosConv('')}
+                  className="flex-1 rounded-xl py-3 text-[13px] font-bold text-white/70 transition hover:bg-white/5"
+                  style={{ border: `1px solid ${BORDE}` }}>
+                  Solo el primero
+                </button>
+                <button
+                  onClick={() => ponerConvocadoATodos(pedirTodosConv)}
+                  className="flex-1 rounded-xl py-3 text-[13px] font-black text-white transition hover:opacity-90"
+                  style={{ background: pedirTodosConv === 'Convocado' ? VERDE : ROJO }}>
+                  Sí, a los {filas.length}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── MARCADOR ────────────────────────────────────────────────────
+            EN EL CELULAR SE LEE COMO UN MARCADOR DE VERDAD (dirección,
+            27/08/2026). Antes todo iba en un solo renglón y en la pantalla del
+            teléfono el gol del rival y su nombre se caían al renglón de abajo:
+            quedaba "FUTURO ANTIOQUIA 3 VS" arriba y el rival colgando.
+
+            Ahora cada equipo es una columna —su nombre encima y su gol debajo—
+            y las dos van lado a lado con el VS en el medio. En el computador se
+            ve igual que siempre: nombre y gol en el mismo renglón. */}
+        <div className="rounded-2xl p-3 sm:p-4 mt-2 flex flex-col sm:flex-row flex-wrap
+          items-center justify-center gap-3 sm:gap-4"
           style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
 
-          <div className="rounded-xl px-6 py-3 text-center"
-            style={{ background: resultado ? colorResultado : CAMPO, minWidth: 190,
+          <div className="rounded-xl px-4 sm:px-6 py-2.5 sm:py-3 text-center w-full sm:w-auto"
+            style={{ background: resultado ? colorResultado : CAMPO, minWidth: 0,
                      border: resultado ? 'none' : `1px solid ${BORDE}` }}>
-            <p className="text-white font-black text-[19px] tracking-wide">
+            <p className="text-white font-black text-[17px] sm:text-[19px] tracking-wide">
               {resultado || 'SIN MARCADOR'}
             </p>
           </div>
 
-          <div className="text-center px-2" style={{ minWidth: 170 }}>
-            <p className="text-white font-black text-[19px] leading-tight">FUTURO</p>
-            <p className="text-white font-black text-[19px] leading-tight">ANTIOQUIA</p>
+          <div className="flex items-center justify-center gap-2 sm:gap-4 w-full sm:w-auto">
+
+            {/* NOSOTROS — nombre encima del gol en el celular, al lado en el PC.
+                Nuestro marcador se suma solo: goles de los deportistas + autogoles. */}
+            <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-4 min-w-0 flex-1 sm:flex-none">
+              <div className="text-center px-1 sm:px-2 sm:min-w-[170px]">
+                <p className="text-white font-black text-[14px] sm:text-[19px] leading-tight">FUTURO</p>
+                <p className="text-white font-black text-[14px] sm:text-[19px] leading-tight">ANTIOQUIA</p>
+              </div>
+              <div className="rounded-xl flex items-center justify-center shrink-0 marcador-caja"
+                style={{ background: VERDE }}
+                title={`${golesDeLosNinos} de los deportistas${autogoles ? ` + ${autogoles} autogol${autogoles > 1 ? 'es' : ''} del rival` : ''}`}>
+                <span className="font-black leading-none marcador-num"
+                  style={{ color: marcadorActivo || gn > 0 ? '#ffffff' : 'rgba(255,255,255,.22)' }}>
+                  {gn}
+                </span>
+              </div>
+            </div>
+
+            <span className="text-white font-black text-[18px] sm:text-[22px] shrink-0">VS</span>
+
+            {/* EL RIVAL — igual, pero al revés en el computador (gol y luego
+                nombre), que es como se lee un marcador. */}
+            <div className="flex flex-col sm:flex-row-reverse items-center gap-1.5 sm:gap-4 min-w-0 flex-1 sm:flex-none">
+              <div className="text-center px-1 sm:px-2 sm:min-w-[170px]">
+                {limpiar(rival)
+                  ? enDosLineas(rival).map((r, i) => (
+                      <p key={i} className="text-white font-black text-[14px] sm:text-[19px] leading-tight">{r}</p>
+                    ))
+                  : <p className="text-white/25 font-black text-[14px] sm:text-[19px] leading-tight">RIVAL</p>}
+              </div>
+              {/* Mientras esté vacía lleva un borde blanco punteado: se ve de una
+                  que ahí falta algo, y sin ella no deja guardar. — 27/08/2026 */}
+              <input ref={cajaRival} value={golesEllos} inputMode="numeric"
+                onChange={e => setGolesEllos(e.target.value.replace(/[^\d]/g, ''))}
+                placeholder="0"
+                title="Los goles del rival. Escríbelos aquí, aunque sean 0. Sin esto no se puede guardar."
+                style={{
+                  background: ROJO,
+                  border: marcadorActivo ? 'none' : '2px dashed rgba(255,255,255,.55)',
+                }}
+                className="rounded-xl text-center text-white font-black outline-none shrink-0
+                  marcador-caja marcador-num placeholder:text-white/[.22]" />
+            </div>
           </div>
-
-          {/* Nuestro marcador se suma solo: goles de los deportistas + autogoles. */}
-          <div className="rounded-xl flex flex-col items-center justify-center"
-            style={{ width: 68, height: 68, background: VERDE }}
-            title={`${golesDeLosNinos} de los deportistas${autogoles ? ` + ${autogoles} autogol${autogoles > 1 ? 'es' : ''} del rival` : ''}`}>
-            <span className="font-black text-[30px] leading-none"
-              style={{ color: marcadorActivo || gn > 0 ? '#ffffff' : 'rgba(255,255,255,.22)' }}>
-              {gn}
-            </span>
-          </div>
-
-          <span className="text-white font-black text-[22px]">VS</span>
-
-          {/* Mientras esté vacía lleva un borde blanco punteado: se ve de una
-              que ahí falta algo, y sin ella no deja guardar. — 27/08/2026 */}
-          <input ref={cajaRival} value={golesEllos} inputMode="numeric"
-            onChange={e => setGolesEllos(e.target.value.replace(/[^\d]/g, ''))}
-            placeholder="0"
-            title="Los goles del rival. Escríbelos aquí, aunque sean 0. Sin esto no se puede guardar."
-            style={{
-              width: 68, height: 68, background: ROJO,
-              border: marcadorActivo ? 'none' : '2px dashed rgba(255,255,255,.55)',
-            }}
-            className="rounded-xl text-center text-white font-black text-[30px] outline-none
-              placeholder:text-white/[.22]" />
-
-          <div className="text-center px-2" style={{ minWidth: 170 }}>
-            {limpiar(rival)
-              ? enDosLineas(rival).map((r, i) => (
-                  <p key={i} className="text-white font-black text-[19px] leading-tight">{r}</p>
-                ))
-              : <p className="text-white/25 font-black text-[19px] leading-tight">RIVAL</p>}
-          </div>
-
         </div>
 
         {/* LOS BOTONES VAN DEBAJO DEL MARCADOR (dirección, 26/08/2026): el
