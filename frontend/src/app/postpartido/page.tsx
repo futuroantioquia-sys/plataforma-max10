@@ -1687,22 +1687,44 @@ export default function CrearPospartidoPage() {
   return (
     <div className="min-h-screen pb-16" style={{ background: LIENZO }}>
 
-      {/* ── Encabezado ── */}
-      <header className="sticky top-0 z-30 px-4 py-3 flex items-center gap-3"
+      {/* ── Encabezado ──────────────────────────────────────────────────────
+          EN EL CELULAR VA EN DOS RENGLONES (dirección, 27/08/2026).
+          Antes iba todo en uno solo y no cabía: el título "Crear Pospartido"
+          se partía en tres líneas, los botones de guardar se le montaban
+          encima y el logo quedaba cortado por el borde de la pantalla.
+
+          Ahora: arriba la flecha, el título y el logo; abajo los dos guardados,
+          repartidos mitad y mitad. En el computador todo vuelve a un renglón,
+          igual que antes. */}
+      <header className="sticky top-0 z-30 px-3 sm:px-4 py-2.5 sm:py-3
+        flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
         style={{ background: CAMPO, borderBottom: `1px solid ${BORDE}` }}>
-        <button onClick={() => router.push('/dashboard')} aria-label="Volver"
-          className="rounded-xl flex items-center justify-center shrink-0"
-          style={{ width: 44, height: 44, background: PANEL, border: `1px solid ${BORDE}` }}>
-          <ArrowLeft className="w-5 h-5 text-white" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-white font-black text-base leading-tight">Crear Pos Partido</h1>
-          <p className="text-white/55 text-[11px] leading-tight truncate">
-            {nombreTorneo || (esProfe
-              ? 'Escoge tu torneo para armar la planilla'
-              : 'Escribe el número del torneo para armar la planilla')}
-          </p>
+
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 sm:flex-1">
+          <button onClick={() => router.push('/dashboard')} aria-label="Volver"
+            className="rounded-xl flex items-center justify-center shrink-0"
+            style={{ width: 44, height: 44, background: PANEL, border: `1px solid ${BORDE}` }}>
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-white font-black text-[15px] sm:text-base leading-tight">Crear Pospartido</h1>
+            <p className="text-white/55 text-[11px] leading-tight truncate">
+              {nombreTorneo || (esProfe
+                ? 'Escoge tu torneo para armar la planilla'
+                : 'Escribe el número del torneo para armar la planilla')}
+            </p>
+          </div>
+          {/* El logo, en el celular, va en este mismo renglón: así se ve
+              completo y no lo empujan los botones. */}
+          <div className="flex flex-col items-end shrink-0 sm:hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-6 w-auto object-contain" />
+            <p className="text-white/60 text-[7.5px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
+          </div>
         </div>
+
+        {/* Renglón de abajo en el celular · a la derecha en el computador */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
         {/* ── LOS DOS GUARDADOS (dirección, 27/08/2026) ─────────────────────
             Antes había un solo botón GUARDAR y no se sabía si un partido
             estaba terminado o el formador iba por la mitad. Ahora son dos
@@ -1716,7 +1738,7 @@ export default function CrearPospartidoPage() {
             querer, y el módulo de seguimiento puede confiar en él. */}
         {!!numTorneo && (
           definitivo ? (
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 flex-1 sm:flex-none">
               <span className="rounded-lg flex items-center gap-1 px-2 text-white font-black text-[10px]"
                 style={{ height: 32, background: 'rgba(0,176,80,.18)', border: `1px solid ${VERDE}`, color: '#5BE39B' }}>
                 <Check className="w-3.5 h-3.5" /> DEFINITIVO
@@ -1729,11 +1751,12 @@ export default function CrearPospartidoPage() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 flex-1 sm:flex-none">
               <button onClick={() => guardarAvance(false)} disabled={guardandoPlanilla}
                 title="Guardar lo que lleva. Puede seguir llenándolo después."
-                className="rounded-lg flex items-center gap-1.5 px-2.5 text-white font-black text-[11px] disabled:opacity-60"
-                style={{ height: 32, background: sinGuardar ? AMBAR : CAMPO, border: `1px solid ${sinGuardar ? AMBAR : BORDE}` }}>
+                className="rounded-lg flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-2.5
+                  text-white font-black text-[11px] h-[38px] sm:h-8 disabled:opacity-60"
+                style={{ background: sinGuardar ? AMBAR : CAMPO, border: `1px solid ${sinGuardar ? AMBAR : BORDE}` }}>
                 {guardandoPlanilla
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : avisoGuardado ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
@@ -1741,8 +1764,9 @@ export default function CrearPospartidoPage() {
               </button>
               <button onClick={() => guardarAvance(true)} disabled={guardandoPlanilla}
                 title="Cerrar el partido: queda como terminado y revisado"
-                className="rounded-lg flex items-center gap-1.5 px-2.5 text-white font-black text-[11px] disabled:opacity-60"
-                style={{ height: 32, background: VERDE }}>
+                className="rounded-lg flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-2.5
+                  text-white font-black text-[11px] h-[38px] sm:h-8 disabled:opacity-60"
+                style={{ background: VERDE }}>
                 <Check className="w-3.5 h-3.5" /> GUARDAR DEFINITIVO
               </button>
             </div>
@@ -1752,17 +1776,21 @@ export default function CrearPospartidoPage() {
         {esAdmon && (
         <button onClick={bajarPDF} disabled={bajandoPdf}
           title="Bajar esta planilla en PDF (solo administración)"
-          className="rounded-lg flex items-center gap-1.5 px-2.5 shrink-0 text-white font-black text-[11px] disabled:opacity-60"
-          style={{ height: 32, background: CAMPO, border: `1px solid ${BORDE}` }}>
+          className="rounded-lg flex items-center justify-center gap-1.5 px-2.5 shrink-0
+            text-white font-black text-[11px] h-[38px] sm:h-8 disabled:opacity-60"
+          style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
           {bajandoPdf
             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
             : <FileDown className="w-3.5 h-3.5" />}
           PDF
         </button>
         )}
+        </div>
 
-        {/* La marca, con el logo, igual que en las demás pantallas. — 27/08/2026 */}
-        <div className="flex flex-col items-end flex-shrink-0">
+        {/* La marca, con el logo, igual que en las demás pantallas. En el
+            celular ya salió arriba, junto al título: aquí solo va del
+            computador para arriba. — 27/08/2026 */}
+        <div className="hidden sm:flex flex-col items-end flex-shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
           <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
@@ -2420,9 +2448,14 @@ export default function CrearPospartidoPage() {
               Suman a nuestro marcador, pero no son de ningún deportista
               nuestro, así que no van en la columna GOL. Se escoge de una lista
               de 1 a 5, igual que todo lo demás. — dirección, 26/08/2026 */}
-          <div className="flex items-center gap-2 rounded-lg px-2.5"
-            style={{ height: 34, background: CAMPO, border: `1px solid ${autogoles > 0 ? VERDE : BORDE}` }}>
-            <span className="text-white/60 text-[10.5px] font-black tracking-wide">AUTOGOL RIVAL</span>
+          <div className="flex items-center gap-2 rounded-lg px-2.5 order-1"
+            title="Autogoles del rival. Suman a nuestro marcador."
+            style={{ height: 36, background: CAMPO, border: `1px solid ${autogoles > 0 ? VERDE : BORDE}` }}>
+            {/* En el celular dice solo AUTOGOL, para que quepa al lado del
+                promedio. En el computador va completo. — 27/08/2026 */}
+            <span className="text-white/60 text-[10.5px] font-black tracking-wide whitespace-nowrap">
+              AUTOGOL<span className="hidden sm:inline"> RIVAL</span>
+            </span>
             <select
               value={autogoles ? String(autogoles) : ''}
               onChange={e => setAutogoles(parseInt(e.target.value, 10) || 0)}
@@ -2441,57 +2474,65 @@ export default function CrearPospartidoPage() {
             </select>
           </div>
 
+          {/* INFO borra el juego. En el celular se va de último —al renglón de
+              abajo— que es donde estorba menos y donde no se oprime sin
+              querer. — 27/08/2026 */}
           <button onClick={borrarEsteJuego} disabled={borrando || !numTorneo}
             title="Borrar la información de este juego: deja la planilla en blanco"
-            className="rounded-lg px-2.5 font-black text-[10.5px] flex items-center gap-1 disabled:opacity-40"
-            style={{ height: 30, background: 'transparent', border: `1px solid ${ROJO}`, color: ROJO }}>
+            className="rounded-lg px-2.5 font-black text-[10.5px] flex items-center gap-1
+              order-3 sm:order-2 disabled:opacity-40"
+            style={{ height: 32, background: 'transparent', border: `1px solid ${ROJO}`, color: ROJO }}>
             {borrando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
             INFO
           </button>
 
-          {/* PROMEDIO DEL EQUIPO — contra la esquina derecha. El letrero va por
-              FUERA del cuadro verde: adentro solo la nota, que es lo que se
-              mira. No se oprime, es el resumen de las calificaciones.
-              — dirección, 26/08/2026 */}
-          <div className="ml-auto flex items-center gap-2.5 select-none"
-            title="Promedio de las calificaciones puestas en la columna CAL">
-            <span className="text-white/50 font-black text-[10.5px] tracking-wide leading-tight text-right">
-              PROMEDIO<br />EQUIPO
+          {/* PROMEDIO DEL EQUIPO — SUBIÓ AL LADO DE AUTOGOL (dirección,
+              27/08/2026). Antes se iba solo contra la esquina derecha y en el
+              celular caía a un renglón aparte, medio perdido. Ahora es una
+              pastilla igual a las otras y se lee de corrido con lo demás.
+              No se oprime: es el resumen de las calificaciones. */}
+          <div className="flex items-center gap-2 rounded-lg px-2.5 select-none order-2 sm:order-3 sm:ml-auto"
+            title="Promedio de las calificaciones puestas en la columna CAL"
+            style={{ height: 36, background: CAMPO, border: `1px solid ${promedioEquipo ? VERDE : BORDE}` }}>
+            <span className="text-white/60 font-black text-[10.5px] tracking-wide whitespace-nowrap">
+              PROMEDIO<span className="hidden sm:inline"> EQUIPO</span>
             </span>
-            <div className="rounded-xl flex items-center justify-center"
+            <div className="rounded flex items-center justify-center"
               style={{
-                height: 44, minWidth: 72,
-                background: promedioEquipo ? VERDE : CAMPO,
+                height: 26, minWidth: 50,
+                background: promedioEquipo ? VERDE : 'transparent',
                 border: `1px solid ${promedioEquipo ? VERDE : BORDE}`,
               }}>
-              <span className="text-white font-black text-[22px] leading-none">
-                {promedioEquipo || <span className="text-white/30 text-[15px]">—</span>}
+              <span className="text-white font-black text-[15px] leading-none">
+                {promedioEquipo || <span className="text-white/30">—</span>}
               </span>
             </div>
           </div>
+          {/* El aviso de guardado va de último SIEMPRE: sin esto, al ordenar
+              las pastillas para el celular, se colaba de primero. */}
           {sinGuardar ? (
-            <p className="text-[11.5px] font-bold" style={{ color: AMBAR }}>
+            <p className="text-[11.5px] font-bold order-4" style={{ color: AMBAR }}>
               Tienes cambios sin guardar.
             </p>
           ) : guardadoEn ? (
-            <p className="text-white/45 text-[11.5px] font-semibold">
+            <p className="text-white/45 text-[11.5px] font-semibold order-4">
               Guardado {cuandoBonito(guardadoEn)}.
             </p>
           ) : null}
 
           {numTorneo && convocables.length > 0 ? (
-            <p className="text-white/45 text-[11px]">
+            <p className="text-white/45 text-[11px] order-5 w-full sm:w-auto">
               <span className="text-white font-black">{convocables.length} deportistas</span> tienen
               el torneo {numTorneo} asignado en Total Afiliados. Si falta alguno, hay que
               ponerle ese torneo en su ficha: aquí no se agregan a mano.
             </p>
           ) : numTorneo && torneo ? (
-            <p className="text-[11px] font-semibold" style={{ color: AMBAR }}>
+            <p className="text-[11px] font-semibold order-5 w-full sm:w-auto" style={{ color: AMBAR }}>
               Todavía ningún deportista tiene el torneo {numTorneo} puesto en C1, C2, C3 o C4.
               Asígnalos en Total Afiliados y la planilla se arma sola.
             </p>
           ) : (
-            <p className="text-white/40 text-[11px]">
+            <p className="text-white/40 text-[11px] order-5 w-full sm:w-auto">
               {esProfe
                 ? 'Escoge tu torneo y salen solos los deportistas asignados.'
                 : 'Escribe el número del torneo y salen solos los deportistas asignados.'}
