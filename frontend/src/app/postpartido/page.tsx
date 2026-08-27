@@ -736,6 +736,7 @@ export default function CrearPospartidoPage() {
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const ultimoArmado = useRef<string>('');   // torneo+fecha con los que ya se armó
   const ultimoTorneo = useRef<string>('');   // para saber si cambió el TORNEO o solo la fecha
+  const ultimaJornada = useRef<string>('');  // la fecha anterior: distingue matriz→fecha de fecha→fecha
 
   /* El orden de las columnas, tal como lo dejó quien usa esta pantalla. */
   const [orden, setOrden] = useState<ClaveCol[]>(ORDEN_DEFECTO);
@@ -848,8 +849,15 @@ export default function CrearPospartidoPage() {
     const clave = `${numTorneo}|${jornada}|${convocables.length}`;
     if (ultimoArmado.current === clave) return;
     const cambioElTorneo = ultimoTorneo.current !== numTorneo;
+    /* ¿De dónde venía? Si venía SIN fecha (de la matriz) y apenas ahora le
+       está poniendo una, lo escrito es de ESTE partido y no se toca. Pero si
+       venía de la FECHA 1 y se pasó a la FECHA 2, eso ya es otro partido: se
+       arranca en blanco. Antes no se distinguían los dos casos y la fecha 2
+       nacía con los datos de la fecha 1 encima. — corregido 27/08/2026 */
+    const veniaDeMatriz = !ultimaJornada.current;
     ultimoArmado.current = clave;
     ultimoTorneo.current = numTorneo;
+    ultimaJornada.current = jornada;
 
     if (!numTorneo) {
       setFilas([]);
@@ -878,13 +886,20 @@ export default function CrearPospartidoPage() {
         return;
       }
 
-      /* No hay nada archivado de esta fecha. Si lo único que cambió fue la
-         fecha, NO se toca lo que está en pantalla. */
-      if (!cambioElTorneo) return;
+      /* No hay nada archivado de esta fecha.
+         ÚNICO caso en que se conserva lo que está en pantalla: el formador
+         venía llenando SIN fecha (en la matriz) y apenas ahora la escogió.
+         En todo lo demás —cambió de torneo, o se pasó de una fecha a otra—
+         se arranca limpio, porque es otro partido. */
+      if (!cambioElTorneo && veniaDeMatriz && jornada) return;
 
       primeraCarga.current = true;
       setSinGuardar(false);
       setGuardadoEn('');
+      setDefinitivo(false);
+      /* El encabezado y el marcador también se van: son de aquel partido. */
+      setFecha(''); setLlegar(''); setRival('');
+      setGolesNos(''); setGolesEllos(''); setAutogoles(0);
       if (convocables.length === 0) {
         setFilas([]);
       } else {
@@ -1922,9 +1937,13 @@ export default function CrearPospartidoPage() {
                 style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}
                 className="w-full rounded-lg px-2 text-white text-[12.5px] font-bold outline-none cursor-pointer">
                 {/* MATRIZ = todavía no se ha escogido fecha. Es la lista pelada
-                    de los deportistas del torneo; ahí es donde administración
-                    carga el torneo. — dirección, 27/08/2026 */}
-                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>MATRIZ</option>
+                    de los deportistas del torneo, y es cosa de administración:
+                    ahí se cargan los torneos. Al formador esa palabra no le
+                    dice nada, así que a él se le pide la fecha y ya.
+                    — dirección, 27/08/2026 */}
+                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>
+                  {esProfe ? '— Escoge la fecha —' : 'MATRIZ'}
+                </option>
                 {/* Si venía algo escrito de antes que no está en la lista, no se pierde. */}
                 {jornada && !NUM_FECHAS.includes(jornada) && (
                   <option value={jornada} style={{ color: '#111827', backgroundColor: 'white' }}>{jornada}</option>
@@ -1999,12 +2018,17 @@ export default function CrearPospartidoPage() {
           }
         `}</style>
 
-        <p className="text-white/35 text-[11px] mb-1.5 px-1">
-          Arrastra el <span className="text-white/60 font-bold">título verde</span> para mover una
-          columna de lugar, o su <span className="text-white/60 font-bold">borde derecho</span> para
-          hacerla más ancha o más angosta. Queda guardado solo en este computador: al volver a
-          entrar, el cuadro está como lo dejaste.
-        </p>
+        {/* Este aviso es para administración. Al formador solo le estorba: él
+            llena la planilla en la cancha, no anda acomodando columnas.
+            — dirección, 27/08/2026 */}
+        {!esProfe && (
+          <p className="text-white/35 text-[11px] mb-1.5 px-1">
+            Arrastra el <span className="text-white/60 font-bold">título verde</span> para mover una
+            columna de lugar, o su <span className="text-white/60 font-bold">borde derecho</span> para
+            hacerla más ancha o más angosta. Queda guardado solo en este computador: al volver a
+            entrar, el cuadro está como lo dejaste.
+          </p>
+        )}
 
         {/* Letrero de la última columna. Solo en la MATRIZ y solo administración.
             Dice a cuánto va el torneo y cuántos lo llevan cargado, para poder
@@ -2069,13 +2093,14 @@ export default function CrearPospartidoPage() {
 
                 {ordenVisible.map((clave, i) => {
                   const c = COLUMNAS[clave];
-                  /* Las dos primeras columnas, sean las que sean, quedan
-                     clavadas a la izquierda: es lo que permite llenar la
-                     planilla desde el celular sin perder de vista el nombre. */
-                  const fija = i <= 1;
-                  /* El corrimiento tiene en cuenta la columna CÓDIGO, que va
-                     antes que todas y también queda clavada a la izquierda. */
-                  const izq  = ANCHO_COD + (i === 0 ? 0 : anchoDe(ordenVisible[0]));
+                  /* SOLO EL NOMBRE QUEDA CLAVADO (dirección, 27/08/2026).
+                     Antes se clavaban las dos primeras columnas y el número se
+                     comía un pedazo de la pantalla del celular sin decir nada:
+                     el renglón ya se sabe cuál es por el nombre. Ahora, al
+                     correr el cuadro para el lado, el número se va debajo y el
+                     nombre se queda a la vista. */
+                  const fija = clave === 'deportista';
+                  const izq  = ANCHO_COD;
                   return (
                     <th key={clave}
                       /* En la MATRIZ no se arrastran columnas: son solo cuatro
@@ -2162,8 +2187,9 @@ export default function CrearPospartidoPage() {
                     )}
 
                     {ordenVisible.map((clave, k) => {
-                      const fija = k <= 1;
-                      const izq  = ANCHO_COD + (k === 0 ? 0 : anchoDe(ordenVisible[0]));
+                      /* Igual que en el título: el único clavado es el nombre. */
+                      const fija = clave === 'deportista';
+                      const izq  = ANCHO_COD;
                       /* TODAS las casillas llevan el mismo gris oscuro: antes
                          las dos primeras iban en un gris más oscuro y, al mover
                          las columnas de lugar, quedaba una franja distinta en
