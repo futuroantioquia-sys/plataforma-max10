@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Users } from 'lucide-react';
+import { ArrowLeft, Users, ClipboardList, CalendarDays, Trophy, ChevronDown, ChevronRight } from 'lucide-react';
 import { getProfes, contarDeportistasPorProyecto } from '@/lib/db';
 
 /* El conteo de cada proyecto se guarda en este teléfono. Así, de la segunda
@@ -112,6 +112,53 @@ export default function MisProyectosPage() {
     cargar();
   }, []);
 
+  /* ── LA LISTA DE ARRIBA A LA IZQUIERDA ───────────────────────────────────
+     (dirección, 27/08/2026)
+
+     Desde aquí el formador va derecho a lo suyo —asistencia, microciclo,
+     pospartido— sin tener que entrar primero a un proyecto y buscar el botón
+     adentro. Es la misma lista que ya está dentro del proyecto, pero en la
+     puerta.
+
+     UN DETALLE QUE HAY QUE RESOLVER: la asistencia y el microciclo son SIEMPRE
+     de un proyecto. El pospartido no —ese va por torneo—. Entonces:
+       · Si el formador tiene UN solo proyecto, se entra derecho.
+       · Si tiene varios, la lista pregunta a cuál, en un segundo paso.
+     Así nunca se entra a un proyecto que no era. */
+  const [menu, setMenu] = useState<null | 'raiz' | 'asistencia' | 'microciclo'>(null);
+  const cajaMenu = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const porFuera = (e: MouseEvent) => {
+      if (cajaMenu.current && !cajaMenu.current.contains(e.target as Node)) setMenu(null);
+    };
+    const conEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null); };
+    document.addEventListener('mousedown', porFuera);
+    document.addEventListener('keydown', conEsc);
+    return () => {
+      document.removeEventListener('mousedown', porFuera);
+      document.removeEventListener('keydown', conEsc);
+    };
+  }, [menu]);
+
+  function irAsistencia(proy: string) {
+    setMenu(null);
+    router.push(`/asistencia?proyecto=${encodeURIComponent(proy)}`);
+  }
+  function irMicrociclo(proy: string) {
+    setMenu(null);
+    router.push(`/microciclo?proyecto=${encodeURIComponent(proy)}`);
+  }
+  /** Abre la opción: si hay un solo proyecto entra derecho; si hay varios,
+   *  muestra la lista de proyectos para escoger. */
+  function escoger(que: 'asistencia' | 'microciclo') {
+    if (proyectosProfe.length === 1) {
+      que === 'asistencia' ? irAsistencia(proyectosProfe[0]) : irMicrociclo(proyectosProfe[0]);
+      return;
+    }
+    setMenu(que);
+  }
+
   const primerNombre = nombreProfe ? nombreProfe.split(' ')[0] : 'Profe';
   // Paleta del sistema (la del consolidado de asistencias)
   const G      = '#00B050';   // verde de la plataforma
@@ -123,8 +170,13 @@ export default function MisProyectosPage() {
     <div className="min-h-screen" style={{ background: LIENZO }}>
 
       {/* ── Header ── */}
-      <header className="relative bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 shadow overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none opacity-[0.07]" aria-hidden>
+      {/* OJO: el encabezado ya NO recorta lo que se sale (antes tenía
+          overflow-hidden por el dibujito del fondo). Si lo recortara, la lista
+          que se abre quedaría cortada por debajo del encabezado y no se vería.
+          El recorte se le pasó al dibujo, que es el único que lo necesitaba.
+          — 27/08/2026 */}
+      <header className="relative bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 py-4 flex items-center gap-2.5 sticky top-0 z-20 shadow">
+        <div className="absolute inset-0 pointer-events-none opacity-[0.07] overflow-hidden" aria-hidden>
           <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <pattern id="sp-mp" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse">
@@ -136,12 +188,73 @@ export default function MisProyectosPage() {
           </svg>
         </div>
         <button onClick={() => router.push('/dashboard')}
-          className="relative text-white/70 hover:text-white transition">
+          className="relative text-white/70 hover:text-white transition shrink-0">
           <ArrowLeft className="w-5 h-5"/>
         </button>
+
+        {/* ── IR DERECHO A LO SUYO ─────────────────────────────────────────
+            Asistencia · Microciclos · Pospartidos, sin entrar antes a un
+            proyecto. — dirección, 27/08/2026 */}
+        <div ref={cajaMenu} className="relative shrink-0 z-30">
+          <button
+            onClick={() => setMenu(m => (m ? null : 'raiz'))}
+            title="Ir a Asistencia, Microciclos o Pospartidos"
+            className="rounded-xl flex items-center gap-1.5 px-2.5 h-9 font-black text-[11px] text-white
+              bg-white/15 hover:bg-white/25 transition whitespace-nowrap">
+            <ClipboardList className="w-3.5 h-3.5 shrink-0" />
+            IR A
+            <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${menu ? 'rotate-180' : ''}`} />
+          </button>
+
+          {menu === 'raiz' && (
+            <div className="absolute left-0 mt-1.5 rounded-xl overflow-hidden shadow-2xl"
+              style={{ background: PANEL, border: `1px solid ${BORDE}`, minWidth: 216 }}>
+              {[
+                { texto: 'GESTIONAR ASISTENCIA', Icono: ClipboardList, ir: () => escoger('asistencia'), varios: proyectosProfe.length > 1 },
+                { texto: 'MICROCICLOS',          Icono: CalendarDays,  ir: () => escoger('microciclo'), varios: proyectosProfe.length > 1 },
+                { texto: 'POSPARTIDOS',          Icono: Trophy,        ir: () => { setMenu(null); router.push('/postpartido'); }, varios: false },
+              ].map(({ texto, Icono, ir, varios }, i) => (
+                <button key={texto} onClick={ir}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left text-white font-black text-[12px]
+                    hover:bg-[rgba(0,176,80,.16)] transition"
+                  style={{ borderTop: i === 0 ? 'none' : `1px solid ${BORDE}` }}>
+                  <Icono className="w-4 h-4 shrink-0" style={{ color: G }} />
+                  <span className="flex-1">{texto}</span>
+                  {varios && <ChevronRight className="w-3.5 h-3.5 shrink-0 text-white/35" />}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {(menu === 'asistencia' || menu === 'microciclo') && (
+            <div className="absolute left-0 mt-1.5 rounded-xl overflow-hidden shadow-2xl"
+              style={{ background: PANEL, border: `1px solid ${BORDE}`, minWidth: 216 }}>
+              <p className="px-4 py-2.5 text-[10px] font-black tracking-widest text-white/45"
+                style={{ borderBottom: `1px solid ${BORDE}` }}>
+                {menu === 'asistencia' ? 'ASISTENCIA · ¿DE CUÁL?' : 'MICROCICLO · ¿DE CUÁL?'}
+              </p>
+              {proyectosProfe.map((proy, i) => (
+                <button key={proy}
+                  onClick={() => (menu === 'asistencia' ? irAsistencia(proy) : irMicrociclo(proy))}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left text-white font-black text-[12px]
+                    hover:bg-[rgba(0,176,80,.16)] transition"
+                  style={{ borderTop: i === 0 ? 'none' : `1px solid ${BORDE}` }}>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: G }} />
+                  {proy}
+                </button>
+              ))}
+              <button onClick={() => setMenu('raiz')}
+                style={{ borderTop: `1px solid ${BORDE}` }}
+                className="w-full px-4 py-2.5 text-left text-white/45 hover:text-white font-bold text-[11px] transition">
+                ← Atrás
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="relative flex-1 min-w-0">
-          <h1 className="text-white font-black text-base leading-tight">Mis Proyectos</h1>
-          <p className="text-white/60 text-[11px]">Futuro Antioquia · MAX 10</p>
+          <h1 className="text-white font-black text-base leading-tight truncate">Mis Proyectos</h1>
+          <p className="text-white/60 text-[11px] truncate">Futuro Antioquia · MAX 10</p>
         </div>
         <div className="relative flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
