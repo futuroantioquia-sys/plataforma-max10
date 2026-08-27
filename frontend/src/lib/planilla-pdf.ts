@@ -135,6 +135,10 @@ function pastillaDe(clave: string, valor: string): RGB | null {
   if (clave === 'actua') {
     if (/titular/i.test(v))  return VERDE;
     if (/suplente/i.test(v)) return AMBAR;
+    /* "No asistió" va ANTES que "No jugó": los dos empiezan por "No", y el
+       que no asistió no se presentó — se marca en rojo, como el "No
+       convocado". — 27/08/2026 */
+    if (/asist/i.test(v))    return ROJO;
     if (/jug/i.test(v))      return MORADO;
     return null;
   }

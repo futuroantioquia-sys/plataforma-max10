@@ -38,7 +38,7 @@ import {
   Archive, RefreshCw,
 } from 'lucide-react';
 import { getCuadro, limpiar, type FilaTorneo } from '@/lib/torneos';
-import { esSuperAdmin, esAccesoTotal } from '@/lib/permisos';
+import { esSuperAdmin, esAccesoTotal, esProfesor } from '@/lib/permisos';
 import { descargarPlanillaPDF } from '@/lib/planilla-pdf';
 import {
   getPlanilla, guardarPlanilla, guardarBorradorLocal, leerBorradorLocal,
@@ -60,6 +60,11 @@ const AMBAR  = '#E0A33A';
 const GRIS   = '#7C879A';
 const MORADO = '#8B72D9';   // el que fue convocado pero no jugó
 const BLANCO = '1px solid #ffffff';
+
+/** 120000 → "$ 120.000". Para el letrero del botón de cobrar el torneo. */
+function plata(n: number): string {
+  return '$ ' + Math.round(Number(n) || 0).toLocaleString('es-CO');
+}
 
 /* Las posiciones, escritas igual que en la ficha del deportista. Un jugador
    puede tener hasta TRES. — dirección, 26/08/2026 */
@@ -94,6 +99,16 @@ const COLUMNAS: Record<ClaveCol, { h: string; w: number; fondo?: string; ayuda?:
   goles:        { h: 'GOL',        w: 66 },
   ataja:        { h: 'ATA',        w: 66, ayuda: 'ATAJADAS del arquero (solo el portero)' },
   calificacion: { h: 'CAL',        w: 66, fondo: VERDE },
+};
+
+/* Para crear los cobros de torneo en `otros_pagos`. Es la misma base de
+   siempre; se ponen aquí porque esta pantalla no usaba esa tabla. */
+const SB_URL_COBROS = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const SB_KEY_COBROS = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
+const HDR_COBROS = {
+  apikey: SB_KEY_COBROS,
+  Authorization: `Bearer ${SB_KEY_COBROS}`,
+  'Content-Type': 'application/json',
 };
 
 const ORDEN_DEFECTO: ClaveCol[] = [
@@ -165,10 +180,14 @@ function leerOrden(): ClaveCol[] {
 
 type FilaPlanilla = {
   id: string;
+  /* De quién es esta fila. Se guarda para poder cobrarle el torneo sin tener
+     que adivinar por el nombre. Las planillas guardadas antes del 27/08/2026
+     no lo traen; para esas se busca por nombre. */
+  depId?: string;
   posicion: string;
   deportista: string;
   convocado: '' | 'Convocado' | 'No convocado';
-  titular: '' | 'Titular' | 'Suplente' | 'No jugó';
+  titular: '' | 'Titular' | 'Suplente' | 'No jugó' | 'No asistió';
   minutos: string;
   faltas: string;
   amarillas: string;
@@ -475,7 +494,7 @@ function CeldaPosiciones({ valor, onChange }: {
    casillas: así se ve de un vistazo lo que falta por marcar. Apenas se escoge,
    la casilla PRENDE con su color:
        CONVOCADO →  Convocado verde · No convocado rojo
-       ACTÚA  →  Titular verde · Suplente amarillo · No jugó morado
+       ACTÚA  →  Titular verde · Suplente amarillo · No jugó morado · No asistió rojo
        AMA  →  1 amarilla · 2 amarillas (las dos en ámbar)
        ROJ  →  1 roja (en rojo)
    Cada clic pasa a la siguiente opción y vuelve a empezar. */
@@ -508,9 +527,15 @@ function Escoger<T extends string>({ valor, opciones, colores, titulo, grande, o
 /* En la casilla se lee la palabra completa: "Convocado" o "No convocado".
    Antes decía SI/NO y tocaba acordarse de a qué contestaba. — 26/08/2026 */
 const OPC_CON = ['Convocado', 'No convocado'] as const;
-/* ACTÚA: las tres formas en que un convocado termina el partido. En minúscula
-   —Titular, Suplente, No jugó— para que quepan en una columna delgada. */
-const OPC_TIT = ['Titular', 'Suplente', 'No jugó'] as const;
+/* ACTÚA: las cuatro formas en que termina el partido para un deportista. En
+   minúscula —Titular, Suplente, No jugó, No asistió— para que quepan en una
+   columna delgada.
+
+   NO ASISTIÓ (rojo) lo pidió la dirección el 27/08/2026 y NO es lo mismo que
+   "No jugó": el que NO JUGÓ estuvo en el partido y se quedó en el banco; el
+   que NO ASISTIÓ no se presentó. Uno es decisión del formador, el otro es
+   falla del deportista — y por eso va en rojo, como el "No convocado". */
+const OPC_TIT = ['Titular', 'Suplente', 'No jugó', 'No asistió'] as const;
 /* Las tarjetas también se marcan a punta de clic: una amarilla, dos amarillas,
    o la roja. Nadie tiene que escribir un número. */
 /* La CALIFICACIÓN va de 1 a 5, de media en media: 1 · 1,5 · 2 · 2,5 … 5.
@@ -649,7 +674,7 @@ function RelojLlegada({ valor, onChange }: {
 const OPC_AMA = ['1', '2'] as const;
 const OPC_ROJ = ['1'] as const;
 const COLOR_CON = { Convocado: VERDE, 'No convocado': ROJO };
-const COLOR_TIT = { Titular: VERDE, Suplente: AMBAR, 'No jugó': MORADO };
+const COLOR_TIT = { Titular: VERDE, Suplente: AMBAR, 'No jugó': MORADO, 'No asistió': ROJO };
 const COLOR_AMA = { '1': AMBAR, '2': AMBAR };
 const COLOR_ROJ = { '1': ROJO };
 
@@ -658,14 +683,43 @@ export default function CrearPospartidoPage() {
   const router = useRouter();
 
   const [cuadro, setCuadro] = useState<FilaTorneo[] | null>(null);
+
+  /* ── CADA FORMADOR, SOLO SUS TORNEOS ─────────────────────────────────────
+     (dirección, 27/08/2026 — se probó entrando como CASTRO y se alcanzaba a
+     abrir la planilla de un torneo de ALVAREZ)
+
+     El formador entra con su usuario, y ese usuario es el mismo nombre que
+     aparece en la casilla FORMADOR del cuadro de Torneos y Competencias. Con
+     eso basta: si el torneo que escribió no está a su cargo, no se le arma la
+     planilla y se le dice de quién es.
+
+     Administración no se toca: sigue viendo todos, que para eso los reparte. */
+  const [esProfe, setEsProfe] = useState(false);
+  const [nombreProfe, setNombreProfe] = useState('');
+  useEffect(() => {
+    setEsProfe(esProfesor());
+    try {
+      const guardado = localStorage.getItem('futuro-profe-nombre');
+      if (guardado) {
+        const n = JSON.parse(guardado);
+        setNombreProfe(typeof n === 'string' ? n : String(n));
+      }
+    } catch { /* sin nombre guardado: más abajo se decide qué hacer */ }
+  }, []);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  /* Aviso AMARILLO: el partido SÍ quedó guardado, pero a la base le faltaba
+     alguna casilla y ese dato suelto no se pudo guardar. — 27/08/2026 */
+  const [avisoBase, setAvisoBase] = useState('');
 
   const [numTorneo, setNumTorneo] = useState('');
   const [jornada, setJornada]     = useState('');
   const [fecha, setFecha]         = useState('');
   const [llegar, setLlegar]       = useState('');
   const [rival, setRival]         = useState('');
+  /* La casilla del marcador del rival: se le hace foco cuando se intenta
+     guardar sin haberla llenado. — 27/08/2026 */
+  const cajaRival = useRef<HTMLInputElement | null>(null);
   const [golesNos, setGolesNos]   = useState('');   // ya no se escribe: se calcula
   const [golesEllos, setGolesEllos] = useState('');
   /* AUTOGOLES DEL RIVAL: goles que suman a nuestro marcador pero que no los
@@ -725,9 +779,47 @@ export default function CrearPospartidoPage() {
   /* ── Los deportistas que tienen ESTE torneo asignado ─────────────────────
      Se buscan en las cuatro casillas de competencia (C1..C4) de cada ficha.
      Van en el mismo orden de Total Afiliados: por código. */
+  /* ── El torneo que corresponde al número escrito ───────────────────────── */
+  const torneoCrudo = useMemo(() => {
+    const n = parseInt(numTorneo, 10);
+    if (!cuadro || !Number.isFinite(n) || n < 1 || n > cuadro.length) return null;
+    return cuadro[n - 1];
+  }, [numTorneo, cuadro]);
+
+  /** ¿Este torneo está a cargo de este formador? Se comparan los nombres sin
+   *  tildes y en mayúsculas: "Álvarez" y "ALVAREZ" son el mismo señor. */
+  const esMiTorneo = useCallback((f: FilaTorneo | null): boolean => {
+    if (!f) return false;
+    const pelado = (x: string) => String(x ?? '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ').trim().toUpperCase();
+    const suyo = pelado(f.formador);
+    const yo   = pelado(nombreProfe);
+    if (!suyo || !yo) return false;
+    return suyo === yo || suyo.includes(yo) || yo.includes(suyo);
+  }, [nombreProfe]);
+
+  /* El torneo escrito NO es de este formador: no se le arma nada. */
+  const torneoAjeno = esProfe && !!torneoCrudo && !esMiTorneo(torneoCrudo);
+  const torneo = torneoAjeno ? null : torneoCrudo;
+
+  /** Los torneos que sí son suyos, para poder decírselos. */
+  const misTorneos = useMemo(() => {
+    if (!esProfe || !cuadro) return [];
+    return cuadro
+      .map((f, i) => ({ f, num: i + 1 }))
+      .filter(({ f }) => esMiTorneo(f))
+      .map(({ f, num }) => ({
+        num: String(num),
+        nombre: [f.torneo, f.programa, f.categoria, f.nombre].map(limpiar).filter(Boolean).join(' '),
+      }));
+  }, [esProfe, cuadro, esMiTorneo]);
+
   const convocables = useMemo(() => {
     const n = parseInt(numTorneo, 10);
     if (!Number.isFinite(n) || n < 1) return [];
+    /* Si el torneo no es de este formador, ni la lista se arma. */
+    if (torneoAjeno) return [];
     return deportistas
       .filter(d => torneosDelDeportista(d).includes(n))
       .sort((a, b) => {
@@ -795,6 +887,7 @@ export default function CrearPospartidoPage() {
       } else {
         setFilas(convocables.map((d, i) => ({
           ...filaNueva(i),
+          depId: d.id,
           posicion: posicionDe(d),
           deportista: limpiar(d._nombre).toUpperCase(),
         })));
@@ -803,13 +896,6 @@ export default function CrearPospartidoPage() {
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numTorneo, jornada, convocables]);
-
-  /* ── El torneo que corresponde al número escrito ───────────────────────── */
-  const torneo = useMemo(() => {
-    const n = parseInt(numTorneo, 10);
-    if (!cuadro || !Number.isFinite(n) || n < 1 || n > cuadro.length) return null;
-    return cuadro[n - 1];
-  }, [numTorneo, cuadro]);
 
   /** "LIGA DESARROLLO SUB 8 REGOL" — todo en un solo renglón. */
   const nombreTorneo = useMemo(() => {
@@ -883,7 +969,61 @@ export default function CrearPospartidoPage() {
      firma el servidor: no basta con tocar el navegador para desbloquearlo.
      Se resuelve en el cliente para no desacomodar la primera pintada. */
   const [esAdmon, setEsAdmon] = useState(false);
-  useEffect(() => { setEsAdmon(esSuperAdmin() || esAccesoTotal()); }, []);
+  /* ADMINISTRACIÓN PRINCIPAL, aparte (dirección, 27/08/2026): la MATRIZ, la
+     columna CÓDIGO y el cobro del torneo son SOLO de ella. `esAdmon` sigue
+     siendo el permiso de siempre —el que baja el PDF—; este es más estrecho. */
+  const [esAdmonPrincipal, setEsAdmonPrincipal] = useState(false);
+  useEffect(() => {
+    setEsAdmon(esSuperAdmin() || esAccesoTotal());
+    setEsAdmonPrincipal(esSuperAdmin());
+  }, []);
+
+  /* ── LA MATRIZ ───────────────────────────────────────────────────────────
+     Cuando en # FECHA no hay una fecha escogida, la pantalla está en MATRIZ:
+     la lista pelada de los deportistas de este torneo, sin partido de por
+     medio. Ahí es donde administración carga el torneo, uno por uno.
+
+     Apenas se escoge una fecha —FECHA 1, FECHA 2…— eso ya es un PARTIDO, y
+     ahí la columna CARGAR TORNEO desaparece: la planilla del partido queda
+     limpia, que es como se ve en la app y como sale en el PDF.
+     — dirección, 27/08/2026 */
+  const enMatriz  = !String(jornada || '').trim();
+  const verCargar = esAdmonPrincipal && enMatriz;
+
+  /* ── LA COLUMNA CÓDIGO ───────────────────────────────────────────────────
+     (dirección, 27/08/2026)
+
+     SOLO LA VE ADMINISTRACIÓN. Ni el formador ni el calidoso, y NO SALE EN EL
+     PDF. La razón la dio la dirección: por el código se sabe quién es becado,
+     y eso no tiene por qué quedar a la vista de los demás.
+
+     Por eso el código NO se guarda dentro de la planilla: se lee de la ficha
+     del deportista cada vez que se pinta la pantalla. Así no queda escrito en
+     el partido archivado ni puede colarse en un PDF por descuido. */
+  const codigoPorId = useMemo(() => {
+    const m = new Map<string, string>();
+    convocables.forEach(d => {
+      const cols = d._columnas ?? {};
+      const k = Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim()));
+      m.set(d.id, k ? String(cols[k] ?? '').trim().toUpperCase() : '');
+    });
+    return m;
+  }, [convocables]);
+
+  /** Ancho de la columna CÓDIGO. En 0 cuando no se muestra, para que las
+   *  columnas clavadas a la izquierda queden en su sitio. */
+  const verCodigo = esAdmonPrincipal;
+  const ANCHO_COD = verCodigo ? 84 : 0;
+
+  /* ── QUÉ COLUMNAS SE VEN ─────────────────────────────────────────────────
+     En la MATRIZ solo van CÓDIGO · N° · DEPORTISTA · CARGAR TORNEO: es una
+     lista para cobrar, no una planilla de partido, y todo lo demás —minutos,
+     tarjetas, goles— ahí no tiene nada que hacer (dirección, 27/08/2026).
+     Al escoger una fecha vuelven todas, en el orden que cada quien dejó. */
+  const ordenVisible = useMemo<ClaveCol[]>(
+    () => (enMatriz ? (['num', 'deportista'] as ClaveCol[]) : orden),
+    [enMatriz, orden],
+  );
 
   /* ── GUARDAR EL AVANCE ───────────────────────────────────────────────────
      El formador llena esto en la cancha. Si le toca parar, lo escrito NO se
@@ -903,6 +1043,120 @@ export default function CrearPospartidoPage() {
   const [avisoGuardado, setAvisoGuardado] = useState('');
   const primeraCarga = useRef(true);
 
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     COBRAR EL TORNEO  —  una columna más, SOLO para administración.
+
+     La pidió la dirección (27/08/2026) aquí y no en otra pantalla, porque esta
+     es la lista donde ya están los deportistas de este torneo, con su nombre a
+     la vista. Se cobra UNO POR UNO, a propósito: la dirección sabe quién ya le
+     pagó el torneo por fuera, y un botón que le cargue a todos le cobraría de
+     nuevo a esa gente.
+
+     EL FORMADOR NO LA VE. La columna solo aparece si quien está en pantalla es
+     administración; el formador llena su planilla igual que siempre.
+
+     El valor sale del cuadro de Torneos y Competencias. El cobro se crea en
+     `otros_pagos` y sale en el Estado de Cuenta del deportista, en la tabla
+     TORNEOS, debajo de las mensualidades.
+     ═══════════════════════════════════════════════════════════════════════════ */
+  type CobroTorneo = { id: string; deportista_id: string; estado: string };
+  const [cobros, setCobros] = useState<CobroTorneo[]>([]);
+  const [cobrando, setCobrando] = useState<string | null>(null);
+
+  /** Cómo se llama el cobro: el mismo nombre del torneo, sin la fecha. */
+  const nombreCobro = useMemo(() => {
+    if (!torneo) return '';
+    return [torneo.torneo, torneo.programa, torneo.categoria].map(limpiar).filter(Boolean).join(' ');
+  }, [torneo]);
+
+  const valorTorneo = Math.max(0, Math.round(Number(torneo?.valor) || 0));
+
+  const leerCobros = useCallback(async () => {
+    if (!nombreCobro) { setCobros([]); return; }
+    try {
+      const res = await fetch(
+        `${SB_URL_COBROS}/rest/v1/otros_pagos?select=id,deportista_id,estado` +
+        `&tipo=eq.torneo&descripcion=eq.${encodeURIComponent(nombreCobro)}`,
+        { headers: HDR_COBROS, cache: 'no-store' },
+      );
+      if (!res.ok) return;
+      const f = await res.json();
+      if (Array.isArray(f)) setCobros(f);
+    } catch { /* sin señal: la columna sale sin marcar */ }
+  }, [nombreCobro]);
+
+  useEffect(() => { if (esAdmon) leerCobros(); }, [esAdmon, leerCobros]);
+
+  /** El id del deportista de esa fila. Si la planilla es vieja y no lo trae,
+   *  se busca por el nombre entre los convocables de este mismo torneo. */
+  function idDeLaFila(f: FilaPlanilla): string {
+    if (f.depId) return f.depId;
+    const n = limpiar(f.deportista).toUpperCase();
+    const d = convocables.find(c => limpiar(c._nombre).toUpperCase() === n);
+    return d?.id ?? '';
+  }
+
+  const cobroDe = (f: FilaPlanilla) => {
+    const id = idDeLaFila(f);
+    return id ? cobros.find(c => c.deportista_id === id) : undefined;
+  };
+
+  async function cobrarTorneo(f: FilaPlanilla) {
+    const id = idDeLaFila(f);
+    if (!id || !nombreCobro) {
+      setError('No se pudo identificar al deportista de esa fila.');
+      return;
+    }
+    setCobrando(f.id); setError('');
+    try {
+      const res = await fetch(`${SB_URL_COBROS}/rest/v1/otros_pagos`, {
+        method: 'POST',
+        headers: { ...HDR_COBROS, Prefer: 'return=representation' },
+        body: JSON.stringify([{
+          deportista_id: id,
+          descripcion:   nombreCobro,
+          tipo:          'torneo',
+          valor:         valorTorneo,
+          estado:        'PEND',
+          fecha:         null,
+        }]),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`No se pudo cargar el cobro (${res.status}). ${txt.slice(0, 130)}`);
+      }
+      await leerCobros();
+    } catch (e: any) {
+      setError(e?.message ?? 'No se pudo cargar el cobro.');
+    } finally {
+      setCobrando(null);
+    }
+  }
+
+  async function quitarCobro(f: FilaPlanilla, c: CobroTorneo) {
+    /* Un torneo YA PAGADO no se quita desde aquí: eso se revierte en el Estado
+       de Cuenta, que es donde queda el registro de lo que se hizo. */
+    if (c.estado === 'PAGÓ') {
+      setError('Ese torneo ya está pagado. Para revertirlo, entra al Estado de Cuenta del deportista.');
+      return;
+    }
+    if (!confirm(`¿Quitarle el cobro de ${nombreCobro} a ${f.deportista}?`)) return;
+    setCobrando(f.id); setError('');
+    try {
+      const res = await fetch(
+        `${SB_URL_COBROS}/rest/v1/otros_pagos?id=eq.${encodeURIComponent(c.id)}`,
+        { method: 'DELETE', headers: HDR_COBROS },
+      );
+      if (!res.ok) throw new Error(`No se pudo quitar (${res.status}).`);
+      await leerCobros();
+    } catch (e: any) {
+      setError(e?.message ?? 'No se pudo quitar el cobro.');
+    } finally {
+      setCobrando(null);
+    }
+  }
+
   const [bajandoPdf, setBajandoPdf] = useState(false);
   async function bajarPDF() {
     if (!esAdmon) {
@@ -917,7 +1171,9 @@ export default function CrearPospartidoPage() {
         torneo: nombreTorneo,
         formador: torneo?.formador ?? '',
         jornada: renglonJornada,
-        columnas: orden.map(c => ({
+        /* El PDF lleva las columnas TAL COMO SE VEN, menos CÓDIGO: esa nunca
+           sale impresa (dirección, 27/08/2026). */
+        columnas: ordenVisible.map(c => ({
           clave: c,
           titulo: COLUMNAS[c].h,
           ancho: anchoDe(c),
@@ -1006,7 +1262,20 @@ export default function CrearPospartidoPage() {
        se sabría si esto es la fecha 1 o la 5, y el archivo quedaría revuelto.
        Lo escrito NO se pierde: ya está guardado en este aparato. — 27/08/2026 */
     if (!jornada) {
-      setError('Falta escoger la # FECHA. Es la que le pone nombre al partido en el banco (FECHA 1, FECHA 2…). Lo que ya escribiste está a salvo en este aparato.');
+      setError('Estás en la MATRIZ, que es la lista del torneo, no un partido. Escoge la # FECHA (FECHA 1, FECHA 2…) para poder guardarlo en el banco. Lo que ya escribiste está a salvo en este aparato.');
+      return;
+    }
+    /* EL MARCADOR DEL RIVAL NO PUEDE QUEDAR EN BLANCO (dirección, 27/08/2026).
+       El nuestro se suma solo —los goles de los deportistas más los autogoles—,
+       pero el del rival hay que escribirlo. Si se deja vacío, el partido queda
+       guardado como si hubiera sido 0, y después nadie puede saber si de
+       verdad fue 0 o si simplemente se les olvidó anotarlo. Así que se pide,
+       así haya sido 0. Vale tanto para el avance como para el definitivo.
+       Lo escrito NO se pierde: ya quedó guardado en este aparato. */
+    if (!marcadorActivo || !Number.isFinite(ge)) {
+      setError('Falta el marcador del rival. Escríbelo en la casilla roja del marcador, aunque haya sido 0. Lo que ya escribiste está a salvo en este aparato.');
+      cajaRival.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      cajaRival.current?.focus();
       return;
     }
     /* CERRAR ES UNA DECISIÓN, ASÍ QUE SE PREGUNTA. Después de esto la planilla
@@ -1022,11 +1291,28 @@ export default function CrearPospartidoPage() {
     setGuardandoPlanilla(true);
     setError('');
     try {
-      await guardarPlanilla(p);
+      const sacadas = await guardarPlanilla(p);
       setSinGuardar(false);
       setDefinitivo(cerrar);
       setGuardadoEn(p.actualizada_en);
       setAvisoGuardado(cerrar ? 'Cerrado' : 'Guardado');
+      /* El partido quedó guardado. Si a la base le faltaba alguna casilla, se
+         guardó sin ella y se avisa —en amarillo, no en rojo— qué quedó por
+         fuera y cómo se arregla. — 27/08/2026 */
+      if (sacadas.length) {
+        const cierre = sacadas.includes('definitivo')
+          ? ' Mientras tanto, el sello de DEFINITIVO no se guarda en la base: en el banco el partido sigue apareciendo a medias.'
+          : '';
+        setAvisoBase(
+          `El partido SÍ quedó guardado, pero la base todavía no tiene ` +
+          `${sacadas.length === 1 ? 'la casilla' : 'las casillas'} ` +
+          `"${sacadas.join('", "')}", así que ${sacadas.length === 1 ? 'ese dato' : 'esos datos'} no se guardaron.` +
+          cierre +
+          ' Se arregla corriendo ARREGLAR-LA-BASE.bat una sola vez.',
+        );
+      } else {
+        setAvisoBase('');
+      }
       setTimeout(() => setAvisoGuardado(''), 2200);
       refrescarBanco();                  // que aparezca de una en el archivo
     } catch (e: any) {
@@ -1080,6 +1366,7 @@ export default function CrearPospartidoPage() {
     setDefinitivo(false);
     setFilas(convocables.map((d, i) => ({
       ...filaNueva(i),
+      depId: d.id,
       posicion: posicionDe(d),
       deportista: limpiar(d._nombre).toUpperCase(),
     })));
@@ -1127,10 +1414,24 @@ export default function CrearPospartidoPage() {
         || `TORNEO ${num}`;
   }, [cuadro]);
 
-  /** Los partidos del banco, agrupados por torneo y ordenados por fecha. */
+  /** Los partidos del banco, agrupados por torneo y ordenados por fecha.
+   *
+   *  SOLO LOS DEL TORNEO EN EL QUE SE ESTÁ (dirección, 27/08/2026): estando en
+   *  el torneo 9 no tiene por qué salir el banco del torneo 1. Con 58 torneos
+   *  la lista se volvía interminable y tocaba buscar el propio entre todos.
+   *  Si todavía no se ha escrito el número del torneo, se muestran todos: ahí
+   *  el banco sirve de índice para escoger por dónde entrar. */
   const bancoPorTorneo = useMemo(() => {
+    const soloEste = String(numTorneo || '').trim();
+    /* Al formador, además, solo se le muestran SUS torneos: sin número escrito
+       el banco le serviría de atajo para abrir el partido de otro.
+       — 27/08/2026 */
+    const mios = esProfe ? new Set(misTorneos.map(t => t.num)) : null;
     const grupos = new Map<string, FichaBanco[]>();
     for (const f of banco ?? []) {
+      const num = String(f.torneo_num).trim();
+      if (soloEste && num !== soloEste) continue;
+      if (mios && !mios.has(num)) continue;
       if (!grupos.has(f.torneo_num)) grupos.set(f.torneo_num, []);
       grupos.get(f.torneo_num)!.push(f);
     }
@@ -1141,7 +1442,7 @@ export default function CrearPospartidoPage() {
         partidos: partidos.sort((a, b) => numeroDeFecha(a.jornada) - numeroDeFecha(b.jornada)),
       }))
       .sort((a, b) => (parseInt(a.num, 10) || 0) - (parseInt(b.num, 10) || 0));
-  }, [banco, nombreDeTorneoNum]);
+  }, [banco, nombreDeTorneoNum, numTorneo, esProfe, misTorneos]);
 
   /** Abre en la planilla de arriba un partido del banco.
    *  Con `paraEditar` además le quita el candado, que es lo que hace el botón
@@ -1234,11 +1535,44 @@ export default function CrearPospartidoPage() {
     switch (clave) {
       case 'num':
         return <span className="block text-center font-black text-white text-[14px]">{i + 1}</span>;
-      case 'deportista':
+      case 'deportista': {
+        /* EL NOMBRE ES UN ENLACE (dirección, 27/08/2026).
+
+           DESDE ADMINISTRACIÓN va DERECHO AL ESTADO DE CUENTA, como en todos
+           los listados de admón: es lo que se está mirando cuando se toca un
+           nombre. El formador y el calidoso no ven plata, así que a ellos el
+           nombre les abre la FICHA.
+
+           Se abre en OTRA PESTAÑA a propósito: el formador puede estar en
+           media planilla y no se le puede sacar de ella.
+
+           Si la fila viene de una planilla vieja que no guardó el id, no hay
+           a dónde ir: entonces se deja como estaba, editable. */
+        const idFicha = idDeLaFila(f);
+        const aDonde  = esAdmon
+          ? `/alumnos/${idFicha}/estado-cuenta?edit=1`
+          : `/alumnos/${idFicha}`;
+        if (!idFicha) {
+          return (
+            <Celda valor={f.deportista} placeholder="Nombre del deportista" grande
+              onChange={v => editar(f.id, 'deportista', v.toUpperCase())} />
+          );
+        }
         return (
-          <Celda valor={f.deportista} placeholder="Nombre del deportista" grande
-            onChange={v => editar(f.id, 'deportista', v.toUpperCase())} />
+          <a
+            href={aDonde}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={esAdmon
+              ? `Abrir el estado de cuenta de ${f.deportista} en otra pestaña`
+              : `Abrir la ficha de ${f.deportista} en otra pestaña`}
+            className="flex items-center w-full rounded px-1 text-white text-[11.5px] font-bold
+              hover:underline decoration-2 underline-offset-2"
+            style={{ height: 30, textDecorationColor: VERDE }}>
+            {f.deportista}
+          </a>
         );
+      }
       case 'convocado':
         return (
           <Escoger valor={f.convocado} opciones={OPC_CON} colores={COLOR_CON} grande
@@ -1248,7 +1582,7 @@ export default function CrearPospartidoPage() {
       case 'actua':
         return (
           <Escoger valor={f.titular} opciones={OPC_TIT} colores={COLOR_TIT}
-            titulo="Clic para cambiar: Titular · Suplente · No jugó"
+            titulo="Clic para cambiar: Titular · Suplente · No jugó · No asistió"
             onChange={v => editar(f.id, 'titular', v)} />
         );
       case 'posicion':
@@ -1318,7 +1652,9 @@ export default function CrearPospartidoPage() {
         <div className="min-w-0 flex-1">
           <h1 className="text-white font-black text-base leading-tight">Crear Pos Partido</h1>
           <p className="text-white/55 text-[11px] leading-tight truncate">
-            {nombreTorneo || 'Escribe el número del torneo para armar la planilla'}
+            {nombreTorneo || (esProfe
+              ? 'Escoge tu torneo para armar la planilla'
+              : 'Escribe el número del torneo para armar la planilla')}
           </p>
         </div>
         {/* ── LOS DOS GUARDADOS (dirección, 27/08/2026) ─────────────────────
@@ -1379,9 +1715,11 @@ export default function CrearPospartidoPage() {
         </button>
         )}
 
-        <div className="text-right leading-tight hidden sm:block">
-          <p className="text-white font-black text-[13px] tracking-widest">MAX 10 SPORT</p>
-          <p className="text-white/45 text-[10px]">Conecta, Gestiona, Gana</p>
+        {/* La marca, con el logo, igual que en las demás pantallas. — 27/08/2026 */}
+        <div className="flex flex-col items-end flex-shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+          <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 
@@ -1395,18 +1733,99 @@ export default function CrearPospartidoPage() {
           </div>
         )}
 
+        {avisoBase && (
+          <div className="rounded-xl px-3 py-2.5 mb-3 flex items-start gap-2"
+            style={{ background: 'rgba(224,163,58,.16)', border: `1px solid ${AMBAR}` }}>
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: AMBAR }} />
+            <p className="text-white text-[12px] font-semibold">{avisoBase}</p>
+          </div>
+        )}
+
+        {/* ── ESE TORNEO NO ES SUYO ───────────────────────────────────────
+            El formador escribió el número de un torneo que está a cargo de otro.
+            No se le arma la planilla; se le dice de quién es y cuáles son los
+            suyos, con el número, para que entre de una. — 27/08/2026 */}
+        {torneoAjeno && (
+          <div className="rounded-2xl p-4 mb-3"
+            style={{ background: 'rgba(192,80,77,.16)', border: `1px solid ${ROJO}` }}>
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: ROJO }} />
+              <div className="min-w-0">
+                <p className="text-white font-black text-[13.5px]">
+                  El torneo {numTorneo} no está a tu cargo.
+                </p>
+                <p className="text-white/70 text-[12px] mt-0.5">
+                  {[torneoCrudo?.torneo, torneoCrudo?.programa, torneoCrudo?.categoria, torneoCrudo?.nombre]
+                    .map(x => limpiar(String(x ?? ''))).filter(Boolean).join(' ')}
+                  {torneoCrudo?.formador ? ` · es de ${limpiar(torneoCrudo.formador).toUpperCase()}` : ''}
+                </p>
+
+                {misTorneos.length > 0 ? (
+                  <>
+                    <p className="text-white/45 text-[11.5px] font-black mt-3 mb-1.5 tracking-wide">
+                      TUS TORNEOS · oprime uno para abrirlo
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {misTorneos.map(t => (
+                        <button key={t.num}
+                          onClick={() => setNumTorneo(t.num)}
+                          className="rounded-lg px-2.5 py-1.5 text-[11.5px] font-black text-white text-left transition hover:opacity-90"
+                          style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                          <span style={{ color: VERDE }}>{t.num}</span> · {t.nombre}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-white/45 text-[11.5px] mt-3">
+                    No tienes torneos asignados en el cuadro de Torneos y Competencias.
+                    Pídele a administración que te ponga como formador en los tuyos.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── TORNEO # ── */}
         <div className="rounded-2xl p-4 mb-3" style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-white font-black text-[15px]">TORNEO #</span>
-            <input
-              value={numTorneo}
-              inputMode="numeric"
-              onChange={e => setNumTorneo(e.target.value.replace(/[^\d]/g, ''))}
-              placeholder="1"
-              style={{ width: 96, height: 44, background: VERDE, border: 'none' }}
-              className="rounded-xl text-center text-white font-black text-[20px] outline-none placeholder:text-white/40"
-            />
+            <span className="text-white font-black text-[15px]">
+              {esProfe ? 'TORNEO' : 'TORNEO #'}
+            </span>
+
+            {/* AL FORMADOR NO SE LE PIDE UN NÚMERO (dirección, 27/08/2026).
+                Él no tiene por qué saberse que su torneo es el 17: escoge el
+                suyo de una lista, por el nombre, y ya. Y como son los suyos,
+                no hay forma de que se meta en el de otro.
+                Administración sigue escribiendo el número: son 58 torneos y
+                escribir "42" es más rápido que buscarlo en una lista. */}
+            {esProfe ? (
+              <select
+                value={numTorneo}
+                onChange={e => setNumTorneo(e.target.value)}
+                title="Escoge tu torneo"
+                style={{ height: 44, background: CAMPO, border: `1px solid ${BORDE}`, maxWidth: 460 }}
+                className="rounded-xl px-3 text-white font-black text-[15px] outline-none cursor-pointer">
+                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>
+                  — Escoge tu torneo —
+                </option>
+                {misTorneos.map(t => (
+                  <option key={t.num} value={t.num} style={{ color: '#111827', backgroundColor: 'white' }}>
+                    {t.num} · {t.nombre}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={numTorneo}
+                inputMode="numeric"
+                onChange={e => setNumTorneo(e.target.value.replace(/[^\d]/g, ''))}
+                placeholder="1"
+                style={{ width: 96, height: 44, background: VERDE, border: 'none' }}
+                className="rounded-xl text-center text-white font-black text-[20px] outline-none placeholder:text-white/40"
+              />
+            )}
 
             {/* El torneo, en el mismo renglón del número: así no se pierde
                 un espacio de pantalla en una caja aparte. — 26/08/2026 */}
@@ -1424,7 +1843,11 @@ export default function CrearPospartidoPage() {
             ) : (
               !cargando && cuadro !== null && numTorneo === '' && (
                 <span className="text-white/25 font-black text-[19px]">
-                  Escribe el número del torneo…
+                  {esProfe
+                    ? (misTorneos.length
+                        ? 'Escoge tu torneo en la lista…'
+                        : 'No tienes torneos asignados.')
+                    : 'Escribe el número del torneo…'}
                 </span>
               )
             )}
@@ -1463,7 +1886,10 @@ export default function CrearPospartidoPage() {
               <select value={jornada} onChange={e => setJornada(e.target.value)}
                 style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}
                 className="w-full rounded-lg px-2 text-white text-[12.5px] font-bold outline-none cursor-pointer">
-                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
+                {/* MATRIZ = todavía no se ha escogido fecha. Es la lista pelada
+                    de los deportistas del torneo; ahí es donde administración
+                    carga el torneo. — dirección, 27/08/2026 */}
+                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>MATRIZ</option>
                 {/* Si venía algo escrito de antes que no está en la lista, no se pierde. */}
                 {jornada && !NUM_FECHAS.includes(jornada) && (
                   <option value={jornada} style={{ color: '#111827', backgroundColor: 'white' }}>{jornada}</option>
@@ -1521,6 +1947,11 @@ export default function CrearPospartidoPage() {
           @media (max-width: 700px) {
             .plan-fija-dep { width: 132px !important; max-width: 132px; }
             .plan-fija-dep input { font-size: 10.5px; }
+            /* En el celular la columna CARGAR TORNEO se DESCLAVA de la derecha:
+               si se queda clavada, entre ella y el nombre —que va clavado a la
+               izquierda— tapan la pantalla y no se alcanza a ver lo del medio.
+               Allá se llega a ella corriendo el cuadro. — 27/08/2026 */
+            .plan-cargar { position: static !important; }
           }
         `}</style>
 
@@ -1531,12 +1962,43 @@ export default function CrearPospartidoPage() {
           entrar, el cuadro está como lo dejaste.
         </p>
 
+        {/* Letrero de la última columna. Solo en la MATRIZ y solo administración.
+            Dice a cuánto va el torneo y cuántos lo llevan cargado, para poder
+            ir de a uno sin perder la cuenta (dirección, 27/08/2026). */}
+        {verCargar && (
+          <div className="rounded-lg px-3 py-2 mb-2 flex flex-wrap items-center gap-x-4 gap-y-1"
+            style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+            <span className="text-[11px] font-black tracking-wide" style={{ color: VERDE }}>MATRIZ</span>
+            <span className="text-white/70 text-[12px]">
+              Valor del torneo:{' '}
+              <b style={{ color: valorTorneo > 0 ? VERDE : AMBAR }}>{plata(valorTorneo)}</b>
+            </span>
+            <span className="text-white/70 text-[12px]">
+              Ya cargado a <b className="text-white">{cobros.length}</b> de{' '}
+              <b className="text-white">{filas.length}</b>
+            </span>
+            {valorTorneo <= 0 && (
+              <span className="text-[11px]" style={{ color: AMBAR }}>
+                Este torneo todavía no tiene valor en Torneos y Competencias: se cargaría en $ 0.
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* En la MATRIZ el cuadro no necesita todo el ancho: son cuatro
+            columnas. Se le pone tope para que no queden estiradas. */}
         <div className="rounded-xl overflow-auto"
-          style={{ border: `1px solid ${BORDE}`, maxHeight: 'calc(100vh - 330px)' }}>
+          style={{
+            border: `1px solid ${BORDE}`,
+            maxHeight: 'calc(100vh - 330px)',
+            maxWidth: enMatriz ? 660 : undefined,
+          }}>
           <table className="text-[11.5px]"
             style={{
               borderCollapse: 'separate', borderSpacing: 0,
-              width: '100%', minWidth: 1120,
+              /* En la MATRIZ son cuatro columnas y caben; en la planilla del
+                 partido el cuadro es ancho y se corre para el lado. */
+              width: '100%', minWidth: enMatriz ? 0 : 1120,
               /* Fijo: cada columna respeta el ancho que le pusimos arriba. Sin
                  esto, un nombre largo estira la columna y en el celular la
                  columna congelada se come media pantalla. */
@@ -1544,20 +2006,41 @@ export default function CrearPospartidoPage() {
             }}>
             <thead>
               <tr>
-                {orden.map((clave, i) => {
+                {/* CÓDIGO · solo administración principal, y NUNCA en el PDF.
+                    Por el código se sabe quién es becado, y eso no se le
+                    muestra a nadie más (dirección, 27/08/2026). */}
+                {verCodigo && (
+                  <th
+                    title="El código de la ficha. Solo lo ve administración; no sale en el PDF."
+                    className="px-2 py-3 text-center font-black text-[12.5px] tracking-wide whitespace-nowrap text-white select-none"
+                    style={{
+                      background: CAMPO,
+                      borderRight: BLANCO, borderBottom: BLANCO, borderTop: BLANCO,
+                      width: ANCHO_COD,
+                      position: 'sticky', top: 0, left: 0, zIndex: 17,
+                    }}>
+                    CÓDIGO
+                  </th>
+                )}
+
+                {ordenVisible.map((clave, i) => {
                   const c = COLUMNAS[clave];
                   /* Las dos primeras columnas, sean las que sean, quedan
                      clavadas a la izquierda: es lo que permite llenar la
                      planilla desde el celular sin perder de vista el nombre. */
                   const fija = i <= 1;
-                  const izq  = i === 0 ? 0 : anchoDe(orden[0]);
+                  /* El corrimiento tiene en cuenta la columna CÓDIGO, que va
+                     antes que todas y también queda clavada a la izquierda. */
+                  const izq  = ANCHO_COD + (i === 0 ? 0 : anchoDe(ordenVisible[0]));
                   return (
                     <th key={clave}
-                      draggable
-                      onDragStart={() => empezarArrastre(i)}
-                      onDragOver={e => { e.preventDefault(); setEncima(i); }}
+                      /* En la MATRIZ no se arrastran columnas: son solo cuatro
+                         y el orden guardado es el de la planilla del partido. */
+                      draggable={!enMatriz}
+                      onDragStart={() => { if (!enMatriz) empezarArrastre(i); }}
+                      onDragOver={e => { if (enMatriz) return; e.preventDefault(); setEncima(i); }}
                       onDragLeave={() => setEncima(v => (v === i ? null : v))}
-                      onDrop={e => { e.preventDefault(); setEncima(null); soltarEn(i); }}
+                      onDrop={e => { if (enMatriz) return; e.preventDefault(); setEncima(null); soltarEn(i); }}
                       onDragEnd={() => setEncima(null)}
                       title={COLUMNAS[clave].ayuda
                         ? `${COLUMNAS[clave].ayuda} · arrastra el título para mover la columna`
@@ -1590,6 +2073,29 @@ export default function CrearPospartidoPage() {
                     </th>
                   );
                 })}
+
+                {/* CARGAR TORNEO · solo administración (dirección, 27/08/2026).
+                    Va aparte del juego de columnas movibles: esas se guardan en
+                    el computador de cada quien, y meterle una clave nueva a esa
+                    lista le dañaría el orden guardado a todo el que ya la tenía
+                    acomodada. Por eso esta va clavada al final. */}
+                {verCargar && (
+                  <th
+                    title="Cargarle a cada deportista el valor de este torneo, uno por uno"
+                    className="plan-cargar px-1 py-3 text-center font-black text-[12.5px] tracking-wide whitespace-nowrap text-white select-none"
+                    style={{
+                      background: CAMPO,
+                      borderLeft: BLANCO, borderRight: BLANCO,
+                      borderBottom: BLANCO, borderTop: BLANCO,
+                      /* Clavada a la DERECHA: el cuadro es ancho y toca correrlo
+                         para el lado; así el botón queda siempre a la vista sin
+                         tener que llegar hasta el final. — 27/08/2026 */
+                      width: 150, minWidth: 150,
+                      position: 'sticky', top: 0, right: 0, zIndex: 18,
+                    }}>
+                    CARGAR TORNEO
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -1598,9 +2104,22 @@ export default function CrearPospartidoPage() {
                      el gris se comía la fuerza del rojo. Lo que cambia es que
                      sus casillas de datos dicen N/A. — 26/08/2026 */
                   <tr key={f.id} style={{ background: PANEL }}>
-                    {orden.map((clave, k) => {
+                    {verCodigo && (
+                      <td className="px-1 py-[4px] text-center"
+                        style={{
+                          borderRight: BLANCO, borderBottom: BLANCO,
+                          background: CAMPO,
+                          position: 'sticky', left: 0, zIndex: 7,
+                        }}>
+                        <span className="text-white/80 text-[11px] font-black tracking-wide">
+                          {codigoPorId.get(idDeLaFila(f)) || '—'}
+                        </span>
+                      </td>
+                    )}
+
+                    {ordenVisible.map((clave, k) => {
                       const fija = k <= 1;
-                      const izq  = k === 0 ? 0 : anchoDe(orden[0]);
+                      const izq  = ANCHO_COD + (k === 0 ? 0 : anchoDe(ordenVisible[0]));
                       /* TODAS las casillas llevan el mismo gris oscuro: antes
                          las dos primeras iban en un gris más oscuro y, al mover
                          las columnas de lugar, quedaba una franja distinta en
@@ -1626,6 +2145,49 @@ export default function CrearPospartidoPage() {
                         </td>
                       );
                     })}
+
+                    {verCargar && (() => {
+                      const c        = cobroDe(f);
+                      const pagado   = c?.estado === 'PAGÓ';
+                      const ocupado  = cobrando === f.id;
+                      const sinId    = !idDeLaFila(f);
+                      return (
+                        <td className="plan-cargar px-1 py-[4px] text-center"
+                          style={{
+                            borderLeft: BLANCO, borderRight: BLANCO, borderBottom: BLANCO,
+                            background: CAMPO,          // sólido: por debajo pasa el resto del cuadro
+                            width: 150, minWidth: 150,
+                            position: 'sticky', right: 0, zIndex: 6,
+                          }}>
+                          {pagado ? (
+                            <span className="inline-block w-full rounded-md px-1 py-[6px] text-[10.5px] font-black text-white leading-none"
+                              style={{ background: VERDE }}>
+                              PAGÓ
+                            </span>
+                          ) : c ? (
+                            <button
+                              onClick={() => quitarCobro(f, c)}
+                              disabled={ocupado}
+                              title="Ya tiene cargado este torneo. Oprime para quitárselo."
+                              className="w-full rounded-md px-1 py-[6px] text-[10.5px] font-black text-white leading-none whitespace-nowrap disabled:opacity-50"
+                              style={{ background: AMBAR }}>
+                              {ocupado ? '…' : 'CARGADO ✓'}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => cobrarTorneo(f)}
+                              disabled={ocupado || sinId}
+                              title={sinId
+                                ? 'No se pudo identificar a este deportista en la lista del torneo'
+                                : `Cargarle ${plata(valorTorneo)} a ${f.deportista}`}
+                              className="w-full rounded-md px-1 py-[6px] text-[10.5px] font-black text-white leading-none whitespace-nowrap disabled:opacity-40"
+                              style={{ background: VERDE }}>
+                              {ocupado ? '…' : 'CARGAR TORNEO'}
+                            </button>
+                          )}
+                        </td>
+                      );
+                    })()}
                   </tr>
               ))}
 
@@ -1637,7 +2199,7 @@ export default function CrearPospartidoPage() {
                   desconectaba todo lo demás. */}
               {filas.length === 0 && (
                 <tr>
-                  <td colSpan={orden.length} className="py-8 text-center"
+                  <td colSpan={ordenVisible.length + (verCodigo ? 1 : 0) + (verCargar ? 1 : 0)} className="py-8 text-center"
                     style={{ background: PANEL, borderRight: BLANCO, borderBottom: BLANCO }}>
                     <p className="text-white/70 text-[13px] font-black">
                       Este torneo todavía no tiene deportistas asignados.
@@ -1682,11 +2244,16 @@ export default function CrearPospartidoPage() {
 
           <span className="text-white font-black text-[22px]">VS</span>
 
-          <input value={golesEllos} inputMode="numeric"
+          {/* Mientras esté vacía lleva un borde blanco punteado: se ve de una
+              que ahí falta algo, y sin ella no deja guardar. — 27/08/2026 */}
+          <input ref={cajaRival} value={golesEllos} inputMode="numeric"
             onChange={e => setGolesEllos(e.target.value.replace(/[^\d]/g, ''))}
             placeholder="0"
-            title="Los goles del rival. Escríbelos aquí, aunque sean 0."
-            style={{ width: 68, height: 68, background: ROJO, border: 'none' }}
+            title="Los goles del rival. Escríbelos aquí, aunque sean 0. Sin esto no se puede guardar."
+            style={{
+              width: 68, height: 68, background: ROJO,
+              border: marcadorActivo ? 'none' : '2px dashed rgba(255,255,255,.55)',
+            }}
             className="rounded-xl text-center text-white font-black text-[30px] outline-none
               placeholder:text-white/[.22]" />
 
@@ -1782,7 +2349,9 @@ export default function CrearPospartidoPage() {
             </p>
           ) : (
             <p className="text-white/40 text-[11px]">
-              Escribe el número del torneo y salen solos los deportistas asignados.
+              {esProfe
+                ? 'Escoge tu torneo y salen solos los deportistas asignados.'
+                : 'Escribe el número del torneo y salen solos los deportistas asignados.'}
             </p>
           )}
         </div>
@@ -1815,8 +2384,10 @@ export default function CrearPospartidoPage() {
             <Archive className="w-5 h-5 text-white shrink-0" />
             <div className="flex-1 min-w-0">
               <h2 className="text-white font-black text-[15px] tracking-wide">BANCO POSPARTIDO</h2>
-              <p className="text-white/75 text-[11px] font-semibold">
-                Todos los partidos ya elaborados. Oprime uno para abrirlo.
+              <p className="text-white/75 text-[11px] font-semibold truncate">
+                {numTorneo
+                  ? `Los partidos de ${nombreTorneo || `el torneo ${numTorneo}`}. Oprime uno para abrirlo.`
+                  : 'Todos los partidos ya elaborados. Oprime uno para abrirlo.'}
               </p>
             </div>
             <button
@@ -1851,7 +2422,9 @@ export default function CrearPospartidoPage() {
 
             ) : bancoPorTorneo.length === 0 ? (
               <p className="text-white/40 text-[12px] font-semibold text-center py-4">
-                Todavía no hay ningún partido archivado. El primero que guardes aparece aquí.
+                {numTorneo
+                  ? `Este torneo todavía no tiene ningún partido archivado. El primero que guardes aparece aquí.`
+                  : 'Todavía no hay ningún partido archivado. El primero que guardes aparece aquí.'}
               </p>
 
             ) : (

@@ -1,12 +1,13 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Camera } from 'lucide-react';
 import LoadingBall from '@/components/LoadingBall';
 import { cn, abrirSoporte, esPdfDato } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
+import { partirNombre } from '@/lib/nombres';
 import type { Deportista } from '@/lib/db';
 import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre, updateColumnasDeportista, enviarMensaje } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
@@ -19,7 +20,14 @@ const SB_URL = 'https://fykdyalpuydkwfjqguip.supabase.co';
 const SB_KEY = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
 const SB_HDR = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
 
-interface OtroPago { id: string; producto_id: string | null; descripcion: string; tipo: string; valor: number; fecha: string | null; estado: 'PAGÓ' | 'PEND'; }
+interface OtroPago { id: string; producto_id: string | null; descripcion: string; tipo: string; valor: number; fecha: string | null; estado: 'PAGÓ' | 'PEND';
+  /* Lo que de verdad entró. Puede ser distinto del valor cargado (un abono).
+     Si la base todavía no tiene esta casilla, se guarda sin ella y se avisa;
+     entonces el pagado se muestra igual al cargado. — 27/08/2026 */
+  valor_pagado?: number | null;
+  /* Cómo pagó: transferencia, efectivo… Misma historia que la de arriba. */
+  medio_pago?: string | null;
+}
 interface Producto  { id: string; tipo: string; descripcion: string; valor: number; }
 
 const DETALLE_ROWS = [
@@ -143,6 +151,18 @@ function esMediaBeca(codRaw: string): boolean {
   return /^mb/i.test(codRaw.trim());
 }
 
+/** La fecha de hoy como la guarda la base: AAAA-MM-DD. */
+function hoyISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** "$ 253.500" → 253500. Lo que se escriba con puntos, comas o el signo entra
+ *  igual; lo que no sea número se descarta. */
+function soloNumero(v: string): number {
+  const n = parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function formatFecha(v: string): string {
   if (!v) return '';
   // Ya tiene formato DD/MM/AAAA
@@ -241,6 +261,69 @@ function EstadoCuentaInner() {
   // ── OTROS PAGOS ────────────────────────────────────────────────
   const xlsxInputRef            = useRef<HTMLInputElement>(null);
   const [otrosPagos,    setOtrosPagos]    = useState<OtroPago[]>([]);
+  /* Los TORNEOS se muestran en su propia tabla, debajo de las mensualidades.
+     El resto de cobros —uniformes, salidas— se queda en OTROS PAGOS. Se
+     reparten aquí para que ningún renglón salga en las dos. — 27/08/2026 */
+  const esCobroDeTorneo = (op: OtroPago) => /torneo/i.test(String(op.tipo ?? ''));
+  const torneosCargados = useMemo(() => otrosPagos.filter(esCobroDeTorneo), [otrosPagos]);
+
+  /* ── REGISTRAR EL PAGO DE UN TORNEO, A MANO ──────────────────────────────
+     El mismo cuadro de Registrar Pago de las mensualidades, pedido por la
+     dirección el 27/08/2026: valor cargado, cómo pagó, cuándo y cuánto.
+     Mientras no exista el cobro en línea, así se registra. */
+  const [torneoEnPago, setTorneoEnPago] = useState<OtroPago | null>(null);
+  const [formTorneo, setFormTorneo] = useState<{ vCargado: string; medio: string; fecha: string; vPagado: string }>(
+    { vCargado: '', medio: '', fecha: '', vPagado: '' },
+  );
+  const [guardandoTorneo, setGuardandoTorneo] = useState(false);
+  /* Aviso amarillo cuando a la base le faltó alguna casilla: el pago SÍ quedó,
+     pero ese dato suelto no se pudo guardar. */
+  const [avisoTorneo, setAvisoTorneo] = useState('');
+
+  function abrirPagoTorneo(op: OtroPago) {
+    setTorneoEnPago(op);
+    setFormTorneo({
+      vCargado: op.valor > 0 ? String(op.valor) : '',
+      medio:    String(op.medio_pago ?? ''),
+      fecha:    hoyISO(),
+      vPagado:  op.valor > 0 ? String(op.valor) : '',
+    });
+  }
+
+  async function confirmarPagoTorneo() {
+    const op = torneoEnPago;
+    if (!op) return;
+    setGuardandoTorneo(true);
+    setAvisoTorneo('');
+    try {
+      const cambios: Record<string, any> = {
+        estado:       'PAGÓ',
+        valor:        soloNumero(formTorneo.vCargado),
+        fecha:        formTorneo.fecha || hoyISO(),
+        valor_pagado: soloNumero(formTorneo.vPagado),
+        medio_pago:   formTorneo.medio.trim() || null,
+      };
+      const sacadas = await parchearOtroPago(op.id, cambios);
+      /* Lo que la base no aceptó no se pinta en pantalla, para que lo que se ve
+         sea de verdad lo que quedó guardado. */
+      const aplicado: Record<string, any> = { ...cambios };
+      sacadas.forEach(c => { delete aplicado[c]; });
+      setOtrosPagos(prev => prev.map(p => p.id === op.id ? { ...p, ...aplicado } : p));
+      if (sacadas.length) {
+        setAvisoTorneo(
+          `El pago quedó registrado, pero la base todavía no tiene ` +
+          `${sacadas.length === 1 ? 'la casilla' : 'las casillas'} "${sacadas.join('", "')}". ` +
+          'Se arregla corriendo ARREGLAR-LA-BASE.bat una sola vez.',
+        );
+      }
+      setTorneoEnPago(null);
+    } catch (e: any) {
+      setAvisoTorneo(e?.message ?? 'No se pudo registrar el pago.');
+    } finally {
+      setGuardandoTorneo(false);
+    }
+  }
+  const otrosNoTorneo   = useMemo(() => otrosPagos.filter(op => !esCobroDeTorneo(op)), [otrosPagos]);
   const [productosLst,  setProductosLst]  = useState<Producto[]>([]);
   const [showAddOtro,   setShowAddOtro]   = useState(false);
   const [selProdId,     setSelProdId]     = useState('');
@@ -274,8 +357,39 @@ function EstadoCuentaInner() {
 
   async function toggleEstadoOtro(op: OtroPago) {
     const nuevo = op.estado === 'PAGÓ' ? 'PEND' : 'PAGÓ';
-    await fetch(`${SB_URL}/rest/v1/otros_pagos?id=eq.${op.id}`, { method: 'PATCH', headers: SB_HDR, body: JSON.stringify({ estado: nuevo }) });
-    setOtrosPagos(prev => prev.map(p => p.id === op.id ? { ...p, estado: nuevo } : p));
+    /* Al registrar el pago queda la FECHA del día, como en mensualidades; al
+       revertirlo se borra, para que no quede una fecha de un pago que ya no
+       existe. — dirección, 27/08/2026 */
+    const fecha = nuevo === 'PAGÓ' ? new Date().toISOString().slice(0, 10) : null;
+    await fetch(`${SB_URL}/rest/v1/otros_pagos?id=eq.${op.id}`, { method: 'PATCH', headers: SB_HDR, body: JSON.stringify({ estado: nuevo, fecha }) });
+    setOtrosPagos(prev => prev.map(p => p.id === op.id ? { ...p, estado: nuevo, fecha } : p));
+  }
+
+  /* ── GUARDAR SIN QUE UNA CASILLA QUE FALTE TUMBE TODO ─────────────────────
+     Igual que en el pospartido: si la tabla no tiene alguna de las casillas
+     nuevas, Supabase no guarda NADA y contesta PGRST204 diciendo cuál es. En
+     vez de perder el pago, se saca esa casilla y se vuelve a mandar.
+     `estado` y `valor` no se sacan nunca: sin ellos el pago no significa nada.
+     Devuelve las casillas que quedaron por fuera. — 27/08/2026 */
+  async function parchearOtroPago(idPago: string, cambios: Record<string, any>): Promise<string[]> {
+    const cuerpo: Record<string, any> = { ...cambios };
+    const NO_SE_SACAN = new Set(['estado', 'valor']);
+    const sacadas: string[] = [];
+    for (let intento = 0; intento < 4; intento++) {
+      const res = await fetch(`${SB_URL}/rest/v1/otros_pagos?id=eq.${idPago}`,
+        { method: 'PATCH', headers: SB_HDR, body: JSON.stringify(cuerpo) });
+      if (res.ok) return sacadas;
+      const txt = await res.text().catch(() => '');
+      const m = txt.match(/Could not find the '([^']+)' column/i);
+      const falta = m ? m[1] : null;
+      if (falta && falta in cuerpo && !NO_SE_SACAN.has(falta)) {
+        delete cuerpo[falta];
+        sacadas.push(falta);
+        continue;
+      }
+      throw new Error(`No se pudo guardar (${res.status}). ${txt.slice(0, 140)}`);
+    }
+    throw new Error('No se pudo guardar después de varios intentos.');
   }
 
   async function eliminarOtroPago(op: OtroPago) {
@@ -913,10 +1027,22 @@ function EstadoCuentaInner() {
                   distinta altura y los renglones no se alinearían con los
                   botones. Se le pone tope de dos renglones para que un nombre
                   muy largo no le rompa la cuenta a toda la tarjeta. */}
-              <div className="min-h-[54px] sm:h-[54px] flex items-center">
-                <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide line-clamp-2">
-                  {nombre}
+              <div className="min-h-[54px] sm:h-[54px] flex flex-col justify-center">
+                {/* NOMBRES ARRIBA, APELLIDOS ABAJO (dirección, 27/08/2026).
+                    Los nombres en el tamaño de siempre; los apellidos debajo,
+                    más pequeños y sin negrilla. La partición la hace
+                    `partirNombre`, con la costumbre colombiana: los dos
+                    últimos son los apellidos. Si algún nombre no se puede
+                    partir, sale completo arriba y abajo no sale nada — nunca
+                    se esconde parte del nombre. */}
+                <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide truncate">
+                  {partirNombre(nombre).nombres || nombre}
                 </h1>
+                {partirNombre(nombre).apellidos && (
+                  <p className="text-white/75 text-[12.5px] font-normal leading-tight uppercase tracking-wide truncate">
+                    {partirNombre(nombre).apellidos}
+                  </p>
+                )}
               </div>
 
               {/* ── LOS CUATRO RENGLONES, EMPAREJADOS CON LOS CUATRO BOTONES ──
@@ -1250,6 +1376,124 @@ function EstadoCuentaInner() {
               </p>
         }
 
+
+        {/* ══════════════════════════════════════════════════════════════════
+            TORNEOS  —  debajo de las mensualidades (dirección, 27/08/2026)
+
+            Cada torneo que se le carga a un deportista aparece aquí con lo que
+            vale, lo que ha pagado y su estado. El valor cargado sale del cuadro
+            de Torneos y Competencias; no se escribe a mano.
+
+            Se separó de OTROS PAGOS a propósito: un torneo no es lo mismo que
+            un uniforme o una salida. La dirección los cobra y los persigue
+            aparte, y mezclarlos obligaba a leer el tipo de cada renglón para
+            saber de qué se trataba.
+
+            EL PAGO SE MARCA A MANO, IGUAL QUE EN MENSUALIDADES (dirección,
+            27/08/2026): administración ve el botón rojo PENDIENTE y, al
+            oprimirlo, el torneo queda en PAGÓ. Oprimiéndolo otra vez se
+            revierte. NO hay botón de "pagar ahora": el cobro en línea de
+            torneos no existe todavía, y un botón que ofrezca pagar y no
+            cobre confunde a quien lo ve.
+            ══════════════════════════════════════════════════════════════════ */}
+        {torneosCargados.length > 0 && (
+          <div className="mb-4">
+            <h3 className="font-black text-sm text-white uppercase tracking-wide flex items-center gap-1 mb-2">
+              <span>🏆</span> Torneos
+            </h3>
+            {avisoTorneo && (
+              <p className="text-[11px] font-semibold mb-2 rounded-lg px-3 py-2"
+                style={{ color: '#fff', background: 'rgba(224,163,58,.16)', border: '1px solid #E0A33A' }}>
+                {avisoTorneo}
+              </p>
+            )}
+            <div className="rounded-2xl overflow-hidden border" style={{ borderColor: '#4A5568' }}>
+              <div className="overflow-x-auto w-full">
+                <table className="border-collapse" style={{ width: '100%', minWidth: 320 }}>
+                  <thead>
+                    <tr>
+                      {/* EL MISMO ORDEN DE MENSUALIDADES (dirección, 27/08/2026):
+                          FECHA · V. CARGADO · V. PAGADO · TORNEO · ESTADO.
+                          Las dos tablas quedan una debajo de la otra, así que
+                          leerlas con las columnas cambiadas de puesto obligaba
+                          a devolverse cada vez. Donde mensualidades dice
+                          DETALLE, aquí dice TORNEO: es lo mismo, el nombre de
+                          lo que se está cobrando. */}
+                      {[
+                        { t: 'FECHA',       w: '15%' },
+                        { t: 'V. CARGADO',  w: '20%' },
+                        { t: 'V. PAGADO',   w: '20%' },
+                        { t: 'TORNEO',      w: '27%' },
+                        { t: 'ESTADO',      w: '18%' },
+                      ].map(({ t, w }) => (
+                        <th key={t} style={{
+                          background: G, color: 'white', border: BW, padding: '9px 5px',
+                          textAlign: 'center', fontSize: 10, fontWeight: 900,
+                          letterSpacing: '0.04em', width: w,
+                        }}>{t}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {torneosCargados.map(op => {
+                      const pagado = op.estado === 'PAGÓ';
+                      return (
+                        <tr key={op.id}>
+                          {/* FECHA — la del día en que se registró el pago */}
+                          <td style={{ background: ROW, border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                            <span className={cn('text-[9px] font-semibold', pagado ? 'text-white' : 'text-white/40')}>
+                              {pagado ? (formatFecha(op.fecha ?? '') || '—') : 'DD/MM/AAAA'}
+                            </span>
+                          </td>
+                          {/* V. CARGADO — lo que vale el torneo en el cuadro */}
+                          <td style={{ background: CAMPO, border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                            <span className="text-[9px] font-bold text-white">
+                              {op.valor > 0 ? ensurePeso(String(op.valor)) : '—'}
+                            </span>
+                          </td>
+                          {/* V. PAGADO — lo que de verdad entró. Si la base no
+                              tiene esa casilla, se muestra el valor cargado. */}
+                          <td style={{ background: CAMPO, border: BW, padding: '4px 6px', textAlign: 'center' }}>
+                            <span className={cn('text-[9px] font-bold', pagado ? 'text-white' : 'text-white/40')}>
+                              {pagado
+                                ? ensurePeso(String(op.valor_pagado ?? op.valor))
+                                : '—'}
+                            </span>
+                          </td>
+                          {/* TORNEO — el que en mensualidades es el DETALLE */}
+                          <td style={{ background: pagado ? CAMPO : '#dc2626', color: '#fff', border: BW,
+                                       padding: '8px 10px', textAlign: 'center',
+                                       fontWeight: 900, fontSize: 11 }}>
+                            {op.descripcion}
+                          </td>
+                          <td style={{ background: ROW, border: BW, padding: '6px 4px', textAlign: 'center' }}>
+                            {puedeEditar ? (
+                              <button
+                                onClick={() => pagado ? toggleEstadoOtro(op) : abrirPagoTorneo(op)}
+                                title={pagado
+                                  ? 'Clic para revertir: vuelve a quedar pendiente'
+                                  : 'Clic para registrar a mano el pago de este torneo'}
+                                className={cn('rounded font-black text-white transition w-full px-2 py-1 text-[10.5px]',
+                                  pagado ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600')}>
+                                {pagado ? 'PAGÓ' : 'PENDIENTE'}
+                              </button>
+                            ) : (
+                              <span className="px-2 py-1 rounded font-black text-[10.5px] w-full block text-center text-white"
+                                style={{ background: pagado ? '#00B050' : '#C0504D' }}>
+                                {pagado ? 'PAGÓ' : 'PENDIENTE'}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── OTROS PAGOS (admin y profe ven; admin edita) ── */}
         {!esDeportista && (
           <div className="mb-4">
@@ -1275,7 +1519,7 @@ function EstadoCuentaInner() {
             </div>
 
             {/* Tabla — mismo layout que mensualidades */}
-            {otrosPagos.length === 0 ? (
+            {otrosNoTorneo.length === 0 ? (
               <p className="text-center text-[11px] text-white/40 py-3 border border-dashed border-[#4A5568] rounded-xl">
                 Sin otros pagos registrados
               </p>
@@ -1299,7 +1543,7 @@ function EstadoCuentaInner() {
                     </tr>
                   </thead>
                   <tbody>
-                    {otrosPagos.map(op => {
+                    {otrosNoTorneo.map(op => {
                       const isPaidO  = op.estado === 'PAGÓ';
                       const detBgO   = isPaidO ? CAMPO : '#dc2626';
                       const rowBgO   = ROW;
@@ -1820,6 +2064,90 @@ function EstadoCuentaInner() {
                 onClick={() => editIdx !== null && eliminarMes(editIdx)}
                 className="text-red-400 hover:text-[#F08A87] text-xs font-bold transition underline underline-offset-2">
                 No cobrar este mes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL REGISTRAR PAGO DE UN TORNEO ───────────────────────────────
+          El mismo cuadro de las mensualidades, para los torneos (dirección,
+          27/08/2026). Mientras no exista el cobro en línea, el pago del torneo
+          se registra aquí a mano: cuánto se cargó, cómo pagó, cuándo y cuánto
+          entró de verdad. */}
+      {torneoEnPago && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-[#3C4759] rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="w-10 h-1 bg-[#2B3547] rounded-full mx-auto mb-5 sm:hidden"/>
+            <h3 className="font-black text-white text-base mb-1">Registrar Pago</h3>
+            <p className="text-white/40 text-xs mb-5 font-semibold">{torneoEnPago.descripcion}</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Valor Cargado</label>
+                <input
+                  value={formTorneo.vCargado}
+                  inputMode="numeric"
+                  onChange={e => setFormTorneo(f => ({ ...f, vCargado: e.target.value }))}
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  placeholder="$ 253.500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Descripción</label>
+                <input
+                  value={formTorneo.medio}
+                  onChange={e => setFormTorneo(f => ({ ...f, medio: e.target.value }))}
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  placeholder="Ej: Transferencia, efectivo..."
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Fecha de Pago</label>
+                <input
+                  type="date"
+                  value={formTorneo.fecha}
+                  onChange={e => setFormTorneo(f => ({ ...f, fecha: e.target.value }))}
+                  style={{ colorScheme: 'dark' }}
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                />
+                {formTorneo.fecha && (
+                  <p className="text-[11px] text-[#5BE39B] font-bold mt-1">→ {formatFecha(formTorneo.fecha)}</p>
+                )}
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-white/40 uppercase tracking-widest">Valor Pagado</label>
+                <input
+                  value={formTorneo.vPagado}
+                  inputMode="numeric"
+                  onChange={e => setFormTorneo(f => ({ ...f, vPagado: e.target.value }))}
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  placeholder="$ 253.500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setTorneoEnPago(null)}
+                className="flex-1 border border-[#4A5568] rounded-xl py-3 text-sm font-bold text-white/70 hover:bg-[#333F50] transition">
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarPagoTorneo}
+                disabled={guardandoTorneo}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-xl py-3 text-sm font-black transition">
+                {guardandoTorneo ? '…' : '✓ Confirmar'}
+              </button>
+            </div>
+
+            {/* Quitarle el torneo — la opción discreta del fondo, como el
+                "No cobrar este mes" de las mensualidades. */}
+            <div className="mt-4 pt-4 border-t border-[#4A5568] text-center">
+              <button
+                onClick={async () => { const op = torneoEnPago; setTorneoEnPago(null); if (op) await eliminarOtroPago(op); }}
+                className="text-red-400 hover:text-[#F08A87] text-xs font-bold transition underline underline-offset-2">
+                No cobrarle este torneo
               </button>
             </div>
           </div>

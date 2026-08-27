@@ -165,19 +165,84 @@ function aPlanilla(f: any, n: string, j: string): PlanillaGuardada {
   };
 }
 
-/** Guarda (o actualiza) la planilla de ese torneo EN ESA FECHA. */
-export async function guardarPlanilla(p: PlanillaGuardada): Promise<void> {
+/* ── QUE UNA CASILLA QUE FALTE NO BLOQUEE EL PARTIDO ──────────────────────────
+   (dirección, 27/08/2026 — pasó de verdad y dejó al formador sin poder guardar)
+
+   Cuando a la tabla de la base le falta una columna que el programa sí manda,
+   Supabase NO guarda NADA y contesta:
+
+       PGRST204 · Could not find the 'definitivo' column of
+                  'pospartido_planillas' in the schema cache
+
+   Antes eso tumbaba la guardada completa: por una casilla que faltaba se perdía
+   el partido entero. Ahora el programa lee cuál es la casilla que falta, la
+   saca, y vuelve a mandar. El partido QUEDA GUARDADO; lo único que se pierde es
+   ese dato suelto, y la pantalla lo avisa en amarillo.
+
+   HAY TRES QUE NO SE PUEDEN SACAR NUNCA:
+     · torneo_num y jornada → son las que dicen QUÉ partido es. Sin la jornada,
+       la fecha 10 pisaría la fecha 1 y se perdería el partido anterior.
+     · filas → son los deportistas. Sin eso no hay planilla.
+   Si falta alguna de esas tres, sí se para y se avisa que hay que correr el
+   .bat, porque guardar a medias haría más daño que no guardar. */
+const NO_SE_PUEDEN_SACAR = new Set(['torneo_num', 'jornada', 'filas']);
+
+/** Las que ya sabemos que esta base no tiene. Se saltan de una en la siguiente
+ *  guardada, para no gastar un viaje de ida y vuelta cada vez. */
+const CASILLAS_QUE_NO_EXISTEN = new Set<string>();
+
+/** Lee el nombre de la casilla que falta en la respuesta de Supabase. */
+function casillaQueFalta(txt: string): string | null {
+  const m = txt.match(/Could not find the '([^']+)' column/i);
+  return m ? m[1] : null;
+}
+
+/**
+ * Guarda (o actualiza) la planilla de ese torneo EN ESA FECHA.
+ *
+ * Devuelve la lista de casillas que hubo que dejar por fuera porque la base
+ * todavía no las tiene. Lista vacía = se guardó completo.
+ */
+export async function guardarPlanilla(p: PlanillaGuardada): Promise<string[]> {
   if (!String(p.jornada || '').trim()) {
     throw new Error('Falta escoger la # FECHA. Sin fecha no se puede archivar el partido.');
   }
-  const cuerpo = { ...p, actualizada_en: new Date().toISOString() };
-  const res = await fetch(`${SB_URL}/rest/v1/${TABLA_POSPARTIDO}`, {
-    method: 'POST',
-    headers: { ...HDR, Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify([cuerpo]),
-  });
-  if (!res.ok) {
+
+  const cuerpo: Record<string, any> = { ...p, actualizada_en: new Date().toISOString() };
+  const sacadas: string[] = [];
+
+  /* Las que ya se supo antes que no existen, ni se intentan. */
+  for (const c of CASILLAS_QUE_NO_EXISTEN) {
+    if (c in cuerpo) { delete cuerpo[c]; sacadas.push(c); }
+  }
+
+  /* Hasta cinco intentos: cada vuelta saca UNA casilla que falte. Cinco es de
+     sobra —la tabla no tiene tantas— y evita quedarse dando vueltas. */
+  for (let intento = 0; intento < 5; intento++) {
+    const res = await fetch(`${SB_URL}/rest/v1/${TABLA_POSPARTIDO}`, {
+      method: 'POST',
+      headers: { ...HDR, Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([cuerpo]),
+    });
+    if (res.ok) return sacadas;
+
     const txt = await res.text().catch(() => '');
+
+    /* ¿Es una casilla que le falta a la tabla? Se saca y se reintenta. */
+    const falta = casillaQueFalta(txt);
+    if (falta && falta in cuerpo && !NO_SE_PUEDEN_SACAR.has(falta)) {
+      delete cuerpo[falta];
+      CASILLAS_QUE_NO_EXISTEN.add(falta);
+      sacadas.push(falta);
+      continue;
+    }
+    if (falta && NO_SE_PUEDEN_SACAR.has(falta)) {
+      throw new Error(
+        `A la base le falta la casilla "${falta}", y esa no se puede dejar por fuera ` +
+        'sin dañar el archivo de partidos. Corre ARREGLAR-LA-BASE.bat una vez y vuelve a guardar.',
+      );
+    }
+
     /* Si la base todavía tiene la llave vieja (solo el torneo), guardar la
        fecha 2 choca con la fecha 1. Se dice en cristiano qué hay que correr. */
     if (/no unique|on conflict|constraint/i.test(txt)) {
@@ -192,6 +257,8 @@ export async function guardarPlanilla(p: PlanillaGuardada): Promise<void> {
         : `No se pudo guardar en la base (${res.status}). ${txt.slice(0, 140)}`,
     );
   }
+
+  throw new Error('No se pudo guardar después de varios intentos. Corre ARREGLAR-LA-BASE.bat.');
 }
 
 /** Borra de la base la planilla de ese torneo en esa fecha. Si la tabla no

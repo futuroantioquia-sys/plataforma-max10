@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Users, Search, FileSpreadsheet, Trash2,
   ChevronRight, ArrowLeft, Camera, GraduationCap,
-  LayoutGrid, TableProperties, ChevronDown, Download, Loader2, ClipboardList, CalendarDays,
+  LayoutGrid, TableProperties, ChevronDown, Download, Loader2, ClipboardList, CalendarDays, Trophy,
 } from 'lucide-react';
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
@@ -81,8 +81,8 @@ function CeldaPosicion({ depId, valor, onChange, readOnly = false }: {
     ? createPortal(
         <div ref={menuRef}
           style={{ position: 'fixed', top: coords.top, left: coords.left, zIndex: 99999, minWidth: 210 }}
-          className="bg-white rounded-2xl shadow-2xl border border-gray-100 py-2">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 pb-1.5 border-b border-gray-100">
+          className="bg-[#3C4759] rounded-2xl shadow-2xl border border-[#4A5568] py-2">
+          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-3 pb-1.5 border-b border-[#4A5568]">
             Máx. {MAX_POS} posiciones
           </p>
           {POSICIONES.map(pos => {
@@ -92,10 +92,10 @@ function CeldaPosicion({ depId, valor, onChange, readOnly = false }: {
               <button key={pos} type="button" onMouseDown={e => e.stopPropagation()} onClick={() => togglePos(pos)} disabled={disabled}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition
                   ${checked  ? 'bg-[#f0fdf4] text-[#064e1e] font-bold' : ''}
-                  ${disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-50'}
-                  ${!checked && !disabled ? 'text-gray-700' : ''}`}>
+                  ${disabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-[#333F50]'}
+                  ${!checked && !disabled ? 'text-white' : ''}`}>
                 <span className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border
-                  ${checked ? 'bg-[#16a34a] border-[#16a34a]' : 'border-gray-300'}`}>
+                  ${checked ? 'bg-[#16a34a] border-[#16a34a]' : 'border-[#4A5568]'}`}>
                   {checked && (
                     <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12">
                       <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -108,7 +108,7 @@ function CeldaPosicion({ depId, valor, onChange, readOnly = false }: {
           })}
           {sel.length > 0 && (
             <button type="button" onMouseDown={e => e.stopPropagation()} onClick={() => { onChange(depId, ''); setOpen(false); }}
-              className="w-full text-left px-3 py-2 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 border-t border-gray-100 transition mt-1">
+              className="w-full text-left px-3 py-2 text-xs text-red-400 hover:text-[#F08A87] hover:bg-[rgba(192,80,77,.14)] border-t border-[#4A5568] transition mt-1">
               Limpiar selección
             </button>
           )}
@@ -130,14 +130,14 @@ function CeldaPosicion({ depId, valor, onChange, readOnly = false }: {
 }
 
 const PALETA = [
-  { grad: 'from-[#064e1e] to-[#22c55e]',  accent: '#16a34a', chip: 'bg-green-100 text-green-700'   },
-  { grad: 'from-[#064e1e] to-[#16a34a]',  accent: '#16a34a', chip: 'bg-green-100 text-green-700'   },
+  { grad: 'from-[#064e1e] to-[#22c55e]',  accent: '#16a34a', chip: 'bg-[rgba(0,176,80,.20)] text-[#5BE39B]'   },
+  { grad: 'from-[#064e1e] to-[#16a34a]',  accent: '#16a34a', chip: 'bg-[rgba(0,176,80,.20)] text-[#5BE39B]'   },
   { grad: 'from-[#0a0c14] to-[#334155]',  accent: '#334155', chip: 'bg-slate-100 text-slate-700'   },
-  { grad: 'from-[#064e1e] to-[#16a34a]',  accent: '#16a34a', chip: 'bg-green-100 text-green-800'   },
-  { grad: 'from-[#064e1e] to-[#22c55e]',  accent: '#16a34a', chip: 'bg-green-100 text-green-800'   },
+  { grad: 'from-[#064e1e] to-[#16a34a]',  accent: '#16a34a', chip: 'bg-[rgba(0,176,80,.20)] text-green-800'   },
+  { grad: 'from-[#064e1e] to-[#22c55e]',  accent: '#16a34a', chip: 'bg-[rgba(0,176,80,.20)] text-green-800'   },
   { grad: 'from-[#0a0c14] to-[#475569]',  accent: '#475569', chip: 'bg-slate-100 text-slate-600'   },
-  { grad: 'from-[#052e14] to-[#22c55e]',  accent: '#16a34a', chip: 'bg-green-100 text-green-700'   },
-  { grad: 'from-[#064e1e] to-[#052a10]',  accent: '#16a34a', chip: 'bg-green-100 text-green-900'   },
+  { grad: 'from-[#052e14] to-[#22c55e]',  accent: '#16a34a', chip: 'bg-[rgba(0,176,80,.20)] text-[#5BE39B]'   },
+  { grad: 'from-[#064e1e] to-[#052a10]',  accent: '#16a34a', chip: 'bg-[rgba(0,176,80,.20)] text-green-900'   },
 ];
 
 // Colores para cada categoría de COMPITE
@@ -156,7 +156,7 @@ function colorCompite(valor: string): string {
   for (const [k, c] of Object.entries(COMPITE_COLORS)) {
     if (v.includes(k)) return c;
   }
-  return 'bg-gray-200 text-gray-600';
+  return 'bg-[#2B3547] text-white/70';
 }
 
 /* Color del CÓDIGO según tipo de afiliación.
@@ -234,7 +234,7 @@ function AvatarStack({ lista, fotos, grad, max = 6 }: {
         </div>
       ))}
       {lista.length > max && (
-        <div className="w-7 h-7 rounded-full ring-2 ring-white bg-gray-100 flex items-center justify-center flex-shrink-0 text-[9px] font-black text-gray-500" style={{ marginLeft: '-6px' }}>
+        <div className="w-7 h-7 rounded-full ring-2 ring-white bg-[#2B3547] flex items-center justify-center flex-shrink-0 text-[9px] font-black text-white/70" style={{ marginLeft: '-6px' }}>
           +{lista.length - max}
         </div>
       )}
@@ -710,7 +710,7 @@ function DashboardProyecto({
     if (lv.includes('mb instit'))return 'bg-[#064e1e] text-white';
     if (lv.includes('b instit')) return 'bg-[#22c55e] text-[#064e1e]';
     if (lv.includes('sin afil')) return 'bg-[#475569] text-white';
-    return 'bg-gray-200 text-gray-600';
+    return 'bg-[#2B3547] text-white/70';
   }
 
   // Columnas fijas
@@ -764,8 +764,8 @@ function DashboardProyecto({
               </div>
               {profe && (
                 <button onClick={() => inputRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-white rounded-full shadow flex items-center justify-center">
-                  <Camera className="w-3 h-3 text-gray-600"/>
+                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#3C4759] rounded-full shadow flex items-center justify-center">
+                  <Camera className="w-3 h-3 text-white/70"/>
                 </button>
               )}
               <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFoto}/>
@@ -810,31 +810,31 @@ function DashboardProyecto({
             const esN = e.toLowerCase().includes('nuevo'), esA = e.toLowerCase().includes('antigu');
             return (
               <div key={dep.id} onClick={() => onVerPerfil(dep.id)}
-                className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all overflow-hidden">
+                className="bg-[#3C4759] rounded-xl border border-[#4A5568] shadow-sm hover:shadow-md cursor-pointer transition-all overflow-hidden">
                 <div className={cn('h-1 bg-gradient-to-r', pal.grad)}/>
                 <div className="p-3 flex items-center gap-3">
                   <div className={cn('w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center bg-gradient-to-br text-white font-black text-[10px]', pal.grad)}>
                     {fotos[dep.id] ? <img src={fotos[dep.id]} alt="" className="w-full h-full object-cover"/> : iniciales(dep._nombre)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-800 text-sm truncate">{dep._nombre}</p>
+                    <p className="font-bold text-white text-sm truncate">{dep._nombre}</p>
                     <div className="flex gap-1.5 mt-1 flex-wrap">
-                      {e && <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full', esN?'bg-green-100 text-green-700':esA?'bg-gray-200 text-gray-700':'bg-gray-100 text-gray-500')}>{e}</span>}
+                      {e && <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full', esN?'bg-[rgba(0,176,80,.20)] text-[#5BE39B]':esA?'bg-[#2B3547] text-white':'bg-[#2B3547] text-white/70')}>{e}</span>}
                       {c && <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full', colorCompite(c))}>{c}</span>}
                     </div>
                   </div>
-                  {a && <p className="text-xs text-gray-400 flex-shrink-0">{a}</p>}
+                  {a && <p className="text-xs text-white/40 flex-shrink-0">{a}</p>}
                 </div>
               </div>
             );
           })}
-          {filtrada.length === 0 && <p className="col-span-2 text-center py-8 text-sm text-gray-400">Sin resultados</p>}
+          {filtrada.length === 0 && <p className="col-span-2 text-center py-8 text-sm text-white/40">Sin resultados</p>}
         </div>
       )}
 
       {/* ── Vista tabla Excel (solo lectura) ── */}
       {vistaTabla && (
-        <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="rounded-xl border border-[#4A5568] overflow-hidden shadow-sm">
 
           {/* Encabezado: PROGRAMA · PROYECTO · FORMADOR, en una sola franja verde.
               Antes era una tablita de dos filas que partía el bloque en dos. */}
@@ -934,7 +934,7 @@ function DashboardProyecto({
                                 : <span className="text-white/30">—</span>
                             ) : c.key === 'compite' ? (
                               v ? <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold', colorCompite(v))}>{v}</span>
-                                : <span className="text-gray-300">—</span>
+                                : <span className="text-white/40">—</span>
                             ) : (
                               <span className="text-white font-medium">{v || <span className="text-white/30">—</span>}</span>
                             )}
@@ -991,6 +991,33 @@ function DashboardProyecto({
 function AlumnosPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  /* ── UNA SOLA LISTA EN VEZ DE DOS BOTONES ────────────────────────────────
+     (dirección, 27/08/2026)
+
+     Eran dos botones y ya no caben tres: en el celular POSPARTIDOS quedaría
+     cortado igual que le pasó a MICROCICLOS. Entonces se recogen los tres en
+     una sola lista que se abre desde arriba a la derecha. Así el renglón queda
+     limpio y mañana cabe un cuarto sin volver a apretar nada.
+
+     Se cierra sola al escoger, al tocar por fuera o con la tecla Esc. */
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const cajaMenu = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!menuAbierto) return;
+    const porFuera = (e: MouseEvent) => {
+      if (cajaMenu.current && !cajaMenu.current.contains(e.target as Node)) setMenuAbierto(false);
+    };
+    const conEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuAbierto(false); };
+    document.addEventListener('mousedown', porFuera);
+    document.addEventListener('keydown', conEsc);
+    return () => {
+      document.removeEventListener('mousedown', porFuera);
+      document.removeEventListener('keydown', conEsc);
+    };
+  }, [menuAbierto]);
+
+
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
   const [fotos,       setFotos]       = useState<Record<string, string>>({});
   const [fotosProfe,  setFotosProfe]  = useState<Record<string, string>>({});
@@ -1249,7 +1276,7 @@ function AlumnosPageContent() {
       if (cargando) return (
         <div style={{ background: LIENZO }} className="min-h-screen flex flex-col items-center justify-center gap-4">
           <BalonCargando />
-          <p className="text-sm font-semibold text-gray-500 text-center px-6">
+          <p className="text-sm font-semibold text-white/70 text-center px-6">
             Cargando proyecto <strong className="text-[#064e1e]">{proyParam}</strong>…
           </p>
         </div>
@@ -1258,7 +1285,7 @@ function AlumnosPageContent() {
       if (deportistas.length > 0) return (
         <div style={{ background: LIENZO }} className="min-h-screen flex flex-col items-center justify-center gap-4">
           <BalonCargando />
-          <p className="text-sm font-semibold text-gray-500 text-center px-6">
+          <p className="text-sm font-semibold text-white/70 text-center px-6">
             Cargando proyecto <strong className="text-[#064e1e]">{proyParam}</strong>…
           </p>
         </div>
@@ -1269,14 +1296,14 @@ function AlumnosPageContent() {
           <div className="w-20 h-20 bg-orange-50 rounded-3xl flex items-center justify-center mb-1">
             <Users className="w-10 h-10 text-orange-300" />
           </div>
-          <h2 className="text-lg font-black text-gray-700">No se pudo cargar el proyecto</h2>
-          <p className="text-gray-400 text-sm max-w-xs">
+          <h2 className="text-lg font-black text-white">No se pudo cargar el proyecto</h2>
+          <p className="text-white/40 text-sm max-w-xs">
             Verifica tu conexión a internet e intenta de nuevo.
           </p>
           {errorCarga && (
             <details className="text-left w-full max-w-sm">
-              <summary className="text-xs text-gray-400 cursor-pointer">Ver detalle técnico</summary>
-              <p className="text-xs text-red-400 mt-1 break-all bg-red-50 rounded p-2">{errorCarga}</p>
+              <summary className="text-xs text-white/40 cursor-pointer">Ver detalle técnico</summary>
+              <p className="text-xs text-red-400 mt-1 break-all bg-[rgba(192,80,77,.14)] rounded p-2">{errorCarga}</p>
             </details>
           )}
           <button onClick={() => window.location.reload()}
@@ -1310,7 +1337,7 @@ function AlumnosPageContent() {
         </div>
         <div className="flex items-center gap-2">
           {!esProfe && deportistas.length > 0 && (
-            <button onClick={limpiar} className="w-9 h-9 flex items-center justify-center rounded-xl border border-red-200 text-red-400 hover:bg-red-50 transition">
+            <button onClick={limpiar} className="w-9 h-9 flex items-center justify-center rounded-xl border border-red-200 text-red-400 hover:bg-[rgba(192,80,77,.14)] transition">
               <Trash2 className="w-4 h-4" />
             </button>
           )}
@@ -1323,7 +1350,7 @@ function AlumnosPageContent() {
           )}
           {!esProfe && (
             <button onClick={() => router.push('/alumnos/importar')}
-              className="flex items-center gap-2 bg-white text-[#16a34a] px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-green-50 transition shadow-sm">
+              className="flex items-center gap-2 bg-[#3C4759] text-[#16a34a] px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-[rgba(0,176,80,.14)] transition shadow-sm">
               <FileSpreadsheet className="w-4 h-4" /> Importar
             </button>
           )}
@@ -1454,25 +1481,25 @@ function AlumnosPageContent() {
         </button>
         <span className="text-xs text-white/60 font-medium hidden sm:block">Programas</span>
         <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block" />
-        <span className="text-xs font-black px-3 py-1.5 rounded-full bg-green-100 text-green-900">SIN PROYECTO</span>
+        <span className="text-xs font-black px-3 py-1.5 rounded-full bg-[rgba(0,176,80,.20)] text-green-900">SIN PROYECTO</span>
         <span className="ml-auto text-sm font-bold text-white/70">{sinProy.length} deportistas</span>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-5">
-        <div className="bg-white rounded-xl border border-gray-200 px-3 py-2.5 flex items-center gap-2 shadow-sm mb-4">
-          <Search className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+        <div className="bg-[#3C4759] rounded-xl border border-[#4A5568] px-3 py-2.5 flex items-center gap-2 shadow-sm mb-4">
+          <Search className="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
           <input type="text" placeholder="Buscar deportista..." value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
-            className="flex-1 text-xs focus:outline-none placeholder:text-gray-300"/>
+            className="flex-1 text-xs focus:outline-none placeholder:text-white/40"/>
           {busqueda && (
-            <button onClick={() => setBusqueda('')} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            <button onClick={() => setBusqueda('')} className="text-xs text-white/40 hover:text-white/70">✕</button>
           )}
-          <span className="text-xs text-gray-400 font-bold flex-shrink-0">
+          <span className="text-xs text-white/40 font-bold flex-shrink-0">
             {sinProy.filter(d => !busqueda || d._nombre.toLowerCase().includes(busqueda.toLowerCase())).length}/{sinProy.length}
           </span>
         </div>
 
-        <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="rounded-xl border border-[#4A5568] overflow-hidden shadow-sm">
           <div className="overflow-x-auto" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
             <table className="text-xs border-collapse w-full">
               <thead className="sticky top-0 z-10">
@@ -1512,12 +1539,12 @@ function AlumnosPageContent() {
                         <td className="border border-white px-2 py-1.5 text-[#111827]">{mes || '—'}</td>
                         <td className="border border-white px-2 py-1.5 text-center text-[#111827]">{dia || '—'}</td>
                         <td className="border border-white px-2 py-1.5">
-                          {estado ? <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-900">{estado}</span>
-                                  : <span className="text-gray-300">—</span>}
+                          {estado ? <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[rgba(0,176,80,.20)] text-green-900">{estado}</span>
+                                  : <span className="text-white/40">—</span>}
                         </td>
                         <td className="border border-white px-2 py-1.5 min-w-[200px]">
                           {soloLectura ? (
-                            <span className="text-gray-400 text-[11px]">—</span>
+                            <span className="text-white/40 text-[11px]">—</span>
                           ) : (
                           <div className="flex items-center gap-1.5">
                             <input
@@ -1526,7 +1553,7 @@ function AlumnosPageContent() {
                               onChange={e => setProyEdits(prev => ({ ...prev, [dep.id]: e.target.value }))}
                               onKeyDown={e => { if (e.key === 'Enter') guardarProy(dep.id, editVal); }}
                               placeholder="Nombre del proyecto..."
-                              className="flex-1 text-[11px] border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-400 bg-white placeholder:text-gray-300 min-w-0"
+                              className="flex-1 text-[11px] border border-[#4A5568] rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-400 bg-[#3C4759] placeholder:text-white/40 min-w-0"
                             />
                             <button
                               onClick={() => guardarProy(dep.id, editVal)}
@@ -1541,7 +1568,7 @@ function AlumnosPageContent() {
                     );
                   })}
                 {sinProy.length === 0 && (
-                  <tr><td colSpan={9} className="py-10 text-center text-sm text-gray-400">Sin deportistas en esta categoría</td></tr>
+                  <tr><td colSpan={9} className="py-10 text-center text-sm text-white/40">Sin deportistas en esta categoría</td></tr>
                 )}
               </tbody>
             </table>
@@ -1564,34 +1591,34 @@ function AlumnosPageContent() {
         </button>
         <span className="text-xs text-white/60 font-medium hidden sm:block">Programas</span>
         <ChevronRight className="w-3 h-3 text-white/30 hidden sm:block" />
-        <span className="text-xs font-black px-3 py-1.5 rounded-full bg-gray-200 text-gray-700">RETIRADOS</span>
+        <span className="text-xs font-black px-3 py-1.5 rounded-full bg-[#2B3547] text-white">RETIRADOS</span>
         <span className="ml-auto text-sm font-bold text-white/70">{retirados.length} deportistas</span>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-5">
         {/* Búsqueda */}
-        <div className="bg-white rounded-xl border border-gray-200 px-3 py-2.5 flex items-center gap-2 shadow-sm mb-4">
-          <Search className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
+        <div className="bg-[#3C4759] rounded-xl border border-[#4A5568] px-3 py-2.5 flex items-center gap-2 shadow-sm mb-4">
+          <Search className="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
           <input type="text" placeholder="Buscar deportista..." value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
-            className="flex-1 text-xs focus:outline-none placeholder:text-gray-300"/>
+            className="flex-1 text-xs focus:outline-none placeholder:text-white/40"/>
           {busqueda && (
-            <button onClick={() => setBusqueda('')} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            <button onClick={() => setBusqueda('')} className="text-xs text-white/40 hover:text-white/70">✕</button>
           )}
-          <span className="text-xs text-gray-400 font-bold flex-shrink-0">
+          <span className="text-xs text-white/40 font-bold flex-shrink-0">
             {retirados.filter(d => !busqueda || d._nombre.toLowerCase().includes(busqueda.toLowerCase())).length}/{retirados.length}
           </span>
         </div>
 
         {/* Tabla retirados */}
-        <div className="rounded-xl border border-gray-300 overflow-hidden shadow-sm">
+        <div className="rounded-xl border border-[#4A5568] overflow-hidden shadow-sm">
           <div className="overflow-x-auto" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
             <table className="text-xs border-collapse w-full">
               <thead className="sticky top-0 z-10">
                 <tr style={{ background: '#4B5563' }}>
-                  <th className="border border-gray-500 px-2 py-2 text-[10px] text-white/40 w-9 text-center select-none">#</th>
+                  <th className="border border-[#4A5568] px-2 py-2 text-[10px] text-white/40 w-9 text-center select-none">#</th>
                   {(['CÓDIGO','DEPORTISTA','PROYECTO','AÑO','MES','DÍA','ESTADO'] as const).map(h => (
-                    <th key={h} className="border border-gray-500 px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left">{h}</th>
+                    <th key={h} className="border border-[#4A5568] px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -1606,31 +1633,31 @@ function AlumnosPageContent() {
                     const dia  = getCol(dep, /^d[ií]a$/i);
                     return (
                       <tr key={dep.id} style={{ background: bg }} className="hover:brightness-95 transition-all">
-                        <td className="border border-gray-300 px-2 py-1.5 text-center text-[10px] font-bold text-gray-400 select-none">{i + 1}</td>
-                        <td className="border border-gray-300 px-2 py-1.5 text-gray-700">
+                        <td className="border border-[#4A5568] px-2 py-1.5 text-center text-[10px] font-bold text-white/40 select-none">{i + 1}</td>
+                        <td className="border border-[#4A5568] px-2 py-1.5 text-white">
                           <span className="inline-flex items-center gap-1.5"><PuntoAcceso cod={cod} accesos={accesos} />{cod || '—'}</span>
                         </td>
-                        <td className="border border-gray-300 px-2 py-1.5">
-                          <span className="font-bold text-gray-700 cursor-pointer hover:underline"
+                        <td className="border border-[#4A5568] px-2 py-1.5">
+                          <span className="font-bold text-white cursor-pointer hover:underline"
                             onClick={() => router.push(`/alumnos/${dep.id}`)}>{dep._nombre}</span>
                         </td>
-                        <td className="border border-gray-300 px-2 py-1.5 text-gray-500">{colProy(dep)}</td>
-                        <td className="border border-gray-300 px-2 py-1.5 text-center text-gray-700">{anio || '—'}</td>
-                        <td className="border border-gray-300 px-2 py-1.5 text-gray-700">{mes || '—'}</td>
-                        <td className="border border-gray-300 px-2 py-1.5 text-center text-gray-700">{dia || '—'}</td>
-                        <td className="border border-gray-300 px-2 py-1.5">
-                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{colEstado(dep)}</span>
+                        <td className="border border-[#4A5568] px-2 py-1.5 text-white/70">{colProy(dep)}</td>
+                        <td className="border border-[#4A5568] px-2 py-1.5 text-center text-white">{anio || '—'}</td>
+                        <td className="border border-[#4A5568] px-2 py-1.5 text-white">{mes || '—'}</td>
+                        <td className="border border-[#4A5568] px-2 py-1.5 text-center text-white">{dia || '—'}</td>
+                        <td className="border border-[#4A5568] px-2 py-1.5">
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[rgba(192,80,77,.20)] text-[#F08A87]">{colEstado(dep)}</span>
                         </td>
                       </tr>
                     );
                   })}
                 {retirados.length === 0 && (
-                  <tr><td colSpan={8} className="py-10 text-center text-sm text-gray-400">Sin retirados</td></tr>
+                  <tr><td colSpan={8} className="py-10 text-center text-sm text-white/40">Sin retirados</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div className="bg-gray-200 border-t border-gray-300 px-4 py-1.5 text-[10px] font-semibold text-gray-500">
+          <div className="bg-[#2B3547] border-t border-[#4A5568] px-4 py-1.5 text-[10px] font-semibold text-white/70">
             {retirados.length} deportistas retirados
           </div>
         </div>
@@ -1746,15 +1773,13 @@ function AlumnosPageContent() {
     `/microciclo?proyecto=${encodeURIComponent(proy!)}`
     + `&programa=${encodeURIComponent(programa ?? '')}`
   );
-  const CLASE_ACCION = cn(
-    'bg-white text-[#16a34a] rounded-xl font-black hover:bg-green-50 transition shadow-sm',
-    'flex items-center justify-center text-center leading-[1.15]',
-    // Celular: se reparten lo que sobra del renglón, letra chica.
-    'flex-1 min-w-0 min-h-[38px] gap-1 px-1.5 py-1 text-[10px]',
-    // Computador: como siempre, al tamaño de su texto y en una sola línea.
-    'sm:flex-none sm:min-h-0 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs sm:whitespace-nowrap',
-  );
+  const irPospartido = () => router.push('/postpartido');
 
+  const OPCIONES_MENU: { texto: string; Icono: any; ir: () => void }[] = [
+    { texto: 'GESTIONAR ASISTENCIA', Icono: ClipboardList, ir: irAsistencia },
+    { texto: 'MICROCICLOS',          Icono: CalendarDays,  ir: irMicrociclo },
+    { texto: 'POSPARTIDOS',          Icono: Trophy,        ir: irPospartido },
+  ];
   /* El distintivo del proyecto va en dos renglones — "SUB" arriba y "8A"
      abajo — igual que el de Mis Proyectos. Así ocupa menos a lo ancho y les
      deja más espacio a los dos botones. Los proyectos que son solo un número
@@ -1785,16 +1810,39 @@ function AlumnosPageContent() {
             {proyAbajo && <span>{proyAbajo}</span>}
           </span>
           {mostrarAcciones && (
-            <div className="ml-auto flex items-center gap-1.5 sm:gap-2 flex-1 sm:flex-none min-w-0">
-              <button onClick={irAsistencia} className={CLASE_ACCION}>
-                <ClipboardList className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                GESTIONAR ASISTENCIA
+            <div ref={cajaMenu} className="ml-auto relative flex-shrink-0">
+              <button
+                onClick={() => setMenuAbierto(v => !v)}
+                title="Asistencia · Microciclos · Pospartidos"
+                className={cn(
+                  'bg-[#3C4759] text-[#16a34a] rounded-xl font-black hover:bg-[rgba(0,176,80,.14)] transition shadow-sm',
+                  'flex items-center justify-center gap-1.5 whitespace-nowrap',
+                  'min-h-[38px] px-3 py-1 text-[11px]',
+                  'sm:px-4 sm:py-1.5 sm:text-xs',
+                )}>
+                <ClipboardList className="w-3.5 h-3.5 flex-shrink-0" />
+                GESTIONAR
+                <ChevronDown className={cn('w-3.5 h-3.5 flex-shrink-0 transition-transform',
+                  menuAbierto && 'rotate-180')} />
               </button>
-              {/* El formador arma aquí su microciclo de la semana. */}
-              <button onClick={irMicrociclo} className={CLASE_ACCION}>
-                <CalendarDays className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                MICROCICLOS
-              </button>
+
+              {menuAbierto && (
+                <div
+                  className="absolute right-0 mt-1.5 rounded-xl overflow-hidden shadow-2xl z-50"
+                  style={{ background: '#3C4759', border: '1px solid #4A5568', minWidth: 216 }}>
+                  {OPCIONES_MENU.map(({ texto, Icono, ir }, i) => (
+                    <button
+                      key={texto}
+                      onClick={() => { setMenuAbierto(false); ir(); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-left text-white font-black text-[12px]
+                        hover:bg-[rgba(0,176,80,.16)] transition"
+                      style={{ borderTop: i === 0 ? 'none' : '1px solid #4A5568' }}>
+                      <Icono className="w-4 h-4 flex-shrink-0" style={{ color: '#00B050' }} />
+                      {texto}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

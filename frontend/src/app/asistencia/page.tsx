@@ -248,12 +248,12 @@ class AsistenciaErrorBoundary extends React.Component<
     if (this.state.error) {
       return (
         <div className="min-h-screen flex items-center justify-center p-4" style={{ background: LIENZO }}>
-          <div className="bg-white rounded-2xl shadow-lg p-6 max-w-lg w-full">
-            <h2 className="text-xl font-black text-red-600 mb-3">⚠️ Error en Asistencia</h2>
-            <pre className="bg-gray-100 rounded-lg p-3 text-xs overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ maxHeight: 240 }}>
+          <div className="bg-[#3C4759] rounded-2xl shadow-lg p-6 max-w-lg w-full">
+            <h2 className="text-xl font-black text-[#F08A87] mb-3">⚠️ Error en Asistencia</h2>
+            <pre className="bg-[#2B3547] rounded-lg p-3 text-xs overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ maxHeight: 240 }}>
               {this.state.error.message}{'\n\n'}{this.state.error.stack}
             </pre>
-            <p className="text-xs text-gray-500 mb-4">Toma captura de pantalla y envíala al desarrollador.</p>
+            <p className="text-xs text-white/70 mb-4">Toma captura de pantalla y envíala al desarrollador.</p>
             <button onClick={() => { this.setState({ error: null }); window.location.reload(); }}
               className="w-full bg-green-600 text-white font-black py-3 rounded-xl text-base">
               🔄 Recargar página
@@ -897,8 +897,13 @@ function AsistenciaInner() {
    * en una pestaña nueva, para no perder los filtros del consolidado.
    */
   function abrirFicha(dep: Deportista) {
+    /* Desde ADMINISTRACIÓN el nombre va derecho al ESTADO DE CUENTA, como en
+       todos los listados de admón (dirección, 27/08/2026). Al formador, que no
+       ve plata, le sigue abriendo la ficha. */
     const volver = `/asistencia?programa=${encodeURIComponent(programa)}&proyecto=${encodeURIComponent(proyecto)}`;
-    const url = `/alumnos/${dep.id}?volver=${encodeURIComponent(volver)}`;
+    const url = esProfe
+      ? `/alumnos/${dep.id}?volver=${encodeURIComponent(volver)}`
+      : `/alumnos/${dep.id}/estado-cuenta?edit=1&volver=${encodeURIComponent(volver)}`;
     try {
       const w = window.open(url, '_blank');
       if (!w) router.push(url);      // si el navegador bloquea la pestaña
@@ -1511,10 +1516,10 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
       {/* ── Panel de error diagnóstico (visible en lugar de "Application error") ── */}
       {errorMsg && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full">
-            <h2 className="text-xl font-black text-red-600 mb-2">⚠️ Error detectado</h2>
-            <p className="text-xs text-gray-500 mb-3">Toma captura de pantalla y envíala al desarrollador:</p>
-            <pre className="bg-gray-100 rounded-lg p-3 text-[11px] font-mono overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ maxHeight: 280 }}>
+          <div className="bg-[#3C4759] rounded-2xl shadow-2xl p-6 max-w-lg w-full">
+            <h2 className="text-xl font-black text-[#F08A87] mb-2">⚠️ Error detectado</h2>
+            <p className="text-xs text-white/70 mb-3">Toma captura de pantalla y envíala al desarrollador:</p>
+            <pre className="bg-[#2B3547] rounded-lg p-3 text-[11px] font-mono overflow-auto mb-4 whitespace-pre-wrap break-all" style={{ maxHeight: 280 }}>
               {errorMsg}
             </pre>
             <div className="flex gap-3">
@@ -1523,7 +1528,7 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                 🔄 Recargar
               </button>
               <button onClick={() => setErrorMsg(null)}
-                className="flex-1 bg-gray-100 text-gray-700 font-black py-3 rounded-xl text-sm">
+                className="flex-1 bg-[#2B3547] text-white font-black py-3 rounded-xl text-sm">
                 Cerrar
               </button>
             </div>
@@ -1587,7 +1592,7 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-sm">
                 {proyectosProfe.map(proy => (
                   <button key={proy} onClick={() => setProyecto(proy)}
-                    className="bg-white border-2 border-gray-200 hover:border-[#16a34a] rounded-2xl p-4 text-center shadow-sm hover:shadow-md transition-all active:scale-95">
+                    className="bg-[#3C4759] border-2 border-[#4A5568] hover:border-[#16a34a] rounded-2xl p-4 text-center shadow-sm hover:shadow-md transition-all active:scale-95">
                     <div className="w-10 h-10 bg-gradient-to-br from-[#064e1e] to-[#22c55e] rounded-xl flex items-center justify-center mx-auto mb-2">
                       <svg className="w-6 h-6" viewBox="0 0 100 100" fill="none">
                         <circle cx="50" cy="50" r="40" stroke="white" strokeWidth="4"/>
@@ -1595,7 +1600,7 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                       </svg>
                     </div>
                     <p className="font-black text-[#064e1e] text-base leading-tight">{proy}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">Pasar asistencia →</p>
+                    <p className="text-xs text-white/40 mt-0.5">Pasar asistencia →</p>
                   </button>
                 ))}
               </div>
@@ -1668,10 +1673,10 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                   </button>
 
                   {buscadorAbierto && (
-                    <div className="absolute z-40 mt-2 left-0 w-[380px] bg-white border border-gray-200 rounded-xl shadow-xl p-2">
+                    <div className="absolute z-40 mt-2 left-0 w-[380px] bg-[#3C4759] border border-[#4A5568] rounded-xl shadow-xl p-2">
                       <div className="flex items-start gap-1">
                         <div className="w-[110px]">
-                          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Código</label>
+                          <label className="block text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">Código</label>
                           <input
                             autoFocus
                             value={qCodigo}
@@ -1681,10 +1686,10 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                               if (e.key === 'Enter' && resultadosGlobal.length) irADeportista(resultadosGlobal[0]);
                             }}
                             placeholder="22194"
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
+                            className="w-full border border-[#4A5568] rounded-lg px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
                         </div>
                         <div className="flex-1">
-                          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Nombre</label>
+                          <label className="block text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">Nombre</label>
                           <input
                             value={qNombre}
                             onChange={e => setQNombre(e.target.value)}
@@ -1693,30 +1698,30 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                               if (e.key === 'Enter' && resultadosGlobal.length) irADeportista(resultadosGlobal[0]);
                             }}
                             placeholder="Apellido o nombre"
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
+                            className="w-full border border-[#4A5568] rounded-lg px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500" />
                         </div>
                         <button type="button" onClick={() => { setBuscadorAbierto(false); setQCodigo(''); setQNombre(''); }}
-                          className="p-1.5 mt-4 text-gray-400 hover:text-gray-700" title="Cerrar">
+                          className="p-1.5 mt-4 text-white/40 hover:text-white" title="Cerrar">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
 
                       <div className="mt-2 max-h-72 overflow-auto">
                         {!hayBusquedaGlobal ? (
-                          <p className="text-[11px] text-gray-400 font-semibold px-1 py-2">Escribe un código, o 2 letras del nombre…</p>
+                          <p className="text-[11px] text-white/40 font-semibold px-1 py-2">Escribe un código, o 2 letras del nombre…</p>
                         ) : resultadosGlobal.length === 0 ? (
-                          <p className="text-[11px] text-gray-400 font-semibold px-1 py-2">Sin resultados</p>
+                          <p className="text-[11px] text-white/40 font-semibold px-1 py-2">Sin resultados</p>
                         ) : resultadosGlobal.map(d => {
                           const proy = proyectoDe(d);
                           return (
                             <button key={d.id} type="button" onClick={() => irADeportista(d)}
-                              className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-green-50 transition flex items-center gap-2">
+                              className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-[rgba(0,176,80,.14)] transition flex items-center gap-2">
                               <span className="text-white font-black text-[10px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: VERDE }}>
                                 {codigoDe(d) || '—'}
                               </span>
                               <span className="flex-1 min-w-0">
-                                <span className="block text-[12px] font-bold text-gray-800 truncate">{d._nombre}</span>
-                                <span className="block text-[10px] text-gray-400 font-semibold truncate">
+                                <span className="block text-[12px] font-bold text-white truncate">{d._nombre}</span>
+                                <span className="block text-[10px] text-white/40 font-semibold truncate">
                                   {getCol(d, /^program/i) || '—'} · {proy === '__SIN_PROYECTO__' ? 'sin proyecto' : proy}
                                   {esRetirado(d) ? ' · retirado' : ''}
                                 </span>
@@ -1805,7 +1810,7 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                     )}
                     {mesTieneAjuste && (
                       <button onClick={restaurarDiasMes} type="button"
-                        className="ml-2 text-blue-600 hover:text-blue-800 font-semibold normal-case underline">
+                        className="ml-2 text-[#8FBEF0] hover:text-blue-800 font-semibold normal-case underline">
                         volver a los del proyecto
                       </button>
                     )}
@@ -1901,8 +1906,8 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                     <span key={etiqueta}
                       className={`text-[11px] font-black px-2 py-1 rounded-lg border ${
                         n === 0
-                          ? 'bg-green-100 text-green-700 border-green-200'
-                          : 'bg-red-50 text-red-600 border-red-200'
+                          ? 'bg-[rgba(0,176,80,.20)] text-[#5BE39B] border-[rgba(0,176,80,.45)]'
+                          : 'bg-[rgba(192,80,77,.14)] text-[#F08A87] border-red-200'
                       }`}>
                       {etiqueta}: {n}
                     </span>
@@ -2016,7 +2021,9 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                             <button
                               type="button"
                               onClick={() => abrirFicha(dep)}
-                              title={`Abrir la ficha de ${dep._nombre}`}
+                              title={esProfe
+                                ? `Abrir la ficha de ${dep._nombre}`
+                                : `Abrir el estado de cuenta de ${dep._nombre}`}
                               className="text-white font-semibold text-[12px] hover:text-[#00B050] hover:underline transition-colors cursor-pointer text-left w-full">
                               {dep._nombre}
                             </button>
@@ -2291,9 +2298,23 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                         <td style={styleCod(LIENZO, 10, movil)}>
                           <div style={pastilla(VERDE, '#fff', { fontSize: 10, padding: '2px 6px' })}>{cod || '—'}</div>
                         </td>
+                        {/* El nombre es un enlace, en otra pestaña, como en todo
+                            listado de la plataforma (dirección, 27/08/2026).
+                            Desde ADMINISTRACIÓN va derecho al estado de cuenta;
+                            al formador, que no ve plata, le abre la ficha.
+                            Otra pestaña porque de aquí no se puede sacar a nadie
+                            en media planilla de asistencia. */}
                         <td style={styleNom(LIENZO, 10, movil)}
-                          className="text-left text-white font-semibold text-[12px] whitespace-nowrap px-2">
-                          {dep._nombre}
+                          className="text-left whitespace-nowrap px-2">
+                          <a
+                            href={esProfe ? `/alumnos/${dep.id}` : `/alumnos/${dep.id}/estado-cuenta?edit=1`}
+                            target="_blank" rel="noopener noreferrer"
+                            title={esProfe
+                              ? `Abrir la ficha de ${dep._nombre} en otra pestaña`
+                              : `Abrir el estado de cuenta de ${dep._nombre} en otra pestaña`}
+                            className="text-white font-semibold text-[12px] hover:underline">
+                            {dep._nombre}
+                          </a>
                         </td>
                         {!esProfe && (
                           <td style={celda} className="text-center text-white font-semibold text-[11px] whitespace-nowrap px-2">

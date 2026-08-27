@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares, addCalificacionEscolar, renameCalificacionEscolar, deleteCalificacionEscolar, enviarMensaje, getEvaluaciones } from '@/lib/db';
+import { partirNombre } from '@/lib/nombres';
 import type { Deportista, CalificacionEscolar, Evaluacion } from '@/lib/db';
 import { createClient } from '@/lib/supabase/client';
 import { parseValoracionExcel } from '@/lib/valoracionExcel';
@@ -577,13 +578,26 @@ export default function PerfilDeportista() {
           {/* Nombre */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <span style={{ fontSize: 26, lineHeight: 1 }}>⚽</span>
+            {/* NOMBRES ARRIBA, APELLIDOS ABAJO (dirección, 27/08/2026).
+                Los apellidos van más pequeños y sin negrilla. La partición usa
+                la costumbre colombiana —los dos últimos son los apellidos—; si
+                un nombre no se puede partir, sale completo arriba. */}
             <h1 style={{
               color: '#fff', fontWeight: 900, fontSize: 19,
               textTransform: 'uppercase', letterSpacing: '0.02em',
               lineHeight: 1.2, margin: 0,
             }}>
-              {dep._nombre}
+              {partirNombre(dep._nombre).nombres || dep._nombre}
             </h1>
+            {partirNombre(dep._nombre).apellidos && (
+              <p style={{
+                color: 'rgba(255,255,255,0.75)', fontWeight: 400, fontSize: 14,
+                textTransform: 'uppercase', letterSpacing: '0.02em',
+                lineHeight: 1.25, margin: '2px 0 0',
+              }}>
+                {partirNombre(dep._nombre).apellidos}
+              </p>
+            )}
           </div>
 
           {/* Filas de info + CÓDIGO */}
@@ -1158,9 +1172,14 @@ export default function PerfilDeportista() {
 
             {/* Nombre + filas de datos */}
             <div className="flex-1 min-w-0 space-y-[5px]">
-              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide mb-2">
-                {dep._nombre}
+              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide">
+                {partirNombre(dep._nombre).nombres || dep._nombre}
               </h1>
+              {partirNombre(dep._nombre).apellidos && (
+                <p className="text-white/75 text-[12.5px] font-normal leading-tight uppercase tracking-wide mb-2">
+                  {partirNombre(dep._nombre).apellidos}
+                </p>
+              )}
 
               {/* Fila: etiqueta verde + valor blanco */}
               {[

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSoloLectura } from '@/lib/permisos';
 import { ArrowLeft, Search, Users, Save, CheckCircle, Columns3, Upload, X, Trophy, AlertCircle, Trash2 } from 'lucide-react';
@@ -1042,6 +1042,137 @@ export default function GeneralPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [ordenados, programaFiltro, proyectoFiltro, sedeFiltro, anioFiltro, edits, busquedaTelefono]);
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     CARGARLE EL TORNEO A TODO EL GRUPO  (dirección, 27/08/2026)
+
+     Estando parado en un grupo —por ejemplo DESARROLLO, proyecto SUB 10A— casi
+     siempre el torneo que se le pone a uno se lo juegan TODOS. Ponerlo de a uno
+     en 25 fichas era el trabajo más largo y donde más se saltaba gente.
+
+     Ahora, apenas se escoge un torneo en C1..C4, la pantalla pregunta si se le
+     carga a todo el grupo que está en pantalla. El grupo es EXACTAMENTE lo que
+     dicen los filtros de arriba (programa, sede, proyecto, año): lo que se ve
+     es lo que se carga, ni uno más.
+
+     Tres reglas para no dañar nada:
+       · Al que YA lo tenga puesto —en la casilla que sea— no se le toca.
+       · No se pisa una casilla ocupada: se busca la primera libre (C1, C2,
+         C3, C4). Si las cuatro están llenas, ese queda por fuera y se avisa.
+       · Al que sea de otro programa (y ese torneo no le corresponda) no se le
+         pone. Puede pasar cuando el filtro trae mezclado.
+
+     Nada de esto se manda solo a la base: queda como cambio pendiente y se
+     guarda con el botón GUARDAR de siempre, igual que si se hubiera puesto a
+     mano. Así se alcanza a revisar antes. */
+  const [pedirGrupo, setPedirGrupo] = useState<
+    { col: string; num: string; nComp: number; quien: string; quitar?: boolean;
+      depId: string; antes: string } | null
+  >(null);
+  const [resumenGrupo, setResumenGrupo] = useState('');
+  /* Lo que tocó la última carga al grupo, para poder DESHACERLA de un botón.
+     Guarda el valor que tenía cada casilla antes, no solo cuáles cambió. */
+  const [deshacerGrupo, setDeshacerGrupo] = useState<
+    { depId: string; col: string; antes: string }[] | null
+  >(null);
+
+  function deshacerCargaGrupo() {
+    const pasos = deshacerGrupo;
+    if (!pasos?.length) return;
+    setEdits(prev => {
+      const n = { ...prev };
+      pasos.forEach(({ depId, col, antes }) => {
+        n[depId] = { ...(n[depId] ?? {}), [col]: antes };
+      });
+      return n;
+    });
+    setDeshacerGrupo(null);
+    setResumenGrupo('Se deshizo la última carga al grupo.');
+  }
+
+  /** Cómo se llama el grupo que está en pantalla, para decirlo en el aviso. */
+  const nombreDelGrupo = useMemo(() => {
+    const partes = [
+      programaFiltro ?? '',
+      sedeFiltro ?? '',
+      proyectoFiltro ?? '',
+      anioFiltro ? `año ${anioFiltro}` : '',
+    ].map(x => String(x).trim()).filter(Boolean);
+    return partes.length ? partes.join(' · ') : 'la lista que está en pantalla';
+  }, [programaFiltro, sedeFiltro, proyectoFiltro, anioFiltro]);
+
+  function cargarTorneoAlGrupo(colElegida: string, num: string) {
+    /* SE ESCRIBE ÚNICAMENTE EN LA COLUMNA QUE SE ESCOGIÓ (corrección del
+       27/08/2026). Antes, si a alguien esa casilla le quedaba ocupada, el
+       programa se pasaba a la siguiente libre "para no perder el dato" — y el
+       resultado fue que pidiendo C2 se llenó C1. Un ayudante que escribe donde
+       no se le dijo hace más daño que uno que avisa: ahora, al que tenga esa
+       casilla ocupada se le deja quieto y se dice cuántos fueron. */
+    const cComp = numCompetencia(colElegida);
+    const colsComp = columnas.filter(c => numCompetencia(c) > 0);
+
+    const pasos: { depId: string; col: string; antes: string }[] = [];
+    let puestos = 0, yaLoTenian = 0, ocupada = 0, otroPrograma = 0;
+
+    listaPlana.forEach(d => {
+      /* Ya lo tiene puesto en cualquiera de las cuatro: no se repite. */
+      if (colsComp.some(c => getValCelda(d, c).trim() === num)) { yaLoTenian++; return; }
+      const prog = getValCelda(d, colPrograma).trim();
+      if (!torneosDePrograma(prog).some(t => t.num === num)) { otroPrograma++; return; }
+      const actual = getValCelda(d, colElegida).trim();
+      if (actual) { ocupada++; return; }          // hay otro torneo ahí: no se pisa
+      pasos.push({ depId: d.id, col: colElegida, antes: '' });
+      puestos++;
+    });
+
+    if (puestos > 0) {
+      setEdits(prev => {
+        const n = { ...prev };
+        pasos.forEach(({ depId, col }) => { n[depId] = { ...(n[depId] ?? {}), [col]: num }; });
+        return n;
+      });
+      setGuardado(false);
+      setDeshacerGrupo(pasos);
+    } else {
+      setDeshacerGrupo(null);
+    }
+
+    const trozos = [`se le puso a ${puestos} en C${cComp}`];
+    if (yaLoTenian)   trozos.push(`${yaLoTenian} ya lo tenían`);
+    if (ocupada)      trozos.push(`${ocupada} con C${cComp} ocupada (no se pisó)`);
+    if (otroPrograma) trozos.push(`${otroPrograma} de otro programa`);
+    setResumenGrupo(
+      `${nombreDelNumero(num) || `Torneo ${num}`} · ${trozos.join(' · ')}. ` +
+      (puestos > 0 ? 'Falta oprimir GUARDAR.' : 'No hubo nada que cambiar.'),
+    );
+  }
+
+  /** Quitarle a todo el grupo el torneo que estaba en esa misma casilla.
+   *  Solo se borra donde esté EXACTAMENTE ese torneo, en esa misma columna:
+   *  así una equivocación se deshace sin tocar lo de nadie más. */
+  function quitarTorneoDelGrupo(colElegida: string, num: string) {
+    const cComp = numCompetencia(colElegida);
+    const pasos: { depId: string; col: string; antes: string }[] = [];
+    listaPlana.forEach(d => {
+      if (getValCelda(d, colElegida).trim() !== num) return;
+      pasos.push({ depId: d.id, col: colElegida, antes: num });
+    });
+    if (pasos.length) {
+      setEdits(prev => {
+        const n = { ...prev };
+        pasos.forEach(({ depId, col }) => { n[depId] = { ...(n[depId] ?? {}), [col]: '' }; });
+        return n;
+      });
+      setGuardado(false);
+      setDeshacerGrupo(pasos);
+    } else {
+      setDeshacerGrupo(null);
+    }
+    setResumenGrupo(
+      `${nombreDelNumero(num) || `Torneo ${num}`} · se le quitó a ${pasos.length} en C${cComp}. ` +
+      (pasos.length ? 'Falta oprimir GUARDAR.' : 'No hubo nada que quitar.'),
+    );
+  }
+
   const [visibles, setVisibles] = useState(TANDA);
   const finTablaRef = useRef<HTMLTableRowElement>(null);
 
@@ -1462,7 +1593,7 @@ export default function GeneralPage() {
           disabled={pendingCount === 0 && !guardado}
           className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-black transition flex-shrink-0 ${
             guardado
-              ? 'bg-green-100 text-green-900'
+              ? 'bg-[rgba(0,176,80,.20)] text-green-900'
               : pendingCount > 0
               ? 'bg-white text-[#16a34a] hover:bg-green-50 shadow-lg animate-pulse'
               : 'bg-white/20 text-white/50 cursor-default'
@@ -1616,7 +1747,7 @@ export default function GeneralPage() {
         <div
           ref={topBarRef}
           onScroll={e => { if (mainRef.current) mainRef.current.scrollLeft = e.currentTarget.scrollLeft; }}
-          className="flex-shrink-0 overflow-x-auto overflow-y-hidden bg-gray-200/80 border-b border-gray-300"
+          className="flex-shrink-0 overflow-x-auto overflow-y-hidden bg-[#2B3547] border-b border-[#4A5568]"
           style={{ height: 16 }}
           title="Desliza para ver más columnas →"
         >
@@ -1632,28 +1763,28 @@ export default function GeneralPage() {
         {/* Buscadores móvil */}
         <div className="sm:hidden mt-2 mb-2 flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
             <input value={buscarCod} onChange={e => setBuscarCod(e.target.value)}
               placeholder="Código…"
-              className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#16a34a]" />
+              className="w-full bg-[#3C4759] border border-[#4A5568] rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#16a34a]" />
           </div>
           <div className="relative flex-[2]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
             <input value={buscar} onChange={e => setBuscar(e.target.value)}
               placeholder="Deportista…"
-              className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#16a34a]" />
+              className="w-full bg-[#3C4759] border border-[#4A5568] rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#16a34a]" />
           </div>
         </div>
 
         {cargando ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm">
             <BalonCargando />
           </div>
         ) : deportistas.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
-            <Users className="w-14 h-14 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 font-semibold text-base">No hay deportistas cargados</p>
-            <p className="text-gray-300 text-sm mt-1">Importa el archivo Excel desde Programas y Proyectos</p>
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-16 text-center">
+            <Users className="w-14 h-14 text-white/40 mx-auto mb-3" />
+            <p className="text-white/40 font-semibold text-base">No hay deportistas cargados</p>
+            <p className="text-white/40 text-sm mt-1">Importa el archivo Excel desde Programas y Proyectos</p>
             <button onClick={() => router.push('/alumnos/importar')}
               className="mt-5 px-5 py-2.5 text-white rounded-xl text-sm font-bold hover:bg-[#064e1e] transition">
               Ir a importar
@@ -1718,10 +1849,26 @@ export default function GeneralPage() {
               <table className="tabla-max10 text-xs" style={{ width: 'max-content', tableLayout: 'fixed' }}>
 
                 {/* ── COLGROUP para anchos ── */}
+                {/* ── COLGROUP: UNA RAYA POR CADA COLUMNA, SIN SALTARSE NINGUNA ──
+                    ESTO ERA UN ERROR (corregido el 27/08/2026) y explica algo que
+                    se veía rarísimo: al estirar C2 la que crecía era C1.
+
+                    ¿Por qué? Porque la columna DEPORTISTA se dibuja aparte,
+                    pegada después de CÓDIGO, y aquí NO se le estaba dando su
+                    propia raya de ancho. El navegador reparte estas rayas de a
+                    una por columna, en orden; al faltar una, todas las de
+                    después quedaban corridas un puesto: el ancho de C2 se lo
+                    llevaba C1, el de C3 se lo llevaba C2, y así.
+
+                    Con la raya de DEPORTISTA en su sitio, cada columna vuelve a
+                    recibir el ancho que le toca. */}
                 <colgroup>
                   <col style={{ width: 36 }} />
                   {colVisibles.map(col => (
-                    <col key={col} style={{ width: colWidths[col] ?? (esCodigo(col) ? 130 : esFechaAfil(col) ? 100 : esTipoAfil(col) ? 95 : 110) }} />
+                    <Fragment key={col}>
+                      <col style={{ width: colWidths[col] ?? (esCodigo(col) ? 130 : esFechaAfil(col) ? 100 : esTipoAfil(col) ? 95 : 110) }} />
+                      {esCodigo(col) && <col style={{ width: colWidths['__NOMBRE__'] ?? 180 }} />}
+                    </Fragment>
                   ))}
                 </colgroup>
 
@@ -1799,7 +1946,7 @@ export default function GeneralPage() {
                                 onClick={() => eliminarFilaDeportista(dep, rowNum)}
                                 disabled={borrandoDep === dep.id}
                                 title={`Eliminar la ficha de ${dep._nombre || 'este deportista'}`}
-                                className="hidden group-hover:inline-flex items-center justify-center text-red-500 hover:text-red-700 disabled:opacity-40">
+                                className="hidden group-hover:inline-flex items-center justify-center text-red-500 hover:text-[#F08A87] disabled:opacity-40">
                                 {borrandoDep === dep.id
                                   ? <span className="text-[9px] font-black">…</span>
                                   : <Trash2 className="w-3.5 h-3.5" />}
@@ -1976,7 +2123,25 @@ export default function GeneralPage() {
                                     className="px-0 py-0" title={ayuda}>
                                     <select
                                       value={puesto}
-                                      onChange={e => setCelda(dep.id, col, e.target.value)}
+                                      onChange={e => {
+                                        const v = e.target.value;
+                                        const antes = puesto;
+                                        setCelda(dep.id, col, v);
+                                        /* Estando parado en un grupo se ofrece
+                                           hacerlo con todos (dirección, 27/08/2026):
+                                           si escogió un torneo, cargárselo a todos;
+                                           si lo dejó en "—", quitárselo a todos.
+                                           Con una sola persona no hay qué preguntar. */
+                                        if (listaPlana.length > 1) {
+                                          if (v) {
+                                            setResumenGrupo('');
+                                            setPedirGrupo({ col, num: v, nComp, quien: dep._nombre, depId: dep.id, antes });
+                                          } else if (antes) {
+                                            setResumenGrupo('');
+                                            setPedirGrupo({ col, num: antes, nComp, quien: dep._nombre, quitar: true, depId: dep.id, antes });
+                                          }
+                                        }
+                                      }}
                                       className="w-full text-[13px] font-black py-[6px] px-1 outline-none bg-transparent text-white cursor-pointer text-center">
                                       <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
                                       {/* Lo que ya estaba escrito antes (aunque no salga
@@ -2331,10 +2496,99 @@ export default function GeneralPage() {
         )}
       </main>
 
+      {/* ══ ¿SE LO CARGO A TODO EL GRUPO? ════════════════════════
+          Sale apenas se escoge un torneo en C1..C4 estando parado en un grupo.
+          Lo que se carga es EXACTAMENTE lo que está en pantalla según los
+          filtros de arriba. — dirección, 27/08/2026 */}
+      {pedirGrupo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-md p-6"
+            style={{ border: '1px solid #4A5568', position: 'relative' }}>
+
+            {/* LA X — cierra el cuadro Y DEVUELVE LA CASILLA COMO ESTABA.
+                La pidió la dirección (27/08/2026) para cuando uno se equivoca de
+                torneo: aquí no se escoge entre "a uno o a todos", se cancela y
+                ya, sin dejar puesto lo que no era. */}
+            <button
+              onClick={() => {
+                setCelda(pedirGrupo.depId, pedirGrupo.col, pedirGrupo.antes);
+                setPedirGrupo(null);
+              }}
+              title="Cerrar y dejar la casilla como estaba"
+              className="absolute top-3 right-3 w-8 h-8 rounded-lg flex items-center justify-center
+                text-white/50 hover:text-white transition"
+              style={{ background: '#2B3547', border: '1px solid #4A5568' }}>
+              <X className="w-4 h-4" />
+            </button>
+
+            <h3 className="font-black text-white text-base mb-1 pr-10">
+              {pedirGrupo.quitar ? '¿Se lo quito a todo el grupo?' : '¿Se lo cargo a todo el grupo?'}
+            </h3>
+            <p className="text-white/45 text-xs font-semibold mb-4">
+              Acabas de {pedirGrupo.quitar ? 'quitarle' : 'ponerle'}{' '}
+              <b className="text-white">{nombreDelNumero(pedirGrupo.num) || `el torneo ${pedirGrupo.num}`}</b>{' '}
+              a <b className="text-white">{pedirGrupo.quien}</b> en C{pedirGrupo.nComp}.
+            </p>
+
+            <div className="rounded-xl px-3 py-3 mb-4"
+              style={{ background: '#2B3547', border: '1px solid #4A5568' }}>
+              <p className="text-white text-[12.5px] font-bold">
+                Grupo en pantalla: <span style={{ color: '#00B050' }}>{nombreDelGrupo}</span>
+              </p>
+              <p className="text-white/60 text-[12px] mt-1">
+                {listaPlana.length} deportista{listaPlana.length !== 1 ? 's' : ''}
+              </p>
+              <p className="text-white/40 text-[11px] mt-2 leading-snug">
+                {pedirGrupo.quitar
+                  ? `Solo se borra donde esté exactamente ese torneo, en C${pedirGrupo.nComp}. Lo de las otras casillas no se toca. Queda como cambio pendiente — se guarda con GUARDAR.`
+                  : `Se escribe únicamente en C${pedirGrupo.nComp}. Al que ya lo tenga no se le toca, y al que tenga esa casilla ocupada con otro torneo se le deja quieto y se te avisa. Queda como cambio pendiente — se guarda con GUARDAR.`}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPedirGrupo(null)}
+                className="flex-1 border border-[#4A5568] rounded-xl py-3 text-sm font-bold text-white/70 hover:bg-[#333F50] transition">
+                Solo a {pedirGrupo.quien.split(' ')[0]}
+              </button>
+              <button
+                onClick={() => {
+                  if (pedirGrupo.quitar) quitarTorneoDelGrupo(pedirGrupo.col, pedirGrupo.num);
+                  else                   cargarTorneoAlGrupo(pedirGrupo.col, pedirGrupo.num);
+                  setPedirGrupo(null);
+                }}
+                className="flex-1 rounded-xl py-3 text-sm font-black text-white transition hover:opacity-90"
+                style={{ background: pedirGrupo.quitar ? '#C0504D' : '#00B050' }}>
+                Sí, a todo el grupo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cómo quedó la carga al grupo. Se queda hasta que se cierre, para
+          alcanzar a leer a cuántos les entró y a cuántos no. */}
+      {resumenGrupo && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-start gap-3 rounded-2xl px-4 py-3 shadow-2xl max-w-[92vw]"
+          style={{ background: '#2B3547', border: '1px solid #00B050' }}>
+          <span className="text-lg leading-none">🏆</span>
+          <p className="text-white text-[12.5px] font-semibold">{resumenGrupo}</p>
+          {deshacerGrupo && deshacerGrupo.length > 0 && (
+            <button onClick={deshacerCargaGrupo}
+              className="shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-black text-white transition hover:opacity-90"
+              style={{ background: '#E0A33A' }}>
+              Deshacer
+            </button>
+          )}
+          <button onClick={() => { setResumenGrupo(''); setDeshacerGrupo(null); }}
+            className="text-white/50 hover:text-white font-black text-[13px] leading-none pl-1">✕</button>
+        </div>
+      )}
+
       {/* ══ MODAL IMPORTAR TORNEOS ══════════════════════════════ */}
       {modalTorneo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-[#3C4759] rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
 
             {/* Header modal */}
             <div className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-6 py-4 flex items-center gap-3 flex-shrink-0">
@@ -2353,7 +2607,7 @@ export default function GeneralPage() {
             {torneoPaso === 'subir' && (
               <div className="p-6 space-y-5 overflow-y-auto">
                 {/* Instrucciones */}
-                <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-sm text-[#064e1e] space-y-1">
+                <div className="bg-[rgba(0,176,80,.14)] border border-green-100 rounded-2xl p-4 text-sm text-[#064e1e] space-y-1">
                   <p className="font-black">Formato esperado del Excel:</p>
                   <p>El archivo debe tener estas columnas (en cualquier orden):</p>
                   <div className="flex flex-wrap gap-2 mt-2">
@@ -2373,20 +2627,20 @@ export default function GeneralPage() {
                   onDrop={e => { e.preventDefault(); setTorneoArrastr(false); const f = e.dataTransfer.files[0]; if (f) procesarExcelTorneo(f); }}
                   onClick={() => torneoInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition ${
-                    torneoArrastr ? 'border-[#16a34a] bg-green-50' : 'border-gray-200 hover:border-[#22c55e]'
+                    torneoArrastr ? 'border-[#16a34a] bg-[rgba(0,176,80,.14)]' : 'border-[#4A5568] hover:border-[#22c55e]'
                   }`}>
                   <input ref={torneoInputRef} type="file" accept=".xlsx,.xls" className="hidden"
                     onChange={e => { const f = e.target.files?.[0]; if (f) procesarExcelTorneo(f); }} />
                   {torneoProc ? (
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-8 h-8 border-4 border-[#16a34a] border-t-transparent rounded-full animate-spin" />
-                      <p className="text-gray-500 text-sm">Leyendo Excel…</p>
+                      <p className="text-white/70 text-sm">Leyendo Excel…</p>
                     </div>
                   ) : (
                     <>
-                      <Upload className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                      <p className="font-bold text-gray-600">Arrastra el Excel aquí o haz clic</p>
-                      <p className="text-xs text-gray-400 mt-1">.xlsx · .xls</p>
+                      <Upload className="w-10 h-10 text-white/40 mx-auto mb-3" />
+                      <p className="font-bold text-white/70">Arrastra el Excel aquí o haz clic</p>
+                      <p className="text-xs text-white/40 mt-1">.xlsx · .xls</p>
                     </>
                   )}
                 </div>
@@ -2401,7 +2655,7 @@ export default function GeneralPage() {
                   const encontrados = torneoFilas.filter(f => f.depId).length;
                   const noEncontrados = torneoFilas.filter(f => !f.depId).length;
                   return (
-                    <div className="flex-shrink-0 px-6 py-3 border-b border-gray-100 flex items-center gap-4 text-sm">
+                    <div className="flex-shrink-0 px-6 py-3 border-b border-[#4A5568] flex items-center gap-4 text-sm">
                       <span className="flex items-center gap-1.5 text-[#16a34a] font-bold">
                         <CheckCircle className="w-4 h-4" />{encontrados} encontrados
                       </span>
@@ -2410,7 +2664,7 @@ export default function GeneralPage() {
                           <AlertCircle className="w-4 h-4" />{noEncontrados} no encontrados
                         </span>
                       )}
-                      <span className="text-gray-400 text-xs">{torneoFilas.length} filas en total</span>
+                      <span className="text-white/40 text-xs">{torneoFilas.length} filas en total</span>
                     </div>
                   );
                 })()}
@@ -2432,27 +2686,27 @@ export default function GeneralPage() {
                     </thead>
                     <tbody>
                       {torneoFilas.map((f, i) => (
-                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="px-3 py-1.5 border-b border-gray-100">
+                        <tr key={i} className={i % 2 === 0 ? 'bg-[#3C4759]' : 'bg-[#333F50]'}>
+                          <td className="px-3 py-1.5 border-b border-[#4A5568]">
                             {f.depId ? (
                               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                f.match === 'codigo' ? 'text-white' : 'bg-gray-200 text-[#111827]'
+                                f.match === 'codigo' ? 'text-white' : 'bg-[#2B3547] text-[#111827]'
                               }`}>
                                 {f.match === 'codigo' ? '✓ Código' : '✓ Nombre'}
                               </span>
                             ) : (
-                              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#2B3547] text-white/70">
                                 No encontrado
                               </span>
                             )}
                           </td>
-                          <td className="px-3 py-1.5 border-b border-gray-100 font-bold text-[#111827]">{f.codigo || '—'}</td>
-                          <td className="px-3 py-1.5 border-b border-gray-100 font-semibold text-gray-800">{f.nombre || '—'}</td>
-                          <td className="px-3 py-1.5 border-b border-gray-100 text-gray-600">{f.competencia || '—'}</td>
-                          <td className="px-3 py-1.5 border-b border-gray-100 text-gray-600">{f.t1 || '—'}</td>
-                          <td className="px-3 py-1.5 border-b border-gray-100 text-gray-600">{f.t2 || '—'}</td>
-                          <td className="px-3 py-1.5 border-b border-gray-100 text-gray-600">{f.t3 || '—'}</td>
-                          <td className="px-3 py-1.5 border-b border-gray-100 text-gray-600">{f.t4 || '—'}</td>
+                          <td className="px-3 py-1.5 border-b border-[#4A5568] font-bold text-[#111827]">{f.codigo || '—'}</td>
+                          <td className="px-3 py-1.5 border-b border-[#4A5568] font-semibold text-white">{f.nombre || '—'}</td>
+                          <td className="px-3 py-1.5 border-b border-[#4A5568] text-white/70">{f.competencia || '—'}</td>
+                          <td className="px-3 py-1.5 border-b border-[#4A5568] text-white/70">{f.t1 || '—'}</td>
+                          <td className="px-3 py-1.5 border-b border-[#4A5568] text-white/70">{f.t2 || '—'}</td>
+                          <td className="px-3 py-1.5 border-b border-[#4A5568] text-white/70">{f.t3 || '—'}</td>
+                          <td className="px-3 py-1.5 border-b border-[#4A5568] text-white/70">{f.t4 || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -2460,9 +2714,9 @@ export default function GeneralPage() {
                 </div>
 
                 {/* Botones */}
-                <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 flex items-center gap-3 justify-end">
+                <div className="flex-shrink-0 px-6 py-4 border-t border-[#4A5568] flex items-center gap-3 justify-end">
                   <button onClick={() => setTorneoPaso('subir')}
-                    className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition">
+                    className="px-4 py-2 rounded-xl border border-[#4A5568] text-sm text-white/70 hover:bg-[#333F50] transition">
                     ← Volver
                   </button>
                   <button
@@ -2479,11 +2733,11 @@ export default function GeneralPage() {
             {/* ── PASO 3: Listo ── */}
             {torneoPaso === 'listo' && (
               <div className="p-10 text-center space-y-4">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                <div className="w-16 h-16 bg-[rgba(0,176,80,.20)] rounded-full flex items-center justify-center mx-auto">
                   <CheckCircle className="w-8 h-8 text-[#16a34a]" />
                 </div>
-                <h3 className="text-xl font-black text-gray-900">¡Torneos actualizados!</h3>
-                <p className="text-gray-500 text-sm">
+                <h3 className="text-xl font-black text-white">¡Torneos actualizados!</h3>
+                <p className="text-white/70 text-sm">
                   Se actualizaron <strong>{torneoFilas.filter(f => f.depId).length}</strong> deportistas con los datos de torneo.
                 </p>
                 <button onClick={() => setModalTorneo(false)}
@@ -2500,7 +2754,7 @@ export default function GeneralPage() {
       {/* ══ MODAL SUBIR NUEVOS DEPORTISTAS ═══════════════════════ */}
       {modalNuevos && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-[#3C4759] rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
 
             {/* Header modal */}
             <div className="bg-gradient-to-r from-[#064e1e] to-[#16a34a] px-6 py-4 flex items-center justify-between flex-shrink-0">
@@ -2521,12 +2775,12 @@ export default function GeneralPage() {
             {/* Paso 1: Subir archivo */}
             {nuevosPaso === 'subir' && (
               <div className="flex-1 flex flex-col items-center justify-center p-10 gap-5">
-                <div className="w-20 h-20 bg-green-100 rounded-3xl flex items-center justify-center">
+                <div className="w-20 h-20 bg-[rgba(0,176,80,.20)] rounded-3xl flex items-center justify-center">
                   <Upload className="w-9 h-9 text-[#16a34a]" />
                 </div>
                 <div className="text-center">
-                  <p className="font-black text-gray-800 text-lg">Sube el Excel de nuevos deportistas</p>
-                  <p className="text-gray-400 text-sm mt-1">El archivo debe tener encabezados en la primera fila (CÓDIGO, DEPORTISTA, PROGRAMA, PROYECTO…)</p>
+                  <p className="font-black text-white text-lg">Sube el Excel de nuevos deportistas</p>
+                  <p className="text-white/40 text-sm mt-1">El archivo debe tener encabezados en la primera fila (CÓDIGO, DEPORTISTA, PROGRAMA, PROYECTO…)</p>
                 </div>
                 <button
                   onClick={() => nuevosInputRef.current?.click()}
@@ -2542,10 +2796,10 @@ export default function GeneralPage() {
             {nuevosPaso === 'preview' && (
               <div className="flex-1 overflow-y-auto flex flex-col">
                 {/* Resumen */}
-                <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 flex gap-4 text-xs font-bold flex-shrink-0">
-                  <span className="text-green-700">✓ {nuevosFilas.filter(r => !r.duplicado).length} nuevos a agregar</span>
+                <div className="px-6 py-3 bg-[#333F50] border-b border-[#4A5568] flex gap-4 text-xs font-bold flex-shrink-0">
+                  <span className="text-[#5BE39B]">✓ {nuevosFilas.filter(r => !r.duplicado).length} nuevos a agregar</span>
                   {nuevosFilas.some(r => r.duplicado) && (
-                    <span className="text-amber-600">⚠ {nuevosFilas.filter(r => r.duplicado).length} duplicados (se omitirán)</span>
+                    <span className="text-[#E0A33A]">⚠ {nuevosFilas.filter(r => r.duplicado).length} duplicados (se omitirán)</span>
                   )}
                 </div>
 
@@ -2582,9 +2836,9 @@ export default function GeneralPage() {
                 </div>
 
                 {/* Botones */}
-                <div className="flex gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+                <div className="flex gap-3 px-6 py-4 border-t border-[#4A5568] flex-shrink-0">
                   <button onClick={() => { setNuevosPaso('subir'); setNuevosFilas([]); }}
-                    className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 font-bold py-2.5 rounded-xl transition text-sm">
+                    className="flex-1 border border-[#4A5568] text-white/70 hover:bg-[#333F50] font-bold py-2.5 rounded-xl transition text-sm">
                     ← Volver
                   </button>
                   <button onClick={confirmarNuevos}
@@ -2600,11 +2854,11 @@ export default function GeneralPage() {
             {/* Paso 3: Listo */}
             {nuevosPaso === 'listo' && (
               <div className="flex-1 flex flex-col items-center justify-center p-10 gap-4 text-center">
-                <div className="w-20 h-20 bg-green-100 rounded-3xl flex items-center justify-center">
+                <div className="w-20 h-20 bg-[rgba(0,176,80,.20)] rounded-3xl flex items-center justify-center">
                   <CheckCircle className="w-10 h-10 text-green-500" />
                 </div>
-                <p className="font-black text-gray-800 text-lg">¡Listo!</p>
-                <p className="text-gray-500 text-sm">
+                <p className="font-black text-white text-lg">¡Listo!</p>
+                <p className="text-white/70 text-sm">
                   Se agregaron <strong>{nuevosFilas.filter(r => !r.duplicado).length}</strong> deportistas al consolidado.
                   Ya aparecen en la tabla.
                 </p>
