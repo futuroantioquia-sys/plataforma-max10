@@ -396,7 +396,7 @@ export default function PerfilDeportista() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#333F50' }}>
         <BalonCargando texto="Cargando perfil…" />
       </div>
     );
@@ -404,9 +404,9 @@ export default function PerfilDeportista() {
 
   if (!dep) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#333F50' }}>
         <div className="text-center space-y-2">
-          <p className="text-gray-400">Deportista no encontrado</p>
+          <p className="text-white/40">Deportista no encontrado</p>
           <button onClick={() => router.push('/alumnos')} className="text-[#16a34a] text-sm font-semibold">← Volver</button>
         </div>
       </div>
@@ -1103,10 +1103,10 @@ export default function PerfilDeportista() {
 
   /* ══════════════ VISTA ADMIN / PROFESOR (igual que antes) ══════════════ */
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: '#333F50' }}>
 
       {/* Header */}
-      <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-lg">
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-lg">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push(
@@ -1123,19 +1123,19 @@ export default function PerfilDeportista() {
         <div className="flex items-center gap-2">
           {esAdmin && editando && (
             <button onClick={() => { setEditando(false); setEdits({ ...dep._columnas }); }}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-white/15 text-white hover:bg-white/25 border border-white/25 transition">
               <X className="w-4 h-4" /> Cancelar
             </button>
           )}
           {esAdmin && !editando && (
             <button onClick={eliminar}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-white/15 text-white hover:bg-white/25 border border-white/25 transition">
               <Trash2 className="w-4 h-4" /> Eliminar
             </button>
           )}
           {esAdmin && (
             <button onClick={() => editando ? guardar() : setEditando(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-black text-white hover:bg-gray-900 border border-white/20 transition">
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white/15 text-white hover:bg-white/25 border border-white/25 transition">
               {editando ? <><Save className="w-4 h-4" /> Guardar</> : <><Edit3 className="w-4 h-4" /> Editar</>}
             </button>
           )}
@@ -1165,7 +1165,7 @@ export default function PerfilDeportista() {
               </div>
               <button onClick={() => inputFotoRef.current?.click()}
                 className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white/90 hover:bg-white rounded-full p-1 shadow-md transition">
-                <Camera className="w-3 h-3 text-gray-700"/>
+                <Camera className="w-3 h-3 text-white/80"/>
               </button>
               <input ref={inputFotoRef} type="file" accept="image/*" className="hidden" onChange={subirFoto}/>
             </div>
@@ -1241,7 +1241,7 @@ export default function PerfilDeportista() {
         {/* ── VENTANA DE INFORMES ── */}
         {showInformes && (
           <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowInformes(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-[#064e1e] to-[#16a34a] text-white">
                 <div className="min-w-0">
                   <h3 className="font-black text-base leading-tight">Informes del deportista</h3>
@@ -1251,28 +1251,28 @@ export default function PerfilDeportista() {
               </div>
 
               <div className="p-4">
-                <p className="text-[11px] font-black text-gray-500 uppercase tracking-wide mb-2">Historial de valoraciones ({historialInf.length})</p>
+                <p className="text-[11px] font-black text-white/55 uppercase tracking-wide mb-2">Historial de valoraciones ({historialInf.length})</p>
                 {cargandoInf ? (
-                  <p className="text-center text-gray-400 text-sm py-6">Cargando…</p>
+                  <p className="text-center text-white/40 text-sm py-6">Cargando…</p>
                 ) : errorInf ? (
-                  <div className="text-center text-[13px] py-5 px-3 rounded-xl border-[1.5px] border-red-200 bg-red-50 text-red-700 font-bold leading-snug">
+                  <div className="text-center text-[13px] py-5 px-3 rounded-xl border-[1.5px] border-[#C0504D] bg-[rgba(192,80,77,.16)] text-[#F08A87] font-bold leading-snug">
                     ⚠ No se pudo consultar el historial (problema de conexión).<br/>
                     <span className="font-semibold">Esto NO quiere decir que el informe no esté guardado.</span><br/>
                     Revisa la señal y vuelve a abrir esta ventana.
                   </div>
                 ) : historialInf.length === 0 ? (
-                  <p className="text-center text-gray-400 text-sm py-6 border border-dashed border-gray-200 rounded-xl">Aún no hay valoraciones guardadas.</p>
+                  <p className="text-center text-white/40 text-sm py-6 border border-dashed border-[#4A5568] rounded-xl">Aún no hay valoraciones guardadas.</p>
                 ) : (
                   <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
                     {historialInf.map(ev => (
-                      <div key={ev.id} className="flex items-center justify-between gap-2 border border-gray-200 bg-gray-50 rounded-xl px-3 py-2">
+                      <div key={ev.id} className="flex items-center justify-between gap-2 border border-[#4A5568] bg-[#2B3547] rounded-xl px-3 py-2">
                         <div className="min-w-0">
-                          <p className="text-[12px] font-bold text-gray-900 truncate">{`Informe ${String((ev as any).numeroInforme ?? '').trim() || '—'} / ${ev.fecha} / ${ev.nombre || dep._nombre}`}</p>
-                          <p className="text-[11px] text-gray-500 truncate">{ev.proyecto || (ev as any).programa || ev.perfil || '—'}</p>
+                          <p className="text-[12px] font-bold text-white truncate">{`Informe ${String((ev as any).numeroInforme ?? '').trim() || '—'} / ${ev.fecha} / ${ev.nombre || dep._nombre}`}</p>
+                          <p className="text-[11px] text-white/55 truncate">{ev.proyecto || (ev as any).programa || ev.perfil || '—'}</p>
                         </div>
                         <div className="flex gap-1.5 flex-shrink-0">
                           <button onClick={() => editarInf(ev)} className="bg-[#16a34a] text-white text-[11px] font-black px-2.5 py-1.5 rounded-lg">✎ Editar</button>
-                          <button onClick={() => eliminarInf(ev)} title="Eliminar" className="bg-red-50 text-red-700 border border-red-200 text-[11px] font-black px-2.5 py-1.5 rounded-lg">🗑</button>
+                          <button onClick={() => eliminarInf(ev)} title="Eliminar" className="bg-[rgba(192,80,77,.16)] text-[#F08A87] border border-[#C0504D] text-[11px] font-black px-2.5 py-1.5 rounded-lg">🗑</button>
                         </div>
                       </div>
                     ))}
@@ -1285,15 +1285,15 @@ export default function PerfilDeportista() {
                     <>
                       <div className={`grid ${ya1er ? 'grid-cols-1' : 'grid-cols-2'} gap-2.5 mt-4`}>
                         {!ya1er && (
-                          <button onClick={() => inputInformeRef.current?.click()} className="flex flex-col items-center gap-1 py-3 rounded-2xl border-[1.5px] border-blue-300 bg-blue-50 text-blue-700 font-black text-[12px] text-center leading-tight">
+                          <button onClick={() => inputInformeRef.current?.click()} className="flex flex-col items-center gap-1 py-3 rounded-2xl border-[1.5px] border-[#4C7DE0] bg-[rgba(76,125,224,.16)] text-[#9DBBF5] font-black text-[12px] text-center leading-tight">
                             <span className="text-lg">⬆</span>Cargar 1er informe (Excel)
                           </button>
                         )}
-                        <button onClick={nuevaInf} className="flex flex-col items-center gap-1 py-3 rounded-2xl border-[1.5px] border-green-300 bg-green-50 text-green-700 font-black text-[12px] text-center leading-tight">
+                        <button onClick={nuevaInf} className="flex flex-col items-center gap-1 py-3 rounded-2xl border-[1.5px] border-[#00B050] bg-[rgba(0,176,80,.14)] text-[#5BE39B] font-black text-[12px] text-center leading-tight">
                           <span className="text-lg">＋</span>Nueva valoración
                         </button>
                       </div>
-                      <p className="text-[11px] text-gray-400 text-center mt-3">
+                      <p className="text-[11px] text-white/40 text-center mt-3">
                         {ya1er
                           ? 'El 1er informe ya fue cargado. Usa “Nueva valoración” para el siguiente informe.'
                           : 'Al elegir cualquiera se abre la valoración con el diseño Max 10.'}
@@ -1309,7 +1309,7 @@ export default function PerfilDeportista() {
         {/* ── ELEGIR INFORME PARA VISTA DINÁMICA ── */}
         {showElegirVD && (
           <div className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowElegirVD(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-[#064e1e] to-[#16a34a] text-white">
                 <div className="min-w-0">
                   <h3 className="font-black text-base leading-tight">¿Cuál informe deseas revisar?</h3>
@@ -1320,33 +1320,33 @@ export default function PerfilDeportista() {
               <div className="p-4 flex flex-col gap-2">
                 {vdInformes.map(ev => (
                   <button key={ev.id} onClick={() => irVistaDinamica(ev)}
-                    className="flex items-center justify-between gap-2 border-[1.5px] border-green-300 bg-green-50 hover:bg-green-100 active:bg-green-200 transition rounded-xl px-4 py-3 text-left">
+                    className="flex items-center justify-between gap-2 border-[1.5px] border-[#00B050] bg-[rgba(0,176,80,.14)] hover:bg-[rgba(0,176,80,.24)] active:bg-[rgba(0,176,80,.3)] transition rounded-xl px-4 py-3 text-left">
                     <div className="min-w-0">
-                      <p className="text-[13px] font-black text-green-800 truncate">
+                      <p className="text-[13px] font-black text-[#5BE39B] truncate">
                         {`Informe ${String((ev as any).numeroInforme ?? '').trim() || '—'}`}
                       </p>
-                      <p className="text-[11px] text-gray-500 truncate">{`${ev.fecha || 's/f'} · ${ev.nombre || dep._nombre}`}</p>
+                      <p className="text-[11px] text-white/55 truncate">{`${ev.fecha || 's/f'} · ${ev.nombre || dep._nombre}`}</p>
                     </div>
-                    <span className="text-green-700 text-lg flex-shrink-0">📊</span>
+                    <span className="text-[#5BE39B] text-lg flex-shrink-0">📊</span>
                   </button>
                 ))}
-                <p className="text-[11px] text-gray-400 text-center mt-1">Se abre la valoración con el diseño Max 10.</p>
+                <p className="text-[11px] text-white/40 text-center mt-1">Se abre la valoración con el diseño Max 10.</p>
               </div>
             </div>
           </div>
         )}
 
         {/* ── PESTAÑAS DE SECCIONES ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="rounded-2xl border overflow-hidden bg-[#3C4759] border-[#4A5568]">
           {/* Tabs */}
-          <div className="flex overflow-x-auto border-b border-gray-100 scrollbar-hide">
+          <div className="flex overflow-x-auto border-b border-[#4A5568] scrollbar-hide">
             {grupos.map(([nombre], i) => (
               <button key={nombre} onClick={() => setTab(i)}
                 className={cn(
                   'flex-shrink-0 px-4 py-3 text-xs font-bold transition whitespace-nowrap',
                   tab === i
-                    ? 'text-[#16a34a] border-b-2 border-[#16a34a] bg-green-50/50'
-                    : 'text-gray-400 hover:text-gray-600'
+                    ? 'text-[#5BE39B] border-b-2 border-[#00B050] bg-[rgba(0,176,80,.12)]'
+                    : 'text-white/40 hover:text-white/60'
                 )}>
                 {nombre}
               </button>
@@ -1367,21 +1367,21 @@ export default function PerfilDeportista() {
                   {camposFijos
                     ? camposFijos.filter(c => !c.readonly).map(c => (
                         <div key={c.key}>
-                          <label className="block text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{c.label}</label>
+                          <label className="block text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">{c.label}</label>
                           <input
                             value={edits[c.key] ?? ''}
                             onChange={e => setEdits(p => ({ ...p, [c.key]: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                            className="w-full border border-[#4A5568] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
                           />
                         </div>
                       ))
                     : tabActual[1].map(([key]) => (
                         <div key={key}>
-                          <label className="block text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{key}</label>
+                          <label className="block text-[11px] text-white/40 font-semibold uppercase tracking-wide mb-1">{key}</label>
                           <input
                             value={edits[key] ?? ''}
                             onChange={e => setEdits(p => ({ ...p, [key]: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                            className="w-full border border-[#4A5568] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
                           />
                         </div>
                       ))
@@ -1392,27 +1392,27 @@ export default function PerfilDeportista() {
 
             if (camposFijos) {
               return (
-                <div className="grid grid-cols-2 gap-px bg-gray-50">
+                <div className="grid grid-cols-2 gap-px bg-[#4A5568]">
                   {camposFijos.map(c => (
-                    <div key={c.key} className="bg-white px-4 py-3.5">
-                      <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider truncate">{c.label}</p>
-                      <p className="text-sm font-bold text-gray-800 mt-1 break-words leading-snug">{c.val || '—'}</p>
+                    <div key={c.key} className="bg-[#3C4759] px-4 py-3.5">
+                      <p className="text-[10px] text-white/40 font-semibold uppercase tracking-wider truncate">{c.label}</p>
+                      <p className="text-sm font-bold text-white mt-1 break-words leading-snug">{c.val || '—'}</p>
                     </div>
                   ))}
-                  {camposFijos.length % 2 !== 0 && <div className="bg-white" />}
+                  {camposFijos.length % 2 !== 0 && <div className="bg-[#3C4759]" />}
                 </div>
               );
             }
 
             return (
-              <div className="grid grid-cols-2 gap-px bg-gray-50">
+              <div className="grid grid-cols-2 gap-px bg-[#4A5568]">
                 {tabActual[1].map(([key, val]) => (
-                  <div key={key} className="bg-white px-4 py-3.5">
-                    <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider truncate">{key}</p>
-                    <p className="text-sm font-bold text-gray-800 mt-1 break-words leading-snug">{val || '—'}</p>
+                  <div key={key} className="bg-[#3C4759] px-4 py-3.5">
+                    <p className="text-[10px] text-white/40 font-semibold uppercase tracking-wider truncate">{key}</p>
+                    <p className="text-sm font-bold text-white mt-1 break-words leading-snug">{val || '—'}</p>
                   </div>
                 ))}
-                {tabActual[1].length % 2 !== 0 && <div className="bg-white" />}
+                {tabActual[1].length % 2 !== 0 && <div className="bg-[#3C4759]" />}
               </div>
             );
           })()}
@@ -1420,19 +1420,19 @@ export default function PerfilDeportista() {
 
         {/* ── SECCIÓN FOTO + DOCUMENTOS (admin/profe) ── */}
         {(foto || docTI || docRC || docEPS || califs.length > 0) && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <p className="text-xs font-black text-gray-500 uppercase tracking-widest">📋 Foto y Documentos</p>
+          <div className="rounded-2xl border overflow-hidden bg-[#3C4759] border-[#4A5568]">
+            <div className="px-4 py-3 border-b border-[#4A5568]">
+              <p className="text-xs font-black text-white/55 uppercase tracking-widest">📋 Foto y Documentos</p>
             </div>
             <div className="p-4 space-y-3">
 
               {/* Foto */}
               {foto && (
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                  <img src={foto} alt={dep._nombre} className="w-14 h-[72px] object-cover object-top rounded-lg border border-gray-200 flex-shrink-0"/>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-[#2B3547] border border-[#4A5568]">
+                  <img src={foto} alt={dep._nombre} className="w-14 h-[72px] object-cover object-top rounded-lg border border-[#4A5568] flex-shrink-0"/>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-gray-800 uppercase tracking-wide">Foto del deportista</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Subida por el acudiente</p>
+                    <p className="text-xs font-black text-white uppercase tracking-wide">Foto del deportista</p>
+                    <p className="text-[10px] text-white/40 mt-0.5">Subida por el acudiente</p>
                   </div>
                   <a
                     href={foto}
@@ -1452,22 +1452,22 @@ export default function PerfilDeportista() {
               ]).filter(({ doc }) => !!doc).map(({ doc, label }) => {
                 const isImage = doc!.data.startsWith('data:image');
                 return (
-                  <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-[#2B3547] border border-[#4A5568]">
                     {isImage
-                      ? <img src={doc!.data} alt={label} className="w-14 h-[72px] object-cover rounded-lg border border-gray-200 flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: label, data: doc!.data })}/>
-                      : <div className="w-14 h-[72px] rounded-lg bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: label, data: doc!.data })}>
+                      ? <img src={doc!.data} alt={label} className="w-14 h-[72px] object-cover rounded-lg border border-[#4A5568] flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: label, data: doc!.data })}/>
+                      : <div className="w-14 h-[72px] rounded-lg bg-[rgba(192,80,77,.16)] border border-[#C0504D] flex items-center justify-center flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: label, data: doc!.data })}>
                           <span className="text-2xl">📄</span>
                         </div>
                     }
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-black text-gray-800 uppercase tracking-wide">{label}</p>
-                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">{doc!.name}</p>
-                      <p className="text-[10px] text-gray-400">{doc!.date}</p>
+                      <p className="text-xs font-black text-white uppercase tracking-wide">{label}</p>
+                      <p className="text-[10px] text-white/55 mt-0.5 truncate">{doc!.name}</p>
+                      <p className="text-[10px] text-white/40">{doc!.date}</p>
                     </div>
                     <div className="flex flex-col gap-1.5 flex-shrink-0">
                       <button
                         onClick={() => setDocPreview({ name: label, data: doc!.data })}
-                        className="text-[10px] font-black px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 transition"
+                        className="text-[10px] font-black px-3 py-1.5 rounded-lg bg-[rgba(76,125,224,.16)] text-[#9DBBF5] hover:bg-[rgba(76,125,224,.28)] border border-[#4C7DE0] transition"
                       >
                         👁 Ver
                       </button>
@@ -1486,26 +1486,26 @@ export default function PerfilDeportista() {
               {/* Calificaciones escolares (boletines) — el acudiente puede subir varias */}
               {califs.length > 0 && (
                 <div className="pt-1">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">📚 Calificaciones escolares ({califs.length})</p>
+                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">📚 Calificaciones escolares ({califs.length})</p>
                   <div className="space-y-2">
                     {califs.map(cal => {
                       const isImage = (cal.datos ?? '').startsWith('data:image');
                       return (
-                        <div key={cal.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                        <div key={cal.id} className="flex items-center gap-3 p-3 rounded-xl bg-[#2B3547] border border-[#4A5568]">
                           {isImage
-                            ? <img src={cal.datos} alt={cal.nombre} className="w-14 h-[72px] object-cover rounded-lg border border-gray-200 flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: cal.nombre || 'Calificación', data: cal.datos })}/>
-                            : <div className="w-14 h-[72px] rounded-lg bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: cal.nombre || 'Calificación', data: cal.datos })}>
+                            ? <img src={cal.datos} alt={cal.nombre} className="w-14 h-[72px] object-cover rounded-lg border border-[#4A5568] flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: cal.nombre || 'Calificación', data: cal.datos })}/>
+                            : <div className="w-14 h-[72px] rounded-lg bg-[rgba(192,80,77,.16)] border border-[#C0504D] flex items-center justify-center flex-shrink-0 cursor-pointer" onClick={() => setDocPreview({ name: cal.nombre || 'Calificación', data: cal.datos })}>
                                 <span className="text-2xl">📄</span>
                               </div>
                           }
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-black text-gray-800 uppercase tracking-wide">📚 Calificación escolar</p>
-                            <p className="text-[10px] text-gray-500 mt-0.5 truncate">{cal.nombre || 'Calificación'}</p>
+                            <p className="text-xs font-black text-white uppercase tracking-wide">📚 Calificación escolar</p>
+                            <p className="text-[10px] text-white/55 mt-0.5 truncate">{cal.nombre || 'Calificación'}</p>
                           </div>
                           <div className="flex flex-col gap-1.5 flex-shrink-0">
                             <button
                               onClick={() => setDocPreview({ name: cal.nombre || 'Calificación', data: cal.datos })}
-                              className="text-[10px] font-black px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 transition"
+                              className="text-[10px] font-black px-3 py-1.5 rounded-lg bg-[rgba(76,125,224,.16)] text-[#9DBBF5] hover:bg-[rgba(76,125,224,.28)] border border-[#4C7DE0] transition"
                             >
                               👁 Ver
                             </button>
@@ -1525,7 +1525,7 @@ export default function PerfilDeportista() {
               )}
 
               {(!foto && !docTI && !docRC && !docEPS && califs.length === 0) && (
-                <p className="text-xs text-gray-400 text-center py-4">El acudiente aún no ha subido documentos.</p>
+                <p className="text-xs text-white/40 text-center py-4">El acudiente aún no ha subido documentos.</p>
               )}
             </div>
           </div>
@@ -1541,18 +1541,18 @@ export default function PerfilDeportista() {
           onClick={() => setDocPreview(null)}
         >
           <div
-            className="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl"
+            className="relative max-w-lg w-full bg-[#3C4759] rounded-2xl overflow-hidden shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <p className="text-sm font-black text-gray-800">{docPreview.name}</p>
-              <button onClick={() => setDocPreview(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">✕</button>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#4A5568]">
+              <p className="text-sm font-black text-white">{docPreview.name}</p>
+              <button onClick={() => setDocPreview(null)} className="text-white/40 hover:text-white/60 text-xl font-bold leading-none">✕</button>
             </div>
             <div className="p-4">
               {docPreview.data.startsWith('data:image') ? (
                 <img src={docPreview.data} alt={docPreview.name} className="w-full rounded-xl object-contain max-h-[70vh]"/>
               ) : (
-                <iframe src={docPreview.data} title={docPreview.name} className="w-full h-[70vh] rounded-xl border border-gray-100"/>
+                <iframe src={docPreview.data} title={docPreview.name} className="w-full h-[70vh] rounded-xl border border-[#4A5568]"/>
               )}
             </div>
             <div className="px-4 pb-4">

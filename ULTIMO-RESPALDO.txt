@@ -1,0 +1,37 @@
+RESPALDO DE LA BASE DE DATOS · Futuro Antioquia
+Fecha: 28/08/2026 03:07
+Carpeta: C:\Users\futur\Claude\Projects\Plataforma max 100\RESPALDO\RESPALDO_2026-08-28
+
+TABLA                        ESTADO    FILAS      TAMAÑO
+------------------------------------------------------------
+admins                      OK              3      0.00 MB
+profes                      OK             25      6.16 MB
+deportistas                 OK           1168      2.33 MB
+cont_movimientos            OK          12244      2.18 MB
+cont_mapeo                  OK           4680      0.31 MB
+cont_conceptos              OK             63      0.00 MB
+pagos_estado                OK          14689      2.36 MB
+otros_pagos                 OK            373      0.05 MB
+soportes_pago               OK             85     15.04 MB
+soportes_pagos              OK              2      0.06 MB
+facturas_solicitudes        OK              3      0.00 MB
+productos                   OK              3      0.00 MB
+nomina                      OK             22      0.00 MB
+asistencia                  OK          50233      7.04 MB
+evaluaciones                OK            535     56.13 MB
+config_valoracion           OK              3      0.02 MB
+cal_com                     OK            448      0.06 MB
+calificaciones_escolares    OK             82     47.52 MB
+documentos_deportista       OK            287    159.90 MB
+fotos_deportistas           OK            651     98.08 MB
+jornada_mes                 OK             44      0.00 MB
+jornadas_proyecto           OK             73      0.00 MB
+mensajes                    OK             37      0.01 MB
+cert_asistencia_log         OK             16      0.00 MB
+cumple_enviados             OK             51      0.00 MB
+visitas                     OK            844      0.04 MB
+------------------------------------------------------------
+TOTAL: 86664 filas · 397.30 MB
+Tablas con error: 0
+
+Respaldo COMPLETO. Todas las tablas quedaron guardadas.

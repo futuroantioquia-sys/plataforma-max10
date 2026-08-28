@@ -49,6 +49,137 @@ const BLANCO = '1px solid #ffffff';
 type Estado = 'cargando' | 'sin-tabla' | 'listo';
 
 /* ── Una casilla que se escribe encima ───────────────────────────────────── */
+/* ── LA CASILLA DE PROGRAMA ───────────────────────────────────────────────
+   (dirección, 27/08/2026)
+
+   Antes se escribía a mano y entraban "DESARROLLO", "Desarrollo", "DESARROLO"
+   y "DESA" como si fueran cuatro programas distintos; después nada cuadraba
+   con las fichas. Ahora se escoge de la lista oficial y ya.
+
+   Y SE PUEDE ESCOGER MÁS DE UNO: hay torneos donde compite más de un programa
+   —una ASOBDIM que junta DESARROLLO y SELECCIÓN, por ejemplo—. Se marcan los
+   que sean y quedan escritos separados por coma: "DESARROLLO, SELECCIÓN".
+
+   Se guarda EXACTAMENTE como se escribe aquí, en mayúsculas y con tilde, que
+   es como están en la lista oficial. */
+function CasillaProgramas({ valor, onChange, bloqueada }: {
+  valor: string;
+  onChange: (v: string) => void;
+  bloqueada?: boolean;
+}) {
+  const [abierta, setAbierta] = useState(false);
+  const caja = useRef<HTMLDivElement | null>(null);
+
+  const puestos = String(valor ?? '')
+    .split(',').map(p => p.trim()).filter(Boolean);
+
+  const igual = (a: string, b: string) =>
+    a.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim() ===
+    b.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+
+  /* Lo que ya estaba escrito y no está en la lista oficial NO se pierde: se
+     muestra igual y se puede desmarcar. */
+  const lista = [
+    ...PROGRAMAS,
+    ...puestos.filter(p => !PROGRAMAS.some(o => igual(o, p))),
+  ];
+
+  function marcar(prog: string) {
+    const esta = puestos.some(p => igual(p, prog));
+    const next = esta
+      ? puestos.filter(p => !igual(p, prog))
+      : [...puestos, prog];
+    /* Se guardan en el orden oficial, no en el orden en que se fueron
+       marcando: así dos torneos con los mismos programas se escriben igual. */
+    next.sort((a, b) => rankProgramaLocal(a) - rankProgramaLocal(b));
+    onChange(next.join(', '));
+  }
+
+  function rankProgramaLocal(p: string): number {
+    const i = PROGRAMAS.findIndex(o => igual(o, p));
+    return i >= 0 ? i : PROGRAMAS.length;
+  }
+
+  useEffect(() => {
+    if (!abierta) return;
+    const fuera = (e: MouseEvent) => {
+      if (caja.current && !caja.current.contains(e.target as Node)) setAbierta(false);
+    };
+    const conEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierta(false); };
+    document.addEventListener('mousedown', fuera);
+    document.addEventListener('keydown', conEsc);
+    return () => {
+      document.removeEventListener('mousedown', fuera);
+      document.removeEventListener('keydown', conEsc);
+    };
+  }, [abierta]);
+
+  if (bloqueada) {
+    return (
+      <span className="block px-1 text-center text-white font-semibold">
+        {valor || <span className="text-white/25">—</span>}
+      </span>
+    );
+  }
+
+  return (
+    <div ref={caja} className="relative">
+      <button
+        type="button"
+        onClick={() => setAbierta(a => !a)}
+        title="Escoge el programa. Puedes marcar más de uno."
+        className="w-full px-1.5 py-[3px] rounded text-center text-white font-semibold text-[12.5px]
+          leading-tight transition"
+        style={{
+          background: abierta ? CAMPO : 'transparent',
+          border: `1px solid ${abierta ? VERDE : 'transparent'}`,
+        }}>
+        {puestos.length
+          ? puestos.join(', ')
+          : <span className="text-white/25">— Escoger —</span>}
+      </button>
+
+      {abierta && (
+        <div className="absolute z-50 mt-1 rounded-xl overflow-hidden left-1/2 -translate-x-1/2"
+          style={{ background: PANEL, border: `1px solid ${BORDE}`, minWidth: 200,
+                   boxShadow: '0 18px 40px rgba(0,0,0,.45)' }}>
+          <p className="px-3 py-2 text-[9.5px] font-black text-white/45 uppercase tracking-widest"
+            style={{ borderBottom: `1px solid ${BORDE}` }}>
+            Marca uno o varios
+          </p>
+          {lista.map(prog => {
+            const marcado = puestos.some(p => igual(p, prog));
+            return (
+              <button key={prog} type="button"
+                onClick={() => marcar(prog)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition">
+                <span className="w-3.5 h-3.5 rounded shrink-0 flex items-center justify-center"
+                  style={{
+                    background: marcado ? VERDE : 'transparent',
+                    border: `1px solid ${marcado ? VERDE : BORDE}`,
+                  }}>
+                  {marcado && <Check className="w-2.5 h-2.5 text-white" />}
+                </span>
+                <span className={`text-white text-[12px] ${marcado ? 'font-black' : 'font-semibold'}`}>
+                  {prog}
+                </span>
+              </button>
+            );
+          })}
+          {puestos.length > 0 && (
+            <button type="button"
+              onClick={() => { onChange(''); setAbierta(false); }}
+              style={{ borderTop: `1px solid ${BORDE}` }}
+              className="w-full text-left px-3 py-2 text-[11px] font-bold text-white/50 hover:text-white transition">
+              Quitar todos
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Casilla({
   valor, onChange, lista, ancho, centro, fuerte, bloqueada,
 }: {
@@ -515,8 +646,7 @@ export default function TorneosPage() {
                           onChange={v => editar(f.id, 'torneo', v)} />
                       </td>
                       <td className="px-1 py-[5px]" style={{ borderRight: BLANCO, borderBottom: BLANCO }}>
-                        <Casilla valor={f.programa} bloqueada={soloLectura}
-                          lista="lista-programa"
+                        <CasillaProgramas valor={f.programa} bloqueada={soloLectura}
                           onChange={v => editar(f.id, 'programa', v)} />
                       </td>
                       <td className="px-1 py-[5px]" style={{ borderRight: BLANCO, borderBottom: BLANCO }}>

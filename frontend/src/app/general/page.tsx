@@ -490,6 +490,7 @@ export default function GeneralPage() {
   const [guardado,    setGuardado]    = useState(false);
   const COL_WIDTHS_KEY   = 'futuro_vg_col_widths';
   const COL_VISIBLE_KEY  = 'futuro_vg_col_visible';
+  const COL_ORDEN_KEY    = 'futuro_vg_col_orden';   // el orden en que las dejó cada quien
 
   const [colWidths,      setColWidths]      = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) ?? '{}'); } catch { return {}; }
@@ -509,6 +510,16 @@ export default function GeneralPage() {
   const [resizingActive, setResizingActive] = useState<string | null>(null);
   const [programaFiltro, setProgramaFiltro] = useState<string | null>(null);
   const [proyectoFiltro, setProyectoFiltro] = useState<string | null>(null);
+  /* ── FILTRAR LOS QUE NO TIENEN PROYECTO (dirección, 27/08/2026) ───────────
+     Antes la lista de proyectos solo traía los que existen, así que a los que
+     tienen la casilla en blanco no había forma de sacarlos — y son justo los
+     que hay que revisar. Ahora la lista trae una opción más, con rayas, que
+     los deja solos en pantalla.
+
+     La palabra "__SIN__" es solo el marbete que usa el programa por dentro:
+     en pantalla se lee "— Sin proyecto —". Va entre guiones bajos para que
+     nunca se confunda con el nombre de un proyecto de verdad. */
+  const SIN_PROYECTO = '__SIN__';
   const [sedeFiltro,     setSedeFiltro]     = useState<string | null>(null);   // 25/08/2026
   const [anioFiltro,     setAnioFiltro]     = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -573,6 +584,59 @@ export default function GeneralPage() {
   function mostrarTodas() {
     setColVisible({});
     try { localStorage.removeItem(COL_VISIBLE_KEY); } catch {}
+  }
+
+  /* ── MOVER LAS COLUMNAS DE LUGAR ─────────────────────────────────────────
+     (dirección, 27/08/2026 — "que se pueda como en pospartido")
+
+     Se agarra el título de la columna y se suelta donde uno quiera. El orden
+     queda guardado EN ESTE COMPUTADOR: al volver a entrar, el cuadro está como
+     lo dejó cada quien. No se le cambia a nadie más.
+
+     DOS COLUMNAS NO SE MUEVEN: el N° y el CÓDIGO. El código lleva pegado al
+     lado el nombre del deportista, y las dos van clavadas a la izquierda para
+     no perder de vista de quién es cada renglón cuando el cuadro se corre. Si
+     se pudieran mover, esa clavada quedaría apuntando al lugar equivocado y el
+     nombre taparía otra columna. */
+  const [ordenCols, setOrdenCols] = useState<string[] | null>(null);
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem(COL_ORDEN_KEY);
+      if (guardado) {
+        const lista = JSON.parse(guardado);
+        if (Array.isArray(lista)) setOrdenCols(lista.filter(x => typeof x === 'string'));
+      }
+    } catch { /* si el navegador no deja guardar, se usa el orden de siempre */ }
+  }, []);
+
+  const [colArrastrada, setColArrastrada] = useState<number | null>(null);
+  const [colEncima,     setColEncima]     = useState<number | null>(null);
+
+  /* ── FIJAR UNA COLUMNA, PROVISIONALMENTE ─────────────────────────────────
+     (dirección, 27/08/2026)
+
+     El cuadro es largo y toca correrlo para el lado. A veces se necesita tener
+     una columna a la vista mientras se revisa lo de allá lejos —por ejemplo el
+     ESTADO mientras se miran las competencias—. Con el alfiler del título, esa
+     columna se viene al frente y se queda quieta; con el mismo alfiler se
+     suelta y vuelve a su lugar.
+
+     NO SE GUARDA en el computador, a propósito: es para el rato, no para
+     siempre. Al recargar la pantalla queda como estaba.
+
+     UNA A LA VEZ: fijar dos o tres se come la pantalla y ya no queda dónde
+     leer. Al fijar otra, la anterior se suelta sola.
+
+     El CÓDIGO no se puede fijar: ya va clavado con el nombre pegado al lado. */
+  const [colFijada, setColFijada] = useState<string | null>(null);
+
+  function anchoDeCol(col: string): number {
+    return colWidths[col] ?? (esCodigo(col) ? 130 : esFechaAfil(col) ? 100 : esTipoAfil(col) ? 95 : 110);
+  }
+
+  function volverAlOrdenDeSiempre() {
+    setOrdenCols(null);
+    try { localStorage.removeItem(COL_ORDEN_KEY); } catch {}
   }
   // ── Resize de columnas ────────────────────────────────────────
   const resizingCol  = useRef<string | null>(null);
@@ -701,7 +765,48 @@ export default function GeneralPage() {
 
   // DEPORTISTA/NOMBRE/ALUMNO/JUGADOR/ATLETA nunca se ocultan (columna crítica)
   const RX_NOMBRE_COL = /deportista|alumno|jugador|atleta|^nombre/i;
-  const colVisibles   = columnas.filter(c => RX_NOMBRE_COL.test(c.trim()) || colVisible[c] !== false);
+  /* Las que se ven, EN EL ORDEN EN QUE LAS DEJÓ QUIEN USA LA PANTALLA.
+     Si aparece una columna nueva que no estaba en el orden guardado, se pone
+     al final: nunca se pierde, y de ahí se mueve a donde toque. */
+  const colVisibles = useMemo(() => {
+    const base = columnas.filter(c => RX_NOMBRE_COL.test(c.trim()) || colVisible[c] !== false);
+    if (!ordenCols?.length) return base;
+    const hay = new Set(base);
+    const enOrden = ordenCols.filter(c => hay.has(c));
+    const nuevas  = base.filter(c => !enOrden.includes(c));
+    return [...enOrden, ...nuevas];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnas, colVisible, ordenCols]);
+
+  /* Dónde empieza cada columna clavada a la izquierda. El N° mide 36 y va de
+     primero; si hay una columna fijada, entra detrás de él y empuja al CÓDIGO
+     y al DEPORTISTA para que nada quede montado encima de nada. */
+  const ANCHO_NUM = 36;
+  const colCodigo = colVisibles.find(c => esCodigo(c)) ?? '';
+  const izqFijada = ANCHO_NUM;
+  const izqCodigo = ANCHO_NUM + (colFijada ? anchoDeCol(colFijada) : 0);
+  const izqNombre = izqCodigo + (colCodigo ? anchoDeCol(colCodigo) : 130);
+
+  /** El orden final: si hay una fijada, se va de primera. */
+  const colOrdenadas = useMemo(
+    () => (colFijada && colVisibles.includes(colFijada)
+      ? [colFijada, ...colVisibles.filter(c => c !== colFijada)]
+      : colVisibles),
+    [colVisibles, colFijada],
+  );
+
+  /** Suelta la columna que se venía arrastrando en el lugar `destino`. */
+  function soltarColumnaEn(destino: number) {
+    const origen = colArrastrada;
+    setColArrastrada(null);
+    setColEncima(null);
+    if (origen === null || origen === destino) return;
+    const lista = [...colVisibles];
+    const [movida] = lista.splice(origen, 1);
+    lista.splice(destino, 0, movida);
+    setOrdenCols(lista);
+    try { localStorage.setItem(COL_ORDEN_KEY, JSON.stringify(lista)); } catch {}
+  }
   const ocultasCount = columnas.length - colVisibles.length;
 
   // ── Proyectos disponibles por programa ───────────────────────
@@ -768,7 +873,8 @@ export default function GeneralPage() {
     if (sedeFiltro && !sedes.includes(sedeFiltro)) setSedeFiltro(null);
   }, [sedes, sedeFiltro]);
   useEffect(() => {
-    if (proyectoFiltro && !proyectosVisibles.includes(proyectoFiltro)) setProyectoFiltro(null);
+    if (proyectoFiltro && proyectoFiltro !== SIN_PROYECTO
+        && !proyectosVisibles.includes(proyectoFiltro)) setProyectoFiltro(null);
   }, [proyectosVisibles, proyectoFiltro]);
 
   // ── Columna PROGRAMA / PROYECTO / PROFE (nombre real en el Excel) ──
@@ -800,7 +906,19 @@ export default function GeneralPage() {
   const torneosDePrograma = useCallback((programa: string) => {
     const k = llavePrograma(programa);
     const conNumero = cuadroTorneos.map((f, i) => ({ f, n: i + 1 }));
-    const suyos = k ? conNumero.filter(({ f }) => llavePrograma(f.programa) === k) : [];
+    /* UN TORNEO PUEDE SER DE VARIOS PROGRAMAS (dirección, 27/08/2026).
+       En Torneos y Competencias la casilla PROGRAMA ahora deja marcar más de
+       uno, y queda escrito "DESARROLLO, SELECCIÓN". Entonces aquí no se puede
+       comparar la casilla completa: se parte por la coma y basta con que UNO
+       de ellos sea el del deportista. Sin esto, un torneo de dos programas no
+       le aparecería a nadie. */
+    const suyos = k
+      ? conNumero.filter(({ f }) => String(f.programa ?? '')
+          .split(',')
+          .map(x => llavePrograma(x))
+          .filter(Boolean)
+          .includes(k))
+      : [];
     const lista = suyos.length ? suyos : conNumero;
     return lista.map(({ f, n }) => ({
       num: String(n),
@@ -1035,7 +1153,11 @@ export default function GeneralPage() {
        de nada — que fue justo lo que pasó la primera vez. */
     if (busquedaTelefono) return true;
     if (programaFiltro !== null && grupoDep(d) !== programaFiltro) return false;
-    if (proyectoFiltro && getColVal(d, RX_PROY).trim() !== proyectoFiltro) return false;
+    if (proyectoFiltro) {
+      const suyo = getColVal(d, RX_PROY).trim();
+      if (proyectoFiltro === SIN_PROYECTO) { if (suyo) return false; }
+      else if (suyo !== proyectoFiltro) return false;
+    }
     if (sedeFiltro && sedeCanonica(getColVal(d, /^sede/i)) !== sedeFiltro) return false;
     if (anioFiltro && getColVal(d, /^a[ñn]o$/i).trim() !== anioFiltro) return false;
     return true;
@@ -1533,7 +1655,7 @@ export default function GeneralPage() {
           <h1 className="text-white font-black text-base leading-tight">Vista General</h1>
           <p className="text-white/60 text-[11px]">
             {proyectoFiltro
-              ? `Proyecto: ${proyectoFiltro}`
+              ? (proyectoFiltro === SIN_PROYECTO ? 'Proyecto: sin asignar' : `Proyecto: ${proyectoFiltro}`)
               : programaFiltro
               ? `${LABEL_GRUPO[programaFiltro] ?? programaFiltro}`
               : `${deportistas.length} deportistas · ${grupos.length} programas`}
@@ -1666,10 +1788,13 @@ export default function GeneralPage() {
             <select
               value={proyectoFiltro ?? ''}
               onChange={e => setProyectoFiltro(e.target.value || null)}
-              disabled={proyectosVisibles.length === 0}
+              /* Ya no se apaga aunque no haya proyectos: la opción
+                 "Sin proyecto" siempre sirve. */
               className="w-full rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white border disabled:opacity-50"
               style={{ background: LIENZO, borderColor: BORDE }}>
               <option value="">— Todos —</option>
+              {/* Los que tienen la casilla PROYECTO en blanco. */}
+              <option value={SIN_PROYECTO}>— — — Sin proyecto — — —</option>
               {proyectosVisibles.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
@@ -1844,9 +1969,64 @@ export default function GeneralPage() {
                  y raya de arriba de la fila del encabezado. */
               .tabla-max10 tr > *:first-child { border-left: 1px solid #ffffff !important; }
               .tabla-max10 thead tr:first-child > * { border-top: 1px solid #ffffff !important; }
+
+              /* ── LA COLUMNA FIJADA ────────────────────────────────────────
+                 Cuando hay una fijada, se va de PRIMERA entre las columnas de
+                 datos, así que en cada renglón es la segunda casilla (la
+                 primera es el N°). Se clava a 36 px, que es justo lo que mide
+                 el N°, y lleva la raya ámbar que marca dónde termina lo que
+                 está quieto. El color de fondo solo entra si la casilla no
+                 trae el suyo: las que ya tienen color siguen igual.
+                 — dirección, 27/08/2026 */
+              .tabla-max10.hay-fija tbody tr > td:nth-child(2) {
+                position: sticky !important;
+                left: 36px !important;
+                z-index: 12 !important;
+                background-color: #2B3547;
+                box-shadow: 3px 0 0 0 #E0A33A;
+              }
+              .tabla-max10.hay-fija thead tr > th:nth-child(2) { z-index: 32 !important; }
             `}</style>
+            {/* La columna que está fijada, con su botón para soltarla. */}
+            {colFijada && (
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 mb-2 w-fit"
+                style={{ background: 'rgba(224,163,58,.14)', border: '1px solid #E0A33A' }}>
+                <span className="text-[13px] leading-none">📌</span>
+                <span className="text-white text-[12px] font-bold">
+                  Columna fija: <b>{labelCol(colFijada)}</b>
+                </span>
+                <button onClick={() => setColFijada(null)}
+                  title="Soltarla y devolverla a su lugar"
+                  className="rounded-lg px-2.5 py-1 text-[11px] font-black text-white transition hover:opacity-90"
+                  style={{ background: '#E0A33A' }}>
+                  ✕ SOLTAR
+                </button>
+              </div>
+            )}
+
+            {/* Cómo se acomoda el cuadro. Se dice una sola vez, en chiquito.
+                — dirección, 27/08/2026 */}
+            <p className="text-white/35 text-[11px] mb-1.5 px-1">
+              Arrastra el <span className="text-white/60 font-bold">título</span> de una columna para
+              moverla de lugar, o su <span className="text-white/60 font-bold">borde derecho</span> para
+              hacerla más ancha, o el <span className="text-white/60 font-bold">alfiler</span> para
+              dejarla fija al frente mientras corres el cuadro.
+              El orden y el ancho quedan guardados solo en este computador; lo fijado es solo para el rato.
+              {ordenCols?.length ? (
+                <>
+                  {' · '}
+                  <button onClick={volverAlOrdenDeSiempre}
+                    className="underline underline-offset-2 font-bold hover:text-white transition"
+                    style={{ color: '#E0A33A' }}>
+                    Volver al orden de siempre
+                  </button>
+                </>
+              ) : null}
+            </p>
+
             <div className="overflow-auto tabla-scroll" style={{ maxHeight: 'calc(100vh - 210px)' }}>
-              <table className="tabla-max10 text-xs" style={{ width: 'max-content', tableLayout: 'fixed' }}>
+              <table className={`tabla-max10 text-xs ${colFijada ? 'hay-fija' : ''}`}
+                style={{ width: 'max-content', tableLayout: 'fixed' }}>
 
                 {/* ── COLGROUP para anchos ── */}
                 {/* ── COLGROUP: UNA RAYA POR CADA COLUMNA, SIN SALTARSE NINGUNA ──
@@ -1864,7 +2044,7 @@ export default function GeneralPage() {
                     recibir el ancho que le toca. */}
                 <colgroup>
                   <col style={{ width: 36 }} />
-                  {colVisibles.map(col => (
+                  {colOrdenadas.map(col => (
                     <Fragment key={col}>
                       <col style={{ width: colWidths[col] ?? (esCodigo(col) ? 130 : esFechaAfil(col) ? 100 : esTipoAfil(col) ? 95 : 110) }} />
                       {esCodigo(col) && <col style={{ width: colWidths['__NOMBRE__'] ?? 180 }} />}
@@ -1879,23 +2059,71 @@ export default function GeneralPage() {
                     <th className="px-2 py-2.5 text-center font-black text-[10px] whitespace-nowrap sticky left-0 z-30" style={{ border: '2px solid #ffffff', color: 'white', background: VERDE }}>
                       N°
                     </th>
-                    {colVisibles.map(col => {
+                    {colOrdenadas.map((col, iCol) => {
                       const esCod = esCodigo(col);
                       /* Las cuatro competencias llevan encabezado naranja. */
                       const fondoTh = numCompetencia(col) ? NARANJA_COMP : '#00B050';
+                      /* El CÓDIGO no se mueve: lleva pegado el nombre del
+                         deportista y los dos van clavados a la izquierda.
+                         — dirección, 27/08/2026 */
+                      const seMueve = !esCod;
                       return (
                         <>
                         <th key={col}
-                          style={{ border: '2px solid #ffffff', background: fondoTh, color: 'white' }}
+                          draggable={seMueve}
+                          onDragStart={() => { if (seMueve) setColArrastrada(iCol); }}
+                          onDragOver={e => { if (!seMueve || colArrastrada === null) return; e.preventDefault(); setColEncima(iCol); }}
+                          onDragLeave={() => setColEncima(v => (v === iCol ? null : v))}
+                          onDrop={e => { if (!seMueve) return; e.preventDefault(); soltarColumnaEn(iCol); }}
+                          onDragEnd={() => { setColArrastrada(null); setColEncima(null); }}
+                          title={seMueve
+                            ? 'Arrastra este título para mover la columna de lugar · su borde derecho cambia el ancho'
+                            : 'Esta columna no se mueve: lleva pegado el nombre del deportista'}
+                          style={{
+                            border: '2px solid #ffffff', background: fondoTh, color: 'white',
+                            outline: colEncima === iCol ? '2px dashed #ffffff' : undefined,
+                            outlineOffset: -3,
+                            opacity: colArrastrada === iCol ? 0.5 : 1,
+                            /* Clavada a la izquierda: la fijada detrás del N°,
+                               y el CÓDIGO detrás de ella. */
+                            left: col === colFijada ? izqFijada : esCod ? izqCodigo : undefined,
+                            /* La raya ámbar marca dónde termina lo que está
+                               quieto: de ahí para allá todo pasa por debajo. */
+                            boxShadow: col === colFijada ? `3px 0 0 0 ${'#E0A33A'}` : undefined,
+                          }}
                           className={`relative px-2 py-2.5 text-center font-black text-[10px] whitespace-nowrap select-none ${
-                            esCod ? 'sticky left-[36px] z-30' : ''
-                          }`}>
-                          <span className={resizingActive === col ? 'opacity-60' : ''}>
-                            {labelCol(col)}
+                            seMueve ? 'cursor-grab active:cursor-grabbing' : ''
+                          } ${(esCod || col === colFijada) ? 'sticky z-30' : ''}`}>
+                          <span className={`inline-flex items-center gap-1.5 ${resizingActive === col ? 'opacity-60' : ''}`}>
+                            <span className="pointer-events-none">{labelCol(col)}</span>
+                            {/* EL ALFILER — fija esta columna al frente, o la
+                                suelta. No va en el CÓDIGO, que ya está clavado
+                                con el nombre pegado. — dirección, 27/08/2026 */}
+                            {!esCod && (
+                              <button
+                                type="button"
+                                draggable={false}
+                                onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
+                                onMouseDown={e => e.stopPropagation()}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setColFijada(v => (v === col ? null : col));
+                                }}
+                                title={col === colFijada
+                                  ? 'Soltar esta columna'
+                                  : 'Fijar esta columna al frente mientras corres el cuadro'}
+                                className="leading-none px-0.5 transition"
+                                style={{ opacity: col === colFijada ? 1 : 0.55 }}>
+                                {col === colFijada ? '📌' : '📍'}
+                              </button>
+                            )}
                           </span>
-                          {/* Handle de resize */}
+                          {/* Handle de resize — no arrastra la columna, solo la
+                              estira: por eso corta el arrastre. */}
                           <div
-                            onMouseDown={e => onResizeStart(col, e)}
+                            draggable={false}
+                            onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
+                            onMouseDown={e => { e.stopPropagation(); onResizeStart(col, e); }}
                             className="absolute right-0 top-0 h-full w-4 cursor-col-resize group/handle z-10 flex items-center justify-end"
                             title="⟺ Arrastrar para ajustar ancho · Doble clic para restablecer">
                             <div className={`w-[3px] rounded-full transition-all duration-150 ${
@@ -1908,8 +2136,9 @@ export default function GeneralPage() {
                         {/* Columna fija DEPORTISTA justo después de CÓDIGO */}
                         {esCod && (
                           <th key="__nombre_th__"
-                            style={{ border: '2px solid #ffffff', background: '#00B050', color: 'white', minWidth: 180 }}
-                            className="px-3 py-2.5 text-left font-black text-[10px] whitespace-nowrap sticky left-[120px] z-30">
+                            style={{ border: '2px solid #ffffff', background: '#00B050', color: 'white',
+                                     minWidth: 180, left: izqNombre }}
+                            className="px-3 py-2.5 text-left font-black text-[10px] whitespace-nowrap sticky z-30">
                             DEPORTISTA
                           </th>
                         )}
@@ -1953,8 +2182,9 @@ export default function GeneralPage() {
                               </button>
                             </td>
 
-                            {/* Columnas dinámicas */}
-                            {colVisibles.map(col => {
+                            {/* Columnas dinámicas — en el mismo orden que el
+                                encabezado, con la fijada de primera. */}
+                            {colOrdenadas.map(col => {
                               const rawVal   = getValCelda(dep, col);
                               const esCod    = esCodigo(col);
                               const esFecha  = esFechaAfil(col);
@@ -2180,8 +2410,8 @@ export default function GeneralPage() {
                                 return (
                                   <>
                                   <td key={col}
-                                    className="px-0 py-0 text-center sticky left-[36px] z-10"
-                                    style={{ backgroundColor: codColor, border: '2px solid #ffffff' }}>
+                                    className="px-0 py-0 text-center sticky z-10"
+                                    style={{ backgroundColor: codColor, border: '2px solid #ffffff', left: izqCodigo }}>
                                     <input
                                       value={rawValCod}
                                       onChange={e => setCelda(dep.id, col, e.target.value)}
@@ -2190,8 +2420,9 @@ export default function GeneralPage() {
                                   </td>
                                   {/* Columna DEPORTISTA fija — 1 clic: estado de cuenta · doble clic: editar nombre */}
                                   <td key="__nombre_td__"
-                                    className="px-3 py-0 sticky left-[120px] z-10 whitespace-nowrap"
-                                    style={{ backgroundColor: stickyBg, border: '2px solid #ffffff', minWidth: 180 }}>
+                                    className="px-3 py-0 sticky z-10 whitespace-nowrap"
+                                    style={{ backgroundColor: stickyBg, border: '2px solid #ffffff',
+                                             minWidth: 180, left: izqNombre }}>
                                     {editNombreId === dep.id ? (
                                       <input
                                         autoFocus
@@ -2343,10 +2574,23 @@ export default function GeneralPage() {
                                     onChange={e => {
                                       setCelda(dep.id, col, esSede ? sedeCanonica(e.target.value) : e.target.value);
                                       // Al cambiar el PROGRAMA, limpiar PROYECTO y PROFE (se debe reseleccionar)
-                                      if (col === colPrograma) {
-                                        if (colProy)  setCelda(dep.id, colProy, '');
-                                        if (colProfe) setCelda(dep.id, colProfe, '');
-                                      }
+                                      /* ── AL CAMBIAR DE PROGRAMA YA NO SE BORRA
+                                         EL PROYECTO (corregido 27/08/2026) ──
+                                         Antes, cambiar el programa vaciaba de
+                                         una el PROYECTO y el PROFE, sin avisar
+                                         y sin forma de deshacerlo. Le pasó a la
+                                         dirección con nueve deportistas que se
+                                         movieron de FORMACIÓN a DESARROLLO: se
+                                         quedaron sin proyecto y no había cómo
+                                         saber cuál tenían.
+
+                                         La idea original era no dejar una
+                                         combinación imposible, pero para eso
+                                         basta con AVISAR: el proyecto se
+                                         conserva y la casilla queda marcada en
+                                         ámbar hasta que se acomode. Borrar el
+                                         dato del usuario nunca puede ser la
+                                         forma de corregirlo. */
                                     }}
                                     className="w-full text-[11px] font-semibold py-[7px] px-1.5 outline-none bg-transparent text-white cursor-pointer truncate">
                                     {/* Letra oscura en las opciones: la lista del
@@ -2378,12 +2622,26 @@ export default function GeneralPage() {
                                     <span className="block w-full text-[13px] font-semibold text-white truncate">{rawVal && rawVal !== '—' ? rawVal : '—'}</span>
                                   </td>
                                 );
+                                /* EL PROYECTO QUE YA TIENE NO SE PIERDE, así no
+                                   sea de este programa (corregido 27/08/2026).
+                                   Antes no salía en la lista y la casilla se veía
+                                   vacía: al tocarla se guardaba en blanco y el
+                                   dato se iba sin que nadie se diera cuenta.
+                                   Ahora sale igual, y la casilla se pone ÁMBAR
+                                   para avisar que ese proyecto no es del
+                                   programa que tiene puesto. */
+                                const proyActualCel = rawVal === '—' ? '' : rawVal.trim();
+                                const proyAjeno = !!proyActualCel && !opsProy.includes(proyActualCel);
                                 return (
                                   <td key={col}
-                                    style={{ border: '2px solid #ffffff', backgroundColor: VERDE }}
+                                    style={{ border: '2px solid #ffffff',
+                                             backgroundColor: proyAjeno ? '#9a6b1f' : VERDE }}
+                                    title={proyAjeno
+                                      ? `${proyActualCel} no es un proyecto de ${progActual || 'este programa'}. Se conservó tal cual: escoge el que corresponda cuando quieras.`
+                                      : undefined}
                                     className="px-0 py-0">
                                     <select
-                                      value={rawVal === '—' ? '' : rawVal}
+                                      value={proyActualCel}
                                       onChange={e => {
                                         const nuevaProy = e.target.value;
                                         setCelda(dep.id, col, nuevaProy);
@@ -2392,6 +2650,11 @@ export default function GeneralPage() {
                                       }}
                                       className="w-full text-[13px] font-semibold text-white py-[6px] px-2 outline-none bg-transparent cursor-pointer truncate">
                                       <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
+                                      {proyAjeno && (
+                                        <option value={proyActualCel} style={{ color: '#111827', backgroundColor: 'white' }}>
+                                          {proyActualCel} · de otro programa
+                                        </option>
+                                      )}
                                       {opsProy.map(o => <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o}</option>)}
                                     </select>
                                   </td>

@@ -35,7 +35,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, AlertTriangle, Loader2, ChevronDown, FileDown, Save, Check, Trash2,
-  Archive, RefreshCw, X,
+  Archive, RefreshCw, X, Zap,
 } from 'lucide-react';
 import { getCuadro, limpiar, type FilaTorneo } from '@/lib/torneos';
 import { esSuperAdmin, esAccesoTotal, esProfesor } from '@/lib/permisos';
@@ -60,6 +60,36 @@ const AMBAR  = '#E0A33A';
 const GRIS   = '#7C879A';
 const MORADO = '#8B72D9';   // el que fue convocado pero no jugó
 const BLANCO = '1px solid #ffffff';
+
+/* ── LOS COLORES DEL CÓDIGO ───────────────────────────────────────────────
+   Son los MISMOS de Total Afiliados (dirección, 27/08/2026): el código dice de
+   un vistazo qué clase de afiliado es cada uno, y esa lectura tiene que ser
+   igual en toda la plataforma. Si aquí fueran otros colores, uno terminaría
+   aprendiéndose dos idiomas para lo mismo.
+
+       NUEVO      naranja
+       ANTIGUO    verde
+       REINGRESO  azul
+       B / MB     gris   (institucional · becado)
+*/
+const COD_VERDE   = '#16a34a';   // ANTIGUO
+const COD_NARANJA = '#f97316';   // NUEVO
+const COD_AZUL    = '#2563eb';   // REINGRESO
+const COD_GRIS    = '#6b7280';   // B / MB institucional y todo lo demás
+
+function colorDelCodigo(codigo: string, afiliacion: string, estado: string): string {
+  const cod  = String(codigo ?? '').trim().toUpperCase();
+  const afil = String(afiliacion ?? '').toLowerCase();
+  const est  = String(estado ?? '').toLowerCase();
+  /* Los que empiezan por B o MB van SIEMPRE en gris, así el código mande sobre
+     el tipo de afiliación (misma regla que en Total Afiliados). */
+  if (/^M?B/.test(cod))       return COD_GRIS;
+  if (est.includes('retir'))  return '#9ca3af';
+  if (afil.includes('nuevo')) return COD_NARANJA;
+  if (afil.includes('antigu'))return COD_VERDE;
+  if (afil.includes('reingreso')) return COD_AZUL;
+  return COD_GRIS;
+}
 
 /** 120000 → "$ 120.000". Para el letrero del botón de cobrar el torneo. */
 function plata(n: number): string {
@@ -716,6 +746,15 @@ export default function CrearPospartidoPage() {
   const [avisoBase, setAvisoBase] = useState('');
 
   const [numTorneo, setNumTorneo] = useState('');
+
+  /* ── ¿SOLO LOS ACTIVOS, O TODOS? ─────────────────────────────────────────
+     (dirección, 27/08/2026)
+
+     Normalmente se trabaja SOLO CON LOS ACTIVOS: un retirado ni juega ni se le
+     cobra. Pero a veces hay que ver a los que ya no están —para revisar un
+     torneo viejo, o para entender por qué falta alguien— y para eso está el
+     botón. Arranca siempre en ACTIVOS. */
+  const [soloActivos, setSoloActivos] = useState(true);
   const [jornada, setJornada]     = useState('');
   const [fecha, setFecha]         = useState('');
   const [llegar, setLlegar]       = useState('');
@@ -737,6 +776,13 @@ export default function CrearPospartidoPage() {
   const ultimoArmado = useRef<string>('');   // torneo+fecha con los que ya se armó
   const ultimoTorneo = useRef<string>('');   // para saber si cambió el TORNEO o solo la fecha
   const ultimaJornada = useRef<string>('');  // la fecha anterior: distingue matriz→fecha de fecha→fecha
+
+  /* ── SE ACUERDA DE DÓNDE IBA (dirección, 27/08/2026) ──────────────────────
+     El torneo y la fecha quedan anotados en este mismo aparato. Al volver a
+     entrar —o al regresar del estado de cuenta de un deportista— la pantalla
+     abre donde estaba, en vez de en blanco. Solo se guarda en el aparato: no
+     se manda a la base ni lo ve nadie más. */
+  const LLAVE_ULTIMO = 'pospartido-ultimo-abierto';
 
   /* El orden de las columnas, tal como lo dejó quien usa esta pantalla. */
   const [orden, setOrden] = useState<ClaveCol[]>(ORDEN_DEFECTO);
@@ -770,6 +816,26 @@ export default function CrearPospartidoPage() {
       document.removeEventListener('mouseup', soltando);
     };
   }, [estirandoCual]);
+
+  /* Al abrir: se recupera dónde iba. Va ANTES de leer el cuadro para que la
+     pantalla no alcance a pintarse en blanco. */
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem(LLAVE_ULTIMO);
+      if (!guardado) return;
+      const u = JSON.parse(guardado);
+      if (u?.numTorneo) setNumTorneo(String(u.numTorneo));
+      if (u?.jornada)   setJornada(String(u.jornada));
+    } catch { /* si el navegador no deja guardar, abre en blanco y ya */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Y se va anotando a medida que cambia. */
+  useEffect(() => {
+    try {
+      localStorage.setItem(LLAVE_ULTIMO, JSON.stringify({ numTorneo, jornada }));
+    } catch { /* sin espacio o en modo incógnito: no pasa nada */ }
+  }, [numTorneo, jornada]);
 
   useEffect(() => {
     getCuadro()
@@ -826,13 +892,34 @@ export default function CrearPospartidoPage() {
     if (torneoAjeno) return [];
     return deportistas
       .filter(d => torneosDelDeportista(d).includes(n))
+      /* SOLO LOS QUE SIGUEN ACTIVOS (dirección, 27/08/2026).
+         Un retirado o un pausado no juega el torneo y no se le cobra, pero
+         seguía apareciendo en la planilla porque el número del torneo quedó
+         escrito en su ficha. Se le convocaba sin querer y se le cargaba el
+         torneo a alguien que ya no está.
+
+         OJO CON UNA COSA: "SOLICITA RETIRO" NO es estar retirado. Ese caso
+         está EN ESTUDIO mientras se coordinan los pagos, y mientras tanto el
+         deportista sigue entrenando y se le sigue cobrando. Por eso se descarta
+         la palabra "solicita" antes de mirar si dice "retirado" — es la misma
+         regla que usa Total Afiliados.
+
+         Al que no tenga nada escrito en ESTADO se le deja pasar: falta el dato,
+         no es una baja, y esconderlo sería peor. */
+      .filter(d => {
+        if (!soloActivos) return true;                        // se pidió ver a todos
+        const est = getCol(d, /^estado$/i);
+        if (!String(est).trim()) return true;                 // sin dato: se deja
+        if (/solicit/i.test(est)) return true;                // en estudio: sigue activo
+        return !/retir|pausa|inactiv/i.test(est);
+      })
       .sort((a, b) => {
         const ca = parseInt(codigoDe(a).replace(/\D/g, ''), 10);
         const cb = parseInt(codigoDe(b).replace(/\D/g, ''), 10);
         if (Number.isFinite(ca) && Number.isFinite(cb) && ca !== cb) return ca - cb;
         return (a._nombre || '').localeCompare(b._nombre || '', 'es');
       });
-  }, [numTorneo, deportistas]);
+  }, [numTorneo, deportistas, torneoAjeno, soloActivos]);
 
   /* ── La planilla se arma sola con esos deportistas ───────────────────────
      Ni un renglón de más ni uno de menos.
@@ -861,6 +948,25 @@ export default function CrearPospartidoPage() {
 
     if (!numTorneo) {
       setFilas([]);
+      return;
+    }
+
+    /* EN LA MATRIZ LA LISTA SE ARMA SIEMPRE DE CERO (corregido 27/08/2026).
+       La matriz no es un partido: es la lista viva del torneo. Antes se le
+       aplicaba lo guardado en el aparato, y por eso seguía saliendo gente que
+       ya se había retirado —la lista vieja pisaba a la nueva—. Ahora se rearma
+       con los deportistas que correspondan en este momento. */
+    if (!jornada) {
+      primeraCarga.current = true;
+      setSinGuardar(false);
+      setGuardadoEn('');
+      setDefinitivo(false);
+      setFilas(convocables.map((d, i) => ({
+        ...filaNueva(i),
+        depId: d.id,
+        posicion: posicionDe(d),
+        deportista: limpiar(d._nombre).toUpperCase(),
+      })));
       return;
     }
 
@@ -1028,6 +1134,22 @@ export default function CrearPospartidoPage() {
     return m;
   }, [convocables]);
 
+  /** El color del código de cada deportista: el mismo de Total Afiliados. */
+  const colorCodPorId = useMemo(() => {
+    const m = new Map<string, string>();
+    convocables.forEach(d => {
+      m.set(
+        d.id,
+        colorDelCodigo(
+          codigoPorId.get(d.id) ?? '',
+          getCol(d, /tipo.*afil|^afil/i),
+          getCol(d, /^estado$/i),
+        ),
+      );
+    });
+    return m;
+  }, [convocables, codigoPorId]);
+
   /** Ancho de la columna CÓDIGO. En 0 cuando no se muestra, para que las
    *  columnas clavadas a la izquierda queden en su sitio. */
   const verCodigo = esAdmonPrincipal;
@@ -1078,6 +1200,9 @@ export default function CrearPospartidoPage() {
      `otros_pagos` y sale en el Estado de Cuenta del deportista, en la tabla
      TORNEOS, debajo de las mensualidades.
      ═══════════════════════════════════════════════════════════════════════════ */
+  /* "NO PAGA" se escribe igual que en las mensualidades —NOPAGA, sin espacio—
+     para que las dos pantallas hablen el mismo idioma. — 27/08/2026 */
+  const ESTADO_NO_PAGA = 'NOPAGA';
   type CobroTorneo = { id: string; deportista_id: string; estado: string };
   const [cobros, setCobros] = useState<CobroTorneo[]>([]);
   const [cobrando, setCobrando] = useState<string | null>(null);
@@ -1152,6 +1277,99 @@ export default function CrearPospartidoPage() {
     }
   }
 
+  /* ── CAMBIARLE EL ESTADO A UNO SOLO ──────────────────────────────────────
+     (dirección, 27/08/2026)
+
+     Tocando la pastilla de un deportista se abre un menú chiquito con los
+     cuatro estados posibles de ese torneo para él:
+
+       PENDIENTE  · lo debe (ámbar)
+       PAGÓ       · ya pagó (verde)
+       NO PAGA    · está exonerado de este torneo (gris)
+       QUITAR     · borra el cobro y queda como si nunca se le hubiera puesto
+
+     Sirve para corregir sin tener que entrar al estado de cuenta: si la carga
+     en lote le dejó PAGÓ a alguien que en realidad debe, se arregla aquí. */
+  const [menuCobro, setMenuCobro] = useState<
+    { filaId: string; depId: string; cobro: CobroTorneo | null; x: number; y: number } | null
+  >(null);
+
+  useEffect(() => {
+    if (!menuCobro) return;
+    const cerrar = () => setMenuCobro(null);
+    const conEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuCobro(null); };
+    document.addEventListener('mousedown', cerrar);
+    document.addEventListener('keydown', conEsc);
+    window.addEventListener('scroll', cerrar, true);
+    return () => {
+      document.removeEventListener('mousedown', cerrar);
+      document.removeEventListener('keydown', conEsc);
+      window.removeEventListener('scroll', cerrar, true);
+    };
+  }, [menuCobro]);
+
+  /** Pone (o cambia) el estado del torneo para UN deportista. */
+  async function ponerEstado(depId: string, cobro: CobroTorneo | null, estado: string) {
+    if (!depId || !nombreCobro) return;
+    setCobrando(depId); setError(''); setMenuCobro(null);
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const res = cobro
+        ? await fetch(`${SB_URL_COBROS}/rest/v1/otros_pagos?id=eq.${encodeURIComponent(cobro.id)}`, {
+            method: 'PATCH',
+            headers: HDR_COBROS,
+            body: JSON.stringify({ estado, fecha: estado === 'PAGÓ' ? hoy : null }),
+          })
+        : await fetch(`${SB_URL_COBROS}/rest/v1/otros_pagos`, {
+            method: 'POST',
+            headers: { ...HDR_COBROS, Prefer: 'return=minimal' },
+            body: JSON.stringify([{
+              deportista_id: depId,
+              descripcion:   nombreCobro,
+              tipo:          'torneo',
+              valor:         valorTorneo,
+              estado,
+              fecha:         estado === 'PAGÓ' ? hoy : null,
+            }]),
+          });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        /* Si la base solo acepta PAGÓ y PEND, "NO PAGA" la rechaza. Se dice en
+           cristiano en vez de mostrar el error crudo. */
+        if (/check|constraint|violates/i.test(txt) && estado === ESTADO_NO_PAGA) {
+          throw new Error(
+            'La base todavía no acepta el estado NO PAGA para los torneos. ' +
+            'Mientras tanto se puede dejar sin cargar (QUITAR), que para las cuentas es lo mismo.',
+          );
+        }
+        throw new Error(`No se pudo cambiar (${res.status}). ${txt.slice(0, 130)}`);
+      }
+      await leerCobros();
+    } catch (e: any) {
+      setError(e?.message ?? 'No se pudo cambiar el estado.');
+    } finally {
+      setCobrando(null);
+    }
+  }
+
+  /** Borra el cobro: queda como si nunca se le hubiera puesto. */
+  async function borrarCobro(cobro: CobroTorneo | null) {
+    if (!cobro) { setMenuCobro(null); return; }
+    setCobrando(cobro.deportista_id); setError(''); setMenuCobro(null);
+    try {
+      const res = await fetch(
+        `${SB_URL_COBROS}/rest/v1/otros_pagos?id=eq.${encodeURIComponent(cobro.id)}`,
+        { method: 'DELETE', headers: HDR_COBROS },
+      );
+      if (!res.ok) throw new Error(`No se pudo quitar (${res.status}).`);
+      await leerCobros();
+    } catch (e: any) {
+      setError(e?.message ?? 'No se pudo quitar el cobro.');
+    } finally {
+      setCobrando(null);
+    }
+  }
+
   async function quitarCobro(f: FilaPlanilla, c: CobroTorneo) {
     /* Un torneo YA PAGADO no se quita desde aquí: eso se revierte en el Estado
        de Cuenta, que es donde queda el registro de lo que se hizo. */
@@ -1195,6 +1413,101 @@ export default function CrearPospartidoPage() {
     setFilas(fs => fs.map(f => ({ ...f, convocado: valor })));
     setSinGuardar(true);
     setPedirTodosConv('');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     CARGARLE EL TORNEO DE UNA A LOS QUE YA PAGARON  (dirección, 27/08/2026)
+
+     El botón verde de cada renglón es para el que DEBE: le queda el torneo
+     PENDIENTE. Pero casi siempre la mayoría ya pagó por fuera, y cargarlos de
+     a uno para después marcarlos pagados era el trabajo más largo.
+
+     Este botón —el título negro de la columna— hace eso de una sola vez:
+     saca la lista de los que TODAVÍA no lo tienen cargado, se desmarca al que
+     no corresponda, y a los demás se les carga el torneo YA PAGADO, con la
+     fecha de hoy.
+
+     Y se puede DESHACER: al terminar queda un letrero con el botón, que borra
+     exactamente los cobros que se acabaron de crear. Ni uno más: no toca a los
+     que ya estaban cargados de antes ni a los que se cargaron de a uno.
+     ═══════════════════════════════════════════════════════════════════════ */
+  const [abrirLote, setAbirLote] = useState(false);
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const [guardandoLote, setGuardandoLote] = useState(false);
+  const [loteHecho, setLoteHecho] = useState<{ ids: string[]; cuantos: number } | null>(null);
+  const [deshaciendo, setDeshaciendo] = useState(false);
+
+  /** Los que todavía no tienen este torneo cargado. */
+  const sinCargar = useMemo(() => {
+    return filas
+      .map(f => ({ f, id: idDeLaFila(f) }))
+      .filter(({ f, id }) => !!id && !cobros.some(c => c.deportista_id === id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filas, cobros, convocables]);
+
+  function abrirCargaLote() {
+    setMarcados(new Set(sinCargar.map(({ id }) => id)));
+    setLoteHecho(null);
+    setAbirLote(true);
+  }
+
+  async function confirmarCargaLote() {
+    const ids = [...marcados];
+    if (!ids.length || !nombreCobro) return;
+    setGuardandoLote(true); setError('');
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const res = await fetch(`${SB_URL_COBROS}/rest/v1/otros_pagos`, {
+        method: 'POST',
+        headers: { ...HDR_COBROS, Prefer: 'return=representation' },
+        body: JSON.stringify(ids.map(depId => ({
+          deportista_id: depId,
+          descripcion:   nombreCobro,
+          tipo:          'torneo',
+          valor:         valorTorneo,
+          estado:        'PAGÓ',
+          fecha:         hoy,
+        }))),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`No se pudo cargar (${res.status}). ${txt.slice(0, 140)}`);
+      }
+      const creados = await res.json().catch(() => []);
+      const idsCreados = Array.isArray(creados)
+        ? creados.map((c: any) => String(c?.id ?? '')).filter(Boolean)
+        : [];
+      await leerCobros();
+      setAbirLote(false);
+      setLoteHecho({ ids: idsCreados, cuantos: ids.length });
+    } catch (e: any) {
+      setError(e?.message ?? 'No se pudo cargar el torneo al grupo.');
+    } finally {
+      setGuardandoLote(false);
+    }
+  }
+
+  async function deshacerCargaLote() {
+    const lote = loteHecho;
+    if (!lote?.ids.length) { setLoteHecho(null); return; }
+    setDeshaciendo(true); setError('');
+    try {
+      /* Los números de cobro son solo letras, números y guiones, así que se
+         pueden mandar tal cual dentro del paréntesis. */
+      const lista = lote.ids.filter(i => /^[A-Za-z0-9-]+$/.test(i)).join(',');
+      if (!lista) throw new Error('No se pudo identificar lo que se acaba de cargar.');
+      const res = await fetch(
+        `${SB_URL_COBROS}/rest/v1/otros_pagos?id=in.(${lista})`,
+        { method: 'DELETE', headers: HDR_COBROS },
+      );
+      if (!res.ok) throw new Error(`No se pudo deshacer (${res.status}).`);
+      await leerCobros();
+      setLoteHecho(null);
+    } catch (e: any) {
+      setError(e?.message ?? 'No se pudo deshacer. Se puede quitar uno por uno desde el estado de cuenta.');
+    } finally {
+      setDeshaciendo(false);
+    }
   }
 
   const [bajandoPdf, setBajandoPdf] = useState(false);
@@ -1589,9 +1902,11 @@ export default function CrearPospartidoPage() {
            Si la fila viene de una planilla vieja que no guardó el id, no hay
            a dónde ir: entonces se deja como estaba, editable. */
         const idFicha = idDeLaFila(f);
+        /* Se le dice a dónde volver: la pestaña que se abre nace sin historial
+           y sin esto la flecha de atrás caía en la ficha. — 27/08/2026 */
         const aDonde  = esAdmon
-          ? `/alumnos/${idFicha}/estado-cuenta?edit=1`
-          : `/alumnos/${idFicha}`;
+          ? `/alumnos/${idFicha}/estado-cuenta?edit=1&volver=${encodeURIComponent('/postpartido')}`
+          : `/alumnos/${idFicha}?volver=${encodeURIComponent('/postpartido')}`;
         if (!idFicha) {
           return (
             <Celda valor={f.deportista} placeholder="Nombre del deportista" grande
@@ -1736,7 +2051,9 @@ export default function CrearPospartidoPage() {
             Cuando ya está cerrado, los dos botones desaparecen y queda EDITAR,
             que lo vuelve a abrir. Así el sello no se pierde por un clic sin
             querer, y el módulo de seguimiento puede confiar en él. */}
-        {!!numTorneo && (
+        {/* En la MATRIZ no hay nada que guardar: no es un partido, y el cobro
+            del torneo se manda solo al oprimirlo. — 27/08/2026 */}
+        {!!numTorneo && !enMatriz && (
           definitivo ? (
             <div className="flex items-center gap-2 flex-1 sm:flex-none">
               <span className="rounded-lg flex items-center gap-1 px-2 text-white font-black text-[10px]"
@@ -1955,8 +2272,9 @@ export default function CrearPospartidoPage() {
           {/* Los anchos NO son iguales a propósito (dirección, 26/08/2026):
               el reloj ocupa lo justo y RIVAL se lleva el espacio grande, que es
               donde va un nombre largo. */}
-          <div className="grid grid-cols-2 gap-2 mt-3
-            sm:grid-cols-[0.8fr_1fr_212px_2fr]">
+          <div className={enMatriz
+            ? 'grid grid-cols-1 sm:grid-cols-[220px] gap-2 mt-3'
+            : 'grid grid-cols-2 gap-2 mt-3 sm:grid-cols-[0.8fr_1fr_212px_2fr]'}>
             <div>
               <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
                 # FECHA
@@ -1982,6 +2300,12 @@ export default function CrearPospartidoPage() {
               </select>
             </div>
 
+            {/* DÍA · HORA · RIVAL son de un PARTIDO. En la matriz —que es la
+                lista del torneo para cobrar— no hay partido, así que no se
+                muestran. Aparecen apenas se escoge una FECHA.
+                — dirección, 27/08/2026 */}
+            {!enMatriz && (
+            <>
             <div>
               <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
                 DÍA DEL JUEGO
@@ -2007,7 +2331,47 @@ export default function CrearPospartidoPage() {
                 style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}
                 className="w-full rounded-lg px-2.5 text-white text-[12.5px] font-bold outline-none placeholder:text-white/20" />
             </div>
+            </>
+            )}
 
+          </div>
+
+          {/* ── VER SOLO LOS ACTIVOS, O TODOS ─────────────────────────────
+              Arranca en ACTIVOS. Se cambia aquí porque es lo que decide QUIÉN
+              sale en la lista, y eso hay que poder verlo de una.
+              — dirección, 27/08/2026 */}
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <span className="text-white/45 text-[9.5px] font-black uppercase tracking-widest">
+              Deportistas
+            </span>
+            <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${BORDE}` }}>
+              <button
+                onClick={() => setSoloActivos(true)}
+                title="Solo los que siguen activos. Los retirados y pausados no salen."
+                className="px-3 py-1.5 text-[11px] font-black transition"
+                style={{
+                  background: soloActivos ? VERDE : 'transparent',
+                  color: soloActivos ? '#ffffff' : 'rgba(255,255,255,.45)',
+                }}>
+                SOLO ACTIVOS
+              </button>
+              <button
+                onClick={() => setSoloActivos(false)}
+                title="Muestra también a los retirados y pausados"
+                className="px-3 py-1.5 text-[11px] font-black transition"
+                style={{
+                  background: !soloActivos ? GRIS : 'transparent',
+                  color: !soloActivos ? '#ffffff' : 'rgba(255,255,255,.45)',
+                  borderLeft: `1px solid ${BORDE}`,
+                }}>
+                TODOS
+              </button>
+            </div>
+            {!soloActivos && (
+              <span className="text-[11px] font-bold" style={{ color: AMBAR }}>
+                Estás viendo también a los retirados y pausados.
+              </span>
+            )}
           </div>
 
           {renglonJornada && (
@@ -2056,6 +2420,34 @@ export default function CrearPospartidoPage() {
             hacerla más ancha o más angosta. Queda guardado solo en este computador: al volver a
             entrar, el cuadro está como lo dejaste.
           </p>
+        )}
+
+        {/* ── SE CARGÓ EL LOTE · SE PUEDE DESHACER ────────────────────────
+            Deshace EXACTAMENTE los cobros que se acabaron de crear: se guardan
+            sus números al crearlos. No toca a nadie más. — 27/08/2026 */}
+        {verCargar && loteHecho && (
+          <div className="rounded-xl px-3 py-2.5 mb-2 flex flex-wrap items-center gap-2"
+            style={{ background: 'rgba(0,176,80,.14)', border: `1px solid ${VERDE}` }}>
+            <Check className="w-4 h-4 shrink-0" style={{ color: VERDE }} />
+            <p className="text-white text-[12px] font-semibold">
+              Listo: <b>{loteHecho.cuantos}</b> quedaron con el torneo cargado y <b>PAGADO</b>.
+            </p>
+            <button
+              onClick={deshacerCargaLote}
+              disabled={deshaciendo || !loteHecho.ids.length}
+              title="Quitarles el torneo a los que se acabaron de cargar"
+              className="ml-auto rounded-lg px-3 py-1.5 text-[11px] font-black text-white
+                disabled:opacity-50 transition hover:opacity-90"
+              style={{ background: AMBAR }}>
+              {deshaciendo ? '…' : '↩ DESHACER'}
+            </button>
+            <button
+              onClick={() => setLoteHecho(null)}
+              title="Cerrar este aviso"
+              className="text-white/45 hover:text-white font-black text-[13px] leading-none px-1">
+              ✕
+            </button>
+          </div>
         )}
 
         {/* Letrero de la última columna. Solo en la MATRIZ y solo administración.
@@ -2179,9 +2571,9 @@ export default function CrearPospartidoPage() {
                 {verCargar && (
                   <th
                     title="Cargarle a cada deportista el valor de este torneo, uno por uno"
-                    className="plan-cargar px-1 py-3 text-center font-black text-[12.5px] tracking-wide whitespace-nowrap text-white select-none"
+                    className="plan-cargar p-0 text-center font-black text-[12.5px] tracking-wide whitespace-nowrap text-white select-none"
                     style={{
-                      background: CAMPO,
+                      background: '#1B222C',      // negro: es un botón, no un título más
                       borderLeft: BLANCO, borderRight: BLANCO,
                       borderBottom: BLANCO, borderTop: BLANCO,
                       /* Clavada a la DERECHA: el cuadro es ancho y toca correrlo
@@ -2190,7 +2582,21 @@ export default function CrearPospartidoPage() {
                       width: 150, minWidth: 150,
                       position: 'sticky', top: 0, right: 0, zIndex: 18,
                     }}>
-                    CARGAR TORNEO
+                    {/* EL TÍTULO ES UN BOTÓN (dirección, 27/08/2026): abre la
+                        lista para cargarle el torneo, YA PAGADO, a todos los
+                        que todavía no lo tienen. */}
+                    <button
+                      onClick={abrirCargaLote}
+                      disabled={sinCargar.length === 0}
+                      title={sinCargar.length
+                        ? `Cargarle el torneo, ya pagado, a los ${sinCargar.length} que faltan`
+                        : 'Ya todos tienen este torneo cargado'}
+                      className="w-full px-2 py-3 flex items-center justify-center gap-1.5
+                        text-white font-black text-[12.5px] tracking-wide
+                        hover:bg-white/10 disabled:opacity-45 disabled:hover:bg-transparent transition">
+                      <Zap className="w-3.5 h-3.5 shrink-0" style={{ color: VERDE }} />
+                      CARGAR TORNEO
+                    </button>
                   </th>
                 )}
               </tr>
@@ -2201,18 +2607,24 @@ export default function CrearPospartidoPage() {
                      el gris se comía la fuerza del rojo. Lo que cambia es que
                      sus casillas de datos dicen N/A. — 26/08/2026 */
                   <tr key={f.id} style={{ background: PANEL }}>
-                    {verCodigo && (
-                      <td className="px-1 py-[4px] text-center"
-                        style={{
-                          borderRight: BLANCO, borderBottom: BLANCO,
-                          background: CAMPO,
-                          position: 'sticky', left: 0, zIndex: 7,
-                        }}>
-                        <span className="text-white/80 text-[11px] font-black tracking-wide">
-                          {codigoPorId.get(idDeLaFila(f)) || '—'}
-                        </span>
-                      </td>
-                    )}
+                    {verCodigo && (() => {
+                        const idDep = idDeLaFila(f);
+                        const cod   = codigoPorId.get(idDep) || '';
+                        return (
+                          <td className="px-1 py-[4px] text-center"
+                            style={{
+                              borderRight: BLANCO, borderBottom: BLANCO,
+                              /* El color del código, igual que en Total
+                                 Afiliados. Sin código, el gris del cuadro. */
+                              background: cod ? colorCodPorId.get(idDep) ?? CAMPO : CAMPO,
+                              position: 'sticky', left: 0, zIndex: 7,
+                            }}>
+                            <span className="text-white text-[11.5px] font-black tracking-wider">
+                              {cod || <span className="text-white/30">—</span>}
+                            </span>
+                          </td>
+                        );
+                      })()}
 
                     {ordenVisible.map((clave, k) => {
                       /* Igual que en el título: el único clavado es el nombre. */
@@ -2245,10 +2657,24 @@ export default function CrearPospartidoPage() {
                     })}
 
                     {verCargar && (() => {
-                      const c        = cobroDe(f);
-                      const pagado   = c?.estado === 'PAGÓ';
-                      const ocupado  = cobrando === f.id;
-                      const sinId    = !idDeLaFila(f);
+                      /* UNA SOLA PASTILLA CON LOS CUATRO ESTADOS
+                         (dirección, 27/08/2026). Antes el botón solo cargaba o
+                         quitaba; ahora se toca y sale el menú para dejarlo en
+                         PENDIENTE, PAGÓ, NO PAGA, o quitarlo del todo. */
+                      const id      = idDeLaFila(f);
+                      const c       = cobroDe(f);
+                      const ocupado = cobrando === id;
+                      const est     = c?.estado ?? '';
+                      const pagado  = est === 'PAGÓ';
+                      const noPaga  = est === ESTADO_NO_PAGA;
+                      const letra   = !c ? 'CARGAR TORNEO'
+                                    : pagado ? 'PAGÓ'
+                                    : noPaga ? 'NO PAGA'
+                                    : 'CARGADO ✓';
+                      const fondo   = !c ? VERDE
+                                    : pagado ? VERDE
+                                    : noPaga ? GRIS
+                                    : AMBAR;
                       return (
                         <td className="plan-cargar px-1 py-[4px] text-center"
                           style={{
@@ -2257,32 +2683,26 @@ export default function CrearPospartidoPage() {
                             width: 150, minWidth: 150,
                             position: 'sticky', right: 0, zIndex: 6,
                           }}>
-                          {pagado ? (
-                            <span className="inline-block w-full rounded-md px-1 py-[6px] text-[10.5px] font-black text-white leading-none"
-                              style={{ background: VERDE }}>
-                              PAGÓ
-                            </span>
-                          ) : c ? (
-                            <button
-                              onClick={() => quitarCobro(f, c)}
-                              disabled={ocupado}
-                              title="Ya tiene cargado este torneo. Oprime para quitárselo."
-                              className="w-full rounded-md px-1 py-[6px] text-[10.5px] font-black text-white leading-none whitespace-nowrap disabled:opacity-50"
-                              style={{ background: AMBAR }}>
-                              {ocupado ? '…' : 'CARGADO ✓'}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => cobrarTorneo(f)}
-                              disabled={ocupado || sinId}
-                              title={sinId
-                                ? 'No se pudo identificar a este deportista en la lista del torneo'
-                                : `Cargarle ${plata(valorTorneo)} a ${f.deportista}`}
-                              className="w-full rounded-md px-1 py-[6px] text-[10.5px] font-black text-white leading-none whitespace-nowrap disabled:opacity-40"
-                              style={{ background: VERDE }}>
-                              {ocupado ? '…' : 'CARGAR TORNEO'}
-                            </button>
-                          )}
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (!id) return;
+                              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              setMenuCobro({
+                                filaId: f.id, depId: id, cobro: c ?? null,
+                                x: Math.max(8, r.right - 176), y: r.bottom + 4,
+                              });
+                            }}
+                            onMouseDown={e => e.stopPropagation()}
+                            disabled={ocupado || !id}
+                            title={id
+                              ? 'Toca para cambiar: PENDIENTE · PAGÓ · NO PAGA · QUITAR'
+                              : 'No se pudo identificar a este deportista en la lista del torneo'}
+                            className="w-full rounded-md px-1 py-[6px] text-[10.5px] font-black text-white
+                              leading-none whitespace-nowrap disabled:opacity-40"
+                            style={{ background: fondo }}>
+                            {ocupado ? '…' : letra}
+                          </button>
                         </td>
                       );
                     })()}
@@ -2312,6 +2732,152 @@ export default function CrearPospartidoPage() {
             </tbody>
           </table>
         </div>
+
+        {/* ── EL MENÚ DE UN SOLO DEPORTISTA ───────────────────────────────
+            Va por FUERA del cuadro (en un portal) porque la columna está
+            clavada a la derecha y con el recorte del cuadro el menú quedaría
+            cortado. — 27/08/2026 */}
+        {menuCobro && typeof document !== 'undefined' && createPortal(
+          <div
+            onMouseDown={e => e.stopPropagation()}
+            style={{
+              position: 'fixed', top: menuCobro.y, left: menuCobro.x, zIndex: 99999,
+              width: 176, background: PANEL, border: `1px solid ${BORDE}`,
+              boxShadow: '0 18px 40px rgba(0,0,0,.45)',
+            }}
+            className="rounded-xl overflow-hidden py-1">
+            {[
+              { texto: 'PENDIENTE', ayuda: 'Lo debe',                    color: AMBAR, estado: 'PEND' },
+              { texto: 'PAGÓ',      ayuda: 'Ya pagó este torneo',        color: VERDE, estado: 'PAGÓ' },
+              { texto: 'NO PAGA',   ayuda: 'Exonerado de este torneo',   color: GRIS,  estado: ESTADO_NO_PAGA },
+            ].map(o => (
+              <button key={o.estado} type="button"
+                onClick={() => ponerEstado(menuCobro.depId, menuCobro.cobro, o.estado)}
+                title={o.ayuda}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: o.color }} />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-white font-black text-[12px] leading-tight">{o.texto}</span>
+                  <span className="block text-white/40 text-[10px] leading-tight">{o.ayuda}</span>
+                </span>
+                {menuCobro.cobro?.estado === o.estado && (
+                  <Check className="w-3.5 h-3.5 shrink-0" style={{ color: VERDE }} />
+                )}
+              </button>
+            ))}
+            {menuCobro.cobro && (
+              <button type="button"
+                onClick={() => borrarCobro(menuCobro.cobro)}
+                title="Borrar el cobro: queda como si nunca se le hubiera puesto"
+                style={{ borderTop: `1px solid ${BORDE}` }}
+                className="w-full px-3 py-2 text-left text-[11.5px] font-black mt-1 hover:bg-white/5 transition"
+                >
+                <span style={{ color: ROJO }}>QUITAR EL TORNEO</span>
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
+
+        {/* ── CARGAR EL TORNEO A LOS QUE YA PAGARON ───────────────────────
+            Salen SOLO los que todavía no lo tienen, todos marcados. Se desmarca
+            al que no corresponda y listo. — dirección, 27/08/2026 */}
+        {abrirLote && (
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4"
+            style={{ background: 'rgba(0,0,0,.62)' }}>
+            <div className="rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
+              style={{ background: PANEL, border: `1px solid ${BORDE}`, maxHeight: '92vh' }}>
+
+              <div className="px-4 py-3.5 shrink-0" style={{ borderBottom: `1px solid ${BORDE}` }}>
+                <h3 className="text-white font-black text-[15px] pr-8">
+                  Cargar el torneo a los que ya pagaron
+                </h3>
+                <p className="text-white/45 text-[11.5px] font-semibold mt-0.5">
+                  {nombreCobro} · <b style={{ color: valorTorneo > 0 ? VERDE : AMBAR }}>{plata(valorTorneo)}</b>
+                </p>
+              </div>
+
+              <div className="mx-4 mt-3 rounded-xl px-3 py-2.5 shrink-0"
+                style={{ background: CAMPO, border: `1px solid ${VERDE}` }}>
+                <p className="text-white text-[11.5px] leading-relaxed">
+                  A los que marques se les carga el torneo y queda{' '}
+                  <b style={{ color: VERDE }}>REGISTRADO COMO PAGADO</b> en su estado de cuenta, con la
+                  fecha de hoy. Los que ya lo tienen cargado no salen en esta lista.
+                </p>
+                {valorTorneo <= 0 && (
+                  <p className="text-[11px] mt-1.5" style={{ color: AMBAR }}>
+                    Ojo: este torneo todavía no tiene valor en Torneos y Competencias. Se cargaría en $ 0.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 px-4 pt-3 pb-1 shrink-0">
+                <button onClick={() => setMarcados(new Set(sinCargar.map(({ id }) => id)))}
+                  className="rounded-lg px-2.5 py-1.5 text-[11px] font-black text-white transition hover:opacity-90"
+                  style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                  Marcar todos
+                </button>
+                <button onClick={() => setMarcados(new Set())}
+                  className="rounded-lg px-2.5 py-1.5 text-[11px] font-black text-white transition hover:opacity-90"
+                  style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                  Ninguno
+                </button>
+                <span className="ml-auto text-white/45 text-[11px] font-black">
+                  {sinCargar.length} sin cargar
+                </span>
+              </div>
+
+              <div className="px-4 overflow-auto flex-1">
+                {sinCargar.length === 0 ? (
+                  <p className="text-white/45 text-[12px] text-center py-6">
+                    Ya todos tienen este torneo cargado.
+                  </p>
+                ) : sinCargar.map(({ f, id }) => {
+                  const puesto = marcados.has(id);
+                  return (
+                    <button key={f.id} type="button"
+                      onClick={() => setMarcados(prev => {
+                        const n = new Set(prev);
+                        n.has(id) ? n.delete(id) : n.add(id);
+                        return n;
+                      })}
+                      className="w-full flex items-center gap-2.5 py-2.5 text-left"
+                      style={{ borderBottom: `1px solid ${BORDE}55` }}>
+                      <span className="w-[18px] h-[18px] rounded shrink-0 flex items-center justify-center"
+                        style={{
+                          background: puesto ? VERDE : 'transparent',
+                          border: `1px solid ${puesto ? VERDE : BORDE}`,
+                        }}>
+                        {puesto && <Check className="w-3 h-3 text-white" />}
+                      </span>
+                      <span className="flex-1 min-w-0 text-white font-bold text-[12px] truncate">
+                        {f.deportista}
+                      </span>
+                      <span className="text-white/45 font-black text-[10.5px] shrink-0">
+                        {codigoPorId.get(id) || ''}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2.5 p-4 shrink-0" style={{ borderTop: `1px solid ${BORDE}` }}>
+                <button onClick={() => setAbirLote(false)}
+                  className="flex-1 rounded-xl py-3 text-[12.5px] font-bold text-white/70 transition hover:bg-white/5"
+                  style={{ border: `1px solid ${BORDE}` }}>
+                  Cancelar
+                </button>
+                <button onClick={confirmarCargaLote}
+                  disabled={guardandoLote || marcados.size === 0}
+                  className="flex-1 rounded-xl py-3 text-[12.5px] font-black text-white transition
+                    hover:opacity-90 disabled:opacity-45"
+                  style={{ background: VERDE }}>
+                  {guardandoLote ? 'Cargando…' : `Cargar a ${marcados.size} como PAGADO`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── ¿SE LO PONGO A TODOS? (CONVOCADO) ───────────────────────────
             Sale al marcar el primer renglón. — dirección, 27/08/2026 */}
@@ -2379,6 +2945,11 @@ export default function CrearPospartidoPage() {
             Ahora cada equipo es una columna —su nombre encima y su gol debajo—
             y las dos van lado a lado con el VS en el medio. En el computador se
             ve igual que siempre: nombre y gol en el mismo renglón. */}
+        {/* EN LA MATRIZ NO HAY MARCADOR (dirección, 27/08/2026): la matriz es la
+            lista del torneo para cobrar, no un partido. Un marcador en cero, un
+            VS y un RIVAL vacío ahí no dicen nada y solo estorban. Aparece
+            apenas se escoge una FECHA, que es cuando sí hay partido. */}
+        {!enMatriz && (
         <div className="rounded-2xl p-3 sm:p-4 mt-2 flex flex-col sm:flex-row flex-wrap
           items-center justify-center gap-3 sm:gap-4"
           style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
@@ -2437,6 +3008,7 @@ export default function CrearPospartidoPage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* LOS BOTONES VAN DEBAJO DEL MARCADOR (dirección, 26/08/2026): el
             cuadro y su marcador quedan pegados, como se lee un partido, y lo
@@ -2448,6 +3020,7 @@ export default function CrearPospartidoPage() {
               Suman a nuestro marcador, pero no son de ningún deportista
               nuestro, así que no van en la columna GOL. Se escoge de una lista
               de 1 a 5, igual que todo lo demás. — dirección, 26/08/2026 */}
+          {!enMatriz && (
           <div className="flex items-center gap-2 rounded-lg px-2.5 order-1"
             title="Autogoles del rival. Suman a nuestro marcador."
             style={{ height: 36, background: CAMPO, border: `1px solid ${autogoles > 0 ? VERDE : BORDE}` }}>
@@ -2473,10 +3046,12 @@ export default function CrearPospartidoPage() {
               ))}
             </select>
           </div>
+          )}
 
           {/* INFO borra el juego. En el celular se va de último —al renglón de
               abajo— que es donde estorba menos y donde no se oprime sin
               querer. — 27/08/2026 */}
+          {!enMatriz && (
           <button onClick={borrarEsteJuego} disabled={borrando || !numTorneo}
             title="Borrar la información de este juego: deja la planilla en blanco"
             className="rounded-lg px-2.5 font-black text-[10.5px] flex items-center gap-1
@@ -2485,12 +3060,14 @@ export default function CrearPospartidoPage() {
             {borrando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
             INFO
           </button>
+          )}
 
           {/* PROMEDIO DEL EQUIPO — SUBIÓ AL LADO DE AUTOGOL (dirección,
               27/08/2026). Antes se iba solo contra la esquina derecha y en el
               celular caía a un renglón aparte, medio perdido. Ahora es una
               pastilla igual a las otras y se lee de corrido con lo demás.
               No se oprime: es el resumen de las calificaciones. */}
+          {!enMatriz && (
           <div className="flex items-center gap-2 rounded-lg px-2.5 select-none order-2 sm:order-3 sm:ml-auto"
             title="Promedio de las calificaciones puestas en la columna CAL"
             style={{ height: 36, background: CAMPO, border: `1px solid ${promedioEquipo ? VERDE : BORDE}` }}>
@@ -2508,9 +3085,10 @@ export default function CrearPospartidoPage() {
               </span>
             </div>
           </div>
+          )}
           {/* El aviso de guardado va de último SIEMPRE: sin esto, al ordenar
               las pastillas para el celular, se colaba de primero. */}
-          {sinGuardar ? (
+          {enMatriz ? null : sinGuardar ? (
             <p className="text-[11.5px] font-bold order-4" style={{ color: AMBAR }}>
               Tienes cambios sin guardar.
             </p>
@@ -2540,9 +3118,10 @@ export default function CrearPospartidoPage() {
           )}
         </div>
 
-        {/* El desglose se ve SIEMPRE que haya torneo, aunque vaya en cero: así
-            se comprueba de un vistazo que la suma está corriendo. */}
-        {!!numTorneo && (
+        {/* El desglose se ve siempre que haya PARTIDO, aunque vaya en cero: así
+            se comprueba de un vistazo que la suma está corriendo. En la matriz
+            no, que ahí no hay goles que sumar. — 27/08/2026 */}
+        {!!numTorneo && !enMatriz && (
           <p className="text-white/45 text-[11.5px] text-center mt-2">
             Nuestro marcador se suma solo:
             {' '}<span className="text-white font-black">{golesDeLosNinos}</span> de los deportistas

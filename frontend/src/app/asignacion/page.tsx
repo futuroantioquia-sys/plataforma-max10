@@ -7,10 +7,10 @@
  * Panel derecho: selector en cascada PROGRAMA → PROYECTO
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle, UserPlus, AlertCircle, Search } from 'lucide-react';
-import { getDeportistas, saveDeportistas } from '@/lib/db';
+import { ArrowLeft, CheckCircle, UserPlus, AlertCircle, Search, RefreshCw } from 'lucide-react';
+import { getDeportistas, saveDeportistas, invalidarCache } from '@/lib/db';
 import { createClient } from '@/lib/supabase/client';
 import type { Deportista } from '@/lib/db';
 import { cn } from '@/lib/utils';
@@ -170,12 +170,29 @@ export default function AsignacionPage() {
   const [exito,      setExito]      = useState(false);
   const [error,      setError]      = useState('');
 
-  useEffect(() => {
-    getDeportistas().then(lista => {
+  /* ── LEER LAS FICHAS ─────────────────────────────────────────────────────
+     `refrescar` vuelve a pedirlas a la nube, sin la copia que el navegador
+     tiene guardada en memoria.
+
+     POR QUÉ HACÍA FALTA (dirección, 27/08/2026): las fichas se leen UNA vez y
+     quedan guardadas mientras la pestaña esté abierta. Si el proyecto se
+     arregla desde otro lado —Total Afiliados, u otra pantalla—, esta lista
+     seguía mostrando gente que ya tenía proyecto, y parecía que no se hubiera
+     guardado. Con el botón ACTUALIZAR se vuelve a preguntar y listo. */
+  const [refrescando, setRefrescando] = useState(false);
+
+  const cargar = useCallback(async (deNuevo = false) => {
+    if (deNuevo) { setRefrescando(true); invalidarCache(); }
+    try {
+      const lista = await getDeportistas();
       setTodos(lista);
       setProgramas(getProgramasExistentes(lista));
-    });
+    } finally {
+      setRefrescando(false);
+    }
   }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
 
   // Cargar la sede configurada de cada proyecto (para sugerir bien aunque los
   // deportistas del grupo no tengan la sede llena en su ficha).
@@ -307,6 +324,17 @@ export default function AsignacionPage() {
         <span className="text-xs font-bold bg-white/20 text-white px-3 py-1 rounded-full">
           {sinProyectoLista.length} sin proyecto
         </span>
+        {/* Vuelve a preguntarle a la nube, por si el proyecto se arregló desde
+            otra pantalla. — dirección, 27/08/2026 */}
+        <button
+          onClick={() => cargar(true)}
+          disabled={refrescando}
+          title="Volver a leer las fichas desde la nube"
+          className="flex items-center gap-1.5 text-[11px] font-black text-white bg-white/20 hover:bg-white/35
+            px-3 py-1.5 rounded-xl transition disabled:opacity-50">
+          <RefreshCw className={`w-3.5 h-3.5 ${refrescando ? 'animate-spin' : ''}`} />
+          ACTUALIZAR
+        </button>
         <div className="hidden sm:block text-right leading-tight">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
           <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>

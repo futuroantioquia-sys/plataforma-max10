@@ -1,0 +1,197 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Devolver los proyectos · Futuro Antioquia</title>
+<style>
+:root{--lienzo:#333F50;--panel:#3C4759;--campo:#2B3547;--borde:#4A5568;--verde:#00B050;--rojo:#C0504D;--ambar:#E0A33A}
+*{box-sizing:border-box;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{background:var(--lienzo);color:#fff;padding:18px;max-width:900px;margin:0 auto}
+h1{font-size:19px;font-weight:900}
+.sub{color:#ffffff8c;font-size:12.5px;margin-top:5px;line-height:1.55}
+.sub b{color:#fff}
+.caja{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:14px;margin-top:14px}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;margin-top:8px}
+th{background:var(--verde);color:#fff;font-weight:900;font-size:10px;letter-spacing:.05em;
+ padding:8px 6px;text-align:left;border:1px solid #fff}
+td{background:var(--campo);border:1px solid #fff;padding:7px 6px;color:#fff;font-weight:700}
+td.cod{font-weight:900;letter-spacing:.05em;text-align:center;width:80px}
+td.proy{text-align:center;font-weight:900;width:70px;color:#5BE39B}
+td.est{font-size:11px;font-weight:800}
+.ok{color:#5BE39B}.mal{color:#F08A87}.esp{color:#ffffff70}
+button{border:0;border-radius:11px;padding:12px 18px;font-weight:900;font-size:13px;color:#fff;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+.b1{background:var(--campo);border:1px solid var(--borde)}
+.b2{background:var(--verde)}
+.fila{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.aviso{border-radius:11px;padding:11px 13px;font-size:12.5px;line-height:1.55;margin-top:12px}
+.aviso.amb{background:rgba(224,163,58,.14);border:1px solid var(--ambar)}
+.aviso.ver{background:rgba(0,176,80,.14);border:1px solid var(--verde)}
+.aviso.roj{background:rgba(192,80,77,.16);border:1px solid var(--rojo)}
+</style></head><body>
+
+<h1>Devolver los proyectos que se borraron</h1>
+<p class="sub">
+Esta página le devuelve el <b>PROYECTO</b> a los nueve deportistas que lo perdieron al cambiarlos de
+FORMACIÓN a DESARROLLO. Corre desde tu computador y escribe directo en la plataforma.<br>
+<b>No toca nada más</b>: solo la casilla PROYECTO (y el PROFE, que sale del proyecto) de estos nueve
+códigos. El programa, el torneo, los pagos y todo lo demás se quedan igual.
+</p>
+
+<div class="caja">
+  <table id="tabla">
+    <thead><tr>
+      <th style="text-align:center">CÓDIGO</th><th>DEPORTISTA</th>
+      <th style="text-align:center">PROYECTO</th><th>CÓMO VA</th>
+    </tr></thead>
+    <tbody id="cuerpo"></tbody>
+  </table>
+
+  <div class="fila">
+    <button class="b1" id="buscar">1 · BUSCARLOS</button>
+    <button class="b2" id="devolver" disabled>2 · DEVOLVER LOS PROYECTOS</button>
+  </div>
+  <div id="aviso"></div>
+</div>
+
+<p class="sub" style="margin-top:14px">
+Primero oprime <b>BUSCARLOS</b>: eso solo mira, no cambia nada, y te dice qué encontró en cada ficha.
+Si todo está bien, oprime <b>DEVOLVER LOS PROYECTOS</b>. Después entra a Total Afiliados y refresca
+con Ctrl+F5 para verlos.
+</p>
+
+<script>
+const URL_BASE = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const LLAVE    = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
+const H = { apikey: LLAVE, Authorization: 'Bearer ' + LLAVE, 'Content-Type': 'application/json' };
+
+/* Los nueve, tal como los mandó la dirección. */
+const LISTA = [
+  { cod: '26137', nom: 'JUAN ÁNGEL CRUZ MORENO',            proy: '11' },
+  { cod: '26205', nom: 'MATIAS ARROYAVE BUITRAGO',          proy: '51' },
+  { cod: '23397', nom: 'MILAN OTERO CEBALLOS',              proy: '11' },
+  { cod: '24428', nom: 'TOMAS CAÑAVERAL BUITRAGO',          proy: '52' },
+  { cod: '25605', nom: 'SAMUEL TORO BAUTISTA',              proy: '7'  },
+  { cod: '25459', nom: 'JHON FREDY JARAMILLO BOCANEGRA',    proy: '52' },
+  { cod: '24412', nom: 'DANIEL MEJIA RIVERA',               proy: '7'  },
+  { cod: '24309', nom: 'MATTIAS MUÑOZ CADAVID',             proy: '41' },
+  { cod: '24378', nom: 'THIAGO ANDRES BAUTISTA HERNANDEZ',  proy: '40' },
+];
+
+const $ = id => document.getElementById(id);
+const estados = {};          // cod -> texto
+let encontrados = {};        // cod -> { id, columnas, kProy, kProfe, nombre }
+
+function pintar() {
+  $('cuerpo').innerHTML = LISTA.map(d => {
+    const e = estados[d.cod] || { txt: 'sin buscar', cls: 'esp' };
+    return `<tr>
+      <td class="cod">${d.cod}</td>
+      <td>${d.nom}</td>
+      <td class="proy">${d.proy}</td>
+      <td class="est ${e.cls}">${e.txt}</td>
+    </tr>`;
+  }).join('');
+}
+function aviso(txt, cls) { $('aviso').innerHTML = `<div class="aviso ${cls}">${txt}</div>`; }
+function limpio(x) { return String(x ?? '').trim(); }
+function sinTildes(x) {
+  return String(x ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+}
+
+/* La casilla del código y la del proyecto pueden llamarse distinto en cada
+   ficha (CÓDIGO, CODIGO, Proyecto, PROY…). Se buscan por su forma, no por su
+   nombre exacto. */
+function llaveCodigo(cols)   { return Object.keys(cols).find(k => /^c[oó]d/i.test(k.trim())); }
+function llaveProyecto(cols) { return Object.keys(cols).find(k => /proyecto|^proy\b/i.test(k.trim())); }
+function llaveProfe(cols)    { return Object.keys(cols).find(k => /^prof/i.test(k.trim())); }
+
+async function buscar() {
+  $('buscar').disabled = true;
+  aviso('Buscando las nueve fichas…', 'amb');
+  encontrados = {};
+  try {
+    const res = await fetch(URL_BASE + '/rest/v1/deportistas?select=id,nombre,columnas', { headers: H });
+    if (!res.ok) throw new Error('La base contestó ' + res.status);
+    const filas = await res.json();
+
+    /* Los formadores, para devolver también el PROFE que sale del proyecto. */
+    let profes = [];
+    try {
+      const rp = await fetch(URL_BASE + '/rest/v1/profes?select=usuario,proyectos', { headers: H });
+      if (rp.ok) profes = await rp.json();
+    } catch {}
+    window.__profes = Array.isArray(profes) ? profes : [];
+
+    let hallados = 0;
+    for (const d of LISTA) {
+      const fila = filas.find(f => {
+        let cols = f.columnas;
+        if (typeof cols === 'string') { try { cols = JSON.parse(cols); } catch { cols = {}; } }
+        if (!cols || typeof cols !== 'object') return false;
+        const k = llaveCodigo(cols);
+        return k && limpio(cols[k]).toUpperCase() === d.cod.toUpperCase();
+      });
+      if (!fila) { estados[d.cod] = { txt: 'NO SE ENCONTRÓ esa ficha', cls: 'mal' }; continue; }
+      let cols = fila.columnas;
+      if (typeof cols === 'string') { try { cols = JSON.parse(cols); } catch { cols = {}; } }
+      const kProy  = llaveProyecto(cols) || 'PROYECTO';
+      const kProfe = llaveProfe(cols);
+      encontrados[d.cod] = { id: fila.id, columnas: cols, kProy, kProfe, nombre: fila.nombre };
+      const actual = limpio(cols[kProy]);
+      estados[d.cod] = actual
+        ? { txt: `ya tiene proyecto ${actual} — se cambiaría a ${d.proy}`, cls: 'esp' }
+        : { txt: 'sin proyecto · listo para devolvérselo', cls: 'ok' };
+      hallados++;
+    }
+    pintar();
+    $('devolver').disabled = hallados === 0;
+    aviso(`Se encontraron <b>${hallados}</b> de ${LISTA.length} fichas. Revisa la última columna; si
+           está bien, oprime <b>DEVOLVER LOS PROYECTOS</b>.`, hallados === LISTA.length ? 'ver' : 'amb');
+  } catch (e) {
+    aviso('No se pudo leer la base: ' + e.message + '. Revisa que tengas internet e inténtalo otra vez.', 'roj');
+  } finally {
+    $('buscar').disabled = false;
+  }
+}
+
+function profeDelProyecto(proy) {
+  const p = (window.__profes || []).find(x =>
+    Array.isArray(x.proyectos) && x.proyectos.some(v => sinTildes(v) === sinTildes(proy)));
+  return p ? p.usuario : '';
+}
+
+async function devolver() {
+  $('devolver').disabled = true;
+  aviso('Escribiendo…', 'amb');
+  let bien = 0, mal = 0;
+  for (const d of LISTA) {
+    const f = encontrados[d.cod];
+    if (!f) { mal++; continue; }
+    const nuevas = { ...f.columnas };
+    nuevas[f.kProy] = d.proy;
+    const prof = profeDelProyecto(d.proy);
+    if (f.kProfe && prof) nuevas[f.kProfe] = prof;
+    try {
+      const res = await fetch(URL_BASE + '/rest/v1/deportistas?id=eq.' + encodeURIComponent(f.id), {
+        method: 'PATCH', headers: H, body: JSON.stringify({ columnas: nuevas }),
+      });
+      if (!res.ok) throw new Error('la base contestó ' + res.status);
+      estados[d.cod] = { txt: `LISTO · proyecto ${d.proy}${prof ? ' · profe ' + prof : ''}`, cls: 'ok' };
+      bien++;
+    } catch (e) {
+      estados[d.cod] = { txt: 'NO SE PUDO: ' + e.message, cls: 'mal' };
+      mal++;
+    }
+    pintar();
+  }
+  aviso(mal === 0
+    ? `<b>Listo: a los ${bien} se les devolvió el proyecto.</b> Entra a Total Afiliados y oprime
+       Ctrl+F5 para verlos. Ya puedes cerrar esta página.`
+    : `Se arreglaron ${bien}. Quedaron ${mal} sin arreglar — mira la última columna y mándame la foto.`,
+    mal === 0 ? 'ver' : 'roj');
+  $('devolver').disabled = false;
+}
+
+$('buscar').onclick = buscar;
+$('devolver').onclick = devolver;
+pintar();
+</script></body></html>

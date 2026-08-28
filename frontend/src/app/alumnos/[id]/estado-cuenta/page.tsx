@@ -915,7 +915,22 @@ function EstadoCuentaInner() {
           otro. Si algún día se cambia el encabezado de Asistencia, este hay
           que cambiarlo igual. */}
       <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 z-20">
-        <button onClick={() => searchParams.get('from') === 'contabilidad' ? router.push('/contabilidad') : (window.history.length > 1 ? router.back() : router.push(`/alumnos/${id}`))} className="text-white/70 hover:text-white transition flex-shrink-0">
+        {/* LA FLECHA DEVUELVE A DONDE ESTABA (dirección, 27/08/2026).
+            Fallaba cuando el estado de cuenta se abre en una PESTAÑA NUEVA
+            —como lo hace el nombre del deportista en el pospartido y en la
+            asistencia—: esa pestaña nace sin historial, así que "atrás" no
+            tenía a dónde volver y caía en la ficha.
+            Ahora la pantalla que abre puede decir a dónde regresar, con
+            ?volver=..., y eso manda sobre todo lo demás. */}
+        <button
+          onClick={() => {
+            if (searchParams.get('from') === 'contabilidad') { router.push('/contabilidad'); return; }
+            const volver = searchParams.get('volver');
+            if (volver) { router.push(volver); return; }
+            if (typeof window !== 'undefined' && window.history.length > 1) { router.back(); return; }
+            router.push(`/alumnos/${id}`);
+          }}
+          className="text-white/70 hover:text-white transition flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
@@ -1437,17 +1452,26 @@ function EstadoCuentaInner() {
                   <tbody>
                     {torneosCargados.map(op => {
                       const pagado = op.estado === 'PAGÓ';
+                      /* NO PAGA = está exonerado de ESTE torneo. Se marca desde
+                         la matriz del pospartido. No es deuda ni es pago: es un
+                         torneo que a este deportista no se le cobra.
+                         — dirección, 27/08/2026 */
+                      const noPaga = String(op.estado ?? '').toUpperCase().replace(/\s+/g, '') === 'NOPAGA';
                       return (
                         <tr key={op.id}>
                           {/* FECHA — la del día en que se registró el pago */}
                           <td style={{ background: ROW, border: BW, padding: '4px 6px', textAlign: 'center' }}>
                             <span className={cn('text-[9px] font-semibold', pagado ? 'text-white' : 'text-white/40')}>
-                              {pagado ? (formatFecha(op.fecha ?? '') || '—') : 'DD/MM/AAAA'}
+                              {pagado ? (formatFecha(op.fecha ?? '') || '—') : noPaga ? '—' : 'DD/MM/AAAA'}
                             </span>
                           </td>
                           {/* V. CARGADO — lo que vale el torneo en el cuadro */}
                           <td style={{ background: CAMPO, border: BW, padding: '4px 6px', textAlign: 'center' }}>
-                            <span className="text-[9px] font-bold text-white">
+                            {/* El valor SÍ se muestra aunque esté exonerado
+                                (dirección, 27/08/2026): así se sabe de cuánto
+                                lo eximieron. Va apagado para que no se confunda
+                                con una deuda. */}
+                            <span className={cn('text-[9px] font-bold', noPaga ? 'text-white/45' : 'text-white')}>
                               {op.valor > 0 ? ensurePeso(String(op.valor)) : '—'}
                             </span>
                           </td>
@@ -1460,14 +1484,27 @@ function EstadoCuentaInner() {
                                 : '—'}
                             </span>
                           </td>
-                          {/* TORNEO — el que en mensualidades es el DETALLE */}
-                          <td style={{ background: pagado ? CAMPO : '#dc2626', color: '#fff', border: BW,
+                          {/* TORNEO — el nombre va SIEMPRE en gris oscuro
+                              (dirección, 27/08/2026). Lo había puesto en rojo
+                              cuando estaba pendiente, copiando la columna
+                              DETALLE de mensualidades, y quedaba gritando: en
+                              esta tabla el rojo es del BOTÓN de estado, que es
+                              el que hay que mirar y oprimir. */}
+                          <td style={{ background: CAMPO, color: '#fff', border: BW,
                                        padding: '8px 10px', textAlign: 'center',
                                        fontWeight: 900, fontSize: 11 }}>
                             {op.descripcion}
                           </td>
                           <td style={{ background: ROW, border: BW, padding: '6px 4px', textAlign: 'center' }}>
-                            {puedeEditar ? (
+                            {noPaga ? (
+                              /* Exonerado: no se cobra y no se toca desde aquí.
+                                 Se cambia en la matriz del pospartido. */
+                              <span className="px-2 py-1 rounded font-black text-[10.5px] w-full block text-center text-white"
+                                title="Este deportista está exonerado de este torneo"
+                                style={{ background: '#7C879A' }}>
+                                NO PAGA
+                              </span>
+                            ) : puedeEditar ? (
                               <button
                                 onClick={() => pagado ? toggleEstadoOtro(op) : abrirPagoTorneo(op)}
                                 title={pagado
