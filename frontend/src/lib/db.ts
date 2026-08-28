@@ -2740,6 +2740,10 @@ export async function getEvaluaciones(codigo?: string): Promise<Evaluacion[]> {
    ───────────────────────────────────────────────────────────────────────────── */
 export interface EvaluacionResumen {
   id: string; codigo: string; fecha: string; numeroInforme: string;
+  /** Cuántas casillas de valoración ya tienen algo, y cuántas se miran.
+   *  Con esto el consolidado sabe si el informe está terminado o a medias. */
+  llenos?: number;
+  total?: number;
 }
 
 const LS_EVALS_RESUMEN = 'futuro_evaluaciones_resumen';
@@ -2747,6 +2751,19 @@ const LS_EVALS_RESUMEN = 'futuro_evaluaciones_resumen';
 /** Resumen de informes. Con `codigos` trae solo los de esos deportistas
  *  (el formador ve un solo proyecto); sin `codigos` trae los de toda la
  *  academia, que es lo que necesita Control de Informes. — 25/08/2026 */
+/* Las casillas que se miran para saber si un informe está terminado o a
+   medias. Son las CATORCE valoraciones de siempre —las que tiene cualquier
+   informe, sea del perfil que sea— más las observaciones. No se miran todas
+   las casillas posibles a propósito: hay bloques que solo aplican a ciertos
+   perfiles, y exigirlos marcaría como "a medias" informes que sí están
+   completos. — 27/08/2026 */
+const CAMPOS_AVANCE = [
+  'fuerza_nivel', 'velocidad_nivel', 'resistencia_nivel', 'control_nivel',
+  'pase_nivel', 'remata_nivel', 'conducta_nivel', 'posicion_nivel',
+  'vision_nivel', 'defensa_nivel', 'actitud_nivel', 'disciplina_nivel',
+  'trabajo_nivel', 'observaciones',
+];
+
 export async function getEvaluacionesResumen(codigos?: string[]): Promise<EvaluacionResumen[]> {
   const paso = 1000;
   const out: EvaluacionResumen[] = [];
@@ -2756,7 +2773,7 @@ export async function getEvaluacionesResumen(codigos?: string[]): Promise<Evalua
     for (let desde = 0; desde < 200000; desde += paso) {
       let q = supabase()
         .from('evaluaciones')
-        .select('id, codigo, fecha, numero_informe')
+        .select('id, codigo, fecha, numero_informe, ' + CAMPOS_AVANCE.join(', '))
         .order('id', { ascending: true })
         .range(desde, desde + paso - 1);
       if (cods.length) q = q.in('codigo', cods) as typeof q;
@@ -2764,11 +2781,19 @@ export async function getEvaluacionesResumen(codigos?: string[]): Promise<Evalua
       if (error) throw error;
       const lote = data ?? [];
       for (const r of lote as any[]) {
+        /* ¿QUÉ TAN LLENO ESTÁ EL INFORME? (dirección, 27/08/2026)
+           No basta con saber que el informe EXISTE: el formador puede haberlo
+           abierto, puesto dos notas y dejarlo ahí. Se cuentan las casillas de
+           nivel que ya tienen algo, y con eso el consolidado pinta el semáforo:
+           ninguna = rojo, algunas = naranja, todas = verde. */
+        const llenos = CAMPOS_AVANCE.filter(c => String((r as any)[c] ?? '').trim() !== '').length;
         out.push({
           id:            String(r.id ?? ''),
           codigo:        String(r.codigo ?? '').trim().toUpperCase(),
           fecha:         r.fecha ?? '',
           numeroInforme: String(r.numero_informe ?? '').trim(),
+          llenos,
+          total:         CAMPOS_AVANCE.length,
         });
       }
       if (lote.length < paso) break;

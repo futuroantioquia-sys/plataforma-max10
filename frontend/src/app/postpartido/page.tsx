@@ -35,7 +35,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, AlertTriangle, Loader2, ChevronDown, FileDown, Save, Check, Trash2,
-  Archive, RefreshCw, X, Zap,
+  Archive, RefreshCw, X, Zap, GripVertical,
 } from 'lucide-react';
 import { getCuadro, limpiar, type FilaTorneo } from '@/lib/torneos';
 import { esSuperAdmin, esAccesoTotal, esProfesor } from '@/lib/permisos';
@@ -1774,6 +1774,33 @@ export default function CrearPospartidoPage() {
    *  la lista se volvía interminable y tocaba buscar el propio entre todos.
    *  Si todavía no se ha escrito el número del torneo, se muestran todos: ahí
    *  el banco sirve de índice para escoger por dónde entrar. */
+  /* ── EL ORDEN DE LAS FECHAS LO PONE LA MANO ────────────────────────────────
+     La dirección lo pidió el 28/08/2026: como son varias fechas, uno agarra el
+     renglón y lo pone donde quiera. El orden se guarda POR TORNEO en este
+     computador (no en la base): es una comodidad de quien mira, no un dato de
+     la academia. Las fechas que todavía no se han movido quedan de últimas,
+     en su orden natural (FECHA 1, FECHA 2…). */
+  const ORDEN_BANCO_KEY = 'pospartido-orden-banco';
+  const [ordenBanco, setOrdenBanco] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    try {
+      const g = localStorage.getItem(ORDEN_BANCO_KEY);
+      if (!g) return;
+      const p = JSON.parse(g);
+      if (p && typeof p === 'object' && !Array.isArray(p)) setOrdenBanco(p);
+    } catch { /* si está dañado, se sigue con el orden natural */ }
+  }, []);
+
+  function guardarOrdenBanco(siguiente: Record<string, string[]>) {
+    setOrdenBanco(siguiente);
+    try { localStorage.setItem(ORDEN_BANCO_KEY, JSON.stringify(siguiente)); } catch { /* nada */ }
+  }
+
+  /** El renglón que se está arrastrando y el que tiene el dedo encima. */
+  const filaArrastrada = useRef<{ torneo: string; jornada: string } | null>(null);
+  const [filaEncima, setFilaEncima] = useState('');
+
   const bancoPorTorneo = useMemo(() => {
     const soloEste = String(numTorneo || '').trim();
     /* Al formador, además, solo se le muestran SUS torneos: sin número escrito
@@ -1789,13 +1816,70 @@ export default function CrearPospartidoPage() {
       grupos.get(f.torneo_num)!.push(f);
     }
     return [...grupos.entries()]
-      .map(([num, partidos]) => ({
-        num,
-        titulo: nombreDeTorneoNum(num),
-        partidos: partidos.sort((a, b) => numeroDeFecha(a.jornada) - numeroDeFecha(b.jornada)),
-      }))
+      .map(([num, partidos]) => {
+        /* Primero las que la dirección acomodó a mano, en ese mismo orden;
+           detrás, las que no se han tocado, por número de fecha. */
+        const aMano = ordenBanco[num] ?? [];
+        const puesto = new Map(aMano.map((j, i) => [j, i]));
+        const dondeVa = (f: FichaBanco) =>
+          puesto.has(f.jornada) ? puesto.get(f.jornada)! : 100000 + numeroDeFecha(f.jornada);
+        return {
+          num,
+          titulo: nombreDeTorneoNum(num),
+          aMano: aMano.length > 0,
+          partidos: partidos.sort((a, b) => dondeVa(a) - dondeVa(b)),
+        };
+      })
       .sort((a, b) => (parseInt(a.num, 10) || 0) - (parseInt(b.num, 10) || 0));
-  }, [banco, nombreDeTorneoNum, numTorneo, esProfe, misTorneos]);
+  }, [banco, nombreDeTorneoNum, numTorneo, esProfe, misTorneos, ordenBanco]);
+
+  /** Suelta el renglón que se venía arrastrando encima de otro del mismo torneo. */
+  function soltarFilaBanco(numT: string, listaActual: FichaBanco[], destino: FichaBanco) {
+    const viene = filaArrastrada.current;
+    filaArrastrada.current = null;
+    setFilaEncima('');
+    if (!viene || viene.torneo !== numT || viene.jornada === destino.jornada) return;
+    const lista = listaActual.map(p => p.jornada);
+    const de = lista.indexOf(viene.jornada);
+    const a  = lista.indexOf(destino.jornada);
+    if (de < 0 || a < 0) return;
+    lista.splice(a, 0, lista.splice(de, 1)[0]);
+    guardarOrdenBanco({ ...ordenBanco, [numT]: lista });
+  }
+
+  /** ── CREAR POSPARTIDO ────────────────────────────────────────────────────
+   *  Abre arriba una planilla nueva del MISMO torneo del banco, en la primera
+   *  fecha que todavía no exista. Así no toca escribir el número del torneo
+   *  otra vez ni acordarse de por cuál fecha va. — dirección, 28/08/2026 */
+  function crearPospartido(numT: string, yaHechos: FichaBanco[]) {
+    const ocupadas = new Set(yaHechos.map(p => numeroDeFecha(p.jornada)));
+    let n = 1;
+    while (n <= 30 && ocupadas.has(n)) n++;
+    setError('');
+    ultimoArmado.current = '';
+    setNumTorneo(numT);
+    setJornada(`${n}A`);
+    setDefinitivo(false);
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { /* nada */ }
+  }
+
+  /** El torneo con el que se crearía: el que está escrito arriba y, si no hay
+   *  ninguno, el único que esté mostrando el banco. */
+  const torneoParaCrear = String(numTorneo || '').trim()
+    || (bancoPorTorneo.length === 1 ? bancoPorTorneo[0].num : '');
+  const hechosDelTorneo = bancoPorTorneo.find(g => g.num === torneoParaCrear)?.partidos ?? [];
+
+  /** Devuelve un torneo a FECHA 1, FECHA 2, FECHA 3… */
+  function ordenNaturalBanco(numT: string) {
+    const siguiente = { ...ordenBanco };
+    delete siguiente[numT];
+    guardarOrdenBanco(siguiente);
+  }
+
+  /** Cuando el banco muestra un solo torneo, su nombre se sube al título verde
+   *  y abajo ya no hace falta repetirlo. Con varios torneos se deja vacío y
+   *  cada grupo lleva su propio renglón con el nombre. — 28/08/2026 */
+  const unSoloTorneoEnBanco = bancoPorTorneo.length === 1 ? bancoPorTorneo[0].titulo : '';
 
   /** Abre en la planilla de arriba un partido del banco.
    *  Con `paraEditar` además le quita el candado, que es lo que hace el botón
@@ -1818,8 +1902,10 @@ export default function CrearPospartidoPage() {
     const nos = parseInt(f.goles_nos, 10);
     const ellos = parseInt(f.goles_ellos, 10);
     if (!Number.isFinite(nos) || !Number.isFinite(ellos)) return null;
-    if (nos > ellos)  return { texto: 'GANAMOS', color: VERDE };
-    if (nos < ellos)  return { texto: 'PERDIMOS', color: ROJO };
+    /* La palabra va delante del marcador, en mayúscula y del color que le
+       corresponde. — dirección, 28/08/2026 */
+    if (nos > ellos)  return { texto: 'VICTORIA', color: VERDE };
+    if (nos < ellos)  return { texto: 'DERROTA', color: ROJO };
     return { texto: 'EMPATE', color: AMBAR };
   }
 
@@ -3137,7 +3223,13 @@ export default function CrearPospartidoPage() {
             Agrupados por torneo; cada partido se nombra FECHA 1, FECHA 2…
             Al oprimir uno, se abre arriba tal como quedó guardado.
             — dirección, 27/08/2026
+
+            EN LA MATRIZ NO SE MUESTRA. La matriz es la lista del torneo para
+            cargar los cobros, no un partido: ahí el banco estorba. Aparece
+            únicamente cuando hay una # FECHA escogida (FECHA 1 … FECHA 12).
+            — dirección, 28/08/2026
             ═══════════════════════════════════════════════════════════════════ */}
+        {!enMatriz && (
         <div className="rounded-2xl mt-6 overflow-hidden"
              style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
 
@@ -3145,12 +3237,18 @@ export default function CrearPospartidoPage() {
           <div className="flex items-center gap-3 px-4 py-3"
                style={{ background: VERDE }}>
             <Archive className="w-5 h-5 text-white shrink-0" />
+            {/* EL NOMBRE DEL TORNEO VA EN EL TÍTULO VERDE (dirección, 28/08/2026):
+                "BANCO POSPARTIDO — LIGA DESARROLLO SUB 8". Así abajo cada fecha
+                cabe en un solo renglón, sin repetir el torneo en cada tarjeta. */}
             <div className="flex-1 min-w-0">
-              <h2 className="text-white font-black text-[15px] tracking-wide">BANCO POSPARTIDO</h2>
+              <h2 className="text-white font-black text-[15px] tracking-wide truncate">
+                BANCO POSPARTIDO
+                {unSoloTorneoEnBanco && (
+                  <span className="font-black"> — {unSoloTorneoEnBanco}</span>
+                )}
+              </h2>
               <p className="text-white/75 text-[11px] font-semibold truncate">
-                {numTorneo
-                  ? `Los partidos de ${nombreTorneo || `el torneo ${numTorneo}`}. Oprime uno para abrirlo.`
-                  : 'Todos los partidos ya elaborados. Oprime uno para abrirlo.'}
+                Oprime un partido para abrirlo. Agárralo de las rayitas para cambiarlo de puesto.
               </p>
             </div>
             <button
@@ -3162,6 +3260,19 @@ export default function CrearPospartidoPage() {
               <RefreshCw className={`w-3.5 h-3.5 text-white ${cargandoBanco ? 'animate-spin' : ''}`} />
               <span className="text-white text-[11px] font-black">Actualizar</span>
             </button>
+
+            {/* CREAR POSPARTIDO — arranca una planilla nueva de ESTE mismo
+                torneo, en la primera fecha que falte. — dirección, 28/08/2026 */}
+            {!!torneoParaCrear && (
+              <button
+                onClick={() => crearPospartido(torneoParaCrear, hechosDelTorneo)}
+                title="Empezar un partido nuevo de este torneo"
+                className="shrink-0 rounded-lg px-3 py-1.5 flex items-center gap-1.5 transition hover:brightness-125"
+                style={{ background: '#20293a', border: `1px solid ${BORDE}` }}>
+                <Zap className="w-3.5 h-3.5 text-white" />
+                <span className="text-white text-[11px] font-black">CREAR POSPARTIDO</span>
+              </button>
+            )}
           </div>
 
           <div className="p-4">
@@ -3191,90 +3302,143 @@ export default function CrearPospartidoPage() {
               </p>
 
             ) : (
+              /* ── CADA PARTIDO EN UN SOLO RENGLÓN ──────────────────────────
+                 La dirección lo pidió así el 28/08/2026: los datos seguidos
+                 de izquierda a derecha — FECHA · rival · marcador — y al
+                 frente, pegados a la derecha, el sello (TERMINADO verde /
+                 A MEDIAS naranja) y el botón EDITAR gris oscuro.
+                 Nada de tarjetas anchas: se leen 12 fechas de un vistazo. */
               <div className="flex flex-col gap-3">
                 {bancoPorTorneo.map(g => (
-                  <div key={g.num} className="rounded-xl overflow-hidden"
-                       style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                  <div key={g.num} className="flex flex-col gap-1.5">
 
-                    {/* Nombre del torneo + cuántas fechas lleva */}
-                    <div className="flex items-center gap-2 px-3 py-2"
-                         style={{ borderBottom: `1px solid ${BORDE}` }}>
-                      <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-black text-white"
-                            style={{ background: BORDE }}>#{g.num}</span>
-                      <span className="text-white font-black text-[13px] truncate">{g.titulo}</span>
-                      <span className="ml-auto shrink-0 text-white/45 text-[11px] font-bold">
-                        {g.partidos.length} {g.partidos.length === 1 ? 'partido' : 'partidos'}
-                      </span>
-                    </div>
+                    {/* El nombre del torneo solo cuando hay más de uno: si es
+                        uno solo, ya está arriba en el título verde. */}
+                    {!unSoloTorneoEnBanco && (
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-black text-white"
+                              style={{ background: BORDE }}>#{g.num}</span>
+                        <span className="text-white font-black text-[12.5px] truncate">{g.titulo}</span>
+                        <span className="ml-auto shrink-0 text-white/45 text-[11px] font-bold">
+                          {g.partidos.length} {g.partidos.length === 1 ? 'partido' : 'partidos'}
+                        </span>
+                      </div>
+                    )}
 
-                    {/* Las fechas */}
-                    <div className="flex flex-wrap gap-2 p-3">
-                      {g.partidos.map(f => {
-                        const res = comoQuedo(f);
-                        const abierto = numTorneo === f.torneo_num && jornada === f.jornada;
-                        return (
-                          <div
-                            key={`${f.torneo_num}|${f.jornada}`}
-                            className="rounded-lg px-3 py-2 transition"
-                            style={{
-                              background: PANEL,
-                              border: `1px solid ${abierto ? VERDE : BORDE}`,
-                              boxShadow: res ? `inset 4px 0 0 0 ${res.color}` : undefined,
-                              minWidth: 168,
-                            }}>
-                            <button onClick={() => abrirDelBanco(f)}
-                              title={`Abrir ${etiquetaFecha(f.jornada)} ${g.titulo}`}
-                              className="text-left w-full hover:brightness-125">
-                              <div className="text-white font-black text-[12.5px]">
-                                {etiquetaFecha(f.jornada)}
-                              </div>
-                              <div className="text-white/55 text-[10.5px] font-semibold truncate"
-                                   style={{ maxWidth: 190 }}>
-                                {f.rival ? `vs ${f.rival.toUpperCase()}` : 'sin rival'}
-                              </div>
-                              {res && (
-                                <div className="text-[10.5px] font-black mt-0.5" style={{ color: res.color }}>
+                    {/* Solo aparece si las fechas se movieron de puesto: devuelve
+                        el torneo a FECHA 1, FECHA 2, FECHA 3… — 28/08/2026 */}
+                    {g.aMano && (
+                      <div className="flex justify-end px-1">
+                        <button
+                          onClick={() => ordenNaturalBanco(g.num)}
+                          title="Devolver las fechas a su orden natural"
+                          className="rounded px-2 py-0.5 text-[9.5px] font-black text-white/60 hover:text-white transition"
+                          style={{ background: '#20293a', border: `1px solid ${BORDE}` }}>
+                          ORDEN NORMAL
+                        </button>
+                      </div>
+                    )}
+
+                    {g.partidos.map(f => {
+                      const res = comoQuedo(f);
+                      const abierto = numTorneo === f.torneo_num && jornada === f.jornada;
+                      const clave = `${f.torneo_num}|${f.jornada}`;
+                      return (
+                        <div
+                          key={clave}
+                          /* SE AGARRA CON LA MANO Y SE PONE DONDE UNO QUIERA.
+                             — dirección, 28/08/2026 */
+                          draggable
+                          onDragStart={e => {
+                            filaArrastrada.current = { torneo: g.num, jornada: f.jornada };
+                            /* Firefox no arranca el arrastre si no se le pone algo. */
+                            try {
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.dataTransfer.setData('text/plain', clave);
+                            } catch { /* nada */ }
+                          }}
+                          onDragOver={e => {
+                            const v = filaArrastrada.current;
+                            if (!v || v.torneo !== g.num) return;
+                            e.preventDefault();
+                            if (filaEncima !== clave) setFilaEncima(clave);
+                          }}
+                          onDragLeave={() => { if (filaEncima === clave) setFilaEncima(''); }}
+                          onDrop={e => { e.preventDefault(); soltarFilaBanco(g.num, g.partidos, f); }}
+                          onDragEnd={() => { filaArrastrada.current = null; setFilaEncima(''); }}
+                          className="rounded-lg flex items-center gap-3 pl-2 pr-2 py-1.5 transition"
+                          style={{
+                            background: CAMPO,
+                            border: `1px solid ${abierto ? VERDE : BORDE}`,
+                            boxShadow: res ? `inset 4px 0 0 0 ${res.color}` : undefined,
+                            outline: filaEncima === clave ? `2px solid ${AMBAR}` : undefined,
+                            outlineOffset: filaEncima === clave ? -2 : undefined,
+                          }}>
+
+                          {/* La manija: de aquí se agarra */}
+                          <GripVertical
+                            className="w-3.5 h-3.5 shrink-0 text-white/25"
+                            style={{ cursor: 'grab' }}
+                          />
+
+                          {/* Los datos, seguidos y en una sola línea */}
+                          <button onClick={() => abrirDelBanco(f)}
+                            title={`Abrir ${etiquetaFecha(f.jornada)} ${g.titulo}`}
+                            className="flex-1 min-w-0 flex items-center gap-3 text-left hover:brightness-125">
+                            <span className="shrink-0 text-white font-black text-[12.5px] w-[62px]">
+                              {etiquetaFecha(f.jornada)}
+                            </span>
+                            <span className="min-w-0 truncate text-white/60 text-[11.5px] font-semibold"
+                                  style={{ maxWidth: 280 }}>
+                              {f.rival ? `vs ${f.rival.toUpperCase()}` : 'sin rival'}
+                            </span>
+                            {/* EL RESULTADO VA ENSEGUIDA DEL RIVAL — 28/08/2026:
+                                primero la palabra (VICTORIA verde, EMPATE ámbar,
+                                DERROTA roja) y detrás el marcador. */}
+                            {res && (
+                              <>
+                                <span className="shrink-0 font-black text-[10.5px] tracking-wide"
+                                      style={{ color: res.color }}>
+                                  {res.texto}
+                                </span>
+                                <span className="shrink-0 font-black text-[12px] tabular-nums"
+                                      style={{ color: res.color, marginLeft: -4 }}>
                                   {f.goles_nos || '0'} — {f.goles_ellos || '0'}
-                                </div>
-                              )}
-                            </button>
+                                </span>
+                              </>
+                            )}
+                            <span className="flex-1" />
+                          </button>
 
-                            {/* ── EL SELLO Y EL BOTÓN DE ABRIRLO ──────────────
-                                Verde con chulo = cerrado. Ámbar = va a medias.
-                                De un vistazo se ve cuáles partidos están de
-                                verdad terminados; eso es lo que va a leer el
-                                módulo de seguimiento. — dirección, 27/08/2026 */}
-                            <div className="flex items-center gap-1.5 mt-2 pt-1.5"
-                                 style={{ borderTop: `1px solid ${BORDE}` }}>
-                              {f.definitivo ? (
-                                <span className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black"
-                                  style={{ background: 'rgba(0,176,80,.16)', border: `1px solid ${VERDE}`, color: '#5BE39B' }}>
-                                  <Check className="w-3 h-3" /> DEFINITIVO
-                                </span>
-                              ) : (
-                                <span className="rounded px-1.5 py-0.5 text-[9px] font-black"
-                                  style={{ background: 'rgba(224,163,58,.16)', border: `1px solid ${AMBAR}`, color: AMBAR }}>
-                                  A MEDIAS
-                                </span>
-                              )}
-                              <button
-                                onClick={() => abrirDelBanco(f, true)}
-                                title="Abrirlo para corregirlo"
-                                className="ml-auto rounded px-2 py-0.5 text-[9px] font-black text-white/70 hover:text-white transition"
-                                style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
-                                EDITAR
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          {/* Al frente: el sello y EDITAR */}
+                          {f.definitivo ? (
+                            <span className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-[9.5px] font-black"
+                              style={{ background: 'rgba(0,176,80,.16)', border: `1px solid ${VERDE}`, color: '#5BE39B' }}>
+                              <Check className="w-3 h-3" /> TERMINADO
+                            </span>
+                          ) : (
+                            <span className="shrink-0 rounded px-2 py-1 text-[9.5px] font-black"
+                              style={{ background: 'rgba(224,163,58,.16)', border: `1px solid ${AMBAR}`, color: AMBAR }}>
+                              A MEDIAS
+                            </span>
+                          )}
+                          <button
+                            onClick={() => abrirDelBanco(f, true)}
+                            title="Abrirlo para corregirlo"
+                            className="shrink-0 rounded px-2.5 py-1 text-[9.5px] font-black text-white/75 hover:text-white transition"
+                            style={{ background: '#20293a', border: `1px solid ${BORDE}` }}>
+                            EDITAR
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
             )}
           </div>
         </div>
+        )}
 
       </main>
     </div>

@@ -328,7 +328,11 @@ function AsistenciaInner() {
 
   // Gestión del profe: foto / documento / EPS / informes (solo se carga en el consolidado)
   const [gestion, setGestion] = useState<{ conFoto: Set<string>; conDoc: Set<string>; conEps: Set<string>; conCal: Set<string> } | null>(null);
-  const [informes, setInformes] = useState<Set<string> | null>(null);   // claves "CODIGO|1" y "CODIGO|2"
+  /* Los informes del año, con su AVANCE. Antes solo se guardaba si existían;
+     ahora se guarda además el id (para poder abrirlo) y cuántas casillas lleva
+     llenas, que es lo que pinta el semáforo. — dirección, 27/08/2026 */
+  type InfoAvance = { id: string; llenos: number; total: number };
+  const [informes, setInformes] = useState<Map<string, InfoAvance> | null>(null);   // claves "CODIGO|1" y "CODIGO|2"
 
   // ── Valores iniciales iguales al SSR — se actualizan en el useEffect de rol+carga ──
   const [esProfe,        setEsProfe]        = useState(false);
@@ -386,10 +390,13 @@ function AsistenciaInner() {
   useEffect(() => {
     // 0. Inicializar fecha y searchParams del lado del cliente (evita hydration mismatch)
     const now = new Date();
-    setMes(now.getMonth());
-    setAnio(now.getFullYear());
-    const prgParam = searchParams.get('programa') ?? '';
+    const prgParam  = searchParams.get('programa') ?? '';
     const proyParam = searchParams.get('proyecto') ?? '';
+    // Al volver de un informe (flecha ATRÁS) la dirección trae &vista=resumen:
+    // hay que reabrir el CONSOLIDADO de ese equipo, no el mes corriente.
+    const volviendoAlConsolidado = searchParams.get('vista') === 'resumen';
+    setMes(volviendoAlConsolidado ? TODO_ANIO : now.getMonth());
+    setAnio(now.getFullYear());
     if (prgParam) setPrograma(prgParam);
     if (proyParam) setProyecto(proyParam);
 
@@ -849,15 +856,25 @@ function AsistenciaInner() {
     if (!informes) {
       getEvaluacionesResumen()
         .then(lista => {
-          const set = new Set<string>();
+          const mapa = new Map<string, InfoAvance>();
           (lista || []).forEach(ev => {
             const cod = String(ev.codigo || '').trim().toUpperCase();
             const num = String(ev.numeroInforme || '').trim();
-            if (cod && num) set.add(`${cod}|${num}`);
+            if (!cod || !num) return;
+            const clave = `${cod}|${num}`;
+            const nuevo = {
+              id: String(ev.id || ''),
+              llenos: Number(ev.llenos ?? 0),
+              total: Number(ev.total ?? 0),
+            };
+            /* Si hay varios guardados del mismo informe, manda el MÁS LLENO:
+               es el que refleja de verdad hasta dónde llegó el formador. */
+            const antes = mapa.get(clave);
+            if (!antes || nuevo.llenos > antes.llenos) mapa.set(clave, nuevo);
           });
-          setInformes(set);
+          setInformes(mapa);
         })
-        .catch(() => setInformes(new Set()));
+        .catch(() => setInformes(new Map()));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esResumen]);
@@ -916,6 +933,41 @@ function AsistenciaInner() {
   const tieneEps  = (dep: Deportista) => !!gestion?.conEps.has(dep.id);
   const tieneCal  = (dep: Deportista) => !!gestion?.conCal.has(dep.id);
   const tieneInf  = (dep: Deportista, n: 1 | 2) => !!informes?.has(`${codigoDe(dep)}|${n}`);
+
+  /** El semáforo del informe (dirección, 27/08/2026):
+   *    'falta'   · no existe, o existe pero sin una sola casilla   → ROJO
+   *    'medias'  · empezado pero incompleto                        → NARANJA
+   *    'listo'   · todas las casillas llenas                       → VERDE
+   *  Se devuelve también el id, para poder abrirlo en Vista Dinámica. */
+  function estadoInf(dep: Deportista, n: 1 | 2): {
+    estado: 'falta' | 'medias' | 'listo'; id: string; llenos: number; total: number;
+  } {
+    const ev = informes?.get(`${codigoDe(dep)}|${n}`);
+    if (!ev)                       return { estado: 'falta',  id: '',     llenos: 0, total: 0 };
+    if (ev.llenos <= 0)            return { estado: 'falta',  id: ev.id,  llenos: 0, total: ev.total };
+    if (ev.total > 0 && ev.llenos >= ev.total)
+                                   return { estado: 'listo',  id: ev.id,  llenos: ev.llenos, total: ev.total };
+    return                                { estado: 'medias', id: ev.id,  llenos: ev.llenos, total: ev.total };
+  }
+
+  /** Abre ese informe en Vista Dinámica, en otra pestaña.
+   *
+   *  SE LE DICE POR DÓNDE VOLVER (dirección, 27/08/2026): la flecha de atrás
+   *  del informe devuelve al CONSOLIDADO DE ESTE MISMO EQUIPO, no a una
+   *  pantalla en blanco ni al tablero. Se le mandan el programa y el proyecto
+   *  para que abra donde estaba. */
+  function abrirInforme(dep: Deportista, idEv: string) {
+    const cod = codigoDe(dep);
+    const volver = `/asistencia?programa=${encodeURIComponent(programa)}`
+                 + `&proyecto=${encodeURIComponent(proyecto)}&vista=resumen`;
+    const url = `/valoracion-dinamica?cod=${encodeURIComponent(cod)}`
+              + (idEv ? `&ev=${encodeURIComponent(idEv)}` : '')
+              + `&volver=${encodeURIComponent(volver)}`;
+    try {
+      const w = window.open(url, '_blank');
+      if (!w) router.push(url);
+    } catch { router.push(url); }
+  }
 
   /**
    * ¿El mes le aplica al deportista?  No aplica si es anterior a su afiliación.
@@ -1900,8 +1952,11 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                     ['Sin doc',    atletasResumen.filter(d => !tieneDoc(d)).length],
                     ['Sin EPS',    atletasResumen.filter(d => !tieneEps(d)).length],
                     ['Sin CAL',    atletasResumen.filter(d => !tieneCal(d)).length],
-                    ['Sin Inf 1',  atletasResumen.filter(d => !tieneInf(d, 1)).length],
-                    ['Sin Inf 2',  atletasResumen.filter(d => !tieneInf(d, 2)).length],
+                    /* "Sin" ahora quiere decir NO TERMINADO: los que van a
+                       medias también cuentan, porque el trabajo no está hecho.
+                       — dirección, 27/08/2026 */
+                    ['Sin Inf 1',  atletasResumen.filter(d => estadoInf(d, 1).estado !== 'listo').length],
+                    ['Sin Inf 2',  atletasResumen.filter(d => estadoInf(d, 2).estado !== 'listo').length],
                   ] as [string, number][]).map(([etiqueta, n]) => (
                     <span key={etiqueta}
                       className={`text-[11px] font-black px-2 py-1 rounded-lg border ${
@@ -2076,16 +2131,13 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                             </div>
                           </td>
 
-                          {/* Documentos e informes: verde = listo, gris = pendiente */}
+                          {/* Documentos: verde = listo, gris = pendiente */}
                           {([
                             ['__SEP__', false],
                             ['FOTO',  tieneFoto(dep)],
                             ['DOC',   tieneDoc(dep)],
                             ['EPS',   tieneEps(dep)],
                             ['CAL',   tieneCal(dep)],
-                            ['__SEP__', false],
-                            ['INF 1', tieneInf(dep, 1)],
-                            ['INF 2', tieneInf(dep, 2)],
                             ['__SEP__', false],
                           ] as [string, boolean][]).map(([etiqueta, ok], idx) => (
                             etiqueta === '__SEP__' ? (
@@ -2099,6 +2151,40 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                               </td>
                             )
                           ))}
+
+                          {/* ── LOS DOS INFORMES, CON SEMÁFORO ──────────────
+                              (dirección, 27/08/2026)
+                              ROJO    · no lo ha hecho, o lo abrió y no puso nada
+                              NARANJA · lo empezó y va a medias
+                              VERDE   · terminado
+                              Se le da clic y abre ESE informe en Vista Dinámica,
+                              en otra pestaña, para revisarlo sin perder el
+                              consolidado. */}
+                          {([1, 2] as const).map(n => {
+                            const inf = estadoInf(dep, n);
+                            const color = inf.estado === 'listo' ? VERDE
+                                        : inf.estado === 'medias' ? '#E0A33A'
+                                        : '#C0504D';
+                            const cuenta = inf.total > 0 ? ` (${inf.llenos} de ${inf.total})` : '';
+                            const ayuda = inf.estado === 'listo'  ? `Informe ${n} terminado${cuenta} · clic para revisarlo`
+                                        : inf.estado === 'medias' ? `Informe ${n} a medias${cuenta} · clic para revisarlo`
+                                        : inf.id                  ? `Informe ${n} abierto pero sin llenar · clic para revisarlo`
+                                        :                           `Informe ${n} sin hacer`;
+                            return (
+                              <td key={`inf-${n}`} style={celda}>
+                                <div
+                                  title={ayuda}
+                                  onClick={() => { if (inf.id) abrirInforme(dep, inf.id); }}
+                                  style={{
+                                    ...pastilla(color, '#fff', { fontSize: 8, padding: '2px 3px' }),
+                                    cursor: inf.id ? 'pointer' : 'default',
+                                  }}>
+                                  {`INF ${n}`}
+                                </div>
+                              </td>
+                            );
+                          })}
+                          <td style={separador} />
                         </tr>
                       );
                     })}
@@ -2130,44 +2216,12 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
                     </tr>
                     )}
 
-                    {/* ── FALTANTES ──────────────────────────────────────────────
-                        Cuántos deportistas de la lista NO tienen cada documento o
-                        informe. Verde = no falta ninguno. */}
-                    <tr>
-                      <td colSpan={colsBaseResumen + 1} style={{ ...celda, paddingTop: 6 }}
-                        className="text-left text-white font-bold text-[10px] uppercase tracking-widest whitespace-nowrap pl-2">
-                        FALTANTES
-                      </td>
-                      <td style={separador} />
-                      <td colSpan={MESES_RESUMEN.length + 2} style={{ ...celda, paddingTop: 6 }} />
-                      <td style={separador} />
-                      {([
-                        ['FOTO',  atletasResumen.filter(d => !tieneFoto(d)).length],
-                        ['DOC',   atletasResumen.filter(d => !tieneDoc(d)).length],
-                        ['EPS',   atletasResumen.filter(d => !tieneEps(d)).length],
-                        ['CAL',   atletasResumen.filter(d => !tieneCal(d)).length],
-                      ] as [string, number][]).map(([etiqueta, n]) => (
-                        <td key={etiqueta} style={{ ...celda, paddingTop: 6 }}>
-                          <div title={`${n} de ${atletasResumen.length} sin ${etiqueta}`}
-                            style={pastilla(n === 0 ? VERDE : ROJO_CERO, '#fff', { fontSize: 11.5 })}>
-                            {n}
-                          </div>
-                        </td>
-                      ))}
-                      <td style={separador} />
-                      {([
-                        ['INF 1', atletasResumen.filter(d => !tieneInf(d, 1)).length],
-                        ['INF 2', atletasResumen.filter(d => !tieneInf(d, 2)).length],
-                      ] as [string, number][]).map(([etiqueta, n]) => (
-                        <td key={etiqueta} style={{ ...celda, paddingTop: 6 }}>
-                          <div title={`${n} de ${atletasResumen.length} sin ${etiqueta}`}
-                            style={pastilla(n === 0 ? VERDE : ROJO_CERO, '#fff', { fontSize: 11.5 })}>
-                            {n}
-                          </div>
-                        </td>
-                      ))}
-                      <td style={separador} />
-                    </tr>
+                    {/* EL RENGLÓN DE FALTANTES SE QUITÓ (dirección, 27/08/2026).
+                        Era una fila de contadores al pie del cuadro —0, 5, 2, 8…—
+                        que repetía lo que ya dicen las pastillas de arriba
+                        ("Sin foto 5", "Sin Inf 1 10") y lo que se ve de un
+                        vistazo en el color de cada renglón. Dos veces el mismo
+                        dato en la misma pantalla no informa: estorba. */}
 
                   </tbody>
                 </table>

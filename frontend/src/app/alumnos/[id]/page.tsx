@@ -1157,16 +1157,73 @@ export default function PerfilDeportista() {
 
             {/* Foto 3×4 */}
             <div className="relative flex-shrink-0">
-              <div className="w-[72px] h-[96px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex items-center justify-center">
+              {/* LA FOTO, IGUAL QUE EN EL ESTADO DE CUENTA (dirección,
+                  27/08/2026). Aquí era un recuadro de 72×96 y el niño se veía
+                  chiquito y de lejos; allá es más grande y con el recorte que
+                  siempre deja la cara arriba. Se copió tal cual para que la
+                  misma foto se vea igual en las dos pantallas. */}
+              <div className="w-[112px] h-[140px] sm:w-[144px] sm:h-[180px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex items-center justify-center">
                 {foto
-                  ? <img src={foto} alt="" className="w-full h-full object-cover"/>
+                  ? <img src={foto} alt=""
+                      onLoad={e => {
+                        /* Si la foto original es APAISADA, el recuadro la
+                           mostraría completa —cielo, niño chiquito y pasto— y
+                           correr el recorte hacia arriba no serviría de nada,
+                           porque no sobra por arriba ni por abajo: sobra por
+                           los lados. Entonces solo a esas se les acerca lo
+                           justo para que llenen por ancho. A las verticales no
+                           se les toca nada. */
+                        const im = e.currentTarget;
+                        const forma = im.naturalWidth / Math.max(1, im.naturalHeight);
+                        const cajaForma = 4 / 5;
+                        setFotoZoom(forma > cajaForma
+                          ? Math.min(2, Math.max(1, (forma / cajaForma) * 0.75))
+                          : 1);
+                      }}
+                      className="w-full h-full object-cover"
+                      style={{
+                        objectPosition: '50% 22%',
+                        transform: fotoZoom > 1 ? `scale(${fotoZoom})` : undefined,
+                        transformOrigin: '50% 22%',
+                      }} />
                   : <span className="text-white font-black text-3xl select-none">{initials}</span>
                 }
               </div>
-              <button onClick={() => inputFotoRef.current?.click()}
-                className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white/90 hover:bg-white rounded-full p-1 shadow-md transition">
-                <Camera className="w-3 h-3 text-white/80"/>
-              </button>
+              {/* ── CAMBIAR Y QUITAR LA FOTO ─────────────────────────────────
+                  (dirección, 27/08/2026)
+
+                  El botón de la cámara existía, pero el ícono era BLANCO sobre
+                  un círculo BLANCO: se veía un puntico y nadie sabía que era
+                  para cambiar la foto. Ya va oscuro, y al lado quedó la
+                  papelera para quitarla.
+
+                  Lo puede hacer quien esté viendo la ficha —papá, formador o
+                  administración—: la foto la trae quien la tenga a la mano, y
+                  poner trabas ahí solo dejaba fichas sin foto. */}
+              <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+                <button onClick={() => inputFotoRef.current?.click()}
+                  title={foto ? 'Cambiar la foto' : 'Poner una foto'}
+                  className="bg-white hover:bg-white rounded-full p-1.5 shadow-md transition hover:scale-105">
+                  <Camera className="w-3.5 h-3.5" style={{ color: '#0a2e12' }}/>
+                </button>
+                {foto && (
+                  <button
+                    onClick={() => {
+                      if (!confirm('¿Quitarle la foto a este deportista?')) return;
+                      setFoto(null);
+                      saveFoto(id, '').catch(console.error);
+                      try {
+                        const f = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}');
+                        delete f[id];
+                        localStorage.setItem(FOTOS_KEY, JSON.stringify(f));
+                      } catch { /* si el navegador no deja, la nube ya quedó sin foto */ }
+                    }}
+                    title="Quitar la foto"
+                    className="bg-white hover:bg-white rounded-full p-1.5 shadow-md transition hover:scale-105">
+                    <Trash2 className="w-3.5 h-3.5" style={{ color: '#b91c1c' }}/>
+                  </button>
+                )}
+              </div>
               <input ref={inputFotoRef} type="file" accept="image/*" className="hidden" onChange={subirFoto}/>
             </div>
 
@@ -1176,7 +1233,10 @@ export default function PerfilDeportista() {
                 {partirNombre(dep._nombre).nombres || dep._nombre}
               </h1>
               {partirNombre(dep._nombre).apellidos && (
-                <p className="text-white/75 text-[12.5px] font-normal leading-tight uppercase tracking-wide mb-2">
+                /* Un respiro entre el apellido y las pastillas verdes: iban
+                   demasiado pegadas y el bloque se leía apretado.
+                   — dirección, 27/08/2026 */
+                <p className="text-white/75 text-[12.5px] font-normal leading-tight uppercase tracking-wide mb-3.5">
                   {partirNombre(dep._nombre).apellidos}
                 </p>
               )}

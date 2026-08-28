@@ -254,6 +254,12 @@ function ValoracionDinamicaInner() {
   const searchParams = useSearchParams();
   const codParam = searchParams.get('cod');
   const evParam  = searchParams.get('ev');   // informe concreto a mostrar (id)
+  /* SE LLEGÓ A VER UN INFORME CONCRETO (dirección, 27/08/2026).
+     Cuando se entra desde el consolidado o desde la ficha, la dirección ya
+     trae el código: aquí no hay nada que buscar. Antes salía el buscador y el
+     letrero "Busca un deportista" mientras se cargaban las 1.163 fichas, y
+     parecía que el clic no hubiera servido. */
+  const llegaConCodigo = !!(codParam && String(codParam).trim());
   // ?volver=/ruta → de dónde llegó el usuario, para devolverlo allí (ej: Control de Informes)
   const [volverA, setVolverA] = useState('');
   useEffect(() => {
@@ -576,7 +582,8 @@ function ValoracionDinamicaInner() {
       </header>
 
       <main className="max-w-xl mx-auto px-3 py-4 space-y-4">
-        {/* Buscador */}
+        {/* Buscador — no se muestra cuando se entró a ver un informe concreto. */}
+        {!llegaConCodigo && (
         <div className="print:hidden bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-4">
           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Buscar deportista</label>
           <div className="relative">
@@ -596,6 +603,7 @@ function ValoracionDinamicaInner() {
           )}
           {sel && <p className="mt-2 text-xs text-gray-500">Mostrando: <b className="text-[#16a34a]">{sel._nombre}</b> · Código {codigoDe(sel) || '—'}{loading && ' · cargando…'}</p>}
         </div>
+        )}
 
         {/* Selector de informe cuando el deportista tiene más de uno */}
         {sel && informes.length >= 2 && (
@@ -617,7 +625,26 @@ function ValoracionDinamicaInner() {
           </div>
         )}
 
-        {!sel && (
+        {/* Entró a ver un informe: mientras carga, se dice; no se le ofrece
+            buscar, que no es lo que venía a hacer. */}
+        {!sel && llegaConCodigo && deps.length === 0 && (
+          <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto mb-3 text-2xl">⚡</div>
+            <p className="font-black text-white text-base mb-1">Abriendo el informe…</p>
+            <p className="text-gray-400 text-sm">Un momento: se están leyendo las fichas.</p>
+          </div>
+        )}
+
+        {/* Ya cargaron las fichas y ese código no aparece: se dice claro. */}
+        {!sel && llegaConCodigo && deps.length > 0 && (
+          <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-3 text-2xl">🔎</div>
+            <p className="font-black text-white text-base mb-1">No se encontró el código {String(codParam).trim()}</p>
+            <p className="text-gray-400 text-sm">Puede que la ficha se haya borrado o que el código haya cambiado.</p>
+          </div>
+        )}
+
+        {!sel && !llegaConCodigo && (
           <div className="bg-[#0f172a] rounded-2xl border border-white/10 shadow-sm p-8 text-center">
             <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto mb-3 text-2xl">⚡</div>
             <p className="font-black text-white text-base mb-1">Busca un deportista</p>
