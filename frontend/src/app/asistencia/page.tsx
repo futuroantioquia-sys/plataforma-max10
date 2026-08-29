@@ -1609,7 +1609,7 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
           <div className="flex flex-col items-end flex-shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
-            <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
+            <p className="text-white/75 text-[9px] font-semibold tracking-wide mt-0.5 text-right leading-tight">CONECTA · GESTIONA · GANA</p>
           </div>
         </div>
       </header>

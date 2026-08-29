@@ -165,11 +165,18 @@ export default function MisProyectosPage() {
      (dirección, 29/08/2026). A los demás ni les aparece, y si llegan con el
      enlace pegado la pantalla del pospartido tampoco los deja entrar.
      Para abrírselo a todos, se deja la lista vacía. */
-  const PROFES_CON_POSPARTIDO = ['CASTRO'];
+  /* CERRADO PARA TODOS LOS FORMADORES (dirección, 29/08/2026): seguimos en
+     pruebas, así que por ahora ningún profe ve el pospartido. */
+  const PROFES_CON_POSPARTIDO: string[] = [];
   const sinTildes = (x: any) => String(x ?? '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ').trim().toUpperCase();
-  const vePospartido = PROFES_CON_POSPARTIDO.length === 0 || PROFES_CON_POSPARTIDO.some(p => {
+  /* ABIERTO A TODOS (dirección, 29/08/2026, en la tarde): el pospartido le
+     aparece a todo formador. Para volver a cerrarlo mientras se prueba algo,
+     se pone POSPARTIDO_PARA_TODOS en false y se escriben en
+     PROFES_CON_POSPARTIDO los apellidos que sí pueden. */
+  const POSPARTIDO_PARA_TODOS = true;
+  const vePospartido = POSPARTIDO_PARA_TODOS || PROFES_CON_POSPARTIDO.some(p => {
     const yo = sinTildes(nombreProfe);
     const el = sinTildes(p);
     return !!yo && (yo === el || yo.split(' ').includes(el));
@@ -275,7 +282,7 @@ export default function MisProyectosPage() {
         <div className="relative flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
-          <p className="text-white/50 text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
+          <p className="text-white/75 text-[9px] leading-none mt-0.5 tracking-wide">CONECTA · GESTIONA · GANA</p>
         </div>
       </header>
 

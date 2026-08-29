@@ -63,8 +63,102 @@ const NUM_FECHAS: string[] = Array.from({ length: 30 }, (_, i) => `${i + 1}A`);
 /* La columna del TORNEO va ANCHA a propósito (dirección, 29/08/2026): ahí
    caben nombres como "VALORES LAF FORMACIÓN SELECCIÓN SUB 10 WONDER" y hay que
    poder leerlos completos, no cortados con puntos. */
-const COLUMNAS = '64px minmax(250px,1.4fr) 74px 118px 186px minmax(150px,1fr) minmax(150px,1fr) 142px 142px';
-const ANCHO_MINIMO = 1330;
+/* SIN LA COLUMNA "DÍA DE JUEGO" (dirección, 29/08/2026): el cuadro es de UN
+   SOLO DÍA y el día va arriba, en el título. Al pospartido el día sigue
+   llegando igual —se guarda en el renglón—, solo que aquí no se muestra. */
+/* ESCENARIO MÁS ANCHO, D.T Y A.T MÁS ANGOSTAS (dirección, 29/08/2026): en
+   D.T y A.T va un solo apellido, mientras que en ESCENARIO va el nombre de la
+   cancha completo y se estaba cortando.
+   El orden es: TORNEO # · # FECHA · TORNEO · HORA · ESCENARIO · RIVAL · D.T · A.T
+   (la # FECHA se pasó junto al número del torneo — dirección, 29/08/2026) */
+/* MEDIDA DE HOJA CARTA (dirección, 29/08/2026): el cuadro se apretó para que
+   quepa parejo en una hoja y en la imagen que se comparte. ESCENARIO se bajó
+   —era la más ancha—, y las demás se recortaron un poquito cada una.
+   El orden es: TORNEO # · # FECHA · TORNEO · HORA · ESCENARIO · RIVAL · D.T · A.T
+   (la # FECHA se pasó junto al número del torneo — dirección, 29/08/2026) */
+const COLUMNAS = '56px 66px minmax(210px,1.3fr) 168px minmax(150px,1fr) minmax(140px,1fr) 104px 104px';
+const ANCHO_MINIMO = 1070;
+
+/* ── LA MEMORIA DE RIVALES Y ESCENARIOS ─────────────────────────────────────
+   Los nombres de los equipos y de las canchas se repiten todo el año. En vez
+   de escribirlos completos cada vez, quedan anotados en este computador y
+   salen en una listica debajo de la casilla apenas se escriben las primeras
+   letras. Se puede escribir cualquier cosa nueva: la listica solo ayuda, no
+   obliga. — dirección, 29/08/2026 */
+const LLAVE_RIVALES    = 'programacion-rivales';
+const LLAVE_ESCENARIOS = 'programacion-escenarios';
+
+function leerMemoria(llave: string): string[] {
+  try {
+    const crudo = localStorage.getItem(llave);
+    const lista = crudo ? JSON.parse(crudo) : [];
+    return Array.isArray(lista) ? lista.map((x: any) => String(x ?? '')).filter(Boolean) : [];
+  } catch { return []; }
+}
+
+function recordar(llave: string, valor: string) {
+  const v = String(valor ?? '').trim().toUpperCase();
+  if (v.length < 3) return;                 // media palabra todavía no es un nombre
+  try {
+    const lista = leerMemoria(llave);
+    if (lista.includes(v)) return;
+    localStorage.setItem(llave, JSON.stringify([...lista, v].slice(-400)));
+  } catch { /* sin espacio: no pasa nada */ }
+}
+
+/** El título de los días: un día solo, o un rango.
+ *  "SÁBADO 29 DE AGOSTO DE 2026"  ·  "DEL SÁBADO 29 AL LUNES 31 DE AGOSTO DE 2026"
+ *  — dirección, 29/08/2026 */
+function tituloDias(desde: string, hasta: string, dias?: string[]): string {
+  if (!desde) return 'TODOS LOS DÍAS';
+  if (!hasta || hasta <= desde) return diaLargo(desde);
+
+  /* CORTO Y BONITO (dirección, 29/08/2026): "SAB 29 / DOM 30". El "DEL … AL
+     …" quedaba tan largo que se cortaba en la imagen. Se nombran solo los
+     días que SÍ tienen partido; si son más de cuatro, ahí sí se dice del uno
+     al otro. */
+  const lista = [...new Set((dias ?? []).filter(Boolean))].sort();
+  if (lista.length >= 2 && lista.length <= 4) {
+    const mesDe = (f: string) => f.slice(0, 7);
+    const mismoMes = lista.every(f => mesDe(f) === mesDe(lista[0]));
+    return lista
+      .map(f => {
+        const b = diaBonito(f);                       // "SAB 29 AGO"
+        return mismoMes ? b.split(' ').slice(0, 2).join(' ') : b;
+      })
+      .join(' / ') + (mismoMes ? ` ${diaBonito(lista[0]).split(' ')[2] ?? ''}` : '');
+  }
+
+  const largo1 = diaLargo(desde), largo2 = diaLargo(hasta);
+  if (!largo1 || !largo2) return diaLargo(desde) || '';
+  /* Si los dos son del mismo año, el año se dice una sola vez, al final. */
+  const anio1 = largo1.slice(largo1.lastIndexOf(' ') + 1);
+  const anio2 = largo2.slice(largo2.lastIndexOf(' ') + 1);
+  const sinAnio = (t: string) => t.replace(/ DE \d{4}$/, '');
+  return anio1 === anio2
+    ? `DEL ${sinAnio(largo1)} AL ${largo2}`
+    : `DEL ${largo1} AL ${largo2}`;
+}
+
+/** El día de hoy, escrito como lo guarda la base: 2026-08-29. */
+function hoyISO(): string {
+  const d = new Date();
+  const dos = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}
+
+/** "2026-08-29" → "SÁBADO 29 DE AGOSTO DE 2026". Para el título del cuadro y
+ *  para la imagen que se comparte. — dirección, 29/08/2026 */
+function diaLargo(fecha: string): string {
+  const m = String(fecha ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(d.getTime())) return '';
+  const dias = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+  const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+                 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+  return `${dias[d.getDay()]} ${d.getDate()} DE ${meses[d.getMonth()]} DE ${d.getFullYear()}`;
+}
 
 /* ── Lectura de la ficha del deportista (igual que en pospartido) ─────────── */
 function getCol(dep: Deportista, rx: RegExp): string {
@@ -175,39 +269,9 @@ function BalonFutbol({ className, color }: { className?: string; color?: string 
   );
 }
 
-/* ── UNA SOLA LÍNEA: el día y la hora ──────────────────────────────────────
-   Escrita la fecha, en el renglón queda solo "SAB 29 AGO" —una línea, sin el
-   calendario ni el AAAA-MM-DD debajo—. Al hacerle clic vuelve a salir el
-   calendario para corregirla. Lo mismo con la hora. — dirección, 29/08/2026 */
-function CasillaDia({ valor, onChange }: { valor: string; onChange: (v: string) => void }) {
-  const [abierta, setAbierta] = useState(false);
-  const ref = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { if (abierta) ref.current?.focus(); }, [abierta]);
-
-  if (!valor || abierta) {
-    return (
-      <input
-        ref={ref}
-        type="date"
-        value={valor}
-        onChange={e => onChange(e.target.value)}
-        onBlur={() => setAbierta(false)}
-        style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30, colorScheme: 'dark' }}
-        className="w-full rounded-lg px-2 text-white text-[12px] font-bold outline-none cursor-pointer" />
-    );
-  }
-  return (
-    <button
-      onClick={() => setAbierta(true)}
-      title="Clic para cambiar el día"
-      style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30 }}
-      className="w-full rounded-lg px-2 text-white text-[12px] font-black text-left
-        outline-none truncate hover:brightness-125">
-      {diaBonito(valor)}
-    </button>
-  );
-}
+/* La casilla del DÍA que iba en cada renglón se retiró el 29/08/2026: el
+   cuadro es la programación de UN SOLO DÍA y el día va arriba, en el título.
+   El día se sigue guardando en cada partido y le llega igual al pospartido. */
 
 /* ── EL RELOJ DE LA HORA DE LLEGADA ────────────────────────────────────────
    EXACTAMENTE COMO EN EL POSPARTIDO (dirección, 29/08/2026): una lista de 1
@@ -353,6 +417,14 @@ function CasillaProfe({ valor, onChange, delEquipo, todos }: {
     <select
       value={valor}
       onChange={e => onChange(e.target.value)}
+      /* SE ACOMODA SOLA (dirección, 29/08/2026): al hacerle clic, el renglón
+         se sube al centro de la pantalla. Antes, en los últimos renglones, la
+         listica se abría contra el borde de abajo y tocaba bajar a mano. */
+      onFocus={e => {
+        try {
+          e.currentTarget.closest('div')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        } catch { /* navegador viejo: sigue funcionando igual */ }
+      }}
       title="Sale primero el formador del equipo, y debajo todos los del club."
       style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30 }}
       className="w-full rounded-lg px-2 text-white text-[12px] font-bold outline-none cursor-pointer">
@@ -439,12 +511,42 @@ export default function ProgramacionCompetenciaPage() {
   const [armandoImg, setArmandoImg] = useState(false);
 
   /* Los filtros del encabezado verde. */
-  const [filtroTorneo, setFiltroTorneo] = useState('');   // "LIGA", "ABC", "ASOBDIM"…
-  const [filtroDia, setFiltroDia]       = useState('');   // un día exacto
+  /* VARIOS TORNEOS A LA VEZ (dirección, 29/08/2026): se pueden chulear dos,
+     tres, cinco… y sacar UNA sola imagen con todos. Lista vacía = todos. */
+  const [filtroTorneos, setFiltroTorneos] = useState<string[]>([]);
+  const [abriTorneos, setAbriTorneos] = useState(false);
+  /* EL CUADRO ES DE UN SOLO DÍA (dirección, 29/08/2026).
+     Arranca en el día de hoy. No es "un filtro más": es de qué día es esta
+     programación. Por eso el día se ve arriba, en el título, y la columna de
+     DÍA DE JUEGO ya no está en el cuadro. Dejando el día en blanco se ven
+     todos, que sirve para no perder de vista un partido sin fecha. */
+  const [filtroDia, setFiltroDia]       = useState(() => hoyISO());
+  /* HASTA QUÉ DÍA (dirección, 29/08/2026). Vacío = un solo día. Sirve para
+     agarrar un fin de semana entero —sábado y domingo— o un puente con el
+     lunes festivo, sobre todo para armar UNA sola imagen de todo el puente. */
+  const [filtroHasta, setFiltroHasta]   = useState('');
   /* CUERPO TÉCNICO: sale el nombre completo, se muestra el primer apellido, y
      filtra los partidos donde esa persona figura como D.T o como A.T.
      — dirección, 29/08/2026 */
   const [filtroProfe, setFiltroProfe]   = useState('');
+
+  /* LO QUE YA SE HA ESCRITO, para el buscador de RIVAL y de ESCENARIO.
+     Junta dos cosas: lo que está escrito en la programación —así se vea otro
+     día— y lo que quedó anotado en este computador. — dirección, 29/08/2026 */
+  const [memoriaRivales,    setMemoriaRivales]    = useState<string[]>([]);
+  const [memoriaEscenarios, setMemoriaEscenarios] = useState<string[]>([]);
+  useEffect(() => {
+    const juntar = (llave: string, sacar: (f: FilaProgramacion) => string) => {
+      const set = new Set<string>(leerMemoria(llave));
+      for (const f of filas ?? []) {
+        const v = String(sacar(f) ?? '').trim().toUpperCase();
+        if (v.length >= 3) set.add(v);
+      }
+      return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+    };
+    setMemoriaRivales(juntar(LLAVE_RIVALES, f => f.rival));
+    setMemoriaEscenarios(juntar(LLAVE_ESCENARIOS, f => f.escenario));
+  }, [filas]);
 
   /* ── Traer todo ── */
   const recargar = useCallback(async () => {
@@ -545,10 +647,13 @@ export default function ProgramacionCompetenciaPage() {
     const puesto = new Map<string, number>(ordenMano.map((id, i) => [String(id), i] as [string, number]));
     return lista
       .filter(f => {
-        if (filtroDia && f.fecha !== filtroDia) return false;
-        if (filtroTorneo) {
+        if (filtroDia) {
+          const hasta = filtroHasta && filtroHasta >= filtroDia ? filtroHasta : filtroDia;
+          if (!f.fecha || f.fecha < filtroDia || f.fecha > hasta) return false;
+        }
+        if (filtroTorneos.length) {
           const t = torneoDe(f.torneo_num);
-          if (pelar(t?.torneo) !== pelar(filtroTorneo)) return false;
+          if (!filtroTorneos.some(x => pelar(x) === pelar(t?.torneo))) return false;
         }
         /* CUERPO TÉCNICO: vale si figura de D.T o de A.T. */
         if (filtroProfe) {
@@ -565,7 +670,7 @@ export default function ProgramacionCompetenciaPage() {
         if (pa !== pb) return pa - pb;
         return (a.fecha || '9999').localeCompare(b.fecha || '9999');
       });
-  }, [lista, filtroDia, filtroTorneo, filtroProfe, torneoDe, ordenMano]);
+  }, [lista, filtroDia, filtroHasta, filtroTorneos, filtroProfe, torneoDe, ordenMano]);
 
   /** Suelta el renglón que se venía arrastrando encima de otro. */
   function soltarFila(destino: FilaProgramacion) {
@@ -599,19 +704,31 @@ export default function ProgramacionCompetenciaPage() {
 
   const hayOrdenMano = ordenMano.length > 0;
 
-  const hayFiltro = !!filtroDia || !!filtroTorneo || !!filtroProfe;
+  const hayFiltro = !!filtroDia || !!filtroHasta || filtroTorneos.length > 0 || !!filtroProfe;
 
   /* ── Cambiar una casilla ── */
   function cambiar(id: string, campo: keyof FilaProgramacion, valor: string) {
     setFilas(prev => (prev ?? []).map(f => (f.id === id ? { ...f, [campo]: valor } : f)));
     void guardarPartido(id, { [campo]: valor } as Partial<FilaProgramacion>);
+    /* SE VA APRENDIENDO LO QUE SE ESCRIBE (dirección, 29/08/2026): cada rival
+       y cada escenario que se escriba queda anotado, y la próxima vez sale
+       solo en la listica. Se guarda en este computador. */
+    if (campo === 'rival') recordar(LLAVE_RIVALES, valor);
+    if (campo === 'escenario') recordar(LLAVE_ESCENARIOS, valor);
   }
 
   /* ── Agregar un renglón ── */
   async function nuevoRenglon() {
     setError(''); setAviso('');
     try {
-      const creada = await agregarPartido();
+      /* NACE CON EL DÍA DEL CUADRO (dirección, 29/08/2026): como la columna
+         del día ya no está, si el renglón naciera sin fecha desaparecería de
+         una —el cuadro solo muestra los de ese día—. */
+      const creada = await agregarPartido({
+        ...(filtroDia ? { fecha: filtroDia } : {}),
+        /* Y en la FECHA 1A, que después se cambia en la lista. */
+        jornada: '1A',
+      });
       if (creada) setFilas(prev => [...(prev ?? []), creada]);
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo agregar el renglón.');
@@ -641,17 +758,10 @@ export default function ProgramacionCompetenciaPage() {
          formador haya calificado NO se toca.
 
      — dirección, 29/08/2026 */
-  async function bajarAPospartido(f: FilaProgramacion) {
-    setError(''); setAviso('');
-
-    if (!f.torneo_num) { setError('Primero escribe el número del torneo.'); return; }
-    if (!f.jornada) {
-      setError('Falta la # FECHA. La planilla del pospartido se guarda por torneo Y fecha: sin ella no se sabe cuál partido es.');
-      return;
-    }
-
-    setTrabajando(f.id);
-    try {
+  /** MANDA UN PARTIDO. Devuelve si ya tenía deportistas calificados y qué
+   *  casillas le faltan a la base. Lo usan el balón de cada renglón y el
+   *  botón de MANDAR TODOS. — dirección, 29/08/2026 */
+  async function mandarUno(f: FilaProgramacion): Promise<{ teniaFilas: boolean; sacadas: string[] }> {
       /* ¿Ya había algo guardado de ese partido? Se respeta. */
       const antes = await getPlanilla(f.torneo_num, f.jornada);
       const teniaFilas = !!antes && Array.isArray(antes.filas) && antes.filas.length > 0;
@@ -679,6 +789,19 @@ export default function ProgramacionCompetenciaPage() {
         x.id === f.id ? { ...x, microciclo_id: `PP-${f.torneo_num}-${f.jornada}` } : x
       )));
 
+      return { teniaFilas, sacadas };
+  }
+
+  async function bajarAPospartido(f: FilaProgramacion) {
+    setError(''); setAviso('');
+    if (!f.torneo_num) { setError('Primero escribe el número del torneo.'); return; }
+    if (!f.jornada) {
+      setError('Falta la # FECHA. La planilla del pospartido se guarda por torneo Y fecha: sin ella no se sabe cuál partido es.');
+      return;
+    }
+    setTrabajando(f.id);
+    try {
+      const { teniaFilas, sacadas } = await mandarUno(f);
       const comoSeLlama = [etiquetaFecha(f.jornada), nombreTorneo(f.torneo_num)]
         .filter(Boolean).join(' ');
       setAviso(
@@ -694,6 +817,47 @@ export default function ProgramacionCompetenciaPage() {
     } finally {
       setTrabajando('');
     }
+  }
+
+  /* ── MANDARLOS TODOS DE UNA ────────────────────────────────────────────────
+     Lo normal es que un sábado haya veinte partidos y haya que oprimir veinte
+     balones. Con este botón se mandan de una sola vez TODOS los que se estén
+     viendo —el día, o el puente completo, y con el filtro que esté puesto—.
+     Los que ya estaban mandados solo se les refresca el encabezado; lo que el
+     formador tenga calificado no se toca. — dirección, 29/08/2026 */
+  const [mandandoTodos, setMandandoTodos] = useState(false);
+  async function mandarTodos() {
+    setError(''); setAviso('');
+    const listos = visibles.filter(f => f.torneo_num && f.jornada);
+    const incompletos = visibles.length - listos.length;
+    if (listos.length === 0) {
+      setError('Ninguno de los partidos que se están viendo tiene número de torneo y # FECHA.');
+      return;
+    }
+    if (!window.confirm(
+      `Se van a mandar ${listos.length} ${listos.length === 1 ? 'partido' : 'partidos'} al Banco Post Partido.\n\n` +
+      'A los que ya estaban mandados solo se les actualiza el encabezado: lo calificado NO se toca.\n\n¿Seguimos?'
+    )) return;
+
+    setMandandoTodos(true);
+    let hechos = 0, fallaron = 0;
+    const faltantes = new Set<string>();
+    for (const f of listos) {
+      setTrabajando(f.id);
+      try {
+        const r = await mandarUno(f);
+        r.sacadas.forEach(c => faltantes.add(c));
+        hechos++;
+      } catch { fallaron++; }
+    }
+    setTrabajando('');
+    setMandandoTodos(false);
+    setAviso(
+      `Listo: ${hechos} ${hechos === 1 ? 'partido quedó' : 'partidos quedaron'} en el Banco Post Partido.`
+      + (fallaron ? ` ${fallaron} no se pudieron mandar; intenta otra vez.` : '')
+      + (incompletos ? ` (${incompletos} se saltaron porque les falta el torneo o la # FECHA.)` : '')
+      + (faltantes.size ? ` (A la base le faltan las casillas de ${[...faltantes].join(', ')}.)` : ''),
+    );
   }
 
   /* ── LA IMAGEN PARA COMPARTIR ──────────────────────────────────────────────
@@ -728,27 +892,41 @@ export default function ProgramacionCompetenciaPage() {
         grupos.get(k)!.push(f);
       }
 
-      /* Medidas */
+      /* MEDIDAS PARA QUE QUEPA EN UN CELULAR (dirección, 29/08/2026).
+         Antes el encabezado verde —HORARIO · FECHA · RIVAL · ESCENARIO— se
+         repetía en cada torneo. Con nueve partidos de nueve torneos distintos
+         eso son nueve encabezados, y la imagen salía larguísima: tocaba
+         deslizar y deslizar para verla.
+         Ahora el encabezado va UNA sola vez, arriba, y cada partido queda en
+         un renglón delgado con el nombre de su torneo encima. Entre partido y
+         partido va una rayita corta en la mitad, en vez de un hueco grande. */
       const W = 1080, M = 44;
-      const ALTO_TIT = 172;
-      const ALTO_TORNEO = 58;
-      const ALTO_CABEZA = 44;
-      const ALTO_FILA = 58;
-      const HUECO = 26;
-      const ALTO_PIE = 74;
+      /* El encabezado crece un renglón cuando hay un torneo filtrado. */
+      const nombresTorneos = filtroTorneos.join('  ·  ').toUpperCase();
+      const ALTO_TIT = nombresTorneos ? 176 : 142;
+      const ALTO_CABEZA = 50;
+      const ALTO_TORNEO = 42;
+      const ALTO_FILA = 46;
+      const HUECO = 22;          // donde va la rayita
+      const ALTO_PIE = 88;
 
-      let H = ALTO_TIT + ALTO_PIE;
-      grupos.forEach(g => { H += ALTO_TORNEO + ALTO_CABEZA + g.length * ALTO_FILA + HUECO; });
+      let H = ALTO_TIT + ALTO_CABEZA + ALTO_PIE;
+      grupos.forEach((g, _k) => { H += ALTO_TORNEO + g.length * ALTO_FILA + HUECO; });
 
       const lienzo = document.createElement('canvas');
       lienzo.width = W; lienzo.height = H;
       const ctx = lienzo.getContext('2d')!;
 
       /* Fondo: negro arriba, verde abajo. */
+      /* EL FONDO SE QUEDA OSCURO (dirección, 29/08/2026). Antes el degradado
+         terminaba en verde pleno, y cuando había muchos partidos la mitad de
+         abajo quedaba toda verde: los encabezados verdes se perdían y no se
+         leía nada. Ahora baja de negro a verde MUY oscuro, así que la imagen
+         se ve pareja de arriba abajo, como se veía la parte de arriba. */
       const fondo = ctx.createLinearGradient(0, 0, 0, H);
       fondo.addColorStop(0, '#000000');
-      fondo.addColorStop(0.45, '#04301c');
-      fondo.addColorStop(1, '#00B050');
+      fondo.addColorStop(0.55, '#02180F');
+      fondo.addColorStop(1, '#063A20');
       ctx.fillStyle = fondo;
       ctx.fillRect(0, 0, W, H);
 
@@ -756,18 +934,39 @@ export default function ProgramacionCompetenciaPage() {
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'left';
       ctx.fillStyle = '#ffffff';
-      ctx.font = '900 44px Arial, sans-serif';
-      ctx.fillText('PROGRAMACIÓN DE COMPETENCIA', M, 66);
+      ctx.font = '900 34px Arial, sans-serif';
+      /* EL TORNEO NO VA AQUÍ ARRIBA (dirección, 29/08/2026): se probó al lado
+         de "PROGRAMACIÓN OFICIAL", pero cuando se filtran dos o tres torneos
+         no cabe. Cada torneo ya tiene su propio título abajo, en verde,
+         encima de sus partidos: ahí es donde se lee bien. */
+      ctx.fillText('PROGRAMACIÓN OFICIAL', M, 50);
 
-      ctx.font = '700 22px Arial, sans-serif';
+      /* EL ENCABEZADO VA EN TRES RENGLONES (dirección, 29/08/2026):
+           1) PROGRAMACIÓN OFICIAL — blanco
+           2) el torneo, ASOBDIM     — verde
+           3) los días, SAB 29 / DOM 30 — blanco  */
+      let yLinea = 88;
+      if (nombresTorneos) {
+        ctx.fillStyle = '#5BE39B';
+        ctx.font = '900 27px Arial, sans-serif';
+        ctx.fillText(recortar(ctx, nombresTorneos, 660), M, yLinea);
+        yLinea += 34;
+      }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 25px Arial, sans-serif';
+      const diasConPartido = visibles.map(f => f.fecha).filter(Boolean);
+      const textoDias = tituloDias(filtroDia, filtroHasta, diasConPartido);
+      ctx.fillText(recortar(ctx, textoDias, 620), M, yLinea);
+      const xPie = M + Math.min(ctx.measureText(textoDias).width, 620) + 18;
+
+      ctx.font = '700 17px Arial, sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,.72)';
       const pie = [
-        filtroTorneo ? filtroTorneo : '',
         filtroProfe || '',
-        filtroDia ? diaBonito(filtroDia) : '',
         `${visibles.length} ${visibles.length === 1 ? 'partido' : 'partidos'}`,
       ].filter(Boolean).join('   ·   ');
-      ctx.fillText(pie.toUpperCase(), M, 108);
+      ctx.fillText(pie.toUpperCase(), xPie, yLinea + 2);
 
       /* El logo, si carga. Si no, no pasa nada. */
       try {
@@ -777,79 +976,230 @@ export default function ProgramacionCompetenciaPage() {
           i.onerror = () => mal(new Error('sin logo'));
           i.src = '/MAX%2010.png';
         });
-        const alto = 58, ancho = (logo.width / logo.height) * alto;
-        ctx.drawImage(logo, W - M - ancho, 40, ancho, alto);
+        const alto = 50, ancho = (logo.width / logo.height) * alto;
+        ctx.drawImage(logo, W - M - ancho, 34, ancho, alto);
+        /* EL LEMA DEBAJO DEL LOGO (dirección, 29/08/2026): en la imagen que se
+           comparte también va, igual que en la pantalla. */
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,.85)';
+        ctx.font = '700 13px Arial, sans-serif';
+        /* Centrado con el logo, no con el borde de la hoja. */
+        ctx.fillText('CONECTA · GESTIONA · GANA', W - M - ancho / 2, 34 + alto + 13);
+        ctx.restore();
       } catch { /* sin logo */ }
 
-      /* Las columnas */
+      /* LAS COLUMNAS, CON EL MISMO DISEÑO DEL CUADRO (dirección, 29/08/2026).
+         Cada título va en su propia casilla verde redondeada, con su espacio
+         entre una y otra —igual que en la pantalla de Programación—, y el
+         partido va en una franja gris redondeada. El orden también es el
+         mismo del cuadro: primero el ESCENARIO y después el RIVAL. */
       const ANCHO = W - M * 2;
-      const COLS = [
-        { t: 'HORARIO',        w: 135 },
-        { t: 'FECHA',          w: 135 },
-        { t: 'DÍA DE PARTIDO', w: 215 },
-        { t: 'RIVAL',          w: 275 },
-        { t: 'ESCENARIO',      w: ANCHO - 135 - 135 - 215 - 275 },
-      ];
+      const HUECO_COL = 8;
+
+      /* Con un solo día la columna del DÍA sobra —el día ya está arriba, en
+         el título—; con un puente sí se necesita. */
+      const unSoloDia = !!filtroDia && (!filtroHasta || filtroHasta <= filtroDia);
+      /* SIN LA COLUMNA "# FECHA" (dirección, 29/08/2026): mientras todos los
+         partidos nazcan en la FECHA 1A, ese dato todavía no es de fiar y
+         confunde al que lea la imagen. Adentro de la plataforma sí se sigue
+         viendo y sigue viajando al post partido; es solo en la imagen. */
+      const COLS = unSoloDia
+        ? [
+            { t: 'LLEGAR',    w: 160 },
+            { t: 'ESCENARIO', w: 380 },
+            { t: 'RIVAL',     w: ANCHO - 2 * HUECO_COL - 160 - 380 },
+          ]
+        : [
+            /* El DÍA con espacio de sobra: "SAB 29 AGO" no se puede cortar. */
+            { t: 'LLEGAR',    w: 150 },
+            { t: 'DÍA',       w: 170 },
+            { t: 'ESCENARIO', w: 300 },
+            { t: 'RIVAL',     w: ANCHO - 3 * HUECO_COL - 150 - 170 - 300 },
+          ];
+
+      /** Dónde arranca cada columna. */
+      const equis: number[] = [];
+      { let acc = M; for (const c of COLS) { equis.push(acc); acc += c.w + HUECO_COL; } }
+
+      /** Un recuadro con las esquinas redondas. */
+      const caja = (x: number, yy: number, w: number, h: number, r: number) => {
+        ctx.beginPath();
+        if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(x, yy, w, h, r);
+        else {
+          ctx.moveTo(x + r, yy);
+          ctx.arcTo(x + w, yy, x + w, yy + h, r);
+          ctx.arcTo(x + w, yy + h, x, yy + h, r);
+          ctx.arcTo(x, yy + h, x, yy, r);
+          ctx.arcTo(x, yy, x + w, yy, r);
+        }
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      /* LOS ESCUDOS DE WONDER Y REGOL (dirección, 29/08/2026): van SOLO en el
+         pie de la imagen, al lado del nombre de la academia. Se buscan en la
+         carpeta public con estos nombres: /wonder.png y /regol.png. Si alguno
+         no está, sencillamente no sale y no se daña nada. */
+      const traerLogo = (ruta: string) => new Promise<HTMLImageElement | null>(ok => {
+        const i = new Image();
+        i.onload = () => ok(i);
+        i.onerror = () => ok(null);
+        i.src = ruta;
+      });
+      const [logoRegol, logoWonder] = await Promise.all([
+        traerLogo('/regol.png'),
+        traerLogo('/wonder.png'),
+      ]);
+
+      /** EL GOTERÓN ROJO DE UBICACIÓN, para el escenario. — 29/08/2026 */
+      const dibujarPin = (cx: number, cy: number) => {
+        const r = 6.2;
+        ctx.save();
+        ctx.fillStyle = '#E5484D';
+        ctx.beginPath();
+        ctx.arc(cx, cy - 2.5, r, Math.PI, 0);            // la cabecita redonda
+        ctx.lineTo(cx, cy + 9.5);                         // la punta de abajo
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,.55)';                // el huequito del centro
+        ctx.beginPath();
+        ctx.arc(cx, cy - 3, 2.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
+
+      /** EL BALÓN, para el rival. */
+      const dibujarBalon = (cx: number, cy: number) => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy + 1, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.fillStyle = '#1b2333';
+        ctx.beginPath();                                  // el pentágono del centro
+        for (let p = 0; p < 5; p++) {
+          const a = -Math.PI / 2 + (p * 2 * Math.PI) / 5;
+          const px = cx + Math.cos(a) * 3.4;
+          const py = cy + 1 + Math.sin(a) * 3.4;
+          if (p === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      };
 
       let y = ALTO_TIT;
 
-      grupos.forEach((partidos, num) => {
-        const t = torneoDe(num);
-
-        /* El nombre del torneo */
-        ctx.fillStyle = 'rgba(0,0,0,.42)';
-        ctx.fillRect(M, y, ANCHO, ALTO_TORNEO);
-        ctx.fillStyle = '#5BE39B';
-        ctx.font = '900 26px Arial, sans-serif';
-        const titulo = nombreTorneo(num) || `TORNEO ${num}`;
-        ctx.fillText(recortar(ctx, titulo.toUpperCase(), ANCHO - 40), M + 20, y + ALTO_TORNEO / 2);
-        y += ALTO_TORNEO;
-
-        /* El encabezado VERDE con la letra blanca */
+      /* LOS TÍTULOS, CADA UNO EN SU CASILLA VERDE, UNA SOLA VEZ ARRIBA.
+         La primera dice LLEGAR —no "horario"—: es la hora a la que hay que
+         estar en la cancha, no la del pitazo. — dirección, 29/08/2026 */
+      ctx.font = '900 22px Arial, sans-serif';
+      COLS.forEach((c, k) => {
         ctx.fillStyle = '#00B050';
-        ctx.fillRect(M, y, ANCHO, ALTO_CABEZA);
+        caja(equis[k], y, c.w, ALTO_CABEZA, 9);
         ctx.fillStyle = '#ffffff';
-        ctx.font = '900 19px Arial, sans-serif';
-        let x = M;
-        COLS.forEach(c => {
-          ctx.fillText(recortar(ctx, c.t, c.w - 24), x + 14, y + ALTO_CABEZA / 2);
-          x += c.w;
-        });
-        y += ALTO_CABEZA;
+        ctx.textAlign = 'center';
+        ctx.fillText(recortar(ctx, c.t, c.w - 16), equis[k] + c.w / 2, y + ALTO_CABEZA / 2);
+        ctx.textAlign = 'left';
+      });
+      y += ALTO_CABEZA;
+
+      const cuantosGrupos = grupos.size;
+      let vaGrupo = 0;
+
+      grupos.forEach((partidos, num) => {
+        vaGrupo++;
+
+        /* NUESTRO EQUIPO EN BLANCO Y EL RIVAL EN VERDE (dirección,
+           29/08/2026): así se distingue de una quién es quién. */
+        ctx.fillStyle = '#ffffff';
+        /* NUESTRO EQUIPO, MÁS GRANDE (dirección, 29/08/2026): es el nombre
+           que importa, va encima de sus partidos. */
+        ctx.font = '900 25px Arial, sans-serif';
+        const titulo = (nombreTorneo(num) || `TORNEO ${num}`).toUpperCase();
+        ctx.fillText(recortar(ctx, titulo, ANCHO - 26), M + 13, y + ALTO_TORNEO / 2 + 2);
+        y += ALTO_TORNEO;
 
         /* Los partidos */
         partidos.forEach((f, i) => {
-          ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.22)';
-          ctx.fillRect(M, y, ANCHO, ALTO_FILA);
+          /* CADA DATO EN SU PROPIA CASILLA (dirección, 29/08/2026): igual que
+             en el cuadro de Programación, el renglón no es un solo bloque
+             gris sino una casilla por columna, gris en transparencia y con
+             las esquinas redondas, justo debajo de su título verde. */
+          COLS.forEach((c, k) => {
+            ctx.fillStyle = i % 2 === 0 ? 'rgba(60,71,89,.55)' : 'rgba(60,71,89,.34)';
+            caja(equis[k], y, c.w, ALTO_FILA - 4, 9);
+          });
 
-          const datos = [
-            horaBonita(f.hora) || '—',
-            f.jornada ? `FECHA ${parseInt(f.jornada, 10) || f.jornada}` : '—',
-            diaBonito(f.fecha) || '—',
-            (f.rival || '—').toUpperCase(),
-            (f.escenario || '—').toUpperCase(),
-          ];
-          let cx = M;
+          const datos = unSoloDia
+            ? [
+                horaBonita(f.hora) || '—',
+                (f.escenario || '—').toUpperCase(),
+                (f.rival || '—').toUpperCase(),
+              ]
+            : [
+                horaBonita(f.hora) || '—',
+                diaBonito(f.fecha) || '—',
+                (f.escenario || '—').toUpperCase(),
+                (f.rival || '—').toUpperCase(),
+              ];
+          const cualRival = datos.length - 1;
+          const cualEscenario = datos.length - 2;
+          /* El día va en VERDE, para que salte a la vista de cuál día es cada
+             partido cuando la imagen es de un puente. */
+          const cualDia = unSoloDia ? -1 : 1;
           datos.forEach((d, k) => {
-            ctx.fillStyle = k === 3 ? '#ffffff' : 'rgba(255,255,255,.9)';
-            /* La hora y el rival, más grandes: es lo primero que busca un papá. */
-            ctx.font = (k === 0 || k === 3)
-              ? '900 21px Arial, sans-serif'
-              : '700 19px Arial, sans-serif';
-            ctx.fillText(recortar(ctx, d, COLS[k].w - 24), cx + 14, y + ALTO_FILA / 2);
-            cx += COLS[k].w;
+            const medio = y + (ALTO_FILA - 4) / 2;
+            /* EL GOTERÓN ROJO ANTES DEL ESCENARIO Y EL BALÓN ANTES DEL RIVAL
+               (dirección, 29/08/2026): se entiende de una qué es cada cosa,
+               sin tener que leer el título. */
+            let sangria = 11;
+            if (k === cualEscenario) { dibujarPin(equis[k] + 17, medio); sangria = 30; }
+            if (k === cualRival)     { dibujarBalon(equis[k] + 17, medio); sangria = 30; }
+
+            ctx.fillStyle = (k === cualDia || k === cualRival) ? '#5BE39B' : '#ffffff';
+            /* La hora, el día y el rival, más grandes: es lo que primero busca
+               un papá. */
+            ctx.font = (k === 0 || k === cualRival || k === cualDia)
+              ? '900 19px Arial, sans-serif'
+              : '700 17px Arial, sans-serif';
+            ctx.fillText(recortar(ctx, d, COLS[k].w - sangria - 9), equis[k] + sangria, medio);
           });
           y += ALTO_FILA;
         });
 
+        /* LA RAYITA (dirección, 29/08/2026): un pedacito corto en toda la
+           mitad, no una línea de lado a lado. Separa sin hacer ruido. */
+        if (vaGrupo < cuantosGrupos) {
+          ctx.fillStyle = 'rgba(91,227,155,.45)';
+          ctx.fillRect(W / 2 - 90, y + HUECO / 2 - 1, 180, 2);
+        }
         y += HUECO;
       });
 
       /* Pie */
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(255,255,255,.85)';
-      ctx.font = '900 22px Arial, sans-serif';
-      ctx.fillText('MAX 10 SPORT · FUTURO ANTIOQUIA', W / 2, H - 42);
+      /* EL PIE (dirección, 29/08/2026): el escudo de WONDER a la izquierda,
+         el de REGOL a la derecha y, en la mitad, el nombre de la academia en
+         letra más pequeña. Si un escudo no está guardado, sencillamente no
+         sale y el nombre queda igual de centrado. */
+      {
+        const medioPie = H - ALTO_PIE / 2 - 4;
+        const altoEsc = 44;
+        if (logoWonder) {
+          const anc = (logoWonder.width / logoWonder.height) * altoEsc;
+          ctx.drawImage(logoWonder, M, medioPie - altoEsc / 2, anc, altoEsc);
+        }
+        if (logoRegol) {
+          const anc = (logoRegol.width / logoRegol.height) * altoEsc;
+          ctx.drawImage(logoRegol, W - M - anc, medioPie - altoEsc / 2, anc, altoEsc);
+        }
+        ctx.font = '900 22px Arial, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('ACADEMIA DE FÚTBOL FUTURO ANTIOQUIA', W / 2, medioPie);
+      }
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
 
@@ -864,9 +1214,10 @@ export default function ProgramacionCompetenciaPage() {
   function bajarImagen() {
     if (!imagen) return;
     const nombre = [
-      'PROGRAMACION', filtroTorneo,
+      'PROGRAMACION OFICIAL',
+      tituloDias(filtroDia, filtroHasta, visibles.map(f => f.fecha)),
+      filtroTorneos.join(' '),
       filtroProfe || '',
-      filtroDia ? diaBonito(filtroDia) : '',
     ].filter(Boolean).join(' ').replace(/[\\/:*?"<>|]/g, ' ').trim();
     const a = document.createElement('a');
     a.href = imagen;
@@ -917,13 +1268,17 @@ export default function ProgramacionCompetenciaPage() {
             Programación de Competencia
           </h1>
           <p className="text-white/70 text-[11px] font-semibold leading-tight">
-            Qué se juega, cuándo y dónde. De aquí salen los microciclos.
+            Qué se juega, cuándo y dónde. De aquí salen los post partidos.
           </p>
         </div>
         <div className="hidden sm:flex flex-col items-end flex-shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
-          <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
+          {/* SE VE POCO Y ES EL LEMA DEL CLUB (dirección, 29/08/2026): iba en
+              letra de 8 y casi transparente. Se sube el tamaño y el brillo. */}
+          <p className="text-white/80 text-[9.5px] font-semibold tracking-wide mt-0.5 text-right leading-tight">
+            CONECTA · GESTIONA · GANA
+          </p>
         </div>
       </header>
 
@@ -953,30 +1308,71 @@ export default function ProgramacionCompetenciaPage() {
 
         {/* ── EL ENCABEZADO VERDE, CON LOS FILTROS ── */}
         <div className="rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3"
-             style={{ background: VERDE }}>
+             style={{ background: 'linear-gradient(to right, #05502A, #00B050)' }}>
           <CalendarDays className="w-5 h-5 text-white shrink-0" />
           <div className="min-w-0">
-            <h2 className="text-white font-black text-[15px] tracking-wide">PARTIDOS PROGRAMADOS</h2>
+            <h2 className="text-white font-black text-[15px] tracking-wide leading-tight">
+              PROGRAMACIÓN OFICIAL
+            </h2>
             <p className="text-white/75 text-[11px] font-semibold">
-              {hayFiltro
-                ? `${visibles.length} de ${lista.length} partidos`
-                : `${lista.length} ${lista.length === 1 ? 'partido programado' : 'partidos programados'}`}
+              {visibles.length} {visibles.length === 1 ? 'partido' : 'partidos'}
             </p>
           </div>
 
           {/* Los filtros */}
           <div className="flex flex-wrap items-center gap-2 ml-auto">
-            <select
-              value={filtroTorneo}
-              onChange={e => setFiltroTorneo(e.target.value)}
-              title="Ver solo un torneo: LIGA, ABC, ASOBDIM, LA GRAN MANZANA…"
-              style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)', height: 32 }}
-              className="rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer">
-              <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS TORNEOS</option>
-              {torneosParaFiltrar.map(t => (
-                <option key={t} value={t} style={{ color: '#111827', backgroundColor: 'white' }}>{t}</option>
-              ))}
-            </select>
+            {/* TORNEOS: DE CHULOS (dirección, 29/08/2026). Se pueden marcar
+                varios —dos, tres, cinco— y la imagen sale con todos ellos. */}
+            <div className="relative">
+              <button
+                onClick={() => setAbriTorneos(v => !v)}
+                title="Marca los torneos que quieres ver. Puedes marcar varios."
+                className="rounded-lg px-2.5 h-8 flex items-center gap-1.5 text-white text-[11.5px] font-black"
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)' }}>
+                {filtroTorneos.length === 0
+                  ? 'TODOS LOS TORNEOS'
+                  : filtroTorneos.length === 1
+                    ? filtroTorneos[0]
+                    : `${filtroTorneos.length} TORNEOS`}
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+
+              {abriTorneos && (
+                <>
+                  {/* Un vidrio invisible: al hacer clic por fuera, se cierra. */}
+                  <div className="fixed inset-0 z-40" onClick={() => setAbriTorneos(false)} />
+                  <div className="absolute left-0 mt-1 z-50 rounded-xl overflow-hidden shadow-2xl"
+                       style={{ background: PANEL, border: `1px solid ${BORDE}`, minWidth: 250, maxHeight: 340, overflowY: 'auto' }}>
+                    <button
+                      onClick={() => { setFiltroTorneos([]); setAbriTorneos(false); }}
+                      className="w-full text-left px-3 py-2 text-white text-[11.5px] font-black hover:brightness-125"
+                      style={{ background: filtroTorneos.length === 0 ? VERDE : 'transparent' }}>
+                      TODOS LOS TORNEOS
+                    </button>
+                    {torneosParaFiltrar.map(t => {
+                      const marcado = filtroTorneos.includes(t);
+                      return (
+                        <button
+                          key={t}
+                          onClick={() => setFiltroTorneos(prev =>
+                            prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])}
+                          className="w-full text-left px-3 py-2 flex items-center gap-2
+                            text-white text-[11.5px] font-bold hover:brightness-125"
+                          style={{ background: marcado ? 'rgba(0,176,80,.22)' : 'transparent' }}>
+                          <span className="shrink-0 rounded flex items-center justify-center"
+                                style={{ width: 15, height: 15,
+                                         background: marcado ? VERDE : 'transparent',
+                                         border: `1px solid ${marcado ? VERDE : BORDE}` }}>
+                            {marcado && <Check className="w-3 h-3 text-white" />}
+                          </span>
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
 
             <select
               value={filtroProfe}
@@ -992,16 +1388,45 @@ export default function ProgramacionCompetenciaPage() {
               ))}
             </select>
 
+            {/* DE QUÉ DÍA ES ESTE CUADRO. Cambiando aquí el día, cambia toda
+                la programación que se ve y el título de arriba. */}
             <input
               type="date"
               value={filtroDia}
               onChange={e => setFiltroDia(e.target.value)}
-              title="Ver solo los partidos de ese día"
+              title="De qué día es esta programación"
               style={{
                 background: 'transparent', border: '1px solid rgba(255,255,255,.6)',
                 height: 32, colorScheme: 'dark',
               }}
               className="rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer" />
+
+            {/* HASTA QUÉ DÍA. Se deja vacío para un solo día; se llena para
+                agarrar un fin de semana o un puente completo en una sola
+                imagen. — dirección, 29/08/2026 */}
+            <span className="text-white/70 text-[11px] font-black">HASTA</span>
+            <input
+              type="date"
+              value={filtroHasta}
+              min={filtroDia || undefined}
+              disabled={!filtroDia}
+              onChange={e => setFiltroHasta(e.target.value)}
+              title="Hasta qué día. Déjalo vacío si es un solo día."
+              style={{
+                background: 'transparent', border: '1px solid rgba(255,255,255,.6)',
+                height: 32, colorScheme: 'dark',
+              }}
+              className="rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer disabled:opacity-40" />
+
+            <button
+              onClick={() => { setFiltroHasta(''); setFiltroDia(filtroDia ? '' : hoyISO()); }}
+              title={filtroDia
+                ? 'Ver todos los partidos, de todos los días'
+                : 'Volver a la programación de hoy'}
+              className="rounded-lg px-2.5 h-8 flex items-center text-white text-[11px] font-black"
+              style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)' }}>
+              {filtroDia ? 'TODOS LOS DÍAS' : 'HOY'}
+            </button>
 
             <button
               onClick={ordenarPorHorario}
@@ -1024,13 +1449,30 @@ export default function ProgramacionCompetenciaPage() {
 
             {hayFiltro && (
               <button
-                onClick={() => { setFiltroTorneo(''); setFiltroDia(''); setFiltroProfe(''); }}
+                onClick={() => { setFiltroTorneos([]); setFiltroDia(''); setFiltroHasta(''); setFiltroProfe(''); }}
                 title="Quitar los filtros"
                 className="rounded-lg px-2.5 h-8 flex items-center gap-1 text-white text-[11px] font-black"
                 style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)' }}>
                 <X className="w-3.5 h-3.5" /> VER TODOS
               </button>
             )}
+
+            {/* MANDARLOS TODOS DE UNA (dirección, 29/08/2026): en vez de
+                oprimir el balón veinte veces, uno solo manda todo lo que se
+                está viendo. */}
+            <button
+              onClick={mandarTodos}
+              disabled={cargando || mandandoTodos || visibles.length === 0}
+              title="Crear el post partido de TODOS los partidos que se están viendo"
+              className="rounded-lg px-3 h-8 flex items-center gap-1.5 transition hover:brightness-125 disabled:opacity-50"
+              style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)' }}>
+              {mandandoTodos
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                : <BalonFutbol className="w-3.5 h-3.5" color="#ffffff" />}
+              <span className="text-white text-[11px] font-black">
+                {mandandoTodos ? 'MANDANDO…' : 'AGREGAR TODOS A POST PARTIDO'}
+              </span>
+            </button>
 
             <button
               onClick={armarImagen}
@@ -1064,6 +1506,32 @@ export default function ProgramacionCompetenciaPage() {
             datos, y los dos botones quedan por FUERA de esa caja, sobre el
             fondo de la pantalla. Si se le pone un recuadro a todo el bloque,
             los botones vuelven a quedar encerrados. */}
+        {/* EL TÍTULO DEL DÍA (dirección, 29/08/2026).
+            Va en el fondo oscuro que separa el encabezado verde del cuadro,
+            centrado: "PROGRAMACIÓN OFICIAL" en blanco y el día en verde. Es
+            el que le dice a cualquiera —y a la imagen que se comparte— de qué
+            día es esta programación. */}
+        <div className="pt-7 pb-5 text-center">
+          <h3 className="font-black tracking-wide leading-tight text-[17px] sm:text-[20px]">
+            <span className="text-white">PROGRAMACIÓN OFICIAL</span>
+            {filtroTorneos.length > 0 && (
+              <span style={{ color: '#5BE39B' }}>{' '}{filtroTorneos.join(' · ').toUpperCase()}</span>
+            )}
+            <span className="text-white">
+              {' '}{tituloDias(filtroDia, filtroHasta, visibles.map(f => f.fecha))}
+            </span>
+          </h3>
+        </div>
+
+        {/* LAS DOS LISTICAS DEL BUSCADOR. No se ven: son las que el navegador
+            abre debajo de la casilla cuando se escribe. */}
+        <datalist id="memoria-escenarios">
+          {memoriaEscenarios.map(v => <option key={v} value={v} />)}
+        </datalist>
+        <datalist id="memoria-rivales">
+          {memoriaRivales.map(v => <option key={v} value={v} />)}
+        </datalist>
+
         <div className="pt-3">
           {cargando ? (
             <div className="flex items-center gap-2 py-6 justify-center">
@@ -1094,7 +1562,7 @@ export default function ProgramacionCompetenciaPage() {
                   <span style={{ width: 38 }} className="shrink-0" />
                   <div className="flex-1 grid gap-2 px-3 py-1.5"
                        style={{ gridTemplateColumns: COLUMNAS, border: '1px solid transparent' }}>
-                    {['TORNEO #', 'TORNEO', '# FECHA', 'DÍA DE JUEGO', 'HORA DE LLEGADA', 'ESCENARIO',
+                    {['TORNEO #', '# FECHA', 'TORNEO', 'HORA DE LLEGADA', 'ESCENARIO',
                       'RIVAL', 'D.T', 'A.T'].map(t => (
                       <div key={t}
                         title={t}
@@ -1174,6 +1642,26 @@ export default function ProgramacionCompetenciaPage() {
                             className="w-full rounded-lg text-center text-white font-black text-[15px] outline-none
                               placeholder:text-white/50" />
 
+                          <select
+                            value={f.jornada}
+                            onChange={e => cambiar(f.id, 'jornada', e.target.value)}
+                            /* Igual que en D.T y A.T: el renglón se sube solo. */
+                            onFocus={e => {
+                              try {
+                                e.currentTarget.closest('div')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                              } catch { /* nada */ }
+                            }}
+                            style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30 }}
+                            className="w-full rounded-lg px-1.5 text-white text-[12px] font-bold outline-none cursor-pointer">
+                            <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
+                            {f.jornada && !NUM_FECHAS.includes(f.jornada) && (
+                              <option value={f.jornada} style={{ color: '#111827', backgroundColor: 'white' }}>{f.jornada}</option>
+                            )}
+                            {NUM_FECHAS.map(n => (
+                              <option key={n} value={n} style={{ color: '#111827', backgroundColor: 'white' }}>{n}</option>
+                            ))}
+                          </select>
+
                           {t ? (
                             /* SIN EL NOMBRE DEL PROFE DEBAJO (dirección,
                                29/08/2026): ocupaba un segundo renglón y engordaba
@@ -1188,35 +1676,30 @@ export default function ProgramacionCompetenciaPage() {
                             </span>
                           )}
 
-                          <select
-                            value={f.jornada}
-                            onChange={e => cambiar(f.id, 'jornada', e.target.value)}
-                            style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30 }}
-                            className="w-full rounded-lg px-1.5 text-white text-[12px] font-bold outline-none cursor-pointer">
-                            <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
-                            {f.jornada && !NUM_FECHAS.includes(f.jornada) && (
-                              <option value={f.jornada} style={{ color: '#111827', backgroundColor: 'white' }}>{f.jornada}</option>
-                            )}
-                            {NUM_FECHAS.map(n => (
-                              <option key={n} value={n} style={{ color: '#111827', backgroundColor: 'white' }}>{n}</option>
-                            ))}
-                          </select>
-
-                          <CasillaDia valor={f.fecha} onChange={v => cambiar(f.id, 'fecha', v)} />
+                          {/* La casilla del DÍA se quitó de aquí: el cuadro es de
+                              un solo día. Se cambia de día arriba, en el título. */}
                           <RelojLlegada valor={f.hora} onChange={v => cambiar(f.id, 'hora', v)} />
 
                           {/* ESCENARIO va ANTES que RIVAL, por orden de la
                               dirección (29/08/2026). */}
+                          {/* CON BUSCADOR (dirección, 29/08/2026): al escribir las
+                              primeras letras se abre la listica con las canchas
+                              y los equipos que ya se han usado. Se puede escoger
+                              uno o seguir escribiendo algo nuevo. */}
                           <input
                             value={f.escenario}
-                            onChange={e => cambiar(f.id, 'escenario', e.target.value)}
+                            list="memoria-escenarios"
+                            autoComplete="off"
+                            onChange={e => cambiar(f.id, 'escenario', e.target.value.toUpperCase())}
                             placeholder="ESCENARIO"
                             style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30 }}
                             className="w-full rounded-lg px-2 text-white text-[12px] font-bold outline-none placeholder:text-white/20" />
 
                           <input
                             value={f.rival}
-                            onChange={e => cambiar(f.id, 'rival', e.target.value)}
+                            list="memoria-rivales"
+                            autoComplete="off"
+                            onChange={e => cambiar(f.id, 'rival', e.target.value.toUpperCase())}
                             placeholder="RIVAL"
                             style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30 }}
                             className="w-full rounded-lg px-2 text-white text-[12px] font-bold outline-none placeholder:text-white/20" />
@@ -1277,6 +1760,12 @@ export default function ProgramacionCompetenciaPage() {
           sola la planilla, con los que tengan ese torneo asignado en Total Afiliados.
           Si esa planilla ya existía, solo se le actualiza el encabezado: lo calificado no se toca.
         </p>
+
+        {/* AIRE AL FINAL (dirección, 29/08/2026): el último renglón quedaba
+            pegado al borde de la pantalla y las listicas de D.T y A.T se
+            abrían cortadas. Con este espacio en blanco el cuadro se puede
+            subir con la rueda del mouse y las listas caben completas. */}
+        <div aria-hidden style={{ height: 340 }} />
 
         {/* ── LA IMAGEN PARA COMPARTIR ── */}
         {!!imagen && (

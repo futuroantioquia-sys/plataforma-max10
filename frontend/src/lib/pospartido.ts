@@ -87,6 +87,11 @@ export type FichaBanco = {
   goles_ellos: string;
   definitivo: boolean;      // cerrado (true) o a medias (false)
   actualizada_en: string;
+  /* QUIÉN LO DIRIGE (dirección, 29/08/2026). Vienen de la programación y
+     sirven para que el partido le aparezca en el banco al profe que ese día
+     va de D.T o de A.T, aunque el torneo no sea suyo. */
+  dt?: string;
+  at?: string;
 };
 
 const FALTA_TABLA =
@@ -306,12 +311,19 @@ export async function borrarPlanilla(num: string, jornada: string): Promise<void
  *  `undefined` = la tabla todavía no existe. */
 export async function getBanco(): Promise<FichaBanco[] | undefined> {
   try {
-    const res = await fetch(
-      `${SB_URL}/rest/v1/${TABLA_POSPARTIDO}` +
-      `?select=torneo_num,jornada,fecha,rival,goles_nos,goles_ellos,definitivo,actualizada_en` +
+    const pedir = (cols: string) => fetch(
+      `${SB_URL}/rest/v1/${TABLA_POSPARTIDO}?select=${cols}` +
       `&order=actualizada_en.desc&limit=1000`,
       { headers: HDR, cache: 'no-store' },
     );
+    const BASICAS = 'torneo_num,jornada,fecha,rival,goles_nos,goles_ellos,definitivo,actualizada_en';
+    /* Se piden también D.T y A.T; si la base todavía no las tiene, se vuelve a
+       pedir sin ellas para que el banco no se caiga. — 29/08/2026 */
+    let res = await pedir(`${BASICAS},dt,at`);
+    if (!res.ok && res.status !== 404) {
+      const previo = await res.text().catch(() => '');
+      if (/dt|at|column|schema cache/i.test(previo)) res = await pedir(BASICAS);
+    }
     if (res.status === 404) return undefined;
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
@@ -328,6 +340,8 @@ export async function getBanco(): Promise<FichaBanco[] | undefined> {
       goles_ellos:    String(f?.goles_ellos ?? ''),
       definitivo:     f?.definitivo === true,
       actualizada_en: String(f?.actualizada_en ?? ''),
+      dt:             String(f?.dt ?? ''),
+      at:             String(f?.at ?? ''),
     })).filter(f => f.torneo_num);
   } catch {
     return [];   // sin señal: el banco sale vacío, pero la planilla sigue sirviendo

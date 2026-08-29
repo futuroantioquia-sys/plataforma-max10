@@ -191,7 +191,7 @@ export default function PagosPendientesPage() {
         <div className="relative flex flex-col items-center border-l border-white/30 pl-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/MAX%2010.png" alt="MAX10" className="h-7 object-contain" />
-          <p className="text-white text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
+          <p className="text-white/75 text-[9px] leading-none mt-0.5 tracking-wide">CONECTA · GESTIONA · GANA</p>
         </div>
       </header>
 

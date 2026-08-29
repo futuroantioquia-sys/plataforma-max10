@@ -998,8 +998,13 @@ export default function CrearPospartidoPage() {
   const convocables = useMemo(() => {
     const n = parseInt(numTorneo, 10);
     if (!Number.isFinite(n) || n < 1) return [];
-    /* Si el torneo no es de este formador, ni la lista se arma. */
-    if (torneoAjeno) return [];
+    /* Si el torneo no es de este formador, ni la lista se arma.
+       SALVO QUE SEA UN PARTIDO (dirección, 29/08/2026): si hay # FECHA, ese
+       partido se lo creó la dirección desde PROGRAMACIÓN y ahí ya dice quién
+       lo dirige. Un profe puede estar de D.T reemplazando a otro; si aquí se
+       le bloquea la lista, abre su partido y le sale "este torneo todavía no
+       tiene deportistas asignados" y no puede calificar a nadie. */
+    if (torneoAjeno && !jornada) return [];
     return deportistas
       .filter(d => torneosDelDeportista(d).includes(n))
       /* SOLO LOS QUE SIGUEN ACTIVOS (dirección, 27/08/2026).
@@ -1030,7 +1035,7 @@ export default function CrearPospartidoPage() {
         if (Number.isFinite(ca) && Number.isFinite(cb) && ca !== cb) return ca - cb;
         return (a._nombre || '').localeCompare(b._nombre || '', 'es');
       });
-  }, [numTorneo, deportistas, torneoAjeno]);
+  }, [numTorneo, deportistas, torneoAjeno, jornada]);
 
   /* ── La planilla se arma sola con esos deportistas ───────────────────────
      Ni un renglón de más ni uno de menos.
@@ -1711,7 +1716,11 @@ export default function CrearPospartidoPage() {
 
   const [bajandoPdf, setBajandoPdf] = useState(false);
   async function bajarPDF() {
-    if (!esAdmon) {
+    /* EL PDF YA LO PUEDE BAJAR EL FORMADOR (dirección, 29/08/2026, en la
+       tarde). Se abrió junto con el resto del pospartido. Ojo: el PDF sale
+       SIN la calificación de cada deportista —esa columna va en blanco—,
+       porque se comparte por fuera del club; el promedio del equipo sí sale. */
+    if (!esAdmon && !esProfe) {
       setError('El PDF de la planilla lo baja únicamente administración.');
       return;
     }
@@ -2337,11 +2346,18 @@ export default function CrearPospartidoPage() {
   /* MIENTRAS SE PRUEBA, SOLO CASTRO (dirección, 29/08/2026). Los demás
      formadores siguen viendo el aviso de "en ajustes". Para abrírselo a todos,
      se borra la lista de abajo y ya. */
-  const PROFES_QUE_PUEDEN = ['CASTRO'];
+  /* ABIERTO A TODOS LOS FORMADORES (dirección, 29/08/2026, en la tarde).
+     Se terminaron las pruebas: todo formador entra a su Banco de Post
+     Partidos y gestiona los partidos que la dirección le programó.
+     Si algún día hay que volver a cerrarlo para probar algo, se pone
+     POSPARTIDO_PARA_TODOS en false y se escriben los apellidos que sí pueden
+     en PROFES_QUE_PUEDEN, así: ['CASTRO']. */
+  const POSPARTIDO_PARA_TODOS = true;
+  const PROFES_QUE_PUEDEN: string[] = [];
   const sinTildes = (x: any) => String(x ?? '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ').trim().toUpperCase();
-  const yoPuedo = PROFES_QUE_PUEDEN.some(p => {
+  const yoPuedo = POSPARTIDO_PARA_TODOS || PROFES_QUE_PUEDEN.some(p => {
     const yo = sinTildes(nombreProfe);
     const el = sinTildes(p);
     return !!yo && (yo === el || yo.split(' ').includes(el));
@@ -2352,8 +2368,19 @@ export default function CrearPospartidoPage() {
        torneo ni fecha: abre lo que la dirección le creó desde Programación de
        Competencia, y lo llena. Nada más. */
     const mios = esProfe ? new Set(misTorneos.map(t => t.num)) : null;
+    /* TAMBIÉN LOS PARTIDOS DONDE ÉL ES D.T O A.T (dirección, 29/08/2026).
+       Un formador puede dirigir un partido de un torneo que no es suyo —está
+       reemplazando a un compañero—. Si solo se miraran "sus torneos", ese
+       partido no le aparecería en el banco y no podría llenarlo. */
+    const soyYo = (x: any) => {
+      const yo = sinTildes(nombreProfe);
+      const el = sinTildes(x);
+      if (!yo || !el) return false;
+      return yo === el || yo.split(' ').includes(el) || el.split(' ').some(p => yo.split(' ').includes(p));
+    };
     const todos = [...(banco ?? [])]
-      .filter(f => !mios || mios.has(String(f.torneo_num).trim()))
+      .filter(f => !mios || mios.has(String(f.torneo_num).trim())
+                || soyYo((f as any).dt) || soyYo((f as any).at))
       .sort((a, b) => {
         /* Por día de juego; los que no tienen día, por torneo y fecha. */
         const fa = a.fecha || '9999-99-99';
@@ -2388,7 +2415,7 @@ export default function CrearPospartidoPage() {
           <div className="hidden sm:flex flex-col items-end flex-shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
-            <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
+            <p className="text-white/75 text-[9px] font-semibold tracking-wide mt-0.5 text-right leading-tight">CONECTA · GESTIONA · GANA</p>
           </div>
         </header>
 
@@ -2620,7 +2647,7 @@ export default function CrearPospartidoPage() {
           <div className="flex flex-col items-end shrink-0 sm:hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-6 w-auto object-contain" />
-            <p className="text-white/60 text-[7.5px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
+            <p className="text-white/75 text-[9px] font-semibold tracking-wide mt-0.5 text-right leading-tight">CONECTA · GESTIONA · GANA</p>
           </div>
         </div>
 
@@ -2679,9 +2706,9 @@ export default function CrearPospartidoPage() {
         {/* (INFO no va aquí: la dirección lo puso en el recuadro del TORNEO,
             contra la derecha, encima de la casilla RIVAL. — 28/08/2026) */}
 
-        {esAdmon && (
+        {(esAdmon || esProfe) && (
         <button onClick={bajarPDF} disabled={bajandoPdf}
-          title="Bajar esta planilla en PDF (solo administración)"
+          title="Bajar esta planilla en PDF. La calificación de cada deportista sale en blanco."
           className="rounded-lg flex items-center justify-center gap-1.5 px-2.5 shrink-0
             text-white font-black text-[11px] h-[38px] sm:h-8 disabled:opacity-60"
           style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
@@ -2699,7 +2726,7 @@ export default function CrearPospartidoPage() {
         <div className="hidden sm:flex flex-col items-end flex-shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
-          <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
+          <p className="text-white/75 text-[9px] font-semibold tracking-wide mt-0.5 text-right leading-tight">CONECTA · GESTIONA · GANA</p>
         </div>
       </header>
 

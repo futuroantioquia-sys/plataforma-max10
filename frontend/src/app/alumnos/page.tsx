@@ -1356,7 +1356,7 @@ function AlumnosPageContent() {
           )}
           <div className="text-right leading-tight border-l border-white/20 pl-3">
             <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-            <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
+            <p className="text-white/75 text-[9px] font-semibold tracking-wide">CONECTA · GESTIONA · GANA</p>
           </div>
         </div>
       </header>

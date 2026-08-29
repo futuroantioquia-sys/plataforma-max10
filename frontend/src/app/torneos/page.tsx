@@ -457,7 +457,11 @@ export default function TorneosPage() {
       for (const id of chuleados) {
         const num = numeroDe.get(id);
         if (!num) continue;
-        await agregarPartido({ torneo_num: String(num), fecha: diaPartido });
+        /* NACE EN LA FECHA 1A (dirección, 29/08/2026). Quien programa casi
+           nunca sabe de una si es la primera, la segunda o la tercera fecha,
+           y un renglón sin # FECHA no se puede mandar al pospartido. Se le
+           pone 1A a todos y se corrige en Programación cuando se sepa. */
+        await agregarPartido({ torneo_num: String(num), fecha: diaPartido, jornada: '1A' });
         hechos++;
       }
       setChuleados(new Set());

@@ -420,13 +420,20 @@ function DashboardProfesor() {
      (dirección, 29/08/2026). La pantalla del pospartido también lo bloquea,
      por si alguien llega con el enlace pegado. Para abrírselo a todos, se
      deja la lista vacía. */
-  const PROFES_CON_POSPARTIDO = ['CASTRO'];
+  /* CERRADO PARA TODOS LOS FORMADORES (dirección, 29/08/2026): por ahora
+     ningún profe ve el pospartido en su tablero. */
+  const PROFES_CON_POSPARTIDO: string[] = [];
   const sinTildesPP = (x: any) => String(x ?? '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ').trim().toUpperCase();
   /* Se usa el nombre que ya trae el estado —se llenó arriba, en el effect—,
      para no leer el aparato mientras se pinta la pantalla. */
-  const vePospartido = PROFES_CON_POSPARTIDO.length === 0 || PROFES_CON_POSPARTIDO.some(p => {
+  /* ABIERTO A TODOS (dirección, 29/08/2026, en la tarde): el pospartido le
+     aparece a todo formador. Para volver a cerrarlo mientras se prueba algo,
+     se pone POSPARTIDO_PARA_TODOS en false y se escriben en
+     PROFES_CON_POSPARTIDO los apellidos que sí pueden. */
+  const POSPARTIDO_PARA_TODOS = true;
+  const vePospartido = POSPARTIDO_PARA_TODOS || PROFES_CON_POSPARTIDO.some(p => {
     const yo = sinTildesPP(nombreProfe);
     const el = sinTildesPP(p);
     return !!yo && (yo === el || yo.split(' ').includes(el));

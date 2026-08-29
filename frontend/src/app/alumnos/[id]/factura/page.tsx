@@ -111,7 +111,7 @@ export default function SolicitarFacturaPage() {
         </div>
         <div className="text-right leading-tight flex-shrink-0">
           <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-          <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
+          <p className="text-white/75 text-[9px] font-semibold tracking-wide">CONECTA · GESTIONA · GANA</p>
         </div>
       </header>
 

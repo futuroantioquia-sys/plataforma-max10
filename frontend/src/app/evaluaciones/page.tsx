@@ -1499,7 +1499,7 @@ function ValoracionPageInner() {
                   {/* Logo Max10 izquierda */}
                   <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     <img src="/MAX%2010.png" alt="Max10 Sport" style={{ height: 36, width: 'auto', objectFit: 'contain' }} />
-                    <span style={{ color: '#fff', fontSize: 8, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Conecta, Gestiona, Gana</span>
+                    <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>CONECTA · GESTIONA · GANA</span>
                   </div>
                   {/* Título derecha */}
                   <div style={{ flex: 1, textAlign: 'right', color: '#fff', fontWeight: 900, fontSize: 14, letterSpacing: 2, textTransform: 'uppercase' }}>
