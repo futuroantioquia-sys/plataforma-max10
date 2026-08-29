@@ -2308,13 +2308,36 @@ export default function CrearPospartidoPage() {
      uno. Aquí no se crea ni se llena nada: los partidos entran por
      PROGRAMACIÓN DE COMPETENCIA y los llena el formador.
      — dirección, 29/08/2026 */
-  if (esAdmon && !abriPlanilla) {
-    const todos = [...(banco ?? [])].sort((a, b) => {
-      const ta = parseInt(a.torneo_num, 10) || 0;
-      const tb = parseInt(b.torneo_num, 10) || 0;
-      if (ta !== tb) return ta - tb;
-      return numeroDeFecha(a.jornada) - numeroDeFecha(b.jornada);
-    });
+  /* MIENTRAS SE PRUEBA, SOLO CASTRO (dirección, 29/08/2026). Los demás
+     formadores siguen viendo el aviso de "en ajustes". Para abrírselo a todos,
+     se borra la lista de abajo y ya. */
+  const PROFES_QUE_PUEDEN = ['CASTRO'];
+  const sinTildes = (x: any) => String(x ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim().toUpperCase();
+  const yoPuedo = PROFES_QUE_PUEDEN.some(p => {
+    const yo = sinTildes(nombreProfe);
+    const el = sinTildes(p);
+    return !!yo && (yo === el || yo.split(' ').includes(el));
+  });
+
+  if ((esAdmon || (esProfe && yoPuedo)) && !abriPlanilla) {
+    /* AL FORMADOR SOLO SUS PARTIDOS (dirección, 29/08/2026). Él no escoge
+       torneo ni fecha: abre lo que la dirección le creó desde Programación de
+       Competencia, y lo llena. Nada más. */
+    const mios = esProfe ? new Set(misTorneos.map(t => t.num)) : null;
+    const todos = [...(banco ?? [])]
+      .filter(f => !mios || mios.has(String(f.torneo_num).trim()))
+      .sort((a, b) => {
+        /* Por día de juego; los que no tienen día, por torneo y fecha. */
+        const fa = a.fecha || '9999-99-99';
+        const fb = b.fecha || '9999-99-99';
+        if (fa !== fb) return fa.localeCompare(fb);
+        const ta = parseInt(a.torneo_num, 10) || 0;
+        const tb = parseInt(b.torneo_num, 10) || 0;
+        if (ta !== tb) return ta - tb;
+        return numeroDeFecha(a.jornada) - numeroDeFecha(b.jornada);
+      });
 
     return (
       <div className="min-h-screen pb-16" style={{ background: LIENZO }}>
@@ -2328,10 +2351,12 @@ export default function CrearPospartidoPage() {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-white font-black text-[15px] sm:text-base leading-tight">
-              Banco General de Post Partido
+              {esProfe ? 'Mis Post Partidos' : 'Banco General de Post Partido'}
             </h1>
             <p className="text-white/70 text-[11px] font-semibold leading-tight">
-              Todos los partidos. Los crea Programación de Competencia y los llena el formador.
+              {esProfe
+                ? 'Tus partidos. Ábrelos y llénalos.'
+                : 'Todos los partidos. Los crea Programación de Competencia y los llena el formador.'}
             </p>
           </div>
           <div className="hidden sm:flex flex-col items-end flex-shrink-0">
@@ -2359,16 +2384,21 @@ export default function CrearPospartidoPage() {
           ) : todos.length === 0 ? (
             <div className="rounded-2xl p-6 text-center"
                  style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
-              <p className="text-white font-black text-[14px] mb-1.5">No hay ningún partido todavía</p>
-              <p className="text-white/55 text-[12.5px] font-semibold leading-relaxed">
-                Los partidos se crean en <span className="text-white font-black">PROGRAMACIÓN DE COMPETENCIA</span>:
-                se llena el renglón y se oprime el balón. De ahí caen aquí y al banco del formador.
+              <p className="text-white font-black text-[14px] mb-1.5">
+                {esProfe ? 'Todavía no tienes partidos' : 'No hay ningún partido todavía'}
               </p>
-              <button onClick={() => router.push('/programacion')}
-                className="mt-4 rounded-xl px-4 py-2.5 text-white font-black text-[12px]"
-                style={{ background: VERDE }}>
-                IR A PROGRAMACIÓN
-              </button>
+              <p className="text-white/55 text-[12.5px] font-semibold leading-relaxed">
+                {esProfe
+                  ? 'Cuando la dirección te programe un partido, aparece aquí y ya lo puedes llenar.'
+                  : 'Los partidos se crean en PROGRAMACIÓN DE COMPETENCIA: se llena el renglón y se oprime el balón. De ahí caen aquí y al banco del formador.'}
+              </p>
+              {!esProfe && (
+                <button onClick={() => router.push('/programacion')}
+                  className="mt-4 rounded-xl px-4 py-2.5 text-white font-black text-[12px]"
+                  style={{ background: VERDE }}>
+                  IR A PROGRAMACIÓN
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -2376,9 +2406,11 @@ export default function CrearPospartidoPage() {
                    style={{ background: VERDE }}>
                 <Archive className="w-5 h-5 text-white shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-white font-black text-[15px] tracking-wide">PARTIDOS</h2>
+                  <h2 className="text-white font-black text-[15px] tracking-wide">
+                    {esProfe ? 'MIS PARTIDOS' : 'PARTIDOS'}
+                  </h2>
                   <p className="text-white/75 text-[11px] font-semibold">
-                    {todos.length} {todos.length === 1 ? 'partido' : 'partidos'} en total
+                    {todos.length} {todos.length === 1 ? 'partido' : 'partidos'}
                   </p>
                 </div>
                 <button onClick={refrescarBanco}
@@ -2443,17 +2475,19 @@ export default function CrearPospartidoPage() {
                           setAbriPlanilla(true);
                           try { window.scrollTo({ top: 0 }); } catch { /* nada */ }
                         }}
-                        title="Ver este partido"
+                        title={esProfe ? 'Abrir y llenar este partido' : 'Ver este partido'}
                         className="shrink-0 rounded-lg px-3 py-2 text-white text-[10.5px] font-black
                           transition hover:brightness-125"
-                        style={{ background: '#20293a', border: `1px solid ${BORDE}` }}>
-                        VER POST PARTIDO
+                        style={{
+                          background: esProfe ? VERDE : '#20293a',
+                          border: `1px solid ${esProfe ? VERDE : BORDE}`,
+                        }}>
+                        {esProfe ? 'GESTIONAR' : 'VER POST PARTIDO'}
                       </button>
 
-                      {/* BORRAR ESTE POSPARTIDO. Es lo único que administración
-                          puede cambiar aquí: quitar uno que no debía existir —una
-                          prueba, un partido que no se jugó—. Pide confirmación y
-                          NO se puede deshacer. — dirección, 29/08/2026 */}
+                      {/* BORRAR: solo administración. El formador no borra partidos.
+                          — dirección, 29/08/2026 */}
+                      {!esProfe && (
                       <button
                         onClick={async () => {
                           const como = `${etiquetaFecha(f.jornada)} ${nombreDeTorneoNum(f.torneo_num)}`;
@@ -2475,15 +2509,16 @@ export default function CrearPospartidoPage() {
                         style={{ width: 34, height: 34, background: 'transparent', border: `1px solid ${ROJO}` }}>
                         <Trash2 className="w-3.5 h-3.5" style={{ color: ROJO }} />
                       </button>
+                      )}
                     </div>
                   );
                 })}
               </div>
 
               <p className="text-white/40 text-[11.5px] font-semibold mt-4 leading-relaxed">
-                Administración <span className="text-white font-black">solo mira</span>. La información de cada
-                partido la llena el formador, y los partidos se crean únicamente desde
-                <span className="text-white font-black"> Programación de Competencia</span>.
+                {esProfe
+                  ? 'Estos son los partidos que la dirección te programó. Ábrelos con GESTIONAR y llénalos.'
+                  : 'Administración solo mira. La información de cada partido la llena el formador, y los partidos se crean únicamente desde Programación de Competencia.'}
               </p>
             </>
           )}
@@ -2498,19 +2533,6 @@ export default function CrearPospartidoPage() {
      alguien llega con el enlace pegado, tampoco entra.
      Cuando la dirección diga que ya, se borra este bloque y todo vuelve a
      funcionar como está escrito más abajo. */
-  /* MIENTRAS SE PRUEBA, SOLO CASTRO (dirección, 29/08/2026). Los demás
-     formadores siguen viendo el aviso de "en ajustes". Para abrírselo a todos,
-     se borra la lista de abajo y ya. */
-  const PROFES_QUE_PUEDEN = ['CASTRO'];
-  const sinTildes = (x: any) => String(x ?? '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ').trim().toUpperCase();
-  const yoPuedo = PROFES_QUE_PUEDEN.some(p => {
-    const yo = sinTildes(nombreProfe);
-    const el = sinTildes(p);
-    return !!yo && (yo === el || yo.split(' ').includes(el));
-  });
-
   if (esProfe && !yoPuedo) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6" style={{ background: LIENZO }}>
@@ -2653,19 +2675,23 @@ export default function CrearPospartidoPage() {
 
       <main className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 1350 }}>
 
-        {/* ADMINISTRACIÓN SOLO MIRA (dirección, 29/08/2026). */}
-        {soloMira && (
+        {/* VOLVER A LA LISTA — para los dos. Administración además va con
+            candado: solo mira. — dirección, 29/08/2026 */}
+        {(soloMira || esProfe) && (
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <button
               onClick={() => { setAbriPlanilla(false); refrescarBanco(); }}
               className="rounded-xl px-3 py-2 flex items-center gap-1.5 text-white text-[11.5px] font-black
                 transition hover:brightness-125"
               style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
-              <ArrowLeft className="w-3.5 h-3.5" /> VOLVER A LA LISTA
+              <ArrowLeft className="w-3.5 h-3.5" />
+              {esProfe ? 'VOLVER A MIS PARTIDOS' : 'VOLVER A LA LISTA'}
             </button>
-            <span className="text-[11.5px] font-bold" style={{ color: AMBAR }}>
-              Estás mirando el partido. La información la llena el formador.
-            </span>
+            {soloMira && (
+              <span className="text-[11.5px] font-bold" style={{ color: AMBAR }}>
+                Estás mirando el partido. La información la llena el formador.
+              </span>
+            )}
           </div>
         )}
 
@@ -2750,26 +2776,15 @@ export default function CrearPospartidoPage() {
                 no hay forma de que se meta en el de otro.
                 Administración sigue escribiendo el número: son 58 torneos y
                 escribir "42" es más rápido que buscarlo en una lista. */}
+            {/* AL FORMADOR YA NO SE LE PIDE ESCOGER (dirección, 29/08/2026):
+                el partido se lo abrió la dirección desde la programación, así
+                que el torneo viene puesto y no se toca. Antes había una lista
+                y podía saltar de un torneo a otro, o quedarse en uno vacío. */}
             {esProfe ? (
-              <select
-                value={numTorneo}
-                onChange={e => setNumTorneo(e.target.value)}
-                title="Escoge tu torneo"
-                /* En el celular ocupa todo el renglón: con ancho fijo se salía
-                   de la pantalla y tocaba deslizar solo para verla.
-                   — 27/08/2026 */
-                style={{ height: 44, background: CAMPO, border: `1px solid ${BORDE}` }}
-                className="w-full sm:w-auto sm:max-w-[460px] min-w-0 rounded-xl px-3
-                  text-white font-black text-[13px] sm:text-[15px] outline-none cursor-pointer">
-                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>
-                  — Escoge tu torneo —
-                </option>
-                {misTorneos.map(t => (
-                  <option key={t.num} value={t.num} style={{ color: '#111827', backgroundColor: 'white' }}>
-                    {t.num} · {t.nombre}
-                  </option>
-                ))}
-              </select>
+              <span className="rounded-xl px-3 flex items-center text-white font-black text-[15px]"
+                style={{ height: 44, background: CAMPO, border: `1px solid ${BORDE}` }}>
+                {numTorneo || '—'}
+              </span>
             ) : (
               <input
                 value={numTorneo}
@@ -2854,6 +2869,16 @@ export default function CrearPospartidoPage() {
               <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
                 # FECHA
               </label>
+              {/* AL FORMADOR LA FECHA TAMPOCO SE LE PIDE (dirección,
+                  29/08/2026): el partido se lo abrió la dirección, ya viene
+                  con su fecha y no se cambia desde aquí. Antes tenía la lista
+                  de 1A a 30A y podía irse a una fecha que no existía. */}
+              {esProfe ? (
+                <span className="w-full rounded-lg px-2 flex items-center text-white text-[12.5px] font-black"
+                  style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}>
+                  {jornada ? etiquetaFecha(jornada) : '—'}
+                </span>
+              ) : (
               <select value={jornada} onChange={e => setJornada(e.target.value)}
                 style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}
                 className="w-full rounded-lg px-2 text-white text-[12.5px] font-bold outline-none cursor-pointer">
@@ -2873,6 +2898,7 @@ export default function CrearPospartidoPage() {
                   <option key={f} value={f} style={{ color: '#111827', backgroundColor: 'white' }}>{f}</option>
                 ))}
               </select>
+              )}
             </div>
 
             {/* DÍA · HORA · RIVAL son de un PARTIDO. En la matriz —que es la
