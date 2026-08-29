@@ -1,0 +1,82 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Que queden ESCENARIO, D.T y A.T</title>
+<style>
+:root{--lienzo:#333F50;--panel:#3C4759;--campo:#2B3547;--borde:#4A5568;--verde:#00B050;--ambar:#E0A33A}
+*{box-sizing:border-box;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{background:var(--lienzo);color:#fff;padding:18px;max-width:900px;margin:0 auto}
+h1{font-size:19px;font-weight:900}
+.sub{color:#ffffff8c;font-size:12.5px;margin-top:6px;line-height:1.6}
+.sub b{color:#fff}
+.caja{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:14px;margin-top:14px}
+ol{margin:0;padding-left:20px;font-size:13px;line-height:2}
+ol b{color:#5BE39B}
+textarea{width:100%;height:250px;background:var(--campo);border:1px solid var(--borde);border-radius:11px;
+ color:#fff;font-family:Consolas,monospace;font-size:11.5px;padding:11px;line-height:1.5;resize:vertical}
+button{border:0;border-radius:11px;padding:12px 18px;font-weight:900;font-size:13px;color:#fff;cursor:pointer}
+.b2{background:var(--verde)}
+.b1{background:var(--campo);border:1px solid var(--borde)}
+.fila{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.ok{color:#5BE39B;font-size:12.5px;font-weight:800}
+.aviso{border-radius:11px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-top:12px;
+ background:rgba(224,163,58,.14);border:1px solid var(--ambar)}
+</style></head><body>
+
+<h1>Que queden guardados ESCENARIO, D.T y A.T</h1>
+<p class="sub">
+Estos tres se ven en la pantalla pero <b>no se estaban guardando</b>: a la base le faltan las
+casillas. Esto las crea. Se hace <b>una sola vez</b> y <b>no borra nada</b>.
+</p>
+
+<div class="aviso">
+<b>Antes que nada:</b> si Chrome te ofrece <b>traducir</b> la página de Supabase, dile que <b>NO</b>.
+La traducción automática danna esa pantalla y sale el error de &ldquo;una extension del navegador
+provoco un error&rdquo;.
+</div>
+
+<div class="caja">
+  <ol>
+    <li>Oprime <b>COPIAR EL TEXTO</b>.</li>
+    <li>Oprime <b>ABRIR SUPABASE</b>. Se abre una pagina en blanco para escribir.</li>
+    <li>Si Chrome ofrece traducir, escoge <b>No traducir</b>.</li>
+    <li>Haz clic dentro del cuadro grande y pega con <b>Ctrl + V</b>.</li>
+    <li>Oprime <b>RUN</b> (arriba a la derecha) o <b>Ctrl + Enter</b>.</li>
+    <li>Abajo deben salir <b>cuatro renglones, todos con LISTO</b>.</li>
+    <li>Vuelve a la plataforma y oprime <b>Ctrl + F5</b>.</li>
+  </ol>
+
+  <div class="fila">
+    <button class="b2" id="copiar">1 &middot; COPIAR EL TEXTO</button>
+    <button class="b1" id="abrir">2 &middot; ABRIR SUPABASE</button>
+    <span class="ok" id="listo"></span>
+  </div>
+</div>
+
+<div class="caja">
+  <textarea id="sql" readonly spellcheck="false"></textarea>
+</div>
+
+<p class="sub" style="margin-top:14px">
+Despues de esto, los partidos que <b>vuelvas a mandar</b> desde Programacion —oprimiendo el
+balon otra vez— ya le llevan al formador el escenario, el D.T y el A.T.
+</p>
+
+<script>
+const SQL = document.getElementById('sql');
+SQL.value = "-- CASILLAS QUE FALTAN EN EL POSPARTIDO - 29/08/2026\n-- Crea ESCENARIO, RESUMEN, D.T y A.T en la tabla del pospartido.\n-- Correr esto NO borra nada. Se puede correr varias veces sin problema.\n\nalter table public.pospartido_planillas add column if not exists escenario text not null default '';\nalter table public.pospartido_planillas add column if not exists resumen   text not null default '';\nalter table public.pospartido_planillas add column if not exists dt        text not null default '';\nalter table public.pospartido_planillas add column if not exists at        text not null default '';\n\nnotify pgrst, 'reload schema';\n\n-- Abajo deben salir CUATRO renglones, todos con la palabra LISTO.\nselect 'escenario' as casilla,\n       case when exists (select 1 from information_schema.columns\n            where table_name='pospartido_planillas' and column_name='escenario')\n            then 'LISTO' else 'FALTA' end as resultado\nunion all select 'resumen',\n       case when exists (select 1 from information_schema.columns\n            where table_name='pospartido_planillas' and column_name='resumen')\n            then 'LISTO' else 'FALTA' end\nunion all select 'D.T',\n       case when exists (select 1 from information_schema.columns\n            where table_name='pospartido_planillas' and column_name='dt')\n            then 'LISTO' else 'FALTA' end\nunion all select 'A.T',\n       case when exists (select 1 from information_schema.columns\n            where table_name='pospartido_planillas' and column_name='at')\n            then 'LISTO' else 'FALTA' end;";
+
+document.getElementById('copiar').onclick = async () => {
+  SQL.select();
+  let ok = false;
+  try { await navigator.clipboard.writeText(SQL.value); ok = true; }
+  catch { try { ok = document.execCommand('copy'); } catch {} }
+  document.getElementById('listo').textContent = ok
+    ? 'Copiado. Ahora abre Supabase y pega con Ctrl + V.'
+    : 'No se pudo copiar solo: seleccionalo con Ctrl + A y copia con Ctrl + C.';
+};
+
+document.getElementById('abrir').onclick = () => {
+  window.open('https://supabase.com/dashboard/project/fykdyalpuydkwfjqguip/sql/new', '_blank');
+};
+</script></body></html>

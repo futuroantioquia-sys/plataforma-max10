@@ -45,7 +45,13 @@ export async function middleware(request: NextRequest) {
   if (rol === 'profesor') {
     const permitida = RUTAS_PROFESOR.some(r => pathname === r || pathname.startsWith(r + '/'));
     if (!permitida) {
-      return NextResponse.redirect(new URL('/asistencia', request.url));
+      /* A DÓNDE SE DEVUELVE EL FORMADOR (dirección, 29/08/2026).
+         Antes caía en CONTROL DE ASISTENCIA, que es la pantalla grande de la
+         administración —con todos los programas y todos los proyectos—. Al
+         oprimir "atrás" el profe terminaba ahí y parecía que estuviera viendo
+         lo del administrador. Ahora se devuelve a MIS PROYECTOS, que es su
+         casa. */
+      return NextResponse.redirect(new URL('/mis-proyectos', request.url));
     }
   }
 

@@ -10,7 +10,7 @@ import {
   UserMinus, FileText,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
-import { esSuperAdmin, esDeportivo } from '@/lib/permisos';
+import { esSuperAdmin, esDeportivo, getSesion } from '@/lib/permisos';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
 import { getDeportistas, countSoportesPendientes, countSolicitudesFacturaPendientes, countLibroPagos, getResumenVisitas, getVisitasPorDia } from '@/lib/db';
@@ -689,7 +689,14 @@ function DashboardInner() {
   const [montado,  setMontado]  = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => { setMontado(true); }, []);
+  /* EL ROL MANDA DESDE LA COOKIE DEL SERVIDOR (dirección, 29/08/2026).
+     Pasó de verdad: un formador entró y le apareció el tablero completo
+     —Total Afiliados, Pagos, Programación—. La razón es que el tablero se
+     guiaba por el rol guardado EN EL APARATO (queda pegado del último que
+     entró en ese computador). La cookie la firma el servidor al entrar y no
+     se puede cambiar desde el navegador: esa es la que vale. */
+  const [rolCookie, setRolCookie] = useState<string | null>(null);
+  useEffect(() => { setMontado(true); setRolCookie(getSesion() || ''); }, []);
 
   useEffect(() => {
     if (!montado) return;
@@ -735,6 +742,12 @@ function DashboardInner() {
     visitante:      <DashboardPadre />,
   };
 
+  /* La cookie del servidor manda; el rol del aparato solo se usa si la cookie
+     no dice nada. Y si ninguno de los dos se entiende, se muestra el tablero
+     del FORMADOR —el más pequeño—, nunca el de administración. */
+  const rolMandado = (rolCookie === '1' ? 'administracion' : rolCookie) || '';
+  const vista = vistaPorRol[rolMandado] ?? vistaPorRol[usuario.rol] ?? <DashboardProfesor />;
+
   return (
     <div className="min-h-screen" style={{ background: LIENZO }}>
       {/* Panel de error (Promise rejection) */}
@@ -758,7 +771,7 @@ function DashboardInner() {
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-7">
         <WelcomeBar usuario={usuario} />
-        {vistaPorRol[usuario.rol] ?? <DashboardAdmin />}
+        {vista}
       </main>
     </div>
   );

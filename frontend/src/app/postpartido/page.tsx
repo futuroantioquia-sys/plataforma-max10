@@ -1095,9 +1095,34 @@ export default function CrearPospartidoPage() {
         ? ((enBase.actualizada_en || '') >= (local.actualizada_en || '') ? enBase : local)
         : (enBase || local);
 
+      /* EL ENCABEZADO MANDA DESDE LA BASE (dirección, 29/08/2026).
+         Pasó de verdad: CASTRO abrió el partido y le salió el encabezado en
+         blanco. La razón es que en ese computador había quedado un BORRADOR
+         viejo —de cuando el módulo se llenaba a mano— más nuevo que lo que la
+         dirección acababa de programar, y el borrador pisaba el día, la hora,
+         el rival y el escenario.
+         Ahora se hace al revés: los renglones de los deportistas salen de lo
+         más nuevo (que es lo que el formador lleva escrito), pero el
+         ENCABEZADO sale de la BASE siempre que la base lo tenga. Lo que la
+         dirección programó no lo pisa nada. */
+      const conEncabezadoBueno = (p: any) => {
+        if (!p) return p;
+        if (!enBase) return p;
+        const vale = (x: any) => String(x ?? '').trim() !== '';
+        return {
+          ...p,
+          fecha:     vale(enBase.fecha)                ? enBase.fecha                : p.fecha,
+          llegar:    vale(enBase.llegar)               ? enBase.llegar               : p.llegar,
+          rival:     vale(enBase.rival)                ? enBase.rival                : p.rival,
+          escenario: vale((enBase as any).escenario)   ? (enBase as any).escenario   : (p as any).escenario,
+          dt:        vale((enBase as any).dt)          ? (enBase as any).dt          : (p as any).dt,
+          at:        vale((enBase as any).at)          ? (enBase as any).at          : (p as any).at,
+        };
+      };
+
       if (guardada && Array.isArray(guardada.filas) && guardada.filas.length) {
         primeraCarga.current = true;      // volcarla no cuenta como cambio
-        ponerPlanilla(guardada);
+        ponerPlanilla(conEncabezadoBueno(guardada));
         setGuardadoEn(enBase?.actualizada_en ?? '');
         setSinGuardar(!enBase || (local ? (local.actualizada_en > (enBase.actualizada_en || '')) : false));
         return;
@@ -1110,14 +1135,15 @@ export default function CrearPospartidoPage() {
          nada" y se borraba el encabezado que la dirección acababa de
          programar. */
       if (guardada) {
+        const cab: any = conEncabezadoBueno(guardada);
         primeraCarga.current = true;
-        setFecha(guardada.fecha ?? '');
-        setLlegar(guardada.llegar ?? '');
-        setRival(guardada.rival ?? '');
-        setEscenario((guardada as any).escenario ?? '');
-        setResumen((guardada as any).resumen ?? '');
-        setDt((guardada as any).dt ?? '');
-        setAt((guardada as any).at ?? '');
+        setFecha(cab.fecha ?? '');
+        setLlegar(cab.llegar ?? '');
+        setRival(cab.rival ?? '');
+        setEscenario(cab.escenario ?? '');
+        setResumen(cab.resumen ?? '');
+        setDt(cab.dt ?? '');
+        setAt(cab.at ?? '');
         setGolesNos(guardada.goles_nos ?? '');
         setGolesEllos(guardada.goles_ellos ?? '');
         setAutogoles(parseInt(String((guardada as any).autogoles ?? '0'), 10) || 0);
@@ -2350,12 +2376,12 @@ export default function CrearPospartidoPage() {
             <ArrowLeft className="w-4 h-4 text-white" />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-white font-black text-[15px] sm:text-base leading-tight">
-              {esProfe ? 'Mis Post Partidos' : 'Banco General de Post Partido'}
+            <h1 className="text-white font-black text-[15px] sm:text-base leading-tight uppercase">
+              {esProfe ? 'Mi Banco de Post Partidos' : 'Banco General Post Partido'}
             </h1>
             <p className="text-white/70 text-[11px] font-semibold leading-tight">
               {esProfe
-                ? 'Tus partidos. Ábrelos y llénalos.'
+                ? 'Los partidos que te programó la dirección. Ábrelos y llénalos.'
                 : 'Todos los partidos. Los crea Programación de Competencia y los llena el formador.'}
             </p>
           </div>
@@ -2407,7 +2433,7 @@ export default function CrearPospartidoPage() {
                 <Archive className="w-5 h-5 text-white shrink-0" />
                 <div className="flex-1 min-w-0">
                   <h2 className="text-white font-black text-[15px] tracking-wide">
-                    {esProfe ? 'MIS PARTIDOS' : 'PARTIDOS'}
+                    {esProfe ? 'MI BANCO DE POST PARTIDOS' : 'PARTIDOS'}
                   </h2>
                   <p className="text-white/75 text-[11px] font-semibold">
                     {todos.length} {todos.length === 1 ? 'partido' : 'partidos'}
@@ -2578,7 +2604,11 @@ export default function CrearPospartidoPage() {
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="text-white font-black text-[15px] sm:text-base leading-tight">Crear Pospartido</h1>
+            {/* AL FORMADOR NO SE LE DICE "CREAR": él no crea nada, llena el
+                partido que la dirección le programó. — 29/08/2026 */}
+            <h1 className="text-white font-black text-[15px] sm:text-base leading-tight">
+              {esProfe ? 'Post Partido' : 'Crear Pospartido'}
+            </h1>
             <p className="text-white/55 text-[11px] leading-tight truncate">
               {nombreTorneo || (esProfe
                 ? 'Escoge tu torneo para armar la planilla'
@@ -2766,9 +2796,12 @@ export default function CrearPospartidoPage() {
                pointerEvents: soloMira ? 'none' : undefined,
              }}>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-white font-black text-[15px]">
-              {esProfe ? 'TORNEO' : 'TORNEO #'}
-            </span>
+            {/* AL FORMADOR NI TORNEOS NI ESCOGER FECHAS: se le muestra el
+                nombre del partido y ya. Todo lo demás es de administración.
+                — dirección, 29/08/2026 */}
+            {!esProfe && (
+              <span className="text-white font-black text-[15px]">TORNEO #</span>
+            )}
 
             {/* AL FORMADOR NO SE LE PIDE UN NÚMERO (dirección, 27/08/2026).
                 Él no tiene por qué saberse que su torneo es el 17: escoge el
@@ -2781,10 +2814,15 @@ export default function CrearPospartidoPage() {
                 que el torneo viene puesto y no se toca. Antes había una lista
                 y podía saltar de un torneo a otro, o quedarse en uno vacío. */}
             {esProfe ? (
-              <span className="rounded-xl px-3 flex items-center text-white font-black text-[15px]"
-                style={{ height: 44, background: CAMPO, border: `1px solid ${BORDE}` }}>
-                {numTorneo || '—'}
-              </span>
+              <div className="min-w-0">
+                <p className="text-white font-black text-[17px] leading-tight truncate">
+                  {nombreTorneo || '—'}
+                </p>
+                <p className="text-white/55 text-[12px] font-black leading-tight">
+                  {jornada ? etiquetaFecha(jornada) : ''}
+                  {fechaBonita ? ` · ${fechaBonita}` : ''}
+                </p>
+              </div>
             ) : (
               <input
                 value={numTorneo}
@@ -2797,8 +2835,10 @@ export default function CrearPospartidoPage() {
             )}
 
             {/* El torneo, en el mismo renglón del número: así no se pierde
-                un espacio de pantalla en una caja aparte. — 26/08/2026 */}
-            {nombreTorneo ? (
+                un espacio de pantalla en una caja aparte. — 26/08/2026
+                Al FORMADOR no se le repite: él ya lo tiene arriba, con su
+                fecha y su día. — 29/08/2026 */}
+            {esProfe ? null : nombreTorneo ? (
               <div className="min-w-0">
                 <p className="text-white font-black text-[19px] leading-tight truncate">
                   {nombreTorneo}
@@ -2864,7 +2904,10 @@ export default function CrearPospartidoPage() {
               cancha quepa en el mismo renglón. */}
           <div className={enMatriz
             ? 'grid grid-cols-1 sm:grid-cols-[220px] gap-2 mt-3'
-            : 'grid grid-cols-2 gap-2 mt-3 sm:grid-cols-[0.6fr_0.85fr_196px_1.3fr_1.3fr]'}>
+            : esProfe
+              ? 'grid grid-cols-2 gap-2 mt-3 sm:grid-cols-[0.85fr_196px_1.3fr_1.3fr]'
+              : 'grid grid-cols-2 gap-2 mt-3 sm:grid-cols-[0.6fr_0.85fr_196px_1.3fr_1.3fr]'}>
+            {!esProfe && (
             <div>
               <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
                 # FECHA
@@ -2900,6 +2943,7 @@ export default function CrearPospartidoPage() {
               </select>
               )}
             </div>
+            )}
 
             {/* DÍA · HORA · RIVAL son de un PARTIDO. En la matriz —que es la
                 lista del torneo para cobrar— no hay partido, así que no se
@@ -3755,7 +3799,10 @@ export default function CrearPospartidoPage() {
             únicamente cuando hay una # FECHA escogida (FECHA 1 … FECHA 12).
             — dirección, 28/08/2026
             ═══════════════════════════════════════════════════════════════════ */}
-        {!enMatriz && (
+        {/* AL FORMADOR NO SE LE MUESTRA (dirección, 29/08/2026): él ya entró
+            por su propio banco —"MI BANCO DE POST PARTIDOS"— y vuelve a él con
+            el botón de arriba. Repetirle el banco aquí abajo lo confunde. */}
+        {!enMatriz && !esProfe && (
         <div className="rounded-2xl mt-6 overflow-hidden"
              style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
 
