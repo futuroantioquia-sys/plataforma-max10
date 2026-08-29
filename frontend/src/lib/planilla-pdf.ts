@@ -85,6 +85,9 @@ export type DatosPlanilla = {
   rival: string;
   /** El promedio de las calificaciones — "2,5". Vacío si nadie tiene nota. */
   promedio?: string;
+  /** BREVE RESUMEN DEL JUEGO, lo que escribió el formador. Si viene vacío,
+   *  el recuadro ni siquiera se dibuja. — dirección, 28/08/2026 */
+  resumen?: string;
   /** Cómo se llama el partido en el BANCO: "FECHA 1 LIGA DESARROLLO SUB 8".
    *  Con eso se nombra el archivo que se baja. */
   nombreArchivo?: string;
@@ -193,7 +196,22 @@ export async function descargarPlanillaPDF(d: DatosPlanilla): Promise<void> {
   const HUECO_PROM   = 4;              // de la tarjeta al promedio
   const ALTO_PROM    = 11;             // el cuadro verde del promedio
   const ALTO_PIE     = 10;             // el renglón de MAX 10 SPORT
-  const PIE = HUECO_CUADRO + ALTO_CARD + HUECO_PROM + ALTO_PROM + ALTO_PIE;
+
+  /* EL RESUMEN DEL JUEGO (dirección, 28/08/2026). Se mide ANTES de repartir
+     la hoja: así el cuadro de los deportistas se encoge lo necesario y el
+     resumen nunca queda pisado ni se sale de la página. Si el formador no
+     escribió nada, no ocupa un milímetro. */
+  const resumenTxt = String(d.resumen ?? '').replace(/\s+\n/g, '\n').trim();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  const lineasResumen: string[] = resumenTxt
+    ? (doc.splitTextToSize(resumenTxt, ANCHO - 10) as string[]).slice(0, 5)
+    : [];
+  const HUECO_RES = lineasResumen.length ? 4 : 0;
+  const ALTO_RES  = lineasResumen.length ? 8 + lineasResumen.length * 4.2 + 2.5 : 0;
+
+  const PIE = HUECO_CUADRO + ALTO_CARD + HUECO_PROM + ALTO_PROM
+            + HUECO_RES + ALTO_RES + ALTO_PIE;
   const DISPONIBLE = H - Y_CUADRO - ALTO_TIT - PIE;
 
   /* ALTO DE LA FILA: se ajusta para que TODO el equipo quepa en la hoja. Si
@@ -340,7 +358,8 @@ export async function descargarPlanillaPDF(d: DatosPlanilla): Promise<void> {
   /* La tarjeta va PEGADA al cuadro, como en pantalla. El tope de abajo sale
      de las medidas apuntadas arriba, no de un número a ojo. */
   const yCard = Math.min(y + HUECO_CUADRO,
-                         H - ALTO_PIE - ALTO_PROM - HUECO_PROM - ALTO_CARD);
+                         H - ALTO_PIE - ALTO_RES - HUECO_RES
+                           - ALTO_PROM - HUECO_PROM - ALTO_CARD);
 
   doc.setFillColor(...PANEL);
   doc.setDrawColor(...BORDE);
@@ -432,6 +451,27 @@ export async function descargarPlanillaPDF(d: DatosPlanilla): Promise<void> {
   doc.setTextColor(...(d.promedio ? BLANCO : APAGADO));
   doc.setFontSize(14);
   centrado(d.promedio || '—', xProm + W_PROM / 2, yProm + 8);
+
+  /* ── BREVE RESUMEN DEL JUEGO ─────────────────────────────────────────────
+     Lo que escribió el formador, en su propio recuadro, debajo del promedio.
+     — dirección, 28/08/2026 */
+  if (lineasResumen.length) {
+    const yRes = yProm + ALTO_PROM + HUECO_RES;
+    doc.setFillColor(...PANEL);
+    doc.setDrawColor(...BORDE);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(MX, yRes, ANCHO, ALTO_RES, 3, 3, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...APAGADO);
+    doc.text('BREVE RESUMEN DEL JUEGO', MX + 5, yRes + 5);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...BLANCO);
+    lineasResumen.forEach((ln, i) => doc.text(ln, MX + 5, yRes + 10.2 + i * 4.2));
+  }
 
   /* ── Pie ── */
   doc.setFont('helvetica', 'normal');

@@ -160,6 +160,20 @@ export default function MisProyectosPage() {
   }
 
   const primerNombre = nombreProfe ? nombreProfe.split(' ')[0] : 'Profe';
+
+  /* MIENTRAS SE PRUEBA EL POSPARTIDO, solo a CASTRO se le muestra el botón
+     (dirección, 29/08/2026). A los demás ni les aparece, y si llegan con el
+     enlace pegado la pantalla del pospartido tampoco los deja entrar.
+     Para abrírselo a todos, se deja la lista vacía. */
+  const PROFES_CON_POSPARTIDO = ['CASTRO'];
+  const sinTildes = (x: any) => String(x ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim().toUpperCase();
+  const vePospartido = PROFES_CON_POSPARTIDO.length === 0 || PROFES_CON_POSPARTIDO.some(p => {
+    const yo = sinTildes(nombreProfe);
+    const el = sinTildes(p);
+    return !!yo && (yo === el || yo.split(' ').includes(el));
+  });
   // Paleta del sistema (la del consolidado de asistencias)
   const G      = '#00B050';   // verde de la plataforma
   const LIENZO = '#2B3547';   // fondo
@@ -212,7 +226,9 @@ export default function MisProyectosPage() {
               {[
                 { texto: 'GESTIONAR ASISTENCIA', Icono: ClipboardList, ir: () => escoger('asistencia'), varios: proyectosProfe.length > 1 },
                 { texto: 'MICROCICLOS',          Icono: CalendarDays,  ir: () => escoger('microciclo'), varios: proyectosProfe.length > 1 },
-                { texto: 'POSPARTIDOS',          Icono: Trophy,        ir: () => { setMenu(null); router.push('/postpartido'); }, varios: false },
+                ...(vePospartido
+                  ? [{ texto: 'POSPARTIDOS', Icono: Trophy, ir: () => { setMenu(null); router.push('/postpartido'); }, varios: false }]
+                  : []),
               ].map(({ texto, Icono, ir, varios }, i) => (
                 <button key={texto} onClick={ir}
                   className="w-full flex items-center gap-2.5 px-4 py-3 text-left text-white font-black text-[12px]

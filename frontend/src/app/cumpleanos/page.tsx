@@ -103,7 +103,7 @@ function encuadreBusto(capa: HTMLCanvasElement, aspecto: number, centroX = 0.5) 
   for (let y = top; y <= bot; y++) { if ((maxX[y] - minX[y]) > anchoCabeza * 1.65) { hombros = y; break; } }
   const altoCabeza = Math.max(hombros - top, alto * 0.12);
 
-  const y0 = top - altoCabeza * 0.06;                          // casi sin aire: el niño va grande
+  const y0 = top - altoCabeza * 0.12;                          // un poco de aire arriba de la cabeza
   const y1 = Math.min(hombros + altoCabeza * 0.72, bot);      // corta bajo los escudos, sin el patrocinador
 
   let suma = 0, cont = 0;
@@ -113,6 +113,27 @@ function encuadreBusto(capa: HTMLCanvasElement, aspecto: number, centroX = 0.5) 
   const sh = Math.max(y1 - y0, 10), sw = sh * aspecto;
   // centroX dice en qué parte del marco debe quedar el eje del deportista
   return { sx: cx - sw * centroX, sy: y0, sw, sh };
+}
+
+/** Dibuja el camino de un rectángulo de esquinas redondas.
+ *  Se hace a mano porque `roundRect` no existe en los navegadores viejos y
+ *  aquí hay papás entrando desde teléfonos de todo tipo. — 28/08/2026 */
+function cajaRedonda(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number,
+) {
+  const radio = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radio, y);
+  ctx.lineTo(x + w - radio, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radio);
+  ctx.lineTo(x + w, y + h - radio);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radio, y + h);
+  ctx.lineTo(x + radio, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radio);
+  ctx.lineTo(x, y + radio);
+  ctx.quadraticCurveTo(x, y, x + radio, y);
+  ctx.closePath();
 }
 
 /** Deja el celular listo para WhatsApp: solo dígitos y con el 57 de Colombia. */
@@ -213,7 +234,23 @@ export default function CumpleanosPage() {
      día se les manda su tarjeta, con un texto distinto. */
   /* Por defecto entra en SOLO ACTIVOS. Para ver retirados se cambia a mano aquí abajo. */
   const [filtroEstado, setFiltroEstado] = useState<'todos' | 'activos' | 'retirados'>('activos');
-  const [sinFondo, setSinFondo] = useState(true);
+  /* ── LOS TRES DISEÑOS DE LA TARJETA (dirección, 28/08/2026) ──────────────
+     'conFondo' · la foto tal cual, dentro del recuadro pequeño del cromo.
+     'sinFondo' · se le quita el fondo al niño y queda sobre el arte.
+     'grande'   · la foto ABARCA TODO el recuadro del Mundial 2026, y el
+                  nombre y el club se conservan sobre una franja negra.
+     Antes era un solo chulo de sí/no; ahora son tres opciones. */
+  type Diseno = 'conFondo' | 'sinFondo' | 'grande';
+  const [diseno, setDiseno] = useState<Diseno>('sinFondo');
+
+  /* ── VISTA PREVIA DE LA TARJETA (dirección, 28/08/2026) ──────────────────
+     El botón VER TARJETA abre esta ventana con la tarjeta ya armada. Ahí se
+     cambia entre los tres diseños y se ve cuál queda mejor con la foto de ESE
+     deportista, antes de bajarla o de mandarla por WhatsApp. */
+  const [previa, setPrevia] = useState<Cumple | null>(null);
+  const [previaDis, setPreviaDis] = useState<Diseno>('sinFondo');
+  const [previaImg, setPreviaImg] = useState('');
+  const [previaCargando, setPreviaCargando] = useState(false);
 
   /* ── CHULO VERDE: tarjetas que YA se enviaron por WhatsApp ──
      Se guarda por AÑO, así que cada 1 de enero la lista arranca limpia.
@@ -675,9 +712,13 @@ export default function CumpleanosPage() {
     img.src = src;
   });
 
-  async function descargarTarjeta(c: Cumple, accion: 'descargar' | 'whatsapp' = 'descargar') {
-    setGenerando(c.id);
-    try {
+  /** Arma la tarjeta y devuelve el lienzo, SIN entregarla.
+   *  Lo usan la vista previa, la descarga y el envío por WhatsApp: los tres
+   *  dibujan exactamente lo mismo, así que lo que se ve en la previa es lo
+   *  que se manda. — dirección, 28/08/2026 */
+  async function armarLienzo(c: Cumple, dis: Diseno): Promise<{ lienzo: HTMLCanvasElement; fondoOk: boolean }> {
+    const sinFondo = dis === 'sinFondo';
+    {
       // Si el deportista tiene foto pero todavía no llegó, la pedimos ahora mismo
       let foto = c.foto;
       if (!foto && idsConFoto.has(c.id)) {
@@ -700,6 +741,37 @@ export default function CumpleanosPage() {
       const EDAD = { cx: 700, cy: 432, ang: -6 };      // "¡HOY CUMPLES ...!"
       const NOM  = { cx: 212, y1: 562, y2: 588, ancho: 320 };
 
+      /* DISEÑO GRANDE: la foto llena TODO el cromo del Mundial 2026.
+         El cromo por dentro va de (20,20) a (500,664).
+         — dirección, 28/08/2026 */
+      /* OJO CON LAS MEDIDAS: el cromo del arte tiene un marco negro delgadito
+         alrededor (de 14 a 19 por fuera del teal). Si el fondo nuevo empieza
+         en 20, ese marco queda asomando por los bordes como una tira de
+         pixeles viejos. Por eso se arranca en 13 y se tapa completo.
+         — dirección, 28/08/2026 */
+      const CROMO  = { x: 13, y: 13, w: 496, h: 660 };
+      /* El cromo lleva un FONDO DEGRADADO de negro arriba a verde abajo
+         (el verde de la casa, #00B050), y la foto va adentro con su margen:
+         foto arriba, y debajo el nombre grande con los apellidos más
+         pequeños. — dirección, 28/08/2026 */
+      const MARGEN = Math.round(CROMO.w * 0.03);
+      const FOTO_G = {
+        x: CROMO.x + MARGEN,
+        y: CROMO.y + MARGEN,
+        w: CROMO.w - MARGEN * 2,
+        h: Math.round(CROMO.h * 0.881) - MARGEN,
+      };
+      /* La pastilla verde con el nombre, abajo del todo. */
+      const BANDA = {
+        x: CROMO.x + MARGEN,
+        y: CROMO.y + Math.round(CROMO.h * 0.894),
+        w: CROMO.w - MARGEN * 2,
+        h: Math.round(CROMO.h * 0.091),
+      };
+      const REDONDO = { cromo: 22, foto: 13, banda: 15 };
+      const grande = dis === 'grande';
+      const CAJA = grande ? FOTO_G : ZONA;
+
       // 1) Fondo: el arte del caramelo
       let fondoOk = false;
       try {
@@ -710,6 +782,17 @@ export default function CumpleanosPage() {
         ctx.fillStyle = '#0b2233'; ctx.fillRect(0, 0, W, H);
       }
 
+      // 1b) En el diseño GRANDE el cromo entero se pinta de negro: encima va
+      //     la foto con su margen y debajo el nombre. — 28/08/2026
+      if (grande) {
+        /* Tarjeta NEGRA de esquinas redondas: tapa por completo el cromo del
+           arte. Encima va la foto y abajo la pastilla verde con el nombre.
+           — dirección, 28/08/2026 */
+        ctx.fillStyle = '#000000';
+        cajaRedonda(ctx, CROMO.x, CROMO.y, CROMO.w, CROMO.h, REDONDO.cromo);
+        ctx.fill();
+      }
+
       // 2) El deportista: recortado sin fondo y encuadrado de cabeza y pecho
       if (foto) {
         try {
@@ -718,22 +801,40 @@ export default function CumpleanosPage() {
           // Se recorta el fondo del niño y con esa silueta se calcula el encuadre.
           let capa: HTMLCanvasElement | HTMLImageElement = img;
           let enc: { sx: number; sy: number; sw: number; sh: number };
+          const proporcion = CAJA.w / CAJA.h;
+          /* EL ENCUADRE SIEMPRE SALE DE LA SILUETA (dirección, 28/08/2026).
+             Antes, si la tarjeta iba CON FONDO, ni se buscaba la silueta y el
+             recorte se hacía a ciegas —"la mitad de arriba de la foto"—: por
+             eso unas quedaban espectaculares y otras no. Ahora la silueta se
+             calcula siempre, aunque el fondo se conserve: sirve para saber
+             dónde está la cabeza y dónde los hombros, y así el corte queda
+             igual en todas: un poco arriba de la cabeza y hasta los escudos.
+             La silueta solo se DIBUJA cuando el diseño es SIN FONDO. */
           try {
-            if (!sinFondo) throw new Error('recorte apagado');
             const silueta = await recortarPersona(img);
-            capa = silueta;                                   // va sin fondo
-            enc = encuadreBusto(silueta, ZONA.w / ZONA.h, 0.5);
+            if (sinFondo) capa = silueta;                     // va sin fondo
+            enc = encuadreBusto(silueta, proporcion, 0.5);
           } catch {
-            // Si no se pudo recortar: la foto tal cual, encuadrada por arriba
-            const sh = Math.min(img.height * 0.72, img.height);
-            const sw = sh * (ZONA.w / ZONA.h);
-            enc = { sx: (img.width - sw) / 2, sy: img.height * 0.02, sw, sh };
+            /* No se pudo hallar la silueta (foto rara o sin señal): se usa la
+               foto completa, corrida un poco hacia arriba, que es donde casi
+               siempre está la cara. Nunca se recorta a ciegas la mitad. */
+            let sh = img.height;
+            let sw = sh * proporcion;
+            if (sw > img.width) { sw = img.width; sh = sw / proporcion; }
+            enc = {
+              sx: (img.width - sw) / 2,
+              sy: Math.max(0, (img.height - sh) * 0.15),
+              sw,
+              sh,
+            };
           }
 
-          // El deportista sin fondo, encuadrado en el rectángulo del caramelo
+          // El deportista, encuadrado en su recuadro (el pequeño o todo el cromo)
           ctx.save();
-          ctx.beginPath(); ctx.rect(ZONA.x, ZONA.y, ZONA.w, ZONA.h); ctx.clip();
-          ctx.drawImage(capa, enc.sx, enc.sy, enc.sw, enc.sh, ZONA.x, ZONA.y, ZONA.w, ZONA.h);
+          if (grande) cajaRedonda(ctx, CAJA.x, CAJA.y, CAJA.w, CAJA.h, REDONDO.foto);
+          else { ctx.beginPath(); ctx.rect(CAJA.x, CAJA.y, CAJA.w, CAJA.h); }
+          ctx.clip();
+          ctx.drawImage(capa, enc.sx, enc.sy, enc.sw, enc.sh, CAJA.x, CAJA.y, CAJA.w, CAJA.h);
           ctx.restore();
         } catch { /* sin foto */ }
       }
@@ -741,16 +842,35 @@ export default function CumpleanosPage() {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // 3) Nombre en la barra roja del caramelo
+      // 3) Nombre del deportista
       const [linea1, linea2] = partirNombre(c.nombre);
       ctx.fillStyle = '#ffffff';
-      let f1 = 32;
-      do { ctx.font = `700 ${f1}px Arial, sans-serif`; if (ctx.measureText(linea1).width <= NOM.ancho) break; f1 -= 1; } while (f1 > 12);
-      ctx.fillText(linea1, NOM.cx, NOM.y1);
-      if (linea2) {
-        let f2 = 22;
-        do { ctx.font = `400 ${f2}px Arial, sans-serif`; if (ctx.measureText(linea2).width <= NOM.ancho) break; f2 -= 1; } while (f2 > 10);
-        ctx.fillText(linea2, NOM.cx, NOM.y2);
+
+      if (grande) {
+        /* DISEÑO GRANDE — tal cual el modelo de la dirección (28/08/2026):
+           tarjeta negra de esquinas redondas, la foto arriba, y abajo una
+           pastilla VERDE con el nombre completo en un solo renglón. */
+        ctx.fillStyle = '#00B050';
+        cajaRedonda(ctx, BANDA.x, BANDA.y, BANDA.w, BANDA.h, REDONDO.banda);
+        ctx.fill();
+
+        const completo = [linea1, linea2].filter(Boolean).join(' ').toUpperCase();
+        const anchoTexto = BANDA.w - 28;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        let g1 = 26;
+        do { ctx.font = `700 ${g1}px Arial, sans-serif`; if (ctx.measureText(completo).width <= anchoTexto) break; g1 -= 1; } while (g1 > 10);
+        ctx.fillText(completo, BANDA.x + BANDA.w / 2, BANDA.y + BANDA.h / 2 + 1);
+
+      } else {
+        let f1 = 32;
+        do { ctx.font = `700 ${f1}px Arial, sans-serif`; if (ctx.measureText(linea1).width <= NOM.ancho) break; f1 -= 1; } while (f1 > 12);
+        ctx.fillText(linea1, NOM.cx, NOM.y1);
+        if (linea2) {
+          let f2 = 22;
+          do { ctx.font = `400 ${f2}px Arial, sans-serif`; if (ctx.measureText(linea2).width <= NOM.ancho) break; f2 -= 1; } while (f2 > 10);
+          ctx.fillText(linea2, NOM.cx, NOM.y2);
+        }
       }
 
       // 4) Fecha dentro del calendario (sigue su inclinación)
@@ -791,13 +911,25 @@ export default function CumpleanosPage() {
       }
       ctx.textBaseline = 'alphabetic';
 
-      // 5) Entregar: descargar o mandar por WhatsApp
+      return { lienzo: canvas, fondoOk };
+    }
+  }
+
+  /** Entrega la tarjeta: la baja al computador o la manda por WhatsApp. */
+  async function descargarTarjeta(
+    c: Cumple,
+    accion: 'descargar' | 'whatsapp' = 'descargar',
+    dis: Diseno = diseno,
+  ) {
+    setGenerando(c.id);
+    try {
+      const { lienzo, fondoOk } = await armarLienzo(c, dis);
       const nombreArchivo = `cumple-${c.codigo || c.nombre}.png`;
 
       if (accion === 'whatsapp') {
-        await enviarPorWhatsApp(c, canvas, nombreArchivo);
+        await enviarPorWhatsApp(c, lienzo, nombreArchivo);
       } else {
-        const url = canvas.toDataURL('image/png');
+        const url = lienzo.toDataURL('image/png');
         const a = document.createElement('a');
         a.href = url;
         a.download = nombreArchivo;
@@ -893,6 +1025,28 @@ export default function CumpleanosPage() {
   /* Una fila de la lista.
      `compacto` = fila delgada (se usa en la vista de la semana, para que
      quepan los 7 días en pantalla sin tanto desplazamiento).            */
+  /* Cada vez que se abre la ventana o se cambia de diseño, se vuelve a armar
+     la tarjeta y se muestra. Es la MISMA que se descarga: no es un dibujo
+     aparte que después no coincida. */
+  useEffect(() => {
+    if (!previa) { setPreviaImg(''); return; }
+    let cancelado = false;
+    setPreviaCargando(true);
+    setPreviaImg('');
+    (async () => {
+      try {
+        const { lienzo } = await armarLienzo(previa, previaDis);
+        if (!cancelado) setPreviaImg(lienzo.toDataURL('image/png'));
+      } catch {
+        if (!cancelado) setPreviaImg('');
+      } finally {
+        if (!cancelado) setPreviaCargando(false);
+      }
+    })();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previa, previaDis]);
+
   const Tarjeta = ({ c, destacado, verDia, compacto }: { c: Cumple; destacado?: boolean; verDia?: boolean; compacto?: boolean }) => {
     const kFila   = compacto ? 'gap-2 rounded-xl p-1.5'      : 'gap-3 rounded-2xl p-3';
     const kFoto   = compacto ? 'w-10 h-10 rounded-lg'        : 'w-14 h-14 rounded-xl';
@@ -956,13 +1110,16 @@ export default function CumpleanosPage() {
           </p>
         )}
       </div>
+      {/* VER TARJETA — abre la vista previa. Reemplazó al botón que llevaba a
+          la ficha: desde aquí lo que hace falta es ver cómo va a quedar la
+          tarjeta, no abrir la ficha. — dirección, 28/08/2026 */}
       <button
-        onClick={() => router.push(`/alumnos/${c.id}?volver=/cumpleanos`)}
-        title="Abrir la ficha del deportista"
+        onClick={() => { setPreviaDis(diseno); setPrevia(c); }}
+        title="Ver cómo queda la tarjeta antes de bajarla o mandarla"
         className={`flex items-center border border-[#00B050] text-[#5BE39B] hover:bg-[#2B3547] font-black rounded-xl flex-shrink-0 ${kBoton}`}
       >
         <Eye className={kIcono} />
-        Ver
+        Ver tarjeta
       </button>
       {/* VERDE = hay número bueno. Un clic envía · doble clic (o clic derecho) lo corrige.
           ROJO  = no hay número, o el que hay no sirve para WhatsApp. Un solo clic
@@ -1195,12 +1352,44 @@ export default function CumpleanosPage() {
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-[13px] text-white/70 font-semibold cursor-pointer select-none">
-            <input type="checkbox" checked={sinFondo} onChange={e => setSinFondo(e.target.checked)}
-              className="w-4 h-4 accent-teal-600" />
-            Quitar el fondo de la foto en la tarjeta
-            <span className="text-[11px] text-white/40 font-normal">(el niño queda sobre el estadio)</span>
-          </label>
+          {/* ── LOS TRES DISEÑOS DE LA TARJETA ─────────────────────────────
+              Se escoge aquí y la tarjeta sale así, tanto al descargar como al
+              mandarla por WhatsApp. — dirección, 28/08/2026 */}
+          <div>
+            <p className="text-[10px] font-black text-white/40 uppercase tracking-wide mb-1.5">
+              Diseño de la tarjeta
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { id: 'conFondo', tit: 'CON FONDO',      pie: 'recuadro pequeño, la foto tal cual' },
+                { id: 'sinFondo', tit: 'SIN FONDO',      pie: 'recuadro pequeño, el niño recortado' },
+                { id: 'grande',   tit: 'RECUADRO GRANDE', pie: 'la foto llena todo el cromo del Mundial' },
+              ] as const).map(o => {
+                const puesto = diseno === o.id;
+                return (
+                  <button key={o.id} type="button" onClick={() => setDiseno(o.id)}
+                    title={o.pie}
+                    className="rounded-xl px-3 py-2 text-left transition"
+                    style={{
+                      background: puesto ? 'rgba(0,176,80,.16)' : '#2B3547',
+                      border: `1px solid ${puesto ? '#00B050' : '#4A5568'}`,
+                    }}>
+                    <span className="block text-[11.5px] font-black"
+                          style={{ color: puesto ? '#5BE39B' : '#ffffff' }}>
+                      {o.tit}
+                    </span>
+                    <span className="block text-[10px] font-semibold text-white/40">{o.pie}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {diseno === 'grande' && (
+              <p className="text-[11.5px] text-white/45 font-semibold mt-1.5">
+                La foto abarca todo el recuadro del Mundial 2026, y el nombre con el club
+                quedan sobre una franja negra, como en los cromos.
+              </p>
+            )}
+          </div>
         </div>
 
         {vista === 'fotos' ? (
@@ -1416,6 +1605,126 @@ export default function CumpleanosPage() {
                 Al guardar, cierra esta ventana y vuelve a hacer clic en WhatsApp:
                 el mensaje se irá al número nuevo.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── VENTANA: VER LA TARJETA ANTES DE MANDARLA ────────────────────────
+          Se ve la tarjeta ya armada y se cambia entre los tres diseños para
+          escoger cuál queda mejor con la foto de ese deportista.
+          — dirección, 28/08/2026 */}
+      {previa && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3"
+          style={{ background: 'rgba(0,0,0,.72)' }}
+          onClick={() => setPrevia(null)}
+        >
+          <div
+            className="rounded-2xl w-full max-w-[820px] max-h-[92vh] overflow-y-auto"
+            style={{ background: '#3C4759', border: '1px solid #4A5568' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Título */}
+            <div className="flex items-center gap-3 px-4 py-3 rounded-t-2xl" style={{ background: '#00B050' }}>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-white font-black text-[14px] uppercase truncate">{previa.nombre}</h3>
+                <p className="text-white/75 text-[11px] font-semibold">
+                  {previa.dia} de {MESES_CAP[previa.mes - 1]}
+                  {previa.edad != null && ` · cumple ${previa.edad} años`}
+                </p>
+              </div>
+              <button
+                onClick={() => setPrevia(null)}
+                title="Cerrar"
+                className="shrink-0 rounded-lg px-2.5 py-1.5 text-white text-[11px] font-black"
+                style={{ background: 'rgba(255,255,255,.18)' }}
+              >
+                CERRAR
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-col sm:flex-row gap-4">
+              {/* La tarjeta */}
+              <div className="flex-1 min-w-0 flex items-start justify-center">
+                {previaCargando ? (
+                  <div className="w-full flex flex-col items-center justify-center py-16 gap-3">
+                    <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-[#00B050] animate-spin" />
+                    <p className="text-white/50 text-[12px] font-semibold">Armando la tarjeta…</p>
+                  </div>
+                ) : previaImg ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={previaImg} alt="Tarjeta de cumpleaños"
+                    className="w-full rounded-xl"
+                    style={{ maxWidth: 380, border: '1px solid #4A5568' }} />
+                ) : (
+                  <p className="text-[12px] font-semibold py-16 text-center" style={{ color: '#E0A33A' }}>
+                    No se pudo armar la tarjeta. Puede que este deportista todavía no tenga foto.
+                  </p>
+                )}
+              </div>
+
+              {/* Los tres diseños y los botones */}
+              <div className="sm:w-[250px] shrink-0 flex flex-col gap-2">
+                <p className="text-[10px] font-black text-white/40 uppercase tracking-wide">
+                  Escoge el diseño
+                </p>
+                {([
+                  { id: 'conFondo', tit: 'CON FONDO',       pie: 'recuadro pequeño, la foto tal cual' },
+                  { id: 'sinFondo', tit: 'SIN FONDO',       pie: 'recuadro pequeño, el niño recortado' },
+                  { id: 'grande',   tit: 'RECUADRO GRANDE', pie: 'la foto llena todo el cromo' },
+                ] as const).map(o => {
+                  const puesto = previaDis === o.id;
+                  return (
+                    <button key={o.id} type="button"
+                      onClick={() => setPreviaDis(o.id)}
+                      disabled={previaCargando}
+                      className="rounded-xl px-3 py-2 text-left transition disabled:opacity-50"
+                      style={{
+                        background: puesto ? 'rgba(0,176,80,.16)' : '#2B3547',
+                        border: `1px solid ${puesto ? '#00B050' : '#4A5568'}`,
+                      }}>
+                      <span className="block text-[11.5px] font-black"
+                            style={{ color: puesto ? '#5BE39B' : '#ffffff' }}>
+                        {o.tit}
+                      </span>
+                      <span className="block text-[10px] font-semibold text-white/40">{o.pie}</span>
+                    </button>
+                  );
+                })}
+
+                <p className="text-[11px] text-white/40 font-semibold mt-1">
+                  Se manda tal como se ve aquí.
+                </p>
+
+                <button
+                  onClick={() => descargarTarjeta(previa, 'descargar', previaDis)}
+                  disabled={previaCargando || !previaImg || generando === previa.id}
+                  className="rounded-xl px-3 py-2.5 text-white font-black text-[12px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  style={{ background: '#00B050' }}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  BAJAR ESTA TARJETA
+                </button>
+
+                <button
+                  onClick={() => { const q = previa; setPrevia(null); if (q) descargarTarjeta(q, 'whatsapp', previaDis); }}
+                  disabled={previaCargando || !previaImg || generando === previa.id}
+                  className="rounded-xl px-3 py-2.5 text-white font-black text-[12px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  style={{ background: celularWhatsApp(telefonoDe(previa)) ? '#16a34a' : '#C0504D' }}
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  MANDAR POR WHATSAPP
+                </button>
+
+                <button
+                  onClick={() => { const q = previa; setPrevia(null); if (q) router.push(`/alumnos/${q.id}?volver=/cumpleanos`); }}
+                  className="rounded-xl px-3 py-2 text-white/70 font-black text-[11px]"
+                  style={{ background: '#2B3547', border: '1px solid #4A5568' }}
+                >
+                  ABRIR LA FICHA
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -50,6 +50,20 @@ export type PlanillaGuardada = {
   fecha: string;
   llegar: string;
   rival: string;
+  /* DÓNDE SE JUEGA (dirección, 28/08/2026): la cancha o el escenario.
+     Si la base todavía no tiene esa casilla, el guardado la deja caer sola
+     —lo demás se guarda igual— y queda en el aparato hasta que se corra
+     ARREGLAR-LA-BASE.bat. */
+  escenario?: string;
+  /* BREVE RESUMEN DEL JUEGO, escrito por el formador. Mismo trato que
+     ESCENARIO: si la base no tiene la casilla, el guardado la deja caer y
+     lo escrito se conserva en el aparato. — dirección, 28/08/2026 */
+  resumen?: string;
+  /* Quién DIRIGIÓ el partido (D.T) y quién lo asistió (A.T). Puede no ser el
+     formador que figura en el cuadro de torneos: cualquiera lo reemplaza un
+     domingo. Mismo trato que ESCENARIO. — dirección, 28/08/2026 */
+  dt?: string;
+  at?: string;
   goles_nos: string;
   goles_ellos: string;
   autogoles: string;        // autogoles del rival, que suman a nuestro marcador
@@ -156,6 +170,14 @@ function aPlanilla(f: any, n: string, j: string): PlanillaGuardada {
     fecha:         String(f?.fecha ?? ''),
     llegar:        String(f?.llegar ?? ''),
     rival:         String(f?.rival ?? ''),
+    /* OJO: estas cuatro también se traen de la base. Faltaban, y por eso lo
+       que se escribía en ESCENARIO, en el RESUMEN o en D.T / A.T se veía
+       mientras uno seguía en la pantalla, pero al volver a abrir el partido
+       desde el banco aparecía vacío. — corregido 28/08/2026 */
+    escenario:     String(f?.escenario ?? ''),
+    resumen:       String(f?.resumen ?? ''),
+    dt:            String(f?.dt ?? ''),
+    at:            String(f?.at ?? ''),
     goles_nos:     String(f?.goles_nos ?? ''),
     goles_ellos:   String(f?.goles_ellos ?? ''),
     autogoles:     String(f?.autogoles ?? ''),

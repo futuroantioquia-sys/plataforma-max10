@@ -26,7 +26,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Trophy, Plus, Trash2, Search, X, Check,
-  Loader2, AlertTriangle, Download, Save,
+  Loader2, AlertTriangle, Download, Save, CalendarPlus,
 } from 'lucide-react';
 import { useSoloLectura } from '@/lib/permisos';
 import {
@@ -34,6 +34,7 @@ import {
   PROGRAMAS, CATEGORIAS, SEMILLA, limpiar, soloPlata, enPesos,
   type FilaTorneo,
 } from '@/lib/torneos';
+import { agregarPartido, diaBonito } from '@/lib/programacion';
 
 /* ── Colores oficiales (los mismos de Retiros, Afiliados y el tablero) ────── */
 const LIENZO = '#333F50';
@@ -258,6 +259,25 @@ export default function TorneosPage() {
   const router = useRouter();
   const soloLectura = useSoloLectura();
 
+  /* ── CREAR PARTIDOS DESDE AQUÍ (dirección, 29/08/2026) ────────────────────
+     Se chulean los torneos que juegan ese día —el 5, el 10, el 15…—, se
+     escoge el DÍA en el calendario y con un botón quedan creados los renglones
+     en PROGRAMACIÓN DE COMPETENCIA, ya con el torneo y el día puestos. Allá
+     solo falta llenar hora, rival, escenario, D.T y A.T.
+     El chulo NO se guarda en la base: es una marca del momento. */
+  const [chuleados, setChuleados] = useState<Set<string>>(new Set());
+  const [diaPartido, setDiaPartido] = useState('');
+  const [creando, setCreando] = useState(false);
+  const [avisoProg, setAvisoProg] = useState('');
+
+  function chulear(id: string) {
+    setChuleados(prev => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  }
+
   const [estado, setEstado]   = useState<Estado>('cargando');
   const [filas, setFilas]     = useState<FilaTorneo[]>([]);
   const [buscar, setBuscar]   = useState('');
@@ -414,6 +434,44 @@ export default function TorneosPage() {
   }
 
   /* ── Listas de sugerencias (salen de lo que ya está escrito) ──────────── */
+  /** Crea en PROGRAMACIÓN un renglón por cada torneo chuleado, con el día ya
+   *  puesto. — dirección, 29/08/2026 */
+  async function crearPartidosProgramados() {
+    setAvisoProg('');
+    if (chuleados.size === 0) {
+      setAvisoProg('Primero chulea los torneos que juegan ese día.');
+      return;
+    }
+    if (!diaPartido) {
+      setAvisoProg('Escoge el DÍA DE JUEGO en el calendario.');
+      return;
+    }
+    setCreando(true);
+    try {
+      /* El número del torneo es su puesto en el cuadro: el mismo que se ve en
+         la columna # TOR y el que se escribe en el pospartido. */
+      const numeroDe = new Map<string, number>();
+      filas.forEach((f, i) => numeroDe.set(f.id, i + 1));
+
+      let hechos = 0;
+      for (const id of chuleados) {
+        const num = numeroDe.get(id);
+        if (!num) continue;
+        await agregarPartido({ torneo_num: String(num), fecha: diaPartido });
+        hechos++;
+      }
+      setChuleados(new Set());
+      setAvisoProg(
+        `Listo: se crearon ${hechos} ${hechos === 1 ? 'partido' : 'partidos'} para el ` +
+        `${diaBonito(diaPartido)} en Programación de Competencia. Allá se les pone hora, rival y escenario.`,
+      );
+    } catch (e: any) {
+      setAvisoProg(e?.message ?? 'No se pudieron crear los partidos.');
+    } finally {
+      setCreando(false);
+    }
+  }
+
   const sugerencias = useMemo(() => {
     const junta = (campo: keyof FilaTorneo, base: string[] = []) => {
       const s = new Set<string>(base);
@@ -597,6 +655,77 @@ export default function TorneosPage() {
               </span>
             </div>
 
+            {/* ── CREAR PARTIDOS DESDE EL CUADRO (dirección, 29/08/2026) ─────
+                Se chulean en la primera columna los torneos que juegan ese
+                día, se escoge el DÍA aquí, y con el botón quedan creados los
+                renglones en PROGRAMACIÓN DE COMPETENCIA con el torneo y el día
+                ya puestos. Allá solo falta hora, rival, escenario, D.T y A.T. */}
+            {!soloLectura && (
+            <div className="rounded-xl px-3 py-2 mb-3 flex flex-wrap items-center gap-2"
+              style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+              <span className="text-white/45 text-[10px] font-black uppercase tracking-widest">
+                Crear partidos
+              </span>
+
+              <span className="rounded-lg px-2.5 flex items-center text-white text-[11.5px] font-black"
+                style={{ height: 34, background: CAMPO, border: `1px solid ${chuleados.size ? VERDE : BORDE}` }}>
+                {chuleados.size} {chuleados.size === 1 ? 'torneo chuleado' : 'torneos chuleados'}
+              </span>
+
+              <input
+                type="date"
+                value={diaPartido}
+                onChange={e => setDiaPartido(e.target.value)}
+                title="El día en que se juegan esos torneos"
+                style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 34, colorScheme: 'dark' }}
+                className="rounded-lg px-2 text-white text-[12px] font-bold outline-none cursor-pointer" />
+
+              {!!diaPartido && (
+                <span className="text-white/50 text-[11.5px] font-black">{diaBonito(diaPartido)}</span>
+              )}
+
+              <button
+                onClick={crearPartidosProgramados}
+                disabled={creando || chuleados.size === 0 || !diaPartido}
+                title="Crea los renglones en Programación de Competencia"
+                className="rounded-lg px-3 flex items-center gap-1.5 text-white text-[11.5px] font-black
+                  transition hover:brightness-110 disabled:opacity-45"
+                style={{ height: 34, background: VERDE }}>
+                {creando
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <CalendarPlus className="w-3.5 h-3.5" />}
+                {creando ? 'CREANDO…' : 'CREAR PARTIDO'}
+              </button>
+
+              {chuleados.size > 0 && (
+                <button
+                  onClick={() => setChuleados(new Set())}
+                  className="rounded-lg px-2.5 text-white/60 text-[11px] font-black"
+                  style={{ height: 34, background: CAMPO, border: `1px solid ${BORDE}` }}>
+                  QUITAR CHULOS
+                </button>
+              )}
+
+              <button
+                onClick={() => router.push('/programacion')}
+                className="ml-auto rounded-lg px-2.5 text-white/70 text-[11px] font-black"
+                style={{ height: 34, background: CAMPO, border: `1px solid ${BORDE}` }}>
+                IR A PROGRAMACIÓN
+              </button>
+            </div>
+            )}
+
+            {!!avisoProg && (
+              <div className="rounded-xl px-3 py-2.5 mb-3 flex items-start gap-2"
+                style={{ background: 'rgba(0,176,80,.14)', border: `1px solid ${VERDE}` }}>
+                <Check className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#5BE39B' }} />
+                <p className="text-white text-[12.5px] font-semibold leading-relaxed flex-1">{avisoProg}</p>
+                <button onClick={() => setAvisoProg('')} className="shrink-0">
+                  <X className="w-4 h-4 text-white/50" />
+                </button>
+              </div>
+            )}
+
             {/* Las sugerencias de cada columna, una sola vez para todo el cuadro */}
             <datalist id="lista-torneo">{sugerencias.torneo.map(o => <option key={o} value={o} />)}</datalist>
             <datalist id="lista-programa">{sugerencias.programa.map(o => <option key={o} value={o} />)}</datalist>
@@ -608,10 +737,11 @@ export default function TorneosPage() {
             <div className="rounded-xl overflow-auto"
               style={{ border: `1px solid ${BORDE}`, maxHeight: 'calc(100vh - 230px)' }}>
               <table className="text-[12px]"
-                style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 920 }}>
+                style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 960 }}>
                 <thead>
                   <tr>
                     {[
+                      { h: '', w: 40 },          /* el chulo */
                       { h: '# TOR', w: 62 },
                       { h: 'TORNEO', w: 200 },
                       { h: 'PROGRAMA', w: 175 },
@@ -635,6 +765,25 @@ export default function TorneosPage() {
                 <tbody>
                   {visibles.map(({ f, n }) => (
                     <tr key={f.id} style={{ background: PANEL }}>
+                      {/* EL CHULO — para escoger los torneos que juegan un día
+                          y crearles el partido de una. — 29/08/2026 */}
+                      <td className="px-1 py-[5px] text-center"
+                        style={{ borderRight: BLANCO, borderBottom: BLANCO, background: CAMPO }}>
+                        <button
+                          onClick={() => chulear(f.id)}
+                          disabled={soloLectura}
+                          title={chuleados.has(f.id)
+                            ? 'Chuleado · clic para quitarlo'
+                            : 'Chulear este torneo para crearle el partido'}
+                          className="rounded-md flex items-center justify-center mx-auto transition disabled:opacity-40"
+                          style={{
+                            width: 22, height: 22,
+                            background: chuleados.has(f.id) ? VERDE : 'transparent',
+                            border: `2px solid ${chuleados.has(f.id) ? VERDE : BORDE}`,
+                          }}>
+                          {chuleados.has(f.id) && <Check className="w-3.5 h-3.5 text-white" strokeWidth={4} />}
+                        </button>
+                      </td>
                       {/* # TOR — la columna fundamental */}
                       <td className="px-2 py-[6px] text-center font-black text-white text-[15px]"
                         style={{ borderRight: BLANCO, borderBottom: BLANCO, background: CAMPO }}>
@@ -684,7 +833,7 @@ export default function TorneosPage() {
                   ))}
                   {visibles.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-10 text-center text-white/45 text-[13px] font-semibold"
+                      <td colSpan={9} className="py-10 text-center text-white/45 text-[13px] font-semibold"
                         style={{ background: PANEL }}>
                         Ningún torneo coincide con “{buscar}”.
                       </td>

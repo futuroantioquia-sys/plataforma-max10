@@ -35,7 +35,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, AlertTriangle, Loader2, ChevronDown, FileDown, Save, Check, Trash2,
-  Archive, RefreshCw, X, Zap, GripVertical,
+  Archive, X, Zap, GripVertical,
 } from 'lucide-react';
 import { getCuadro, limpiar, type FilaTorneo } from '@/lib/torneos';
 import { esSuperAdmin, esAccesoTotal, esProfesor } from '@/lib/permisos';
@@ -242,6 +242,17 @@ function enDosLineas(texto: string): string[] {
     if (acum >= total / 2) break;
   }
   return [pal.slice(0, corte).join(' '), pal.slice(corte).join(' ')];
+}
+
+/** "2026-08-29" → "SAB 29 AGO". Para los listados. — 29/08/2026 */
+function diaCorto(fecha: any): string {
+  const m = String(fecha ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(d.getTime())) return '';
+  const dias  = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
+  const meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}`;
 }
 
 /* ── Lectura de la ficha del deportista ─────────────────────────────────── */
@@ -522,6 +533,79 @@ function CeldaPosiciones({ valor, onChange }: {
   );
 }
 
+/* ── LA CASILLA DEL D.T Y DEL A.T ────────────────────────────────────────────
+   Una lista con TODOS los profes del club. De primero, y separado, el que
+   tiene el torneo asignado —que es el que casi siempre va—, y debajo los
+   demás por orden alfabético, porque cualquiera puede reemplazarlo ese día.
+   Va ancha a propósito: ahí tiene que caber el nombre completo.
+   Si lo que está guardado no aparece en la lista (un nombre viejo, o alguien
+   que ya no está), NO se pierde: se agrega al final para que se siga viendo.
+   — dirección, 28/08/2026 */
+/** El profe del torneo, buscado en la lista del club: en el cuadro de Torneos
+ *  suele estar solo el apellido y en la lista está el nombre completo. Sin
+ *  emparejarlos, el mismo señor salía dos veces. — dirección, 29/08/2026 */
+function profeDelTorneo(texto: any, todos: string[]): string {
+  const pelar2 = (t: any) =>
+    String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+  const t = pelar2(texto);
+  if (!t) return '';
+  const exacto = todos.find(p => pelar2(p) === t);
+  if (exacto) return exacto;
+  const porApellido = todos.find(p => pelar2(primerApellidoPP(p)) === t);
+  if (porApellido) return porApellido;
+  const contenido = todos.find(p => pelar2(p).includes(t));
+  if (contenido) return contenido;
+  return String(texto ?? '').trim();
+}
+
+/** El primer apellido: en Colombia es el penúltimo pedazo del nombre. */
+function primerApellidoPP(nombre: string): string {
+  const p = String(nombre ?? '').trim().split(/\s+/).filter(Boolean);
+  if (p.length === 0) return '';
+  if (p.length === 1) return p[0];
+  if (p.length === 2) return p[1];
+  return p[p.length - 2];
+}
+
+function CasillaProfe({ valor, onChange, delEquipo, todos }: {
+  valor: string;
+  onChange: (v: string) => void;
+  delEquipo: string;
+  todos: string[];
+}) {
+  const pelar = (t: string) =>
+    String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+
+  const jefe = limpiar(delEquipo);
+  const resto = todos.filter(p =>
+    pelar(p) !== pelar(jefe) &&
+    !(!!jefe && pelar(primerApellidoPP(p)) === pelar(primerApellidoPP(jefe))));
+  const puesto = limpiar(valor);
+  const conocido = [jefe, ...resto].some(p => pelar(p) === pelar(puesto));
+
+  return (
+    <select
+      value={valor}
+      onChange={e => onChange(e.target.value)}
+      title="Escoge el formador. Sale primero el del equipo, y debajo todos los del club."
+      style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}
+      className="w-full rounded-lg px-2.5 text-white text-[12.5px] font-bold outline-none cursor-pointer">
+      <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>— Sin asignar —</option>
+      {!!jefe && (
+        <option value={jefe} style={{ color: '#111827', backgroundColor: 'white' }}>
+          {jefe}
+        </option>
+      )}
+      {!!puesto && !conocido && (
+        <option value={valor} style={{ color: '#111827', backgroundColor: 'white' }}>{valor}</option>
+      )}
+      {resto.map(p => (
+        <option key={p} value={p} style={{ color: '#111827', backgroundColor: 'white' }}>{p}</option>
+      ))}
+    </select>
+  );
+}
+
 /* ── Las dos casillas que se llenan de un clic ─────────────────────────────
    Mientras no se ha escogido nada quedan en el MISMO gris oscuro de las demás
    casillas: así se ve de un vistazo lo que falta por marcar. Apenas se escoge,
@@ -754,11 +838,37 @@ export default function CrearPospartidoPage() {
      cobra. Pero a veces hay que ver a los que ya no están —para revisar un
      torneo viejo, o para entender por qué falta alguien— y para eso está el
      botón. Arranca siempre en ACTIVOS. */
-  const [soloActivos, setSoloActivos] = useState(true);
   const [jornada, setJornada]     = useState('');
   const [fecha, setFecha]         = useState('');
   const [llegar, setLlegar]       = useState('');
   const [rival, setRival]         = useState('');
+  /* DÓNDE SE JUEGA — la cancha o el escenario. — dirección, 28/08/2026 */
+  const [escenario, setEscenario] = useState('');
+  /* BREVE RESUMEN DEL JUEGO — lo escribe el formador. — dirección, 28/08/2026 */
+  const [resumen, setResumen]     = useState('');
+
+  /* ── D.T Y A.T (dirección, 28/08/2026) ───────────────────────────────────
+     Quién dirigió el partido y quién lo asistió. Arranca con el formador que
+     tiene el torneo asignado, pero se puede escoger a CUALQUIER profe del
+     club: un domingo cualquiera le toca reemplazar a otro y el papel tiene
+     que decir la verdad de quién estuvo en la raya. */
+  const [dt, setDt] = useState('');
+  const [at, setAt] = useState('');
+
+  /* ── LA LISTA DEL CUERPO TÉCNICO ──────────────────────────────────────────
+     Sale del MISMO cuadro de Torneos y Competencias, de la columna FORMADOR:
+     esos son los nombres con los que trabaja la academia —CASTRO, TABARES,
+     RIOS, CHALARCA…—. Antes se traía de la tabla de profes, que los guarda con
+     nombre completo, y la lista salía distinta y con gente repetida.
+     — dirección, 29/08/2026 */
+  const profesClub = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of cuadro ?? []) {
+      const n = String(limpiar(t.formador) ?? '').toUpperCase();
+      if (n) set.add(n);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [cuadro]);
   /* La casilla del marcador del rival: se le hace foco cuando se intenta
      guardar sin haberla llenado. — 27/08/2026 */
   const cajaRival = useRef<HTMLInputElement | null>(null);
@@ -907,7 +1017,8 @@ export default function CrearPospartidoPage() {
          Al que no tenga nada escrito en ESTADO se le deja pasar: falta el dato,
          no es una baja, y esconderlo sería peor. */
       .filter(d => {
-        if (!soloActivos) return true;                        // se pidió ver a todos
+        /* SIEMPRE solo los activos (dirección, 28/08/2026): se quitó el botón
+           de ver a todos, porque a un retirado no hay para qué convocarlo. */
         const est = getCol(d, /^estado$/i);
         if (!String(est).trim()) return true;                 // sin dato: se deja
         if (/solicit/i.test(est)) return true;                // en estudio: sigue activo
@@ -919,7 +1030,7 @@ export default function CrearPospartidoPage() {
         if (Number.isFinite(ca) && Number.isFinite(cb) && ca !== cb) return ca - cb;
         return (a._nombre || '').localeCompare(b._nombre || '', 'es');
       });
-  }, [numTorneo, deportistas, torneoAjeno, soloActivos]);
+  }, [numTorneo, deportistas, torneoAjeno]);
 
   /* ── La planilla se arma sola con esos deportistas ───────────────────────
      Ni un renglón de más ni uno de menos.
@@ -992,6 +1103,36 @@ export default function CrearPospartidoPage() {
         return;
       }
 
+      /* PLANILLA CREADA DESDE LA PROGRAMACIÓN (dirección, 29/08/2026).
+         Viene con el encabezado lleno —día, hora, rival, escenario, D.T, A.T—
+         pero SIN deportistas: la lista se arma sola aquí abajo con los que
+         tengan ese torneo asignado. Antes este caso se trataba como "no hay
+         nada" y se borraba el encabezado que la dirección acababa de
+         programar. */
+      if (guardada) {
+        primeraCarga.current = true;
+        setFecha(guardada.fecha ?? '');
+        setLlegar(guardada.llegar ?? '');
+        setRival(guardada.rival ?? '');
+        setEscenario((guardada as any).escenario ?? '');
+        setResumen((guardada as any).resumen ?? '');
+        setDt((guardada as any).dt ?? '');
+        setAt((guardada as any).at ?? '');
+        setGolesNos(guardada.goles_nos ?? '');
+        setGolesEllos(guardada.goles_ellos ?? '');
+        setAutogoles(parseInt(String((guardada as any).autogoles ?? '0'), 10) || 0);
+        setDefinitivo((guardada as any).definitivo === true);
+        setGuardadoEn(enBase?.actualizada_en ?? '');
+        setSinGuardar(false);
+        setFilas(convocables.map((d, i) => ({
+          ...filaNueva(i),
+          depId: d.id,
+          posicion: posicionDe(d),
+          deportista: limpiar(d._nombre).toUpperCase(),
+        })));
+        return;
+      }
+
       /* No hay nada archivado de esta fecha.
          ÚNICO caso en que se conserva lo que está en pantalla: el formador
          venía llenando SIN fecha (en la matriz) y apenas ahora la escogió.
@@ -1004,7 +1145,10 @@ export default function CrearPospartidoPage() {
       setGuardadoEn('');
       setDefinitivo(false);
       /* El encabezado y el marcador también se van: son de aquel partido. */
-      setFecha(''); setLlegar(''); setRival('');
+      setFecha(''); setLlegar(''); setRival(''); setEscenario(''); setResumen('');
+      /* El D.T arranca con el formador que tiene el torneo asignado; si ese
+         día lo reemplaza otro, se cambia en la lista. — 28/08/2026 */
+      setDt(limpiar(torneo?.formador ?? '')); setAt('');
       setGolesNos(''); setGolesEllos(''); setAutogoles(0);
       if (convocables.length === 0) {
         setFilas([]);
@@ -1039,6 +1183,13 @@ export default function CrearPospartidoPage() {
     return [f, equipo].filter(Boolean).join(' ');
   }, [torneo, numTorneo, jornada]);
 
+  /** Cómo se llama el PDF que se baja:
+   *      "SAB 8 AGO LIGA DESARROLLO SUB 8 FECHA 1.pdf"
+   *  El día va de primero para que en la carpeta del computador los partidos
+   *  queden ordenados y se reconozca cada uno sin abrirlo. El año se deja por
+   *  fuera: alarga el nombre y no hace falta. — dirección, 28/08/2026
+   *  (Se define más abajo, después de `fechaBonita`.) */
+
   /** "SAB 4 AGO 2026" a partir del día escogido en el calendario. */
   const fechaBonita = useMemo(() => {
     const t = limpiar(fecha);
@@ -1052,6 +1203,18 @@ export default function CrearPospartidoPage() {
     return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} ${d.getFullYear()}`;
   }, [fecha]);
 
+  /** "SAB 8 AGO LIGA DESARROLLO SUB 8 FECHA 1" — el nombre del archivo PDF.
+   *  El orden lo mandó la dirección (28/08/2026): primero el DÍA del partido,
+   *  después el EQUIPO y de último la FECHA. */
+  const nombreDelPdf = useMemo(() => {
+    const dia = fechaBonita.replace(/\s+\d{4}$/, '').trim();   // sin el año
+    const equipo = torneo
+      ? [torneo.torneo, torneo.programa, torneo.categoria].map(limpiar).filter(Boolean).join(' ')
+      : (numTorneo ? `TORNEO ${numTorneo}` : '');
+    const laFecha = jornada ? etiquetaFecha(jornada) : '';
+    return [dia, equipo, laFecha].filter(Boolean).join(' ');
+  }, [fechaBonita, torneo, numTorneo, jornada]);
+
   /** "FECHA 1A SAB 4 AGO 2026 / LLEGAR 10:00AM / RIVAL ATLETICO NACIONAL" */
   const renglonJornada = useMemo(() => {
     const partes: string[] = [];
@@ -1059,8 +1222,9 @@ export default function CrearPospartidoPage() {
     if (j) partes.push(`FECHA ${j.toUpperCase()}`);
     if (limpiar(llegar)) partes.push(`LLEGAR ${limpiar(llegar).toUpperCase()}`);
     if (limpiar(rival)) partes.push(`RIVAL ${limpiar(rival).toUpperCase()}`);
+    if (limpiar(escenario)) partes.push(`ESCENARIO ${limpiar(escenario).toUpperCase()}`);
     return partes.join(' / ');
-  }, [jornada, fechaBonita, llegar, rival]);
+  }, [jornada, fechaBonita, llegar, rival, escenario]);
 
   /* ── Marcador ──────────────────────────────────────────────────────────────
      NUESTROS GOLES NO SE ESCRIBEN: se suman solos. Son los goles que anotó
@@ -1097,6 +1261,15 @@ export default function CrearPospartidoPage() {
      columna CÓDIGO y el cobro del torneo son SOLO de ella. `esAdmon` sigue
      siendo el permiso de siempre —el que baja el PDF—; este es más estrecho. */
   const [esAdmonPrincipal, setEsAdmonPrincipal] = useState(false);
+
+  /* ── EL ADMÓN SOLO MIRA (dirección, 29/08/2026) ───────────────────────────
+     Los pospartidos ya NO se crean aquí: se crean desde PROGRAMACIÓN DE
+     COMPETENCIA y de ahí caen al banco general y al banco del formador.
+     El único que llena la información de un partido es el FORMADOR.
+     Por eso, al entrar administración ve el LISTADO de todos los partidos,
+     numerado, y un botón VER POST PARTIDO. Al abrir uno, lo ve completo pero
+     NO puede escribir: todas las casillas quedan bloqueadas. */
+  const [abriPlanilla, setAbriPlanilla] = useState(false);
   useEffect(() => {
     setEsAdmon(esSuperAdmin() || esAccesoTotal());
     setEsAdmonPrincipal(esSuperAdmin());
@@ -1522,7 +1695,12 @@ export default function CrearPospartidoPage() {
       await descargarPlanillaPDF({
         numeroTorneo: numTorneo,
         torneo: nombreTorneo,
-        formador: torneo?.formador ?? '',
+        /* En el papel va quien DIRIGIÓ el partido, no quien figura en el
+           cuadro: puede haber sido un reemplazo. — 28/08/2026 */
+        formador: [
+          limpiar(dt) || limpiar(torneo?.formador ?? ''),
+          limpiar(at) ? `A.T ${limpiar(at)}` : '',
+        ].filter(Boolean).join('  ·  '),
         jornada: renglonJornada,
         /* El PDF lleva las columnas TAL COMO SE VEN, menos CÓDIGO: esa nunca
            sale impresa (dirección, 27/08/2026). */
@@ -1544,18 +1722,27 @@ export default function CrearPospartidoPage() {
           asistencias: f.asistencias,
           goles: f.goles,
           ataja: f.ataja,
-          calificacion: f.calificacion,
+          /* LA CALIFICACIÓN DE CADA NIÑO NO SALE EN EL PDF (dirección,
+             28/08/2026). El PDF se comparte con papás y con gente de fuera, y
+             la nota de un deportista es asunto del club y de su casa, no de
+             todo el mundo. La columna CAL se sigue viendo —con su título y su
+             espacio— pero va en blanco; el PROMEDIO DEL EQUIPO sí sale, porque
+             ese no señala a nadie. En pantalla las notas siguen igual. */
+          calificacion: '',
         })),
         resultado,
         golesNos: String(gn),
         golesEllos,
         rival,
         promedio: promedioEquipo,
-        /* El archivo se llama IGUAL que el partido en el banco, para que al
-           buscarlo en el computador se reconozca de una:
-              FECHA 1 LIGA DESARROLLO SUB 8.pdf
-           — dirección, 27/08/2026 */
-        nombreArchivo: nombreEnElBanco,
+        /* Lo que escribió el formador debajo del marcador. — 28/08/2026 */
+        resumen,
+        /* El archivo lleva el día adelante, después el equipo y de último la
+           fecha, para que al buscarlo en el computador se reconozca de una y
+           queden ordenados:
+              SAB 8 AGO LIGA DESARROLLO SUB 8 FECHA 1.pdf
+           — dirección, 28/08/2026 */
+        nombreArchivo: nombreDelPdf,
       });
     } catch (e: any) {
       setError(e?.message ?? 'No se pudo armar el PDF.');
@@ -1568,7 +1755,7 @@ export default function CrearPospartidoPage() {
   function planillaDeAhora(): PlanillaGuardada {
     return {
       torneo_num: numTorneo,
-      jornada, fecha, llegar, rival,
+      jornada, fecha, llegar, rival, escenario, resumen, dt, at,
       goles_nos: String(gn),
       goles_ellos: golesEllos,
       autogoles: String(autogoles),
@@ -1584,6 +1771,10 @@ export default function CrearPospartidoPage() {
     setFecha(p.fecha ?? '');
     setLlegar(p.llegar ?? '');
     setRival(p.rival ?? '');
+    setEscenario((p as any).escenario ?? '');
+    setResumen((p as any).resumen ?? '');
+    setDt((p as any).dt ?? '');
+    setAt((p as any).at ?? '');
     setGolesNos(p.goles_nos ?? '');
     setGolesEllos(p.goles_ellos ?? '');
     setAutogoles(parseInt(String((p as any).autogoles ?? '0'), 10) || 0);
@@ -1603,7 +1794,8 @@ export default function CrearPospartidoPage() {
     }, 700);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filas, jornada, fecha, llegar, rival, golesNos, golesEllos, autogoles, numTorneo]);
+  }, [filas, jornada, fecha, llegar, rival, escenario, resumen, dt, at,
+      golesNos, golesEllos, autogoles, numTorneo]);
 
   /** Guarda. `cerrar` = true es GUARDAR DEFINITIVO; false es GUARDAR AVANCE. */
   async function guardarAvance(cerrar = false) {
@@ -1712,7 +1904,8 @@ export default function CrearPospartidoPage() {
     /* Se fuerza el rearmado: si no, la pantalla creería que ya está armada. */
     ultimoArmado.current = '';
     primeraCarga.current = true;
-    setJornada(''); setFecha(''); setLlegar(''); setRival('');
+    setJornada(''); setFecha(''); setLlegar(''); setRival(''); setEscenario(''); setResumen('');
+    setDt(''); setAt('');
     setGolesNos(''); setGolesEllos(''); setAutogoles(0);
     setGuardadoEn('');
     setSinGuardar(false);
@@ -1800,6 +1993,8 @@ export default function CrearPospartidoPage() {
   /** El renglón que se está arrastrando y el que tiene el dedo encima. */
   const filaArrastrada = useRef<{ torneo: string; jornada: string } | null>(null);
   const [filaEncima, setFilaEncima] = useState('');
+  /* Cuál se está moviendo, para pintarla más tenue mientras va en el aire. */
+  const [filaMoviendo, setFilaMoviendo] = useState('');
 
   const bancoPorTorneo = useMemo(() => {
     const soloEste = String(numTorneo || '').trim();
@@ -1838,6 +2033,7 @@ export default function CrearPospartidoPage() {
     const viene = filaArrastrada.current;
     filaArrastrada.current = null;
     setFilaEncima('');
+    setFilaMoviendo('');
     if (!viene || viene.torneo !== numT || viene.jornada === destino.jornada) return;
     const lista = listaActual.map(p => p.jornada);
     const de = lista.indexOf(viene.jornada);
@@ -1914,6 +2110,10 @@ export default function CrearPospartidoPage() {
     setFilas(prev => prev.map(f => (f.id === id ? { ...f, [campo]: valor } as FilaPlanilla : f)));
   }
 
+  /** ¿Esta pantalla es de solo mirar? Para administración, SÍ: la información
+   *  del partido la llena el formador. — dirección, 29/08/2026 */
+  const soloMira = esAdmon;
+
   /* ── Encabezados de la planilla ──────────────────────────────────────────
      El orden lo manda la dirección: se agarra un título y se arrastra al lado
      que quiera. Queda guardado en este computador, así que al volver a entrar
@@ -1956,6 +2156,23 @@ export default function CrearPospartidoPage() {
 
   /** El contenido de una casilla, según la columna que le toque. */
   function contenidoCelda(clave: ClaveCol, f: FilaPlanilla, i: number) {
+    /* ADMINISTRACIÓN SOLO MIRA (dirección, 29/08/2026): la casilla se ve tal
+       cual, con su color y su número, pero no recibe clics ni escritura. Se
+       hace aquí, en un solo lugar, para no tener que tocar una por una las
+       diez clases de casilla que hay. El nombre del deportista SÍ se deja
+       oprimir: lleva al estado de cuenta y eso no cambia nada del partido. */
+    if (soloMira && clave !== 'deportista' && clave !== 'num') {
+      return (
+        <div style={{ pointerEvents: 'none' }}>
+          {contenidoCeldaViva(clave, f, i)}
+        </div>
+      );
+    }
+    return contenidoCeldaViva(clave, f, i);
+  }
+
+  /** Lo mismo, pero sin el candado: es la casilla de verdad. */
+  function contenidoCeldaViva(clave: ClaveCol, f: FilaPlanilla, i: number) {
     /* Si no fue convocado, no hay nada que anotarle: sus casillas dicen N/A y
        no se dejan escribir. El número, el nombre, la posición y la propia
        casilla de CONVOCADO sí se siguen viendo. — 26/08/2026 */
@@ -2085,6 +2302,237 @@ export default function CrearPospartidoPage() {
   }
 
   /* ═══════════════════════════════════════════════════════════════════════ */
+
+  /* ── LO QUE VE ADMINISTRACIÓN: EL BANCO GENERAL ───────────────────────────
+     Todos los partidos que existen, numerados, con un botón para abrir cada
+     uno. Aquí no se crea ni se llena nada: los partidos entran por
+     PROGRAMACIÓN DE COMPETENCIA y los llena el formador.
+     — dirección, 29/08/2026 */
+  if (esAdmon && !abriPlanilla) {
+    const todos = [...(banco ?? [])].sort((a, b) => {
+      const ta = parseInt(a.torneo_num, 10) || 0;
+      const tb = parseInt(b.torneo_num, 10) || 0;
+      if (ta !== tb) return ta - tb;
+      return numeroDeFecha(a.jornada) - numeroDeFecha(b.jornada);
+    });
+
+    return (
+      <div className="min-h-screen pb-16" style={{ background: LIENZO }}>
+        <header className="px-4 py-3 flex flex-wrap items-center gap-3"
+          style={{ background: 'linear-gradient(to right, #333F50, #0EA142)' }}>
+          <button onClick={() => router.push('/dashboard')}
+            title="Volver"
+            className="shrink-0 rounded-lg p-2 transition hover:opacity-80"
+            style={{ background: 'rgba(255,255,255,.16)' }}>
+            <ArrowLeft className="w-4 h-4 text-white" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-white font-black text-[15px] sm:text-base leading-tight">
+              Banco General de Post Partido
+            </h1>
+            <p className="text-white/70 text-[11px] font-semibold leading-tight">
+              Todos los partidos. Los crea Programación de Competencia y los llena el formador.
+            </p>
+          </div>
+          <div className="hidden sm:flex flex-col items-end flex-shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+            <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
+          </div>
+        </header>
+
+        <main className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 1100 }}>
+          {bancoFalta ? (
+            <div className="rounded-xl px-3 py-2.5 flex items-start gap-2"
+                 style={{ background: 'rgba(224,163,58,.14)', border: `1px solid ${AMBAR}` }}>
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: AMBAR }} />
+              <p className="text-white text-[12px] font-semibold leading-relaxed">
+                El banco todavía no está preparado en la base.
+                Corre una sola vez <span className="font-black">PASO-BANCO-POSPARTIDO.bat</span>.
+              </p>
+            </div>
+          ) : cargandoBanco && banco === null ? (
+            <div className="flex items-center gap-2 py-8 justify-center">
+              <Loader2 className="w-4 h-4 animate-spin" style={{ color: GRIS }} />
+              <span className="text-white/50 text-[12px] font-semibold">Abriendo el banco…</span>
+            </div>
+          ) : todos.length === 0 ? (
+            <div className="rounded-2xl p-6 text-center"
+                 style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+              <p className="text-white font-black text-[14px] mb-1.5">No hay ningún partido todavía</p>
+              <p className="text-white/55 text-[12.5px] font-semibold leading-relaxed">
+                Los partidos se crean en <span className="text-white font-black">PROGRAMACIÓN DE COMPETENCIA</span>:
+                se llena el renglón y se oprime el balón. De ahí caen aquí y al banco del formador.
+              </p>
+              <button onClick={() => router.push('/programacion')}
+                className="mt-4 rounded-xl px-4 py-2.5 text-white font-black text-[12px]"
+                style={{ background: VERDE }}>
+                IR A PROGRAMACIÓN
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl mb-3"
+                   style={{ background: VERDE }}>
+                <Archive className="w-5 h-5 text-white shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-white font-black text-[15px] tracking-wide">PARTIDOS</h2>
+                  <p className="text-white/75 text-[11px] font-semibold">
+                    {todos.length} {todos.length === 1 ? 'partido' : 'partidos'} en total
+                  </p>
+                </div>
+                <button onClick={refrescarBanco}
+                  disabled={cargandoBanco}
+                  title="Volver a leer el banco"
+                  className="shrink-0 rounded-lg px-2.5 py-1.5 text-white text-[11px] font-black disabled:opacity-50"
+                  style={{ background: 'rgba(255,255,255,.18)' }}>
+                  ACTUALIZAR
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                {todos.map((f, i) => {
+                  const res = comoQuedo(f);
+                  return (
+                    <div key={`${f.torneo_num}|${f.jornada}`}
+                      className="rounded-xl flex items-center gap-3 pl-2 pr-2 py-2"
+                      style={{
+                        background: CAMPO,
+                        border: `1px solid ${BORDE}`,
+                        boxShadow: res ? `inset 4px 0 0 0 ${res.color}` : undefined,
+                      }}>
+                      <span className="shrink-0 rounded-lg flex items-center justify-center
+                        text-white font-black text-[12.5px]"
+                        style={{ width: 34, height: 34, background: BORDE }}>
+                        {i + 1}
+                      </span>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-black text-[12.5px] leading-tight truncate">
+                          {nombreDeTorneoNum(f.torneo_num)}
+                        </p>
+                        <p className="text-white/50 text-[11px] font-semibold leading-tight truncate">
+                          {/* EL DÍA EN QUE SE JUEGA, de primero: es lo que más se
+                              busca en el listado. — dirección, 29/08/2026 */}
+                          {diaCorto(f.fecha) && (
+                            <span className="text-white/75 font-black">{diaCorto(f.fecha)} · </span>
+                          )}
+                          {etiquetaFecha(f.jornada)}
+                          {f.rival ? ` · vs ${f.rival.toUpperCase()}` : ' · sin rival'}
+                          {res ? ` · ${res.texto} ${f.goles_nos || '0'} — ${f.goles_ellos || '0'}` : ''}
+                        </p>
+                      </div>
+
+                      {f.definitivo ? (
+                        <span className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-[9.5px] font-black"
+                          style={{ background: 'rgba(0,176,80,.16)', border: `1px solid ${VERDE}`, color: '#5BE39B' }}>
+                          <Check className="w-3 h-3" /> TERMINADO
+                        </span>
+                      ) : (
+                        <span className="shrink-0 rounded px-2 py-1 text-[9.5px] font-black"
+                          style={{ background: 'rgba(224,163,58,.16)', border: `1px solid ${AMBAR}`, color: AMBAR }}>
+                          A MEDIAS
+                        </span>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          ultimoArmado.current = '';
+                          setNumTorneo(f.torneo_num);
+                          setJornada(f.jornada);
+                          setAbriPlanilla(true);
+                          try { window.scrollTo({ top: 0 }); } catch { /* nada */ }
+                        }}
+                        title="Ver este partido"
+                        className="shrink-0 rounded-lg px-3 py-2 text-white text-[10.5px] font-black
+                          transition hover:brightness-125"
+                        style={{ background: '#20293a', border: `1px solid ${BORDE}` }}>
+                        VER POST PARTIDO
+                      </button>
+
+                      {/* BORRAR ESTE POSPARTIDO. Es lo único que administración
+                          puede cambiar aquí: quitar uno que no debía existir —una
+                          prueba, un partido que no se jugó—. Pide confirmación y
+                          NO se puede deshacer. — dirección, 29/08/2026 */}
+                      <button
+                        onClick={async () => {
+                          const como = `${etiquetaFecha(f.jornada)} ${nombreDeTorneoNum(f.torneo_num)}`;
+                          if (!window.confirm(
+                            `¿Borrar el pospartido de ${como}?\n\n` +
+                            'Se pierde todo lo que tenga escrito. Esto NO se puede deshacer.',
+                          )) return;
+                          setError('');
+                          try {
+                            await borrarPlanilla(f.torneo_num, f.jornada);
+                            borrarBorradorLocal(f.torneo_num, f.jornada);
+                            refrescarBanco();
+                          } catch (e: any) {
+                            setError(e?.message ?? 'No se pudo borrar ese pospartido.');
+                          }
+                        }}
+                        title="Borrar este pospartido"
+                        className="shrink-0 rounded-lg flex items-center justify-center transition hover:brightness-125"
+                        style={{ width: 34, height: 34, background: 'transparent', border: `1px solid ${ROJO}` }}>
+                        <Trash2 className="w-3.5 h-3.5" style={{ color: ROJO }} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="text-white/40 text-[11.5px] font-semibold mt-4 leading-relaxed">
+                Administración <span className="text-white font-black">solo mira</span>. La información de cada
+                partido la llena el formador, y los partidos se crean únicamente desde
+                <span className="text-white font-black"> Programación de Competencia</span>.
+              </p>
+            </>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  /* ── POSPARTIDO CERRADO PARA LOS FORMADORES (dirección, 28/08/2026) ───────
+     El módulo sigue en ajustes y todavía no se le entrega a los profes. Se
+     cierra AQUÍ, en la pantalla, y no solo escondiendo el botón del menú: si
+     alguien llega con el enlace pegado, tampoco entra.
+     Cuando la dirección diga que ya, se borra este bloque y todo vuelve a
+     funcionar como está escrito más abajo. */
+  /* MIENTRAS SE PRUEBA, SOLO CASTRO (dirección, 29/08/2026). Los demás
+     formadores siguen viendo el aviso de "en ajustes". Para abrírselo a todos,
+     se borra la lista de abajo y ya. */
+  const PROFES_QUE_PUEDEN = ['CASTRO'];
+  const sinTildes = (x: any) => String(x ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim().toUpperCase();
+  const yoPuedo = PROFES_QUE_PUEDEN.some(p => {
+    const yo = sinTildes(nombreProfe);
+    const el = sinTildes(p);
+    return !!yo && (yo === el || yo.split(' ').includes(el));
+  });
+
+  if (esProfe && !yoPuedo) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: LIENZO }}>
+        <div className="rounded-2xl p-6 max-w-[440px] text-center"
+             style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+          <AlertTriangle className="w-8 h-8 mx-auto mb-3" style={{ color: AMBAR }} />
+          <h1 className="text-white font-black text-[16px] mb-2">POSPARTIDO EN AJUSTES</h1>
+          <p className="text-white/60 text-[13px] font-semibold leading-relaxed">
+            Esta sección todavía la está terminando la dirección. Apenas quede lista
+            se les avisa y la podrán usar.
+          </p>
+          <button
+            onClick={() => router.push('/mis-proyectos')}
+            className="mt-4 rounded-xl px-4 py-2.5 text-white font-black text-[12px]"
+            style={{ background: VERDE }}>
+            VOLVER
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen pb-16" style={{ background: LIENZO }}>
 
@@ -2139,7 +2587,7 @@ export default function CrearPospartidoPage() {
             querer, y el módulo de seguimiento puede confiar en él. */}
         {/* En la MATRIZ no hay nada que guardar: no es un partido, y el cobro
             del torneo se manda solo al oprimirlo. — 27/08/2026 */}
-        {!!numTorneo && !enMatriz && (
+        {!!numTorneo && !enMatriz && !soloMira && (
           definitivo ? (
             <div className="flex items-center gap-2 flex-1 sm:flex-none">
               <span className="rounded-lg flex items-center gap-1 px-2 text-white font-black text-[10px]"
@@ -2176,6 +2624,9 @@ export default function CrearPospartidoPage() {
           )
         )}
 
+        {/* (INFO no va aquí: la dirección lo puso en el recuadro del TORNEO,
+            contra la derecha, encima de la casilla RIVAL. — 28/08/2026) */}
+
         {esAdmon && (
         <button onClick={bajarPDF} disabled={bajandoPdf}
           title="Bajar esta planilla en PDF (solo administración)"
@@ -2201,6 +2652,22 @@ export default function CrearPospartidoPage() {
       </header>
 
       <main className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 1350 }}>
+
+        {/* ADMINISTRACIÓN SOLO MIRA (dirección, 29/08/2026). */}
+        {soloMira && (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <button
+              onClick={() => { setAbriPlanilla(false); refrescarBanco(); }}
+              className="rounded-xl px-3 py-2 flex items-center gap-1.5 text-white text-[11.5px] font-black
+                transition hover:brightness-125"
+              style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+              <ArrowLeft className="w-3.5 h-3.5" /> VOLVER A LA LISTA
+            </button>
+            <span className="text-[11.5px] font-bold" style={{ color: AMBAR }}>
+              Estás mirando el partido. La información la llena el formador.
+            </span>
+          </div>
+        )}
 
         {error && (
           <div className="rounded-xl px-3 py-2.5 mb-3 flex items-start gap-2"
@@ -2264,8 +2731,14 @@ export default function CrearPospartidoPage() {
           </div>
         )}
 
-        {/* ── TORNEO # ── */}
-        <div className="rounded-2xl p-4 mb-3" style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+        {/* ── TORNEO # ──
+            Para administración va con candado: se ve todo, pero no se escribe.
+            — dirección, 29/08/2026 */}
+        <div className="rounded-2xl p-4 mb-3"
+             style={{
+               background: PANEL, border: `1px solid ${BORDE}`,
+               pointerEvents: soloMira ? 'none' : undefined,
+             }}>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-white font-black text-[15px]">
               {esProfe ? 'TORNEO' : 'TORNEO #'}
@@ -2347,6 +2820,20 @@ export default function CrearPospartidoPage() {
                 No hay un torneo con el número {numTorneo}. El cuadro tiene {cuadro.length}.
               </span>
             )}
+
+            {/* INFO — deja en blanco la planilla de este partido. Va AQUÍ, en
+                este mismo recuadro, contra la derecha y justo encima de la
+                casilla RIVAL. — dirección, 28/08/2026 */}
+            {!enMatriz && !soloMira && (
+              <button onClick={borrarEsteJuego} disabled={borrando || !numTorneo}
+                title="Borrar la información de este juego: deja la planilla en blanco"
+                className="ml-auto shrink-0 rounded-lg flex items-center justify-center gap-1.5 px-2.5
+                  font-black text-[11px] h-8 disabled:opacity-40"
+                style={{ background: 'transparent', border: `1px solid ${ROJO}`, color: ROJO }}>
+                {borrando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                INFO
+              </button>
+            )}
           </div>
 
           {/* # FECHA · DÍA DEL JUEGO · HORA LLEGADA · RIVAL.
@@ -2356,11 +2843,13 @@ export default function CrearPospartidoPage() {
               El # FECHA sale de una lista (1A a 30A) para que todo el mundo la
               escriba igual. — dirección, 26/08/2026 */}
           {/* Los anchos NO son iguales a propósito (dirección, 26/08/2026):
-              el reloj ocupa lo justo y RIVAL se lleva el espacio grande, que es
-              donde va un nombre largo. */}
+              el reloj ocupa lo justo y los nombres se llevan el espacio grande.
+              Al entrar ESCENARIO (28/08/2026) se apretaron un poco # FECHA,
+              DÍA DEL JUEGO y RIVAL, que es de donde sobraba, para que la
+              cancha quepa en el mismo renglón. */}
           <div className={enMatriz
             ? 'grid grid-cols-1 sm:grid-cols-[220px] gap-2 mt-3'
-            : 'grid grid-cols-2 gap-2 mt-3 sm:grid-cols-[0.8fr_1fr_212px_2fr]'}>
+            : 'grid grid-cols-2 gap-2 mt-3 sm:grid-cols-[0.6fr_0.85fr_196px_1.3fr_1.3fr]'}>
             <div>
               <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
                 # FECHA
@@ -2413,7 +2902,18 @@ export default function CrearPospartidoPage() {
                 RIVAL
               </label>
               <input value={rival} onChange={e => setRival(e.target.value)}
-                placeholder="ATLETICO NACIONAL"
+                placeholder="RIVAL"
+                style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}
+                className="w-full rounded-lg px-2.5 text-white text-[12.5px] font-bold outline-none placeholder:text-white/20" />
+            </div>
+
+            {/* ESCENARIO — dónde se juega. — dirección, 28/08/2026 */}
+            <div>
+              <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
+                ESCENARIO
+              </label>
+              <input value={escenario} onChange={e => setEscenario(e.target.value)}
+                placeholder="ESCENARIO"
                 style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}
                 className="w-full rounded-lg px-2.5 text-white text-[12.5px] font-bold outline-none placeholder:text-white/20" />
             </div>
@@ -2422,43 +2922,33 @@ export default function CrearPospartidoPage() {
 
           </div>
 
-          {/* ── VER SOLO LOS ACTIVOS, O TODOS ─────────────────────────────
-              Arranca en ACTIVOS. Se cambia aquí porque es lo que decide QUIÉN
-              sale en la lista, y eso hay que poder verlo de una.
-              — dirección, 27/08/2026 */}
-          <div className="flex flex-wrap items-center gap-2 mt-3">
-            <span className="text-white/45 text-[9.5px] font-black uppercase tracking-widest">
-              Deportistas
-            </span>
-            <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${BORDE}` }}>
-              <button
-                onClick={() => setSoloActivos(true)}
-                title="Solo los que siguen activos. Los retirados y pausados no salen."
-                className="px-3 py-1.5 text-[11px] font-black transition"
-                style={{
-                  background: soloActivos ? VERDE : 'transparent',
-                  color: soloActivos ? '#ffffff' : 'rgba(255,255,255,.45)',
-                }}>
-                SOLO ACTIVOS
-              </button>
-              <button
-                onClick={() => setSoloActivos(false)}
-                title="Muestra también a los retirados y pausados"
-                className="px-3 py-1.5 text-[11px] font-black transition"
-                style={{
-                  background: !soloActivos ? GRIS : 'transparent',
-                  color: !soloActivos ? '#ffffff' : 'rgba(255,255,255,.45)',
-                  borderLeft: `1px solid ${BORDE}`,
-                }}>
-                TODOS
-              </button>
+          {/* EL BOTÓN "SOLO ACTIVOS / TODOS" SE QUITÓ POR INNECESARIO
+              (dirección, 28/08/2026). En la planilla SIEMPRE salen únicamente
+              los deportistas activos: al retirado no hay para qué llamarlo a
+              un partido. Se quedó la regla, no el botón.
+
+              EN SU LUGAR VAN EL D.T Y EL A.T: quién dirigió el partido y quién
+              lo asistió. Se escogen de la lista de TODOS los profes del club,
+              porque cualquiera puede reemplazar al del equipo ese día. Las dos
+              casillas van anchas: ahí cabe el nombre completo. */}
+          {!enMatriz && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+            <div>
+              <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
+                D.T
+              </label>
+              <CasillaProfe valor={dt} onChange={setDt}
+                delEquipo={profeDelTorneo(torneo?.formador, profesClub)} todos={profesClub} />
             </div>
-            {!soloActivos && (
-              <span className="text-[11px] font-bold" style={{ color: AMBAR }}>
-                Estás viendo también a los retirados y pausados.
-              </span>
-            )}
+            <div>
+              <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
+                A.T
+              </label>
+              <CasillaProfe valor={at} onChange={setAt}
+                delEquipo={profeDelTorneo(torneo?.formador, profesClub)} todos={profesClub} />
+            </div>
           </div>
+          )}
 
           {renglonJornada && (
             <p className="text-white font-black text-[13.5px] mt-3">{renglonJornada}</p>
@@ -3036,10 +3526,46 @@ export default function CrearPospartidoPage() {
             VS y un RIVAL vacío ahí no dicen nada y solo estorban. Aparece
             apenas se escoge una FECHA, que es cuando sí hay partido. */}
         {!enMatriz && (
-        <div className="rounded-2xl p-3 sm:p-4 mt-2 flex flex-col sm:flex-row flex-wrap
-          items-center justify-center gap-3 sm:gap-4"
-          style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+        <div className="rounded-2xl p-3 sm:p-4 mt-2 flex flex-col
+          sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]
+          items-center gap-3 sm:gap-4"
+          style={{
+            background: PANEL, border: `1px solid ${BORDE}`,
+            pointerEvents: soloMira ? 'none' : undefined,
+          }}>
 
+          {/* Tres puestos: AUTOGOL a la izquierda · el partido en el centro ·
+              PROMEDIO a la derecha. El del medio queda CENTRADO de verdad en
+              el recuadro y las pastillas se van cada una a su orilla sin
+              correr el marcador. — dirección, 28/08/2026 */}
+          <div className="flex items-center justify-center sm:justify-self-start w-full sm:w-auto">
+            <div className="flex items-center gap-2 rounded-lg px-2.5 shrink-0"
+              title="Autogoles del rival. Suman a nuestro marcador."
+              style={{ height: 36, background: CAMPO, border: `1px solid ${autogoles > 0 ? VERDE : BORDE}` }}>
+              <span className="text-white/60 text-[10.5px] font-black tracking-wide whitespace-nowrap">
+                AUTOGOL<span className="hidden sm:inline"> RIVAL</span>
+              </span>
+              <select
+                value={autogoles ? String(autogoles) : ''}
+                onChange={e => setAutogoles(parseInt(e.target.value, 10) || 0)}
+                title="Autogoles del rival. Suman a nuestro marcador."
+                style={{
+                  height: 26, width: 54,
+                  background: autogoles > 0 ? VERDE : 'transparent',
+                  border: `1px solid ${autogoles > 0 ? VERDE : BORDE}`,
+                  color: autogoles > 0 ? '#ffffff' : 'rgba(255,255,255,.35)',
+                }}
+                className="rounded text-center text-[13px] font-black outline-none cursor-pointer">
+                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
+                {['1', '2', '3', '4', '5'].map(n => (
+                  <option key={n} value={n} style={{ color: '#111827', backgroundColor: 'white' }}>{n}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* EL RESULTADO, EL MARCADOR Y EL RIVAL QUEDAN COMO SIEMPRE. */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 w-full sm:w-auto">
           <div className="rounded-xl px-4 sm:px-6 py-2.5 sm:py-3 text-center w-full sm:w-auto"
             style={{ background: resultado ? colorResultado : CAMPO, minWidth: 0,
                      border: resultado ? 'none' : `1px solid ${BORDE}` }}>
@@ -3070,7 +3596,8 @@ export default function CrearPospartidoPage() {
             <span className="text-white font-black text-[18px] sm:text-[22px] shrink-0">VS</span>
 
             {/* EL RIVAL — igual, pero al revés en el computador (gol y luego
-                nombre), que es como se lee un marcador. */}
+                nombre), que es como se lee un marcador.
+                (INFO se subió al encabezado de la pantalla. — 28/08/2026) */}
             <div className="flex flex-col sm:flex-row-reverse items-center gap-1.5 sm:gap-4 min-w-0 flex-1 sm:flex-none">
               <div className="text-center px-1 sm:px-2 sm:min-w-[170px]">
                 {limpiar(rival)
@@ -3093,6 +3620,39 @@ export default function CrearPospartidoPage() {
                   marcador-caja marcador-num placeholder:text-white/[.22]" />
             </div>
           </div>
+          </div>
+
+          {/* ── PROMEDIO EQUIPO, CONTRA LA DERECHA ───────────────────────────
+              Y debajo el aviso de guardado. — dirección, 28/08/2026 */}
+          <div className="flex flex-col items-center sm:items-end gap-1.5 w-full sm:w-auto sm:justify-self-end">
+            <div className="flex items-center gap-2 rounded-lg px-2.5 select-none shrink-0"
+              title="Promedio de las calificaciones puestas en la columna CAL"
+              style={{ height: 36, background: CAMPO, border: `1px solid ${promedioEquipo ? VERDE : BORDE}` }}>
+              <span className="text-white/60 font-black text-[10.5px] tracking-wide whitespace-nowrap">
+                PROMEDIO<span className="hidden sm:inline"> EQUIPO</span>
+              </span>
+              <div className="rounded flex items-center justify-center"
+                style={{
+                  height: 26, minWidth: 50,
+                  background: promedioEquipo ? VERDE : 'transparent',
+                  border: `1px solid ${promedioEquipo ? VERDE : BORDE}`,
+                }}>
+                <span className="text-white font-black text-[15px] leading-none">
+                  {promedioEquipo || <span className="text-white/30">—</span>}
+                </span>
+              </div>
+            </div>
+
+            {sinGuardar ? (
+              <p className="text-[11.5px] font-bold" style={{ color: AMBAR }}>
+                Tienes cambios sin guardar.
+              </p>
+            ) : guardadoEn ? (
+              <p className="text-white/45 text-[11.5px] font-semibold">
+                Guardado {cuandoBonito(guardadoEn)}.
+              </p>
+            ) : null}
+          </div>
         </div>
         )}
 
@@ -3102,95 +3662,14 @@ export default function CrearPospartidoPage() {
             GUARDAR quedó SOLO arriba, en el encabezado: tenerlo dos veces
             confundía sobre si eran dos guardadas distintas. */}
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          {/* AUTOGOL RIVAL — goles que el rival se metió en su propia puerta.
-              Suman a nuestro marcador, pero no son de ningún deportista
-              nuestro, así que no van en la columna GOL. Se escoge de una lista
-              de 1 a 5, igual que todo lo demás. — dirección, 26/08/2026 */}
-          {!enMatriz && (
-          <div className="flex items-center gap-2 rounded-lg px-2.5 order-1"
-            title="Autogoles del rival. Suman a nuestro marcador."
-            style={{ height: 36, background: CAMPO, border: `1px solid ${autogoles > 0 ? VERDE : BORDE}` }}>
-            {/* En el celular dice solo AUTOGOL, para que quepa al lado del
-                promedio. En el computador va completo. — 27/08/2026 */}
-            <span className="text-white/60 text-[10.5px] font-black tracking-wide whitespace-nowrap">
-              AUTOGOL<span className="hidden sm:inline"> RIVAL</span>
-            </span>
-            <select
-              value={autogoles ? String(autogoles) : ''}
-              onChange={e => setAutogoles(parseInt(e.target.value, 10) || 0)}
-              title="Autogoles del rival. Suman a nuestro marcador."
-              style={{
-                height: 26, width: 54,
-                background: autogoles > 0 ? VERDE : 'transparent',
-                border: `1px solid ${autogoles > 0 ? VERDE : BORDE}`,
-                color: autogoles > 0 ? '#ffffff' : 'rgba(255,255,255,.35)',
-              }}
-              className="rounded text-center text-[13px] font-black outline-none cursor-pointer">
-              <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
-              {['1', '2', '3', '4', '5'].map(n => (
-                <option key={n} value={n} style={{ color: '#111827', backgroundColor: 'white' }}>{n}</option>
-              ))}
-            </select>
-          </div>
-          )}
-
-          {/* INFO borra el juego. En el celular se va de último —al renglón de
-              abajo— que es donde estorba menos y donde no se oprime sin
-              querer. — 27/08/2026 */}
-          {!enMatriz && (
-          <button onClick={borrarEsteJuego} disabled={borrando || !numTorneo}
-            title="Borrar la información de este juego: deja la planilla en blanco"
-            className="rounded-lg px-2.5 font-black text-[10.5px] flex items-center gap-1
-              order-3 sm:order-2 disabled:opacity-40"
-            style={{ height: 32, background: 'transparent', border: `1px solid ${ROJO}`, color: ROJO }}>
-            {borrando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-            INFO
-          </button>
-          )}
-
-          {/* PROMEDIO DEL EQUIPO — SUBIÓ AL LADO DE AUTOGOL (dirección,
-              27/08/2026). Antes se iba solo contra la esquina derecha y en el
-              celular caía a un renglón aparte, medio perdido. Ahora es una
-              pastilla igual a las otras y se lee de corrido con lo demás.
-              No se oprime: es el resumen de las calificaciones. */}
-          {!enMatriz && (
-          <div className="flex items-center gap-2 rounded-lg px-2.5 select-none order-2 sm:order-3 sm:ml-auto"
-            title="Promedio de las calificaciones puestas en la columna CAL"
-            style={{ height: 36, background: CAMPO, border: `1px solid ${promedioEquipo ? VERDE : BORDE}` }}>
-            <span className="text-white/60 font-black text-[10.5px] tracking-wide whitespace-nowrap">
-              PROMEDIO<span className="hidden sm:inline"> EQUIPO</span>
-            </span>
-            <div className="rounded flex items-center justify-center"
-              style={{
-                height: 26, minWidth: 50,
-                background: promedioEquipo ? VERDE : 'transparent',
-                border: `1px solid ${promedioEquipo ? VERDE : BORDE}`,
-              }}>
-              <span className="text-white font-black text-[15px] leading-none">
-                {promedioEquipo || <span className="text-white/30">—</span>}
-              </span>
-            </div>
-          </div>
-          )}
-          {/* El aviso de guardado va de último SIEMPRE: sin esto, al ordenar
-              las pastillas para el celular, se colaba de primero. */}
-          {enMatriz ? null : sinGuardar ? (
-            <p className="text-[11.5px] font-bold order-4" style={{ color: AMBAR }}>
-              Tienes cambios sin guardar.
-            </p>
-          ) : guardadoEn ? (
-            <p className="text-white/45 text-[11.5px] font-semibold order-4">
-              Guardado {cuandoBonito(guardadoEn)}.
-            </p>
-          ) : null}
-
-          {numTorneo && convocables.length > 0 ? (
-            <p className="text-white/45 text-[11px] order-5 w-full sm:w-auto">
-              <span className="text-white font-black">{convocables.length} deportistas</span> tienen
-              el torneo {numTorneo} asignado en Total Afiliados. Si falta alguno, hay que
-              ponerle ese torneo en su ficha: aquí no se agregan a mano.
-            </p>
-          ) : numTorneo && torneo ? (
+          {/* AUTOGOL RIVAL, PROMEDIO EQUIPO y el aviso de guardado están en el
+              recuadro gris del resultado; INFO, en el encabezado.
+              LOS LETREROS QUE EXPLICABAN LO OBVIO SE QUITARON (dirección,
+              28/08/2026): el que contaba cuántos deportistas tienen el torneo
+              y el que desglosaba la suma del marcador. Aquí solo quedan los
+              avisos de cuando algo FALTA. */}
+          {numTorneo && convocables.length > 0 ? null
+            : numTorneo && torneo ? (
             <p className="text-[11px] font-semibold order-5 w-full sm:w-auto" style={{ color: AMBAR }}>
               Todavía ningún deportista tiene el torneo {numTorneo} puesto en C1, C2, C3 o C4.
               Asígnalos en Total Afiliados y la planilla se arma sola.
@@ -3204,18 +3683,39 @@ export default function CrearPospartidoPage() {
           )}
         </div>
 
-        {/* El desglose se ve siempre que haya PARTIDO, aunque vaya en cero: así
-            se comprueba de un vistazo que la suma está corriendo. En la matriz
-            no, que ahí no hay goles que sumar. — 27/08/2026 */}
-        {!!numTorneo && !enMatriz && (
-          <p className="text-white/45 text-[11.5px] text-center mt-2">
-            Nuestro marcador se suma solo:
-            {' '}<span className="text-white font-black">{golesDeLosNinos}</span> de los deportistas
-            {autogoles > 0 && (
-              <> {' + '}<span className="text-white font-black">{autogoles}</span> autogol{autogoles > 1 ? 'es' : ''} del rival</>
-            )}
-            {' = '}<span className="text-white font-black">{gn}</span>.
-          </p>
+        {/* El desglose de la suma del marcador se quitó por innecesario
+            (dirección, 28/08/2026). La cuenta sigue igual: nuestros goles son
+            los de los deportistas más los autogoles del rival, y eso se ve al
+            pasar el mouse por encima de nuestro marcador. */}
+
+        {/* ── BREVE RESUMEN DEL JUEGO ──────────────────────────────────────
+            Lo escribe el formador, con sus palabras, apenas termina el
+            partido: cómo se jugó, qué salió bien, qué hay que trabajar.
+            Va debajo del marcador y se guarda con el resto de la planilla.
+            En la matriz no aparece: ahí no hay partido. — dirección, 28/08/2026 */}
+        {!enMatriz && (
+          <div className="rounded-2xl p-3 sm:p-4 mt-3"
+               style={{
+                 background: PANEL, border: `1px solid ${BORDE}`,
+                 pointerEvents: soloMira ? 'none' : undefined,
+               }}>
+            <label htmlFor="resumen-juego"
+              className="block text-white font-black text-[13px] tracking-wide mb-2">
+              BREVE RESUMEN DEL JUEGO
+            </label>
+            <textarea
+              id="resumen-juego"
+              value={resumen}
+              onChange={e => setResumen(e.target.value)}
+              rows={4}
+              placeholder="Cómo se jugó, qué salió bien y qué hay que trabajar…"
+              style={{ background: CAMPO, border: `1px solid ${BORDE}`, resize: 'vertical' }}
+              className="w-full rounded-xl px-3 py-2.5 text-white text-[12.5px] font-semibold
+                leading-relaxed outline-none placeholder:text-white/20" />
+            <p className="text-white/35 text-[10.5px] font-semibold mt-1.5">
+              Se guarda junto con la planilla, al oprimir GUARDAR AVANCE o GUARDAR DEFINITIVO.
+            </p>
+          </div>
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
@@ -3242,35 +3742,31 @@ export default function CrearPospartidoPage() {
                 cabe en un solo renglón, sin repetir el torneo en cada tarjeta. */}
             <div className="flex-1 min-w-0">
               <h2 className="text-white font-black text-[15px] tracking-wide truncate">
-                BANCO POSPARTIDO
+                BANCO POST PARTIDO
                 {unSoloTorneoEnBanco && (
                   <span className="font-black"> — {unSoloTorneoEnBanco}</span>
                 )}
               </h2>
               <p className="text-white/75 text-[11px] font-semibold truncate">
-                Oprime un partido para abrirlo. Agárralo de las rayitas para cambiarlo de puesto.
+                Oprime un partido para abrirlo. Para cambiarlo de puesto, agárralo de ORDENAR.
               </p>
             </div>
-            <button
-              onClick={refrescarBanco}
-              disabled={cargandoBanco}
-              title="Volver a leer el archivo"
-              className="shrink-0 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 transition hover:opacity-80 disabled:opacity-50"
-              style={{ background: 'rgba(255,255,255,.18)' }}>
-              <RefreshCw className={`w-3.5 h-3.5 text-white ${cargandoBanco ? 'animate-spin' : ''}`} />
-              <span className="text-white text-[11px] font-black">Actualizar</span>
-            </button>
+            {/* EL BOTÓN "ACTUALIZAR" SE QUITÓ (dirección, 28/08/2026): nadie
+                sabía para qué era. El banco se relee solo al entrar y cada vez
+                que se guarda un partido, así que no hacía falta. */}
 
-            {/* CREAR POSPARTIDO — arranca una planilla nueva de ESTE mismo
-                torneo, en la primera fecha que falte. — dirección, 28/08/2026 */}
-            {!!torneoParaCrear && (
+            {/* CREAR POST PARTIDO SE QUITÓ (dirección, 29/08/2026): de aquí en
+                adelante los partidos se crean ÚNICAMENTE desde PROGRAMACIÓN DE
+                COMPETENCIA, para que ninguno nazca suelto y sin datos. De allá
+                caen al banco general y al banco del formador. */}
+            {false && !!torneoParaCrear && (
               <button
                 onClick={() => crearPospartido(torneoParaCrear, hechosDelTorneo)}
                 title="Empezar un partido nuevo de este torneo"
                 className="shrink-0 rounded-lg px-3 py-1.5 flex items-center gap-1.5 transition hover:brightness-125"
                 style={{ background: '#20293a', border: `1px solid ${BORDE}` }}>
                 <Zap className="w-3.5 h-3.5 text-white" />
-                <span className="text-white text-[11px] font-black">CREAR POSPARTIDO</span>
+                <span className="text-white text-[11px] font-black">CREAR POST PARTIDO</span>
               </button>
             )}
           </div>
@@ -3346,17 +3842,11 @@ export default function CrearPospartidoPage() {
                       return (
                         <div
                           key={clave}
-                          /* SE AGARRA CON LA MANO Y SE PONE DONDE UNO QUIERA.
-                             — dirección, 28/08/2026 */
-                          draggable
-                          onDragStart={e => {
-                            filaArrastrada.current = { torneo: g.num, jornada: f.jornada };
-                            /* Firefox no arranca el arrastre si no se le pone algo. */
-                            try {
-                              e.dataTransfer.effectAllowed = 'move';
-                              e.dataTransfer.setData('text/plain', clave);
-                            } catch { /* nada */ }
-                          }}
+                          /* EL RENGLÓN NO SE ARRASTRA ENTERO (dirección,
+                             28/08/2026): así un clic encima abre el partido,
+                             como uno espera. Para cambiarlo de puesto está la
+                             manija ORDENAR, a la izquierda, junto a la FECHA.
+                             El renglón sí RECIBE lo que se le suelte encima. */
                           onDragOver={e => {
                             const v = filaArrastrada.current;
                             if (!v || v.torneo !== g.num) return;
@@ -3365,7 +3855,9 @@ export default function CrearPospartidoPage() {
                           }}
                           onDragLeave={() => { if (filaEncima === clave) setFilaEncima(''); }}
                           onDrop={e => { e.preventDefault(); soltarFilaBanco(g.num, g.partidos, f); }}
-                          onDragEnd={() => { filaArrastrada.current = null; setFilaEncima(''); }}
+                          onDragEnd={() => {
+                            filaArrastrada.current = null; setFilaEncima(''); setFilaMoviendo('');
+                          }}
                           className="rounded-lg flex items-center gap-3 pl-2 pr-2 py-1.5 transition"
                           style={{
                             background: CAMPO,
@@ -3373,40 +3865,64 @@ export default function CrearPospartidoPage() {
                             boxShadow: res ? `inset 4px 0 0 0 ${res.color}` : undefined,
                             outline: filaEncima === clave ? `2px solid ${AMBAR}` : undefined,
                             outlineOffset: filaEncima === clave ? -2 : undefined,
+                            opacity: filaMoviendo === clave ? 0.55 : 1,
                           }}>
 
-                          {/* La manija: de aquí se agarra */}
-                          <GripVertical
-                            className="w-3.5 h-3.5 shrink-0 text-white/25"
-                            style={{ cursor: 'grab' }}
-                          />
+                          {/* ORDENAR — la manija. SOLO de aquí se agarra el
+                              renglón para cambiarlo de puesto. — 28/08/2026 */}
+                          <div
+                            draggable
+                            onDragStart={e => {
+                              filaArrastrada.current = { torneo: g.num, jornada: f.jornada };
+                              setFilaMoviendo(clave);
+                              /* Firefox no arranca el arrastre si no se le pone algo. */
+                              try {
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.setData('text/plain', clave);
+                              } catch { /* nada */ }
+                            }}
+                            onDragEnd={() => {
+                              filaArrastrada.current = null; setFilaEncima(''); setFilaMoviendo('');
+                            }}
+                            title="Agarra de aquí para cambiar esta fecha de puesto"
+                            className="shrink-0 flex items-center gap-1 rounded px-1.5 py-1 select-none
+                              cursor-grab active:cursor-grabbing hover:brightness-125"
+                            style={{ background: '#20293a', border: `1px solid ${BORDE}` }}>
+                            <GripVertical className="w-3 h-3 text-white/35" />
+                            <span className="text-white/40 text-[8.5px] font-black tracking-wide hidden sm:inline">
+                              ORDENAR
+                            </span>
+                          </div>
 
-                          {/* Los datos, seguidos y en una sola línea */}
+                          {/* Los datos, seguidos y en una sola línea. Un clic
+                              aquí ABRE el partido. */}
                           <button onClick={() => abrirDelBanco(f)}
                             title={`Abrir ${etiquetaFecha(f.jornada)} ${g.titulo}`}
-                            className="flex-1 min-w-0 flex items-center gap-3 text-left hover:brightness-125">
+                            className="flex-1 min-w-0 flex items-center gap-3 text-left hover:brightness-125
+                              cursor-pointer">
                             <span className="shrink-0 text-white font-black text-[12.5px] w-[62px]">
                               {etiquetaFecha(f.jornada)}
                             </span>
-                            <span className="min-w-0 truncate text-white/60 text-[11.5px] font-semibold"
-                                  style={{ maxWidth: 280 }}>
+                            {/* CADA DATO DEBAJO DEL DE ARRIBA (dirección,
+                                28/08/2026): el rival, la palabra y el marcador
+                                llevan un ancho fijo, así los renglones quedan
+                                cuadrados como si fueran columnas —aunque no lo
+                                sean— por largo que sea el nombre del rival. */}
+                            <span className="shrink-0 truncate text-white/60 text-[11.5px] font-semibold
+                              w-[150px] sm:w-[250px]">
                               {f.rival ? `vs ${f.rival.toUpperCase()}` : 'sin rival'}
                             </span>
                             {/* EL RESULTADO VA ENSEGUIDA DEL RIVAL — 28/08/2026:
                                 primero la palabra (VICTORIA verde, EMPATE ámbar,
                                 DERROTA roja) y detrás el marcador. */}
-                            {res && (
-                              <>
-                                <span className="shrink-0 font-black text-[10.5px] tracking-wide"
-                                      style={{ color: res.color }}>
-                                  {res.texto}
-                                </span>
-                                <span className="shrink-0 font-black text-[12px] tabular-nums"
-                                      style={{ color: res.color, marginLeft: -4 }}>
-                                  {f.goles_nos || '0'} — {f.goles_ellos || '0'}
-                                </span>
-                              </>
-                            )}
+                            <span className="shrink-0 font-black text-[10.5px] tracking-wide w-[62px]"
+                                  style={{ color: res?.color }}>
+                              {res?.texto || ''}
+                            </span>
+                            <span className="shrink-0 font-black text-[12px] tabular-nums w-[56px]"
+                                  style={{ color: res?.color }}>
+                              {res ? `${f.goles_nos || '0'} — ${f.goles_ellos || '0'}` : ''}
+                            </span>
                             <span className="flex-1" />
                           </button>
 

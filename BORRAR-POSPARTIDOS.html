@@ -1,0 +1,147 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Borrar los pospartidos viejos · Futuro Antioquia</title>
+<style>
+:root{--lienzo:#333F50;--panel:#3C4759;--campo:#2B3547;--borde:#4A5568;--verde:#00B050;--rojo:#C0504D;--ambar:#E0A33A}
+*{box-sizing:border-box;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{background:var(--lienzo);color:#fff;padding:18px;max-width:960px;margin:0 auto}
+h1{font-size:19px;font-weight:900}
+.sub{color:#ffffff8c;font-size:12.5px;margin-top:6px;line-height:1.6}
+.sub b{color:#fff}
+.caja{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:14px;margin-top:14px}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;margin-top:10px}
+th{background:var(--verde);color:#fff;font-weight:900;font-size:10px;letter-spacing:.05em;
+ padding:8px 6px;text-align:left;border:1px solid #fff}
+td{background:var(--campo);border:1px solid #fff;padding:7px 6px;color:#fff;font-weight:700}
+td.c{text-align:center;font-weight:900;width:70px}
+button{border:0;border-radius:11px;padding:12px 18px;font-weight:900;font-size:13px;color:#fff;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+.b1{background:var(--campo);border:1px solid var(--borde)}
+.b2{background:var(--rojo)}
+.fila{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.aviso{border-radius:11px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-top:12px}
+.amb{background:rgba(224,163,58,.14);border:1px solid var(--ambar)}
+.ver{background:rgba(0,176,80,.14);border:1px solid var(--verde)}
+.roj{background:rgba(192,80,77,.16);border:1px solid var(--rojo)}
+</style></head><body>
+
+<h1>Borrar los pospartidos que se crearon de mala forma</h1>
+<p class="sub">
+De aquí en adelante los partidos se crean <b>únicamente desde PROGRAMACIÓN DE COMPETENCIA</b>.
+Esta página borra los que quedaron creados a mano, para arrancar limpio.
+</p>
+
+<div class="aviso amb">
+<b>Ojo:</b> esto borra las planillas del pospartido —lo que el formador haya escrito en ellas—.
+<b>No toca</b> deportistas, pagos, asistencias, evaluaciones ni nada más.
+Antes de borrar, corre <b>RESPALDO-AHORA.bat</b>.
+</div>
+
+<div class="caja">
+  <div class="fila">
+    <button class="b1" id="mirar">1 · MIRAR QUÉ HAY</button>
+    <button class="b2" id="borrar" disabled>2 · BORRARLOS TODOS</button>
+    <span id="cuenta" style="font-size:12.5px;font-weight:800;color:#ffffff8c"></span>
+  </div>
+  <div id="aviso"></div>
+  <div id="tabla"></div>
+</div>
+
+<p class="sub" style="margin-top:14px">
+Primero oprime <b>MIRAR QUÉ HAY</b>: eso solo mira, no borra nada, y te muestra la lista.
+Si estás de acuerdo, oprime <b>BORRARLOS TODOS</b> y confirma. Después entra a la plataforma
+y oprime Ctrl+F5.
+</p>
+
+<script>
+const URL_BASE = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const LLAVE    = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
+const H = { apikey: LLAVE, Authorization: 'Bearer ' + LLAVE, 'Content-Type': 'application/json' };
+const TABLA = 'pospartido_planillas';
+
+const $ = id => document.getElementById(id);
+let lista = [];
+
+function aviso(txt, cls) { $('aviso').innerHTML = '<div class="aviso ' + cls + '">' + txt + '</div>'; }
+
+function fechaBonita(t) {
+  const m = String(t || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return t || '—';
+  const dias = ['DOM','LUN','MAR','MIE','JUE','VIE','SAB'];
+  const mes  = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(d.getTime())) return t;
+  return dias[d.getDay()] + ' ' + d.getDate() + ' ' + mes[d.getMonth()];
+}
+
+function pintar() {
+  if (lista.length === 0) { $('tabla').innerHTML = ''; return; }
+  $('tabla').innerHTML =
+    '<table><thead><tr>' +
+      '<th class="c">TORNEO</th><th class="c">FECHA</th><th>RIVAL</th>' +
+      '<th class="c">MARCADOR</th><th class="c">DEPORTISTAS</th><th class="c">ESTADO</th>' +
+    '</tr></thead><tbody>' +
+    lista.map(function (p) {
+      const n = Array.isArray(p.filas) ? p.filas.length : 0;
+      return '<tr>' +
+        '<td class="c">' + (p.torneo_num || '—') + '</td>' +
+        '<td class="c">' + (p.jornada || '—') + '</td>' +
+        '<td>' + ((p.rival || '').toUpperCase() || '<span style="color:#ffffff59">sin rival</span>') +
+          ' <span style="color:#ffffff59;font-weight:600">· ' + fechaBonita(p.fecha) + '</span></td>' +
+        '<td class="c">' + (p.goles_nos || '0') + ' — ' + (p.goles_ellos || '0') + '</td>' +
+        '<td class="c">' + n + '</td>' +
+        '<td class="c" style="color:' + (p.definitivo ? '#5BE39B' : '#E0A33A') + '">' +
+          (p.definitivo ? 'TERMINADO' : 'A MEDIAS') + '</td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table>';
+}
+
+$('mirar').onclick = async function () {
+  $('mirar').disabled = true;
+  aviso('Mirando…', 'amb');
+  try {
+    const res = await fetch(URL_BASE + '/rest/v1/' + TABLA +
+      '?select=torneo_num,jornada,fecha,rival,goles_nos,goles_ellos,definitivo,filas' +
+      '&order=torneo_num.asc,jornada.asc', { headers: H, cache: 'no-store' });
+    if (!res.ok) throw new Error('la base contestó ' + res.status);
+    lista = await res.json();
+    pintar();
+    $('cuenta').textContent = lista.length + (lista.length === 1 ? ' pospartido' : ' pospartidos');
+    $('borrar').disabled = lista.length === 0;
+    aviso(lista.length === 0
+      ? 'No hay ningún pospartido guardado. No hay nada que borrar.'
+      : 'Se encontraron <b>' + lista.length + '</b>. Revisa la lista; si estás de acuerdo, oprime BORRARLOS TODOS.',
+      lista.length === 0 ? 'ver' : 'amb');
+  } catch (e) {
+    aviso('No se pudo leer la base: ' + e.message + '. Revisa que tengas internet.', 'roj');
+  } finally {
+    $('mirar').disabled = false;
+  }
+};
+
+$('borrar').onclick = async function () {
+  if (!window.confirm('Se van a borrar ' + lista.length + ' pospartidos.\n\n' +
+                      'Esto NO se puede deshacer.\n\n¿Seguro?')) return;
+  if (!window.confirm('Última confirmación.\n\n¿Borrar los ' + lista.length + ' pospartidos?')) return;
+
+  $('borrar').disabled = true;
+  aviso('Borrando…', 'amb');
+  try {
+    /* Se borra todo lo de la tabla: el filtro "torneo_num no es imposible" es
+       la forma que tiene la base de decir TODAS las filas. */
+    const res = await fetch(URL_BASE + '/rest/v1/' + TABLA + '?torneo_num=not.is.null',
+      { method: 'DELETE', headers: H });
+    if (!res.ok) throw new Error('la base contestó ' + res.status + ' · ' + (await res.text()).slice(0, 200));
+    lista = [];
+    pintar();
+    $('cuenta').textContent = '';
+    aviso('<b>Listo: quedaron borrados.</b> De aquí en adelante los partidos se crean solo desde ' +
+          'PROGRAMACIÓN DE COMPETENCIA. Entra a la plataforma y oprime Ctrl+F5.', 'ver');
+  } catch (e) {
+    aviso('No se pudieron borrar: ' + e.message, 'roj');
+    $('borrar').disabled = false;
+  }
+};
+</script></body></html>

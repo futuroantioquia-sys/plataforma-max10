@@ -1,0 +1,77 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Preparar el cuadro de Programacion</title>
+<style>
+:root{--lienzo:#333F50;--panel:#3C4759;--campo:#2B3547;--borde:#4A5568;--verde:#00B050;--ambar:#E0A33A}
+*{box-sizing:border-box;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{background:var(--lienzo);color:#fff;padding:18px;max-width:900px;margin:0 auto}
+h1{font-size:19px;font-weight:900}
+.sub{color:#ffffff8c;font-size:12.5px;margin-top:6px;line-height:1.6}
+.sub b{color:#fff}
+.caja{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:14px;margin-top:14px}
+ol{margin:0;padding-left:20px;font-size:13px;line-height:1.9}
+ol b{color:#5BE39B}
+textarea{width:100%;height:230px;background:var(--campo);border:1px solid var(--borde);border-radius:11px;
+ color:#fff;font-family:Consolas,monospace;font-size:11.5px;padding:11px;line-height:1.5;resize:vertical}
+button{border:0;border-radius:11px;padding:12px 18px;font-weight:900;font-size:13px;color:#fff;cursor:pointer}
+.b2{background:var(--verde)}
+.b1{background:var(--campo);border:1px solid var(--borde)}
+.fila{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.ok{color:#5BE39B;font-size:12.5px;font-weight:800}
+.aviso{border-radius:11px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-top:12px;
+ background:rgba(224,163,58,.14);border:1px solid var(--ambar)}
+</style></head><body>
+
+<h1>Preparar el cuadro de Programacion de Competencia</h1>
+<p class="sub">
+Esto se hace <b>una sola vez</b>. No borra nada: solo crea el cuadro donde se guardan
+los partidos programados.
+</p>
+
+<div class="aviso">
+<b>Antes que nada:</b> si Chrome te ofrece <b>traducir</b> la pagina de Supabase, dile que
+<b>NO</b>. La traduccion automatica danna esa pantalla y sale el error de
+&ldquo;una extension del navegador provoco un error&rdquo;.
+</div>
+
+<div class="caja">
+  <ol>
+    <li>Oprime <b>COPIAR EL TEXTO</b> aqui abajo.</li>
+    <li>Oprime <b>ABRIR SUPABASE</b>. Se abre una pagina en blanco para escribir.</li>
+    <li>Si Chrome ofrece traducir, escoge <b>No traducir</b> (o &ldquo;Mostrar siempre en ingles&rdquo;).</li>
+    <li>Haz clic dentro del cuadro grande y pega con <b>Ctrl + V</b>.</li>
+    <li>Oprime <b>RUN</b> (arriba a la derecha) o <b>Ctrl + Enter</b>.</li>
+    <li>Abajo debe salir <b>cuadro de programacion &middot; LISTO</b>.</li>
+    <li>Vuelve a la plataforma y oprime <b>Ctrl + F5</b>.</li>
+  </ol>
+
+  <div class="fila">
+    <button class="b2" id="copiar">1 &middot; COPIAR EL TEXTO</button>
+    <button class="b1" id="abrir">2 &middot; ABRIR SUPABASE</button>
+    <span class="ok" id="listo"></span>
+  </div>
+</div>
+
+<div class="caja">
+  <textarea id="sql" readonly spellcheck="false"></textarea>
+</div>
+
+<script>
+const SQL = document.getElementById('sql');
+SQL.value = "-- PROGRAMACION DE COMPETENCIA - 28/08/2026\n-- Crea el cuadro donde la direccion programa los partidos.\n-- Correr esto NO borra nada. Se puede correr varias veces sin problema.\n\ncreate table if not exists public.programacion_competencia (\nid uuid primary key default gen_random_uuid(),\ntorneo_num text not null default '',\njornada text not null default '',\nfecha text not null default '',\nhora text not null default '',\nrival text not null default '',\nescenario text not null default '',\ndt text not null default '',\nat text not null default '',\nmicrociclo_id text not null default '',\nactualizada_en timestamptz not null default now());\n\nalter table public.programacion_competencia add column if not exists microciclo_id text not null default '';\nalter table public.programacion_competencia add column if not exists escenario text not null default '';\nalter table public.programacion_competencia add column if not exists dt text not null default '';\nalter table public.programacion_competencia add column if not exists at text not null default '';\n\nalter table public.programacion_competencia disable row level security;\ngrant select, insert, update, delete on public.programacion_competencia to anon, authenticated;\n\nnotify pgrst, 'reload schema';\n\n-- Abajo debe salir un cuadro con la palabra LISTO.\nselect 'cuadro de programacion' as casilla,\n       case when exists (select 1 from information_schema.tables\n            where table_name='programacion_competencia') then 'LISTO' else 'FALTA' end as resultado;";
+
+document.getElementById('copiar').onclick = async () => {
+  SQL.select();
+  let ok = false;
+  try { await navigator.clipboard.writeText(SQL.value); ok = true; }
+  catch { try { ok = document.execCommand('copy'); } catch {} }
+  document.getElementById('listo').textContent = ok
+    ? 'Copiado. Ahora abre Supabase y pega con Ctrl + V.'
+    : 'No se pudo copiar solo: seleccionalo con Ctrl + A y copia con Ctrl + C.';
+};
+
+document.getElementById('abrir').onclick = () => {
+  window.open('https://supabase.com/dashboard/project/fykdyalpuydkwfjqguip/sql/new', '_blank');
+};
+</script></body></html>
