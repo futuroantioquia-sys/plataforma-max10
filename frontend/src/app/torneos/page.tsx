@@ -281,6 +281,11 @@ export default function TorneosPage() {
   const [estado, setEstado]   = useState<Estado>('cargando');
   const [filas, setFilas]     = useState<FilaTorneo[]>([]);
   const [buscar, setBuscar]   = useState('');
+  /* FILTRAR POR FORMADOR Y POR TORNEO (dirección, 29/08/2026): el buscador
+     libre servía, pero tocaba acordarse de cómo estaba escrito. Con estas dos
+     listas se escoge de lo que ya existe en el cuadro. */
+  const [filtroFormador, setFiltroFormador] = useState('');
+  const [filtroTorneoCuadro, setFiltroTorneoCuadro] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado]   = useState(false);
   const [error, setError]     = useState('');
@@ -494,13 +499,15 @@ export default function TorneosPage() {
   /* ── Buscador ─────────────────────────────────────────────────────────── */
   const visibles = useMemo(() => {
     const q = buscar.trim().toUpperCase();
-    if (!q) return filas.map((f, i) => ({ f, n: i + 1 }));
+    const igual = (a: any, b: string) => String(limpiar(a) ?? '').toUpperCase() === b;
     return filas
       .map((f, i) => ({ f, n: i + 1 }))
-      .filter(({ f }) =>
+      .filter(({ f }) => !filtroFormador || igual(f.formador, filtroFormador))
+      .filter(({ f }) => !filtroTorneoCuadro || igual(f.torneo, filtroTorneoCuadro))
+      .filter(({ f }) => !q ||
         `${f.torneo} ${f.programa} ${f.categoria} ${f.nombre} ${f.formador}`
           .toUpperCase().includes(q));
-  }, [filas, buscar]);
+  }, [filas, buscar, filtroFormador, filtroTorneoCuadro]);
 
   const torneosDistintos = useMemo(
     () => new Set(filas.map(f => limpiar(f.torneo).toUpperCase()).filter(Boolean)).size,
@@ -638,7 +645,7 @@ export default function TorneosPage() {
         {estado === 'listo' && filas.length > 0 && (
           <>
             {/* Buscador */}
-            <div className="rounded-xl px-3 py-2 flex items-center gap-2 mb-3"
+            <div className="rounded-xl px-3 py-2 flex flex-wrap items-center gap-2 mb-3"
               style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: GRIS }} />
@@ -654,6 +661,42 @@ export default function TorneosPage() {
                   <X className="w-4 h-4 text-white" />
                 </button>
               )}
+              <select
+                value={filtroTorneoCuadro}
+                onChange={e => setFiltroTorneoCuadro(e.target.value)}
+                title="Ver solo un torneo"
+                style={{
+                  height: 36,
+                  background: filtroTorneoCuadro ? AMBAR : CAMPO,
+                  border: `1px solid ${filtroTorneoCuadro ? AMBAR : BORDE}`,
+                }}
+                className="shrink-0 rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer">
+                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS TORNEOS</option>
+                {sugerencias.torneo.map(t => (
+                  <option key={t} value={String(t).toUpperCase()} style={{ color: '#111827', backgroundColor: 'white' }}>
+                    {String(t).toUpperCase()}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={filtroFormador}
+                onChange={e => setFiltroFormador(e.target.value)}
+                title="Ver solo los equipos de un formador"
+                style={{
+                  height: 36,
+                  background: filtroFormador ? AMBAR : CAMPO,
+                  border: `1px solid ${filtroFormador ? AMBAR : BORDE}`,
+                }}
+                className="shrink-0 rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer">
+                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS FORMADORES</option>
+                {sugerencias.formador.map(t => (
+                  <option key={t} value={String(t).toUpperCase()} style={{ color: '#111827', backgroundColor: 'white' }}>
+                    {String(t).toUpperCase()}
+                  </option>
+                ))}
+              </select>
+
               <span className="text-white/45 text-[11px] font-black shrink-0 pr-1">
                 {visibles.length}/{filas.length}
               </span>

@@ -106,6 +106,36 @@ function recordar(llave: string, valor: string) {
   } catch { /* sin espacio: no pasa nada */ }
 }
 
+/* ── EL COLOR DE CADA PROGRAMA ──────────────────────────────────────────────
+   La comunidad reconoce el programa por el color de la imagen (dirección,
+   29/08/2026):
+
+       DESARROLLO   dorado        SELECCIÓN   naranja
+       PROGRESIÓN   verde         FORMACIÓN   azul
+
+   Se pintan de ese color: la palabra del programa, las cuatro casillas de
+   arriba —LLEGAR · DÍA · ESCENARIO · RIVAL—, la hora, el día y el rival.
+   Cuando no se está filtrando un solo programa, se usa el verde de siempre. */
+type ColorPrograma = { caja: string; letra: string };
+
+const COLOR_VERDE: ColorPrograma = { caja: '#00B050', letra: '#5BE39B' };
+
+const COLORES_PROGRAMA: { clave: string; color: ColorPrograma }[] = [
+  { clave: 'DESARROLLO', color: { caja: '#C8912F', letra: '#F0C463' } },   // dorado
+  { clave: 'SELECCION',  color: { caja: '#E06A22', letra: '#FFA469' } },   // naranja
+  { clave: 'PROGRESION', color: { caja: '#00B050', letra: '#5BE39B' } },   // verde
+  { clave: 'FORMACION',  color: { caja: '#2F6FD0', letra: '#7FB2F5' } },   // azul
+];
+
+/** El color que le toca a la imagen según el programa que se esté filtrando.
+ *  Si se filtran varios programas —o ninguno—, se queda el verde. */
+function colorDelPrograma(programas: string[]): ColorPrograma {
+  if (programas.length !== 1) return COLOR_VERDE;
+  const n = String(programas[0] ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return COLORES_PROGRAMA.find(c => n.includes(c.clave))?.color ?? COLOR_VERDE;
+}
+
 /** El título de los días: un día solo, o un rango.
  *  "SÁBADO 29 DE AGOSTO DE 2026"  ·  "DEL SÁBADO 29 AL LUNES 31 DE AGOSTO DE 2026"
  *  — dirección, 29/08/2026 */
@@ -515,6 +545,10 @@ export default function ProgramacionCompetenciaPage() {
      tres, cinco… y sacar UNA sola imagen con todos. Lista vacía = todos. */
   const [filtroTorneos, setFiltroTorneos] = useState<string[]>([]);
   const [abriTorneos, setAbriTorneos] = useState(false);
+  /* Y lo mismo con el PROGRAMA —la columna PROGRAMA del cuadro de Torneos y
+     Competencias—: se pueden marcar varios. — dirección, 29/08/2026 */
+  const [filtroProgramas, setFiltroProgramas] = useState<string[]>([]);
+  const [abriProgramas, setAbriProgramas] = useState(false);
   /* EL CUADRO ES DE UN SOLO DÍA (dirección, 29/08/2026).
      Arranca en el día de hoy. No es "un filtro más": es de qué día es esta
      programación. Por eso el día se ve arriba, en el título, y la columna de
@@ -628,6 +662,17 @@ export default function ProgramacionCompetenciaPage() {
     return [...set].sort((a, b) => a.localeCompare(b, 'es'));
   }, [lista, torneoDe]);
 
+  /** LOS PROGRAMAS, tal como están escritos en la columna PROGRAMA del cuadro
+   *  de Torneos y Competencias. — dirección, 29/08/2026 */
+  const programasParaFiltrar = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of cuadro ?? []) {
+      const n = String(limpiar((t as any).programa ?? '') ?? '').toUpperCase();
+      if (n) set.add(n);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [cuadro]);
+
   /** El cuerpo técnico COMPLETO para el filtro: todos los del cuadro de
    *  Torneos, aunque todavía no tengan ningún partido programado —JIMÉNEZ, por
    *  ejemplo—, más cualquier nombre que ya esté puesto en un renglón y no
@@ -655,6 +700,10 @@ export default function ProgramacionCompetenciaPage() {
           const t = torneoDe(f.torneo_num);
           if (!filtroTorneos.some(x => pelar(x) === pelar(t?.torneo))) return false;
         }
+        if (filtroProgramas.length) {
+          const t: any = torneoDe(f.torneo_num);
+          if (!filtroProgramas.some(x => pelar(x) === pelar(t?.programa))) return false;
+        }
         /* CUERPO TÉCNICO: vale si figura de D.T o de A.T. */
         if (filtroProfe) {
           const quien = pelar(filtroProfe);
@@ -670,7 +719,7 @@ export default function ProgramacionCompetenciaPage() {
         if (pa !== pb) return pa - pb;
         return (a.fecha || '9999').localeCompare(b.fecha || '9999');
       });
-  }, [lista, filtroDia, filtroHasta, filtroTorneos, filtroProfe, torneoDe, ordenMano]);
+  }, [lista, filtroDia, filtroHasta, filtroTorneos, filtroProgramas, filtroProfe, torneoDe, ordenMano]);
 
   /** Suelta el renglón que se venía arrastrando encima de otro. */
   function soltarFila(destino: FilaProgramacion) {
@@ -690,6 +739,10 @@ export default function ProgramacionCompetenciaPage() {
   /** Acomoda lo que se está viendo del partido MÁS TEMPRANO al más tarde:
    *  primero por día, y dentro del mismo día por la hora de llegada.
    *  — dirección, 29/08/2026 */
+  /* EL BOTÓN "ORDENAR POR HORARIO" SE QUITÓ (dirección, 29/08/2026): para la
+     imagen manda el orden POR TORNEO, que se ve mucho mejor. La función se
+     deja escrita por si algún día se quiere volver a poner el botón. */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function ordenarPorHorario() {
     const ids = [...visibles]
       .sort((a, b) => {
@@ -702,9 +755,40 @@ export default function ProgramacionCompetenciaPage() {
     guardarOrdenMano(ids);
   }
 
+  /* ORDENAR POR TORNEO (dirección, 29/08/2026): agrupa los partidos por
+     equipo —todos los de ASOBDIM SUB 8 juntos, después los del SUB 9…— y
+     dentro de cada equipo, del más temprano al más tarde. Sirve para armar la
+     imagen por equipos en vez de por horario. */
+  function ordenarPorTorneo() {
+    const ids = [...visibles]
+      .sort((a, b) => {
+        const na = nombreTorneo(a.torneo_num) || `ZZZ ${a.torneo_num}`;
+        const nb = nombreTorneo(b.torneo_num) || `ZZZ ${b.torneo_num}`;
+        const cmp = na.localeCompare(nb, 'es');
+        if (cmp !== 0) return cmp;
+        const fa = a.fecha || '9999-99-99';
+        const fb = b.fecha || '9999-99-99';
+        if (fa !== fb) return fa.localeCompare(fb);
+        return minutosDeLaHora(a.hora) - minutosDeLaHora(b.hora);
+      })
+      .map(f => f.id);
+    guardarOrdenMano(ids);
+  }
+
   const hayOrdenMano = ordenMano.length > 0;
 
-  const hayFiltro = !!filtroDia || !!filtroHasta || filtroTorneos.length > 0 || !!filtroProfe;
+  /** Cómo se pinta un filtro: encendido (blanco) o apagado (transparente). */
+  const pintaFiltro = (encendido: boolean) => ({
+    /* EN NARANJA (dirección, 29/08/2026): sobre el verde de la barra, el
+       naranja canta de lejos y no se confunde con nada más de la pantalla. */
+    background: encendido ? AMBAR : 'transparent',
+    border: `1px solid ${encendido ? AMBAR : 'rgba(255,255,255,.6)'}`,
+    color: '#ffffff',
+    height: 32,
+  });
+
+  const hayFiltro = !!filtroDia || !!filtroHasta || filtroTorneos.length > 0
+    || filtroProgramas.length > 0 || !!filtroProfe;
 
   /* ── Cambiar una casilla ── */
   function cambiar(id: string, campo: keyof FilaProgramacion, valor: string) {
@@ -901,17 +985,53 @@ export default function ProgramacionCompetenciaPage() {
          un renglón delgado con el nombre de su torneo encima. Entre partido y
          partido va una rayita corta en la mitad, en vez de un hueco grande. */
       const W = 1080, M = 44;
+      /* El color de esta imagen, según el programa filtrado. */
+      const COLOR = colorDelPrograma(filtroProgramas);
       /* El encabezado crece un renglón cuando hay un torneo filtrado. */
-      const nombresTorneos = filtroTorneos.join('  ·  ').toUpperCase();
-      const ALTO_TIT = nombresTorneos ? 176 : 142;
+      const nombresTorneos = [...filtroProgramas, ...filtroTorneos].join('  ·  ').toUpperCase();
+      const ALTO_TIT = nombresTorneos ? 184 : 142;
       const ALTO_CABEZA = 50;
-      const ALTO_TORNEO = 42;
-      const ALTO_FILA = 46;
-      const HUECO = 22;          // donde va la rayita
       const ALTO_PIE = 88;
 
-      let H = ALTO_TIT + ALTO_CABEZA + ALTO_PIE;
-      grupos.forEach((g, _k) => { H += ALTO_TORNEO + g.length * ALTO_FILA + HUECO; });
+      /* TODAS LAS IMÁGENES DEL MISMO TAMAÑO (dirección, 29/08/2026).
+         Antes la hoja crecía o se encogía según cuántos partidos hubiera: una
+         de un solo juego salía chiquita y una de doce salía larguísima, y al
+         mandarlas por WhatsApp se veían de tamaños distintos. Ahora la hoja
+         SIEMPRE mide lo mismo —1080 × 1350, la proporción de un celular— y
+         los partidos se reparten parejo adentro:
+
+           · Si sobra campo, el sobrante se reparte por igual entre los
+             torneos, así que quedan equidistantes y sin huecos feos.
+           · Si no cabe, todo se achica al tiempo —renglones y letra— hasta
+             que quepa, sin que se salga nada. */
+      let H = 1350;
+
+      const T_TORNEO = 42;          // alto normal del nombre del torneo
+      const T_FILA   = 46;          // alto normal de cada partido
+      const T_HUECO  = 22;          // el huequito con la rayita
+
+      const disponible = H - ALTO_TIT - ALTO_CABEZA - ALTO_PIE;
+      let natural = 0;
+      grupos.forEach(g => { natural += T_TORNEO + g.length * T_FILA + T_HUECO; });
+
+      /* Cuánto hay que achicar para que quepa (1 = no se achica nada). */
+      const k = natural > disponible ? Math.max(0.62, disponible / natural) : 1;
+      const ALTO_TORNEO = Math.round(T_TORNEO * k);
+      const ALTO_FILA   = Math.round(T_FILA   * k);
+      const HUECO       = Math.round(T_HUECO  * k);
+      /** Para que la letra se achique al mismo paso que los renglones. */
+      const L = (tam: number) => Math.round(tam * k);
+
+      /* Lo que sobre se reparte por igual: un pedacito antes de cada torneo y
+         otro al final, para que queden equidistantes. */
+      let usado = 0;
+      grupos.forEach(g => { usado += ALTO_TORNEO + g.length * ALTO_FILA + HUECO; });
+      /* Si ni achicando cabe —de unos quince partidos en adelante—, la hoja
+         se alarga lo justo. Es preferible una hoja más larga a que se salgan
+         los partidos por debajo. */
+      if (usado > disponible) H = ALTO_TIT + ALTO_CABEZA + ALTO_PIE + usado;
+      const sobra = Math.max(0, (H - ALTO_TIT - ALTO_CABEZA - ALTO_PIE) - usado);
+      const AIRE = grupos.size > 0 ? sobra / (grupos.size + 1) : 0;
 
       const lienzo = document.createElement('canvas');
       lienzo.width = W; lienzo.height = H;
@@ -947,10 +1067,12 @@ export default function ProgramacionCompetenciaPage() {
            3) los días, SAB 29 / DOM 30 — blanco  */
       let yLinea = 88;
       if (nombresTorneos) {
-        ctx.fillStyle = '#5BE39B';
-        ctx.font = '900 27px Arial, sans-serif';
+        /* DEL MISMO TAMAÑO DE "PROGRAMACIÓN OFICIAL" (dirección, 29/08/2026):
+           el programa es el que manda en la imagen, va parejo con el título. */
+        ctx.fillStyle = COLOR.letra;
+        ctx.font = '900 34px Arial, sans-serif';
         ctx.fillText(recortar(ctx, nombresTorneos, 660), M, yLinea);
-        yLinea += 34;
+        yLinea += 40;
       }
 
       ctx.fillStyle = '#ffffff';
@@ -1047,9 +1169,13 @@ export default function ProgramacionCompetenciaPage() {
         i.onerror = () => ok(null);
         i.src = ruta;
       });
-      const [logoRegol, logoWonder] = await Promise.all([
+      /* LA MASCOTA (dirección, 29/08/2026): va en /mascota.png, arriba a la
+         derecha del título, con los pies apoyados en la franja verde de los
+         títulos. Si el archivo no está, la imagen sale igual, sin ella. */
+      const [logoRegol, logoWonder, mascota] = await Promise.all([
         traerLogo('/regol.png'),
         traerLogo('/wonder.png'),
+        traerLogo('/mascota.png'),
       ]);
 
       /** EL GOTERÓN ROJO DE UBICACIÓN, para el escenario. — 29/08/2026 */
@@ -1096,7 +1222,7 @@ export default function ProgramacionCompetenciaPage() {
          estar en la cancha, no la del pitazo. — dirección, 29/08/2026 */
       ctx.font = '900 22px Arial, sans-serif';
       COLS.forEach((c, k) => {
-        ctx.fillStyle = '#00B050';
+        ctx.fillStyle = COLOR.caja;
         caja(equis[k], y, c.w, ALTO_CABEZA, 9);
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
@@ -1105,18 +1231,37 @@ export default function ProgramacionCompetenciaPage() {
       });
       y += ALTO_CABEZA;
 
+      /* LA MASCOTA, encima de la franja verde. Va a la derecha del título y
+         no tapa ni el nombre del club, ni el MAX 10, ni ningún dato: queda en
+         el espacio vacío que hay entre los dos. */
+      if (mascota) {
+        /* MÁS GRANDE (dirección, 29/08/2026): los pies le llegan hasta donde
+           arranca el primer renglón de partidos. La cabeza queda en el mismo
+           sitio de siempre —crece hacia abajo, no hacia arriba—, así que
+           sigue sin tapar el título ni el MAX 10. */
+        const pies = y + 12 + ALTO_TORNEO;
+        const altoMas = 232 + ALTO_TORNEO;
+        const ancMas = (mascota.width / mascota.height) * altoMas;
+        /* Justo en la juntura entre ESCENARIO y RIVAL, no "más o menos ahí":
+           se calcula sola, así queda igual de centrada con cualquier reparto
+           de columnas. — dirección, 29/08/2026 */
+        const juntura = equis[COLS.length - 1] - HUECO_COL / 2;
+        ctx.drawImage(mascota, juntura - ancMas / 2, pies - altoMas, ancMas, altoMas);
+      }
+
       const cuantosGrupos = grupos.size;
       let vaGrupo = 0;
 
       grupos.forEach((partidos, num) => {
         vaGrupo++;
+        y += AIRE;                       // el reparto parejo
 
         /* NUESTRO EQUIPO EN BLANCO Y EL RIVAL EN VERDE (dirección,
            29/08/2026): así se distingue de una quién es quién. */
         ctx.fillStyle = '#ffffff';
         /* NUESTRO EQUIPO, MÁS GRANDE (dirección, 29/08/2026): es el nombre
            que importa, va encima de sus partidos. */
-        ctx.font = '900 25px Arial, sans-serif';
+        ctx.font = `900 ${L(25)}px Arial, sans-serif`;
         const titulo = (nombreTorneo(num) || `TORNEO ${num}`).toUpperCase();
         ctx.fillText(recortar(ctx, titulo, ANCHO - 26), M + 13, y + ALTO_TORNEO / 2 + 2);
         y += ALTO_TORNEO;
@@ -1158,12 +1303,15 @@ export default function ProgramacionCompetenciaPage() {
             if (k === cualEscenario) { dibujarPin(equis[k] + 17, medio); sangria = 30; }
             if (k === cualRival)     { dibujarBalon(equis[k] + 17, medio); sangria = 30; }
 
-            ctx.fillStyle = (k === cualDia || k === cualRival) ? '#5BE39B' : '#ffffff';
+            /* La hora, el día y el rival, del color del programa; el
+               escenario en blanco. — dirección, 29/08/2026 */
+            ctx.fillStyle = (k === 0 || k === cualDia || k === cualRival)
+              ? COLOR.letra : '#ffffff';
             /* La hora, el día y el rival, más grandes: es lo que primero busca
                un papá. */
             ctx.font = (k === 0 || k === cualRival || k === cualDia)
-              ? '900 19px Arial, sans-serif'
-              : '700 17px Arial, sans-serif';
+              ? `900 ${L(19)}px Arial, sans-serif`
+              : `700 ${L(17)}px Arial, sans-serif`;
             ctx.fillText(recortar(ctx, d, COLS[k].w - sangria - 9), equis[k] + sangria, medio);
           });
           y += ALTO_FILA;
@@ -1172,7 +1320,7 @@ export default function ProgramacionCompetenciaPage() {
         /* LA RAYITA (dirección, 29/08/2026): un pedacito corto en toda la
            mitad, no una línea de lado a lado. Separa sin hacer ruido. */
         if (vaGrupo < cuantosGrupos) {
-          ctx.fillStyle = 'rgba(91,227,155,.45)';
+          ctx.fillStyle = COLOR.letra + '73';   // el mismo color, apagadito
           ctx.fillRect(W / 2 - 90, y + HUECO / 2 - 1, 180, 2);
         }
         y += HUECO;
@@ -1216,7 +1364,7 @@ export default function ProgramacionCompetenciaPage() {
     const nombre = [
       'PROGRAMACION OFICIAL',
       tituloDias(filtroDia, filtroHasta, visibles.map(f => f.fecha)),
-      filtroTorneos.join(' '),
+      [...filtroProgramas, ...filtroTorneos].join(' '),
       filtroProfe || '',
     ].filter(Boolean).join(' ').replace(/[\\/:*?"<>|]/g, ' ').trim();
     const a = document.createElement('a');
@@ -1320,6 +1468,10 @@ export default function ProgramacionCompetenciaPage() {
           </div>
 
           {/* Los filtros */}
+          {/* SE VE CUÁL FILTRO ESTÁ PUESTO (dirección, 29/08/2026): son varios
+              y uno se perdía sin saber por dónde estaba filtrando. El que está
+              trabajando se pone BLANCO con la letra verde oscura; el que no,
+              queda transparente con el borde blanco, como estaban todos. */}
           <div className="flex flex-wrap items-center gap-2 ml-auto">
             {/* TORNEOS: DE CHULOS (dirección, 29/08/2026). Se pueden marcar
                 varios —dos, tres, cinco— y la imagen sale con todos ellos. */}
@@ -1327,8 +1479,8 @@ export default function ProgramacionCompetenciaPage() {
               <button
                 onClick={() => setAbriTorneos(v => !v)}
                 title="Marca los torneos que quieres ver. Puedes marcar varios."
-                className="rounded-lg px-2.5 h-8 flex items-center gap-1.5 text-white text-[11.5px] font-black"
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)' }}>
+                className="rounded-lg px-2.5 flex items-center gap-1.5 text-[11.5px] font-black"
+                style={pintaFiltro(filtroTorneos.length > 0)}>
                 {filtroTorneos.length === 0
                   ? 'TODOS LOS TORNEOS'
                   : filtroTorneos.length === 1
@@ -1374,12 +1526,65 @@ export default function ProgramacionCompetenciaPage() {
               )}
             </div>
 
+            {/* PROGRAMAS: DE CHULOS TAMBIÉN (dirección, 29/08/2026). Se pueden marcar
+                varios. Los programas salen del cuadro de Torneos y Competencias. */}
+            <div className="relative">
+              <button
+                onClick={() => setAbriProgramas(v => !v)}
+                title="Marca los programas que quieres ver. Puedes marcar varios."
+                className="rounded-lg px-2.5 flex items-center gap-1.5 text-[11.5px] font-black"
+                style={pintaFiltro(filtroProgramas.length > 0)}>
+                {filtroProgramas.length === 0
+                  ? 'TODOS LOS PROGRAMAS'
+                  : filtroProgramas.length === 1
+                    ? filtroProgramas[0]
+                    : `${filtroProgramas.length} PROGRAMAS`}
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+
+              {abriProgramas && (
+                <>
+                  {/* Un vidrio invisible: al hacer clic por fuera, se cierra. */}
+                  <div className="fixed inset-0 z-40" onClick={() => setAbriProgramas(false)} />
+                  <div className="absolute left-0 mt-1 z-50 rounded-xl overflow-hidden shadow-2xl"
+                       style={{ background: PANEL, border: `1px solid ${BORDE}`, minWidth: 250, maxHeight: 340, overflowY: 'auto' }}>
+                    <button
+                      onClick={() => { setFiltroProgramas([]); setAbriProgramas(false); }}
+                      className="w-full text-left px-3 py-2 text-white text-[11.5px] font-black hover:brightness-125"
+                      style={{ background: filtroProgramas.length === 0 ? VERDE : 'transparent' }}>
+                      TODOS LOS PROGRAMAS
+                    </button>
+                    {programasParaFiltrar.map(t => {
+                      const marcado = filtroProgramas.includes(t);
+                      return (
+                        <button
+                          key={t}
+                          onClick={() => setFiltroProgramas(prev =>
+                            prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])}
+                          className="w-full text-left px-3 py-2 flex items-center gap-2
+                            text-white text-[11.5px] font-bold hover:brightness-125"
+                          style={{ background: marcado ? 'rgba(0,176,80,.22)' : 'transparent' }}>
+                          <span className="shrink-0 rounded flex items-center justify-center"
+                                style={{ width: 15, height: 15,
+                                         background: marcado ? VERDE : 'transparent',
+                                         border: `1px solid ${marcado ? VERDE : BORDE}` }}>
+                            {marcado && <Check className="w-3 h-3 text-white" />}
+                          </span>
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
             <select
               value={filtroProfe}
               onChange={e => setFiltroProfe(e.target.value)}
               title="Ver los partidos donde esa persona va de D.T o de A.T"
-              style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)', height: 32 }}
-              className="rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer">
+              style={pintaFiltro(!!filtroProfe)}
+              className="rounded-lg px-2 text-[11.5px] font-black outline-none cursor-pointer">
               <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>CUERPO TÉCNICO</option>
               {profesParaFiltrar.map(p => (
                 <option key={p} value={p} title={p} style={{ color: '#111827', backgroundColor: 'white' }}>
@@ -1395,11 +1600,8 @@ export default function ProgramacionCompetenciaPage() {
               value={filtroDia}
               onChange={e => setFiltroDia(e.target.value)}
               title="De qué día es esta programación"
-              style={{
-                background: 'transparent', border: '1px solid rgba(255,255,255,.6)',
-                height: 32, colorScheme: 'dark',
-              }}
-              className="rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer" />
+              style={{ ...pintaFiltro(!!filtroDia), colorScheme: 'dark' }}
+              className="rounded-lg px-2 text-[11.5px] font-black outline-none cursor-pointer" />
 
             {/* HASTA QUÉ DÍA. Se deja vacío para un solo día; se llena para
                 agarrar un fin de semana o un puente completo en una sola
@@ -1412,11 +1614,8 @@ export default function ProgramacionCompetenciaPage() {
               disabled={!filtroDia}
               onChange={e => setFiltroHasta(e.target.value)}
               title="Hasta qué día. Déjalo vacío si es un solo día."
-              style={{
-                background: 'transparent', border: '1px solid rgba(255,255,255,.6)',
-                height: 32, colorScheme: 'dark',
-              }}
-              className="rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer disabled:opacity-40" />
+              style={{ ...pintaFiltro(!!filtroHasta), colorScheme: 'dark' }}
+              className="rounded-lg px-2 text-[11.5px] font-black outline-none cursor-pointer disabled:opacity-40" />
 
             <button
               onClick={() => { setFiltroHasta(''); setFiltroDia(filtroDia ? '' : hoyISO()); }}
@@ -1429,12 +1628,16 @@ export default function ProgramacionCompetenciaPage() {
             </button>
 
             <button
-              onClick={ordenarPorHorario}
+              onClick={ordenarPorTorneo}
               disabled={visibles.length < 2}
-              title="Acomoda los partidos del más temprano al más tarde"
-              className="rounded-lg px-2.5 h-8 flex items-center text-white text-[11px] font-black disabled:opacity-45"
-              style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)' }}>
-              ORDENAR POR HORARIO
+              title="Agrupa los partidos por equipo, y dentro de cada equipo por horario"
+              className="rounded-lg px-2.5 flex items-center text-[11px] font-black disabled:opacity-45"
+              /* SE QUEDA NARANJA MIENTRAS EL ORDEN ESTÉ PUESTO (dirección,
+                 29/08/2026): así se sabe que el cuadro está agrupado por
+                 torneo, aunque después se filtre otra cosa. Se apaga con
+                 ORDEN NORMAL. */
+              style={pintaFiltro(hayOrdenMano)}>
+              ORDENAR POR TORNEO
             </button>
 
             {hayOrdenMano && (
@@ -1449,30 +1652,13 @@ export default function ProgramacionCompetenciaPage() {
 
             {hayFiltro && (
               <button
-                onClick={() => { setFiltroTorneos([]); setFiltroDia(''); setFiltroHasta(''); setFiltroProfe(''); }}
+                onClick={() => { setFiltroTorneos([]); setFiltroProgramas([]); setFiltroDia(''); setFiltroHasta(''); setFiltroProfe(''); }}
                 title="Quitar los filtros"
                 className="rounded-lg px-2.5 h-8 flex items-center gap-1 text-white text-[11px] font-black"
                 style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)' }}>
                 <X className="w-3.5 h-3.5" /> VER TODOS
               </button>
             )}
-
-            {/* MANDARLOS TODOS DE UNA (dirección, 29/08/2026): en vez de
-                oprimir el balón veinte veces, uno solo manda todo lo que se
-                está viendo. */}
-            <button
-              onClick={mandarTodos}
-              disabled={cargando || mandandoTodos || visibles.length === 0}
-              title="Crear el post partido de TODOS los partidos que se están viendo"
-              className="rounded-lg px-3 h-8 flex items-center gap-1.5 transition hover:brightness-125 disabled:opacity-50"
-              style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)' }}>
-              {mandandoTodos
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                : <BalonFutbol className="w-3.5 h-3.5" color="#ffffff" />}
-              <span className="text-white text-[11px] font-black">
-                {mandandoTodos ? 'MANDANDO…' : 'AGREGAR TODOS A POST PARTIDO'}
-              </span>
-            </button>
 
             <button
               onClick={armarImagen}
@@ -1514,8 +1700,10 @@ export default function ProgramacionCompetenciaPage() {
         <div className="pt-7 pb-5 text-center">
           <h3 className="font-black tracking-wide leading-tight text-[17px] sm:text-[20px]">
             <span className="text-white">PROGRAMACIÓN OFICIAL</span>
-            {filtroTorneos.length > 0 && (
-              <span style={{ color: '#5BE39B' }}>{' '}{filtroTorneos.join(' · ').toUpperCase()}</span>
+            {(filtroProgramas.length > 0 || filtroTorneos.length > 0) && (
+              <span style={{ color: '#5BE39B' }}>
+                {' '}{[...filtroProgramas, ...filtroTorneos].join(' · ').toUpperCase()}
+              </span>
             )}
             <span className="text-white">
               {' '}{tituloDias(filtroDia, filtroHasta, visibles.map(f => f.fecha))}
@@ -1577,11 +1765,24 @@ export default function ProgramacionCompetenciaPage() {
                   {/* Encima del balón, en letra chiquita, para que se sepa qué
                       hace ese botón sin tener que pararle el mouse encima.
                       — dirección, 29/08/2026 */}
-                  <span style={{ width: 38 }}
-                    className="shrink-0 text-center text-white/45 text-[7.5px] font-black
-                      uppercase leading-[1.15] tracking-tight">
-                    Crear<br />Post<br />Partido
-                  </span>
+                  {/* MANDARLOS TODOS, PERO CHIQUITO Y EN SU SITIO (dirección,
+                      29/08/2026): en la barra verde, grande, era peligroso —se
+                      oprimía sin querer—. Aquí queda justo encima de la columna
+                      de los balones, que es lo que hace, y pide confirmación. */}
+                  <button
+                    onClick={mandarTodos}
+                    disabled={cargando || mandandoTodos || visibles.length === 0}
+                    title="Crear el post partido de TODOS los partidos que se están viendo"
+                    style={{ width: 38, background: '#20293a', border: `1px solid ${BORDE}` }}
+                    className="shrink-0 rounded-lg py-1 flex flex-col items-center justify-center gap-0.5
+                      transition hover:brightness-125 disabled:opacity-45">
+                    {mandandoTodos
+                      ? <Loader2 className="w-3 h-3 animate-spin text-white" />
+                      : <BalonFutbol className="w-3 h-3" color="#ffffff" />}
+                    <span className="text-white/60 text-[6.5px] font-black uppercase leading-none tracking-tight">
+                      Todos
+                    </span>
+                  </button>
                   <span style={{ width: 38 }} className="shrink-0" />
                 </div>
 

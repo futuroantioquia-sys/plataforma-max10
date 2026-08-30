@@ -999,11 +999,12 @@ export default function CrearPospartidoPage() {
     const n = parseInt(numTorneo, 10);
     if (!Number.isFinite(n) || n < 1) return [];
     /* Si el torneo no es de este formador, ni la lista se arma.
-       SALVO QUE SEA UN PARTIDO (dirección, 29/08/2026): si hay # FECHA, ese
-       partido se lo creó la dirección desde PROGRAMACIÓN y ahí ya dice quién
-       lo dirige. Un profe puede estar de D.T reemplazando a otro; si aquí se
-       le bloquea la lista, abre su partido y le sale "este torneo todavía no
-       tiene deportistas asignados" y no puede calificar a nadie. */
+       SALVO QUE SEA UN PARTIDO (dirección, 29/08/2026): al formador solo le
+       llegan los partidos de SUS torneos —eso ya lo filtra el banco—, así que
+       si abrió uno con # FECHA es porque es suyo. Este permiso está para que
+       la lista no se le quede vacía cuando el nombre del cuadro y el del
+       ingreso están escritos distinto ("CASTRO" y "ALEJANDRO CASTRO
+       ESTRADA"), que fue lo que pasó de verdad. */
     if (torneoAjeno && !jornada) return [];
     return deportistas
       .filter(d => torneosDelDeportista(d).includes(n))
@@ -1301,6 +1302,13 @@ export default function CrearPospartidoPage() {
      numerado, y un botón VER POST PARTIDO. Al abrir uno, lo ve completo pero
      NO puede escribir: todas las casillas quedan bloqueadas. */
   const [abriPlanilla, setAbriPlanilla] = useState(false);
+  /* LOS FILTROS DEL BANCO GENERAL (dirección, 29/08/2026): con 38 partidos y
+     subiendo, la dirección necesita poder buscar por estado, por formador y
+     por día. */
+  const [filtroEstado, setFiltroEstado]         = useState('');
+  const [filtroProfeBanco, setFiltroProfeBanco] = useState('');
+  const [bancoDesde, setBancoDesde]             = useState('');
+  const [bancoHasta, setBancoHasta]             = useState('');
   useEffect(() => {
     setEsAdmon(esSuperAdmin() || esAccesoTotal());
     setEsAdmonPrincipal(esSuperAdmin());
@@ -2364,23 +2372,53 @@ export default function CrearPospartidoPage() {
   });
 
   if ((esAdmon || (esProfe && yoPuedo)) && !abriPlanilla) {
+    /* EN QUÉ VA CADA PARTIDO (dirección, 29/08/2026).
+       Antes todo lo que no estuviera cerrado decía "A MEDIAS", incluso los que
+       la dirección acababa de crear y el formador ni había abierto. Ahora son
+       tres estados de verdad:
+
+         SIN INICIAR · creado desde Programación y todavía sin tocar
+         A MEDIAS    · ya tiene marcador, pero no se ha cerrado
+         TERMINADO   · el formador lo dio por definitivo                */
+    const estadoDe = (f: any): 'TERMINADO' | 'A MEDIAS' | 'SIN INICIAR' => {
+      if (f?.definitivo === true) return 'TERMINADO';
+      const algo = String(f?.goles_nos ?? '').trim() !== ''
+                || String(f?.goles_ellos ?? '').trim() !== '';
+      return algo ? 'A MEDIAS' : 'SIN INICIAR';
+    };
+    const pelarNom = (x: any) => String(x ?? '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ').trim().toUpperCase();
+    /* Los formadores que aparecen en el banco, para el filtro. */
+    const profesDelBanco = [...new Set((banco ?? [])
+      .flatMap((f: any) => [f.dt, f.at])
+      .map(pelarNom).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
     /* AL FORMADOR SOLO SUS PARTIDOS (dirección, 29/08/2026). Él no escoge
        torneo ni fecha: abre lo que la dirección le creó desde Programación de
        Competencia, y lo llena. Nada más. */
     const mios = esProfe ? new Set(misTorneos.map(t => t.num)) : null;
-    /* TAMBIÉN LOS PARTIDOS DONDE ÉL ES D.T O A.T (dirección, 29/08/2026).
-       Un formador puede dirigir un partido de un torneo que no es suyo —está
-       reemplazando a un compañero—. Si solo se miraran "sus torneos", ese
-       partido no le aparecería en el banco y no podría llenarlo. */
-    const soyYo = (x: any) => {
-      const yo = sinTildes(nombreProfe);
-      const el = sinTildes(x);
-      if (!yo || !el) return false;
-      return yo === el || yo.split(' ').includes(el) || el.split(' ').some(p => yo.split(' ').includes(p));
-    };
+    /* EL PARTIDO ES DEL FORMADOR DEL TORNEO, PUNTO (dirección, 29/08/2026).
+       Se probó a mandárselo también a quien figurara de D.T o de A.T en la
+       programación, y no sirvió: se le llenaba el banco a un profe con
+       partidos que no son de sus equipos.
+       La regla queda así: el pospartido llega ÚNICAMENTE al banco del
+       formador que aparece en TORNEOS Y COMPETENCIAS. Si ese día lo reemplazó
+       un compañero, el que fue le pasa los datos y el formador oficial es
+       quien llena el pospartido en su perfil. */
     const todos = [...(banco ?? [])]
-      .filter(f => !mios || mios.has(String(f.torneo_num).trim())
-                || soyYo((f as any).dt) || soyYo((f as any).at))
+      .filter(f => !mios || mios.has(String(f.torneo_num).trim()))
+      .filter(f => !filtroEstado || estadoDe(f) === filtroEstado)
+      .filter(f => !filtroProfeBanco
+                || pelarNom((f as any).dt) === filtroProfeBanco
+                || pelarNom((f as any).at) === filtroProfeBanco)
+      .filter(f => {
+        if (!bancoDesde && !bancoHasta) return true;
+        const d = String(f.fecha ?? '');
+        if (!d) return false;                       // sin día no entra en un rango
+        if (bancoDesde && d < bancoDesde) return false;
+        if (bancoHasta && d > bancoHasta) return false;
+        return true;
+      })
       .sort((a, b) => {
         /* Por día de juego; los que no tienen día, por torneo y fecha. */
         const fa = a.fecha || '9999-99-99';
@@ -2455,7 +2493,7 @@ export default function CrearPospartidoPage() {
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl mb-3"
+              <div className="flex flex-wrap items-center gap-2 px-4 py-3 rounded-2xl mb-3"
                    style={{ background: VERDE }}>
                 <Archive className="w-5 h-5 text-white shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -2466,6 +2504,79 @@ export default function CrearPospartidoPage() {
                     {todos.length} {todos.length === 1 ? 'partido' : 'partidos'}
                   </p>
                 </div>
+                {/* FILTRAR POR ESTADO Y POR FORMADOR (dirección, 29/08/2026):
+                    con 38 partidos, sin esto toca leerlos todos. */}
+                {!esProfe && (
+                  <select
+                    value={filtroEstado}
+                    onChange={e => setFiltroEstado(e.target.value)}
+                    title="Ver solo los que están en ese estado"
+                    style={{
+                      background: filtroEstado ? AMBAR : 'rgba(255,255,255,.18)',
+                      border: 'none', height: 30,
+                    }}
+                    className="shrink-0 rounded-lg px-2 text-white text-[11px] font-black outline-none cursor-pointer">
+                    <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS ESTADOS</option>
+                    <option value="SIN INICIAR" style={{ color: '#111827', backgroundColor: 'white' }}>SIN INICIAR</option>
+                    <option value="A MEDIAS" style={{ color: '#111827', backgroundColor: 'white' }}>A MEDIAS</option>
+                    <option value="TERMINADO" style={{ color: '#111827', backgroundColor: 'white' }}>TERMINADO</option>
+                  </select>
+                )}
+
+                {!esProfe && (
+                  <select
+                    value={filtroProfeBanco}
+                    onChange={e => setFiltroProfeBanco(e.target.value)}
+                    title="Ver los partidos de ese formador, de D.T o de A.T"
+                    style={{
+                      background: filtroProfeBanco ? AMBAR : 'rgba(255,255,255,.18)',
+                      border: 'none', height: 30,
+                    }}
+                    className="shrink-0 rounded-lg px-2 text-white text-[11px] font-black outline-none cursor-pointer">
+                    <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS PROFES</option>
+                    {profesDelBanco.map(pr => (
+                      <option key={pr} value={pr} style={{ color: '#111827', backgroundColor: 'white' }}>{pr}</option>
+                    ))}
+                  </select>
+                )}
+
+                {!esProfe && (
+                  <>
+                    <input
+                      type="date"
+                      value={bancoDesde}
+                      onChange={e => setBancoDesde(e.target.value)}
+                      title="Desde qué día"
+                      style={{
+                        background: bancoDesde ? AMBAR : 'rgba(255,255,255,.18)',
+                        border: 'none', height: 30, colorScheme: 'dark',
+                      }}
+                      className="shrink-0 rounded-lg px-2 text-white text-[11px] font-black outline-none cursor-pointer" />
+                    <span className="text-white/80 text-[10.5px] font-black">HASTA</span>
+                    <input
+                      type="date"
+                      value={bancoHasta}
+                      min={bancoDesde || undefined}
+                      onChange={e => setBancoHasta(e.target.value)}
+                      title="Hasta qué día"
+                      style={{
+                        background: bancoHasta ? AMBAR : 'rgba(255,255,255,.18)',
+                        border: 'none', height: 30, colorScheme: 'dark',
+                      }}
+                      className="shrink-0 rounded-lg px-2 text-white text-[11px] font-black outline-none cursor-pointer" />
+                  </>
+                )}
+
+                {!esProfe && (!!filtroEstado || !!filtroProfeBanco || !!bancoDesde || !!bancoHasta) && (
+                  <button
+                    onClick={() => { setFiltroEstado(''); setFiltroProfeBanco(''); setBancoDesde(''); setBancoHasta(''); }}
+                    title="Quitar los filtros"
+                    className="shrink-0 rounded-lg px-2.5 h-[30px] flex items-center gap-1 text-white text-[11px] font-black"
+                    style={{ background: 'rgba(255,255,255,.18)' }}>
+                    <X className="w-3.5 h-3.5" /> VER TODOS
+                  </button>
+                )}
+
                 <button onClick={refrescarBanco}
                   disabled={cargandoBanco}
                   title="Volver a leer el banco"
@@ -2493,8 +2604,21 @@ export default function CrearPospartidoPage() {
                       </span>
 
                       <div className="flex-1 min-w-0">
-                        <p className="text-white font-black text-[12.5px] leading-tight truncate">
-                          {nombreDeTorneoNum(f.torneo_num)}
+                        {/* EL TORNEO Y EL PROFE EN EL MISMO RENGLÓN (dirección,
+                            29/08/2026): el formador iba en una tercera línea y
+                            engordaba toda la fila. Ahora son solo dos líneas. */}
+                        <p className="font-black text-[12.5px] leading-tight truncate">
+                          <span className="text-white">{nombreDeTorneoNum(f.torneo_num)}</span>
+                          {!!(f as any).dt && (
+                            <span style={{ color: '#5BE39B' }}>
+                              {'  ·  '}{String((f as any).dt).toUpperCase()}
+                            </span>
+                          )}
+                          {!!(f as any).at && (
+                            <span className="text-white/45">
+                              {'  ·  '}{String((f as any).at).toUpperCase()}
+                            </span>
+                          )}
                         </p>
                         <p className="text-white/50 text-[11px] font-semibold leading-tight truncate">
                           {/* EL DÍA EN QUE SE JUEGA, de primero: es lo que más se
@@ -2508,17 +2632,27 @@ export default function CrearPospartidoPage() {
                         </p>
                       </div>
 
-                      {f.definitivo ? (
-                        <span className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-[9.5px] font-black"
-                          style={{ background: 'rgba(0,176,80,.16)', border: `1px solid ${VERDE}`, color: '#5BE39B' }}>
-                          <Check className="w-3 h-3" /> TERMINADO
-                        </span>
-                      ) : (
-                        <span className="shrink-0 rounded px-2 py-1 text-[9.5px] font-black"
-                          style={{ background: 'rgba(224,163,58,.16)', border: `1px solid ${AMBAR}`, color: AMBAR }}>
-                          A MEDIAS
-                        </span>
-                      )}
+                      {(() => {
+                        const est = estadoDe(f);
+                        if (est === 'TERMINADO') return (
+                          <span className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-[9.5px] font-black"
+                            style={{ background: 'rgba(0,176,80,.16)', border: `1px solid ${VERDE}`, color: '#5BE39B' }}>
+                            <Check className="w-3 h-3" /> TERMINADO
+                          </span>
+                        );
+                        if (est === 'A MEDIAS') return (
+                          <span className="shrink-0 rounded px-2 py-1 text-[9.5px] font-black"
+                            style={{ background: 'rgba(224,163,58,.16)', border: `1px solid ${AMBAR}`, color: AMBAR }}>
+                            A MEDIAS
+                          </span>
+                        );
+                        return (
+                          <span className="shrink-0 rounded px-2 py-1 text-[9.5px] font-black"
+                            style={{ background: 'rgba(124,135,154,.16)', border: `1px solid ${GRIS}`, color: GRIS }}>
+                            SIN INICIAR
+                          </span>
+                        );
+                      })()}
 
                       <button
                         onClick={() => {
