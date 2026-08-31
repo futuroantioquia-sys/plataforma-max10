@@ -908,6 +908,53 @@ function EstadoCuentaInner() {
     return s + (isNaN(n) ? 0 : n);
   }, 0);
 
+  /* ── EL AVISO DEL PRONTO PAGO ─────────────────────────────────────────
+     (dirección, 31/08/2026)
+
+     Debajo del título, para que el papá lo vea apenas abre: si paga hasta el
+     5 se gana el 10%. Los valores NO están escritos a mano: salen de la
+     tarifa de ESTE deportista, así que a cada quien le sale lo suyo.
+
+     ¿DE QUÉ MES HABLA? Del próximo que alcanza a coger el descuento. Si hoy
+     es 3, todavía alcanza este mes. Si hoy es 20, ese barco ya se fue y lo
+     que le sirve es el mes entrante. Así el aviso nunca le dice al papá una
+     fecha que ya pasó.
+
+     No se le muestra a los becados —no pagan mensualidad— ni al que ya pagó
+     ese mes, que sería recordarle algo que ya hizo. */
+  const MESES_NOM = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO',
+                     'AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+
+  /* OJO: esto NO puede ser un useMemo. Más arriba, esta pantalla se devuelve
+     temprano mientras carga, y un hook que quede DESPUÉS de ese return se
+     ejecuta en unos renders y en otros no. React lo prohíbe y tumba la
+     pantalla con "Rendered more hooks than during the previous render" —pasó,
+     y dejó el estado de cuenta sin abrir—. Es una cuenta de tres líneas: se
+     hace directo, sin hook, y no hay forma de que vuelva a pasar. */
+  const avisoProntoPago = (() => {
+    if (becado || !tarifaNum) return null;
+
+    const hoy = new Date();
+    /* Hasta el 5 alcanza este mes; del 6 en adelante, el que viene. */
+    const objetivo = new Date(hoy.getFullYear(), hoy.getMonth() + (hoy.getDate() <= 5 ? 0 : 1), 1);
+    const nombreMes = MESES_NOM[objetivo.getMonth()];
+    const numeroMes = objetivo.getMonth() + 1;
+
+    /* ¿Ya lo pagó? Entonces no se le recuerda nada. */
+    const yaPago = pagos.some(r =>
+      MES_NUM[r.detalle] === numeroMes &&
+      String(r.detalle).includes(String(objetivo.getFullYear())) &&
+      r.estado === 'PAGÓ');
+    if (yaPago) return null;
+
+    return {
+      mes: nombreMes,
+      completo:   ensurePeso(String(tarifaNum)),
+      condesc:    ensurePeso(String(Math.round(tarifaNum * 0.9))),
+    };
+  })();
+
+  const AMBAR= '#E0A33A';  // el amarillo de la plataforma, para el descuento
   const G    = '#00B050';  // verde institucional de la plataforma
   const GRAY = '#4b5563';  // gris   — encabezados datos + totales
   const ROW  = '#3C4759';
@@ -1236,6 +1283,25 @@ function EstadoCuentaInner() {
             {[2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
+
+        {/* ── SI PAGAS HASTA EL 5, TE GANAS EL 10% ──────────────────────────
+            Va debajo del título, en letra blanca, y el valor con descuento
+            resaltado en amarillo: es la cifra que se quiere que se le grabe.
+            Las cantidades salen de la tarifa de este deportista, no están
+            escritas a mano. — dirección, 31/08/2026 */}
+        {avisoProntoPago && (
+          <div className="rounded-xl px-4 py-3 mt-3"
+               style={{ background: '#3C4759', border: `1px solid ${AMBAR}` }}>
+            <p className="text-white font-bold text-[13px] leading-relaxed">
+              Si pagas hasta el <span className="font-black">5 de {avisoProntoPago.mes}</span> te ganas
+              el <span className="font-black">10% de descuento</span> en la mensualidad: no pagas{' '}
+              <span className="font-black">{avisoProntoPago.completo}</span>, sino{' '}
+              <span className="font-black text-[15px]" style={{ color: AMBAR }}>
+                {avisoProntoPago.condesc}
+              </span>.
+            </p>
+          </div>
+        )}
 
         {/* ── TABLA ── */}
         <div className="rounded-2xl shadow-md border border-[#4A5568] overflow-hidden">

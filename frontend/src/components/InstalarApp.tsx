@@ -35,6 +35,27 @@
 
 import { useEffect, useState } from 'react';
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   EL INTERRUPTOR  ·  dirección, 31/08/2026
+
+                        AVISO_PRENDIDO = false
+
+   La dirección lo pidió así: "pausa esa información para descargar el botón
+   de la app, mañana retomamos, ya que los padres deben meterse YA y se van a
+   enredar". Y tiene toda la razón: primero que entren, después la comodidad
+   del ícono.
+
+   Con esto en false NO se le muestra el aviso a nadie. Nada más se apaga:
+
+     · El ayudante (sw.js) se sigue prendiendo, así que a quien YA la instaló
+       le sigue funcionando el ícono igual que siempre.
+     · El manifest y los íconos siguen en su sitio. Nada se borró.
+     · Quien quiera instalarla igual puede, por el menú de su navegador.
+
+   PARA VOLVER A PRENDERLO MAÑANA: cambiar false por true y subir. Una palabra.
+   ═════════════════════════════════════════════════════════════════════════ */
+const AVISO_PRENDIDO = false;
+
 const LLAVE_CERRADO = 'futuro-instalar-cerrado';
 const DIAS_QUIETO   = 7;
 const ESPERA_MS     = 2000;   // para no estorbar al que está escribiendo
@@ -48,10 +69,14 @@ export function InstalarApp() {
   const [copiado, setCopiado] = useState(false);
 
   useEffect(() => {
-    /* El ayudante. Sin él no hay "instalar". */
+    /* El ayudante. Sin él no hay "instalar". Se prende SIEMPRE, aunque el
+       aviso esté apagado: al que ya la instaló no se le puede dañar el ícono. */
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => { /* no pasa nada */ });
     }
+
+    /* EL AVISO ESTÁ EN PAUSA. De aquí no pasa: nadie ve nada. */
+    if (!AVISO_PRENDIDO) return;
 
     /* ¿Ya está instalada? Entonces no se molesta a nadie. */
     const yaInstalada =
