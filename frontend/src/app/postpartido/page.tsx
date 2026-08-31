@@ -1198,48 +1198,89 @@ export default function CrearPospartidoPage() {
         };
       };
 
-      if (guardada && Array.isArray(guardada.filas) && guardada.filas.length) {
-        /* ── ¿ESTOS RENGLONES SÍ SON DE ESTE EQUIPO? (31/08/2026) ──────────
-           Aquí se atajan las planillas que quedaron cruzadas por el error
-           viejo. Se comparan los renglones guardados con los deportistas que
-           tienen ESTE torneo asignado. Si no se reconoce casi ninguno, lo
-           guardado es de otro partido: se bota, se rearma la lista buena y se
-           avisa en amarillo. El encabezado —día, rival, escenario— sí se
-           respeta, porque ese viene de la programación y está bien. */
-        if (!esDeEsteEquipo(guardada.filas, convocables)) {
-          const cab: any = conEncabezadoBueno(guardada);
-          primeraCarga.current = true;
-          setFecha(cab.fecha ?? '');
-          setLlegar(cab.llegar ?? '');
-          setRival(cab.rival ?? '');
-          setEscenario(cab.escenario ?? '');
-          setResumen('');
-          setDt(cab.dt ?? limpiar(torneo?.formador ?? ''));
-          setAt(cab.at ?? '');
-          setGolesNos(''); setGolesEllos(''); setAutogoles(0);
-          setDefinitivo(false);
-          setGuardadoEn('');
-          setSinGuardar(false);
-          borrarBorradorLocal(numTorneo, jornada);   // el borrador cruzado se va
-          setFilas(convocables.map((d, i) => ({
-            ...filaNueva(i),
-            depId: d.id,
-            posicion: posicionDe(d),
-            deportista: limpiar(d._nombre).toUpperCase(),
-          })));
-          setAvisoBase(
-            'Este partido tenía guardados los deportistas de OTRO equipo, por una falla que ya se ' +
-            'corrigió. Se dejó la lista buena, en blanco, para que se vuelva a llenar. El día, el ' +
-            'rival y el escenario no se tocaron.',
-          );
-          duenoPantalla.current = mio;
-          return;
-        }
+      /* ═══ ¿LOS RENGLONES SON DE ESTE EQUIPO? ═══════════════════════════
+         (dirección, 31/08/2026 — corregido el mismo día)
+
+         Aquí se atajan las planillas que quedaron cruzadas por el error del
+         autoguardado. Pero OJO CON UNA COSA que se aprendió a los golpes: lo
+         que se cruzaba eran los RENGLONES de los deportistas, no el partido.
+         El marcador, el día, el rival y el resumen del partido casi siempre
+         están BIEN guardados en la base.
+
+         La primera versión de esto botaba todo y dejaba el marcador en cero.
+         La dirección lo cazó de una: "arreglaste los niños, pero ¿dónde quedó
+         el 0 x 10 y toda la información de ese juego?". Tenía razón.
+
+         Entonces ahora se hace en dos pasos, y solo se bota lo que toca:
+
+           1. Se miran las DOS copias —la de la base y la del aparato— y se
+              usa la que SÍ sea de este equipo. Casi siempre la base está
+              buena, y ahí el partido se recupera COMPLETO: renglones,
+              marcador, resumen, todo.
+
+           2. Solo si las dos vinieran cruzadas se rearman los renglones, y
+              aun así se CONSERVA lo del partido: día, hora, rival, escenario,
+              marcador y resumen. Lo único que se vuelve a llenar es quién
+              jugó. */
+      const conFilas = (p: any) => !!p && Array.isArray(p.filas) && p.filas.length > 0;
+      const bueno: any = [guardada, enBase, local]
+        .find(p => conFilas(p) && esDeEsteEquipo((p as any).filas, convocables));
+
+      if (bueno) {
+        /* Si la copia que iba de primeras venía cruzada, esa se bota del
+           aparato para que no vuelva a estorbar. */
+        const huboCruce = bueno !== guardada;
+        if (huboCruce) borrarBorradorLocal(numTorneo, jornada);
 
         primeraCarga.current = true;      // volcarla no cuenta como cambio
-        ponerPlanilla(conEncabezadoBueno(guardada));
+        ponerPlanilla(conEncabezadoBueno(bueno));
         setGuardadoEn(enBase?.actualizada_en ?? '');
-        setSinGuardar(!enBase || (local ? (local.actualizada_en > (enBase.actualizada_en || '')) : false));
+        setSinGuardar(huboCruce
+          ? false
+          : (!enBase || (local ? (local.actualizada_en > (enBase.actualizada_en || '')) : false)));
+        if (huboCruce) {
+          setAvisoBase(
+            'En este computador había quedado guardado un enredo de otro partido, por una falla ' +
+            'que ya se corrigió. Se botó y se recuperó el partido bueno tal como está en la base: ' +
+            'los deportistas, el marcador y todo lo demás.',
+          );
+        }
+        duenoPantalla.current = mio;
+        return;
+      }
+
+      if (conFilas(guardada)) {
+        /* Las dos copias venían cruzadas. Se conserva TODO lo del partido y
+           se rearman únicamente los renglones. Manda la base, que es lo
+           oficial. */
+        const fuente: any = enBase ?? guardada;
+        const cab: any = conEncabezadoBueno(fuente);
+        primeraCarga.current = true;
+        setFecha(cab.fecha ?? '');
+        setLlegar(cab.llegar ?? '');
+        setRival(cab.rival ?? '');
+        setEscenario(cab.escenario ?? '');
+        setResumen(cab.resumen ?? '');
+        setDt(cab.dt || limpiar(torneo?.formador ?? ''));
+        setAt(cab.at ?? '');
+        setGolesNos(fuente.goles_nos ?? '');
+        setGolesEllos(fuente.goles_ellos ?? '');
+        setAutogoles(parseInt(String(fuente.autogoles ?? '0'), 10) || 0);
+        setDefinitivo(fuente.definitivo === true);
+        setGuardadoEn(enBase?.actualizada_en ?? '');
+        setSinGuardar(false);
+        borrarBorradorLocal(numTorneo, jornada);   // el borrador cruzado se va
+        setFilas(convocables.map((d, i) => ({
+          ...filaNueva(i),
+          depId: d.id,
+          posicion: posicionDe(d),
+          deportista: limpiar(d._nombre).toUpperCase(),
+        })));
+        setAvisoBase(
+          'Este partido tenía guardados los deportistas de OTRO equipo, por una falla que ya se ' +
+          'corrigió. Se puso la lista buena, en blanco, para que se vuelva a llenar. ' +
+          'El marcador, el día, el rival, el escenario y el resumen NO se tocaron.',
+        );
         duenoPantalla.current = mio;
         return;
       }

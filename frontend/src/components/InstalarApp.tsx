@@ -233,11 +233,46 @@ export function InstalarApp() {
         </button>
       )}
 
-      {/* 2 · iPhone con Safari: se le señala el botón Compartir. */}
+      {/* ── 2 · iPhone con Safari ──────────────────────────────────────────
+          OJO CON LO QUE DICE AQUÍ (dirección, 31/08/2026). Antes esto decía
+          "oprime Compartir aquí abajo" y estaba MAL: en los iPhone nuevos
+          Safari esconde el botón Compartir dentro de los tres puntos ⋯ de la
+          esquina, y el papá se quedaba buscando un botón que no veía.
+
+          Ahora se nombran los dos, porque según la versión del iPhone aparece
+          uno o el otro, y se le dice la esquina exacta donde mirar. Apple NO
+          deja poner un botón que instale: esto es lo más cerca que se llega. */}
       {modo === 'safari' && (
-        <div style={CAJA}>
-          Oprime <b style={VERDE}>Compartir</b> aquí abajo ⬇ y escoge{' '}
-          <b style={VERDE}>“Agregar a pantalla de inicio”</b>.
+        <div style={{ ...CAJA, padding: '12px 13px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{
+              background: '#00B050', color: '#fff', fontWeight: 900, fontSize: 11,
+              borderRadius: 7, width: 20, height: 20, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>1</span>
+            <span style={{ fontSize: 13 }}>
+              Abajo a la <b style={VERDE}>derecha</b>, oprime{' '}
+              <b style={{ ...VERDE, fontSize: 16 }}>•••</b> <span style={{ color: 'rgba(255,255,255,.5)' }}>o</span>{' '}
+              <b style={{ ...VERDE, fontSize: 15 }}>↑</b>
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9 }}>
+            <span style={{
+              background: '#00B050', color: '#fff', fontWeight: 900, fontSize: 11,
+              borderRadius: 7, width: 20, height: 20, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>2</span>
+            <span style={{ fontSize: 13 }}>
+              Escoge <b style={VERDE}>“Agregar a pantalla de inicio”</b>
+            </span>
+          </div>
+          <p style={{
+            color: 'rgba(255,255,255,.42)', fontSize: 10.5, fontWeight: 600,
+            marginTop: 10, lineHeight: 1.45,
+          }}>
+            En iPhone, Apple no permite un botón que la instale sola. Estos dos toques
+            son el único camino, y es el mismo para todas las apps.
+          </p>
         </div>
       )}
 
@@ -257,7 +292,8 @@ export function InstalarApp() {
           {copiado && (
             <div style={{ ...CAJA, marginTop: 10 }}>
               <b style={VERDE}>Enlace copiado.</b> Abre <b style={VERDE}>Safari</b>, pégalo arriba,
-              y allá oprime <b style={VERDE}>Compartir → “Agregar a pantalla de inicio”</b>.
+              y allá oprime <b style={VERDE}>•••</b> abajo a la derecha y escoge{' '}
+              <b style={VERDE}>“Agregar a pantalla de inicio”</b>.
             </div>
           )}
         </>
