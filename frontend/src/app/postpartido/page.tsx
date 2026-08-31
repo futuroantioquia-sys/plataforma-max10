@@ -384,6 +384,40 @@ function NoAplica() {
   );
 }
 
+/**
+ * ¿Los renglones guardados SON de este equipo? — dirección, 31/08/2026
+ *
+ * Es la red que atrapa las planillas que quedaron cruzadas. Se mira cuántos
+ * de los renglones guardados corresponden a deportistas que hoy tienen ESTE
+ * torneo asignado, comparando por id y también por nombre.
+ *
+ * No se exige que coincidan todos: un partido viejo puede tener a alguien que
+ * ya se retiró, o a quien le cambiaron el torneo. Con que se reconozca la
+ * TERCERA PARTE basta para saber que es el equipo correcto. Cuando la planilla
+ * es de otro equipo no se reconoce ni uno, así que la diferencia es clarísima
+ * y no hay riesgo de botar una planilla buena.
+ *
+ * Si no hay con qué comparar —la lista de convocables viene vacía porque el
+ * torneo es de otro formador o las fichas no han llegado— se responde que SÍ:
+ * ante la duda no se toca lo que el formador tenía escrito.
+ */
+function esDeEsteEquipo(filasGuardadas: any[], convocables: Deportista[]): boolean {
+  if (!Array.isArray(filasGuardadas) || filasGuardadas.length === 0) return true;
+  if (convocables.length === 0) return true;
+
+  const ids = new Set(convocables.map(d => String(d.id)));
+  const nombres = new Set(convocables.map(d => limpiar(d._nombre).toUpperCase()));
+
+  const reconocidos = filasGuardadas.filter(f => {
+    const id = String((f as any)?.depId ?? '').trim();
+    if (id && ids.has(id)) return true;
+    const nom = limpiar((f as any)?.deportista ?? '').toUpperCase();
+    return !!nom && nombres.has(nom);
+  }).length;
+
+  return reconocidos >= Math.ceil(filasGuardadas.length / 3);
+}
+
 /** ¿Este deportista juega de portero? Se mira lo que diga su casilla de
  *  posición, escrita a mano o marcada de la lista. */
 function esPortero(posicion: string): boolean {
@@ -890,6 +924,33 @@ export default function CrearPospartidoPage() {
   const ultimoTorneo = useRef<string>('');   // para saber si cambió el TORNEO o solo la fecha
   const ultimaJornada = useRef<string>('');  // la fecha anterior: distingue matriz→fecha de fecha→fecha
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     DE QUÉ PARTIDO ES LO QUE ESTÁ EN PANTALLA  ·  dirección, 31/08/2026
+
+     PASÓ DE VERDAD Y ERA GRAVE: la dirección abrió el partido del torneo 18
+     —ASOBDIM PROGRESIÓN SUB 8 de DORIA— y le salieron los deportistas de
+     OTRO equipo, el SUB 11 de MARTIN, con el marcador de aquel partido.
+
+     Por qué pasaba. Al oprimir otro partido, el número del torneo cambia de
+     una, pero los renglones de los deportistas tardan: hay que ir a la base
+     a buscarlos. En esos milisegundos la pantalla ya dice "torneo 18" pero
+     por dentro todavía tiene los deportistas del anterior. Y el autoguardado
+     —que corre a los 0,7 segundos de cualquier cambio— alcanzaba a dispararse
+     justo ahí y guardaba esa mezcla: el torneo NUEVO con los deportistas
+     VIEJOS. Esa mezcla quedaba en el aparato con la hora de ese momento, o
+     sea más nueva que la de la base, y por eso al volver a abrir el partido
+     la pantalla mostraba la mezcla y no lo bueno. De ahí el "Tienes cambios
+     sin guardar" que salía sin que nadie hubiera tocado nada.
+
+     La cura: lo que está en pantalla queda MARCADO con el partido al que
+     pertenece. Mientras esa marca no diga el partido que se está mirando,
+     NO se guarda nada —ni en el aparato ni en la base—. En cuanto llegan los
+     deportistas buenos se pone la marca y todo sigue normal.
+     ═══════════════════════════════════════════════════════════════════════ */
+  const duenoPantalla = useRef<string>('');
+  /** El nombre del partido que se está mirando ahora. */
+  const partidoDeAhora = () => `${numTorneo}|${jornada}`;
+
   /* ── SE ACUERDA DE DÓNDE IBA (dirección, 27/08/2026) ──────────────────────
      El torneo y la fecha quedan anotados en este mismo aparato. Al volver a
      entrar —o al regresar del estado de cuenta de un deportista— la pantalla
@@ -1066,6 +1127,13 @@ export default function CrearPospartidoPage() {
     ultimoTorneo.current = numTorneo;
     ultimaJornada.current = jornada;
 
+    /* SE CIERRA LA LLAVE DEL GUARDADO, YA (31/08/2026). Esto pasa ANTES de ir
+       a la base. Desde este instante lo que hay en pantalla es del partido
+       anterior, y hasta que no lleguen los renglones buenos no se guarda
+       absolutamente nada. Es lo que impide que se crucen dos partidos. */
+    const mio = `${numTorneo}|${jornada}`;
+    duenoPantalla.current = '';
+
     if (!numTorneo) {
       setFilas([]);
       return;
@@ -1087,6 +1155,7 @@ export default function CrearPospartidoPage() {
         posicion: posicionDe(d),
         deportista: limpiar(d._nombre).toUpperCase(),
       })));
+      duenoPantalla.current = mio;        // la matriz ya quedó armada: se abre la llave
       return;
     }
 
@@ -1130,10 +1199,48 @@ export default function CrearPospartidoPage() {
       };
 
       if (guardada && Array.isArray(guardada.filas) && guardada.filas.length) {
+        /* ── ¿ESTOS RENGLONES SÍ SON DE ESTE EQUIPO? (31/08/2026) ──────────
+           Aquí se atajan las planillas que quedaron cruzadas por el error
+           viejo. Se comparan los renglones guardados con los deportistas que
+           tienen ESTE torneo asignado. Si no se reconoce casi ninguno, lo
+           guardado es de otro partido: se bota, se rearma la lista buena y se
+           avisa en amarillo. El encabezado —día, rival, escenario— sí se
+           respeta, porque ese viene de la programación y está bien. */
+        if (!esDeEsteEquipo(guardada.filas, convocables)) {
+          const cab: any = conEncabezadoBueno(guardada);
+          primeraCarga.current = true;
+          setFecha(cab.fecha ?? '');
+          setLlegar(cab.llegar ?? '');
+          setRival(cab.rival ?? '');
+          setEscenario(cab.escenario ?? '');
+          setResumen('');
+          setDt(cab.dt ?? limpiar(torneo?.formador ?? ''));
+          setAt(cab.at ?? '');
+          setGolesNos(''); setGolesEllos(''); setAutogoles(0);
+          setDefinitivo(false);
+          setGuardadoEn('');
+          setSinGuardar(false);
+          borrarBorradorLocal(numTorneo, jornada);   // el borrador cruzado se va
+          setFilas(convocables.map((d, i) => ({
+            ...filaNueva(i),
+            depId: d.id,
+            posicion: posicionDe(d),
+            deportista: limpiar(d._nombre).toUpperCase(),
+          })));
+          setAvisoBase(
+            'Este partido tenía guardados los deportistas de OTRO equipo, por una falla que ya se ' +
+            'corrigió. Se dejó la lista buena, en blanco, para que se vuelva a llenar. El día, el ' +
+            'rival y el escenario no se tocaron.',
+          );
+          duenoPantalla.current = mio;
+          return;
+        }
+
         primeraCarga.current = true;      // volcarla no cuenta como cambio
         ponerPlanilla(conEncabezadoBueno(guardada));
         setGuardadoEn(enBase?.actualizada_en ?? '');
         setSinGuardar(!enBase || (local ? (local.actualizada_en > (enBase.actualizada_en || '')) : false));
+        duenoPantalla.current = mio;
         return;
       }
 
@@ -1165,6 +1272,7 @@ export default function CrearPospartidoPage() {
           posicion: posicionDe(d),
           deportista: limpiar(d._nombre).toUpperCase(),
         })));
+        duenoPantalla.current = mio;
         return;
       }
 
@@ -1173,7 +1281,7 @@ export default function CrearPospartidoPage() {
          venía llenando SIN fecha (en la matriz) y apenas ahora la escogió.
          En todo lo demás —cambió de torneo, o se pasó de una fecha a otra—
          se arranca limpio, porque es otro partido. */
-      if (!cambioElTorneo && veniaDeMatriz && jornada) return;
+      if (!cambioElTorneo && veniaDeMatriz && jornada) { duenoPantalla.current = mio; return; }
 
       primeraCarga.current = true;
       setSinGuardar(false);
@@ -1195,6 +1303,7 @@ export default function CrearPospartidoPage() {
           deportista: limpiar(d._nombre).toUpperCase(),
         })));
       }
+      duenoPantalla.current = mio;
     })();
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1835,8 +1944,16 @@ export default function CrearPospartidoPage() {
      a poner el número del torneo aparece todo como estaba. */
   useEffect(() => {
     if (!numTorneo) return;
+    /* LA LLAVE (31/08/2026). Si lo que hay en pantalla todavía no está marcado
+       como de ESTE partido, es que se acaba de cambiar de partido y los
+       renglones buenos vienen en camino. Guardar ahora es lo que cruzaba dos
+       equipos. Así que no se guarda: se espera. */
+    if (duenoPantalla.current !== partidoDeAhora()) return;
     if (primeraCarga.current) { primeraCarga.current = false; return; }
     const t = setTimeout(() => {
+      /* Se vuelve a mirar al disparar: en esos 0,7 segundos pudo cambiarse
+         de partido otra vez. */
+      if (duenoPantalla.current !== partidoDeAhora()) return;
       guardarBorradorLocal(planillaDeAhora());
       setSinGuardar(true);
     }, 700);
@@ -1847,6 +1964,13 @@ export default function CrearPospartidoPage() {
 
   /** Guarda. `cerrar` = true es GUARDAR DEFINITIVO; false es GUARDAR AVANCE. */
   async function guardarAvance(cerrar = false) {
+    /* LA MISMA LLAVE, también aquí (31/08/2026). Si el partido todavía se
+       está abriendo, GUARDAR mandaría a la base los deportistas del partido
+       anterior. Se le dice que espere un segundo, que es la verdad. */
+    if (duenoPantalla.current !== partidoDeAhora()) {
+      setError('El partido todavía se está abriendo. Espera un segundo y vuelve a oprimir GUARDAR.');
+      return;
+    }
     if (!numTorneo) {
       setError('Primero escribe el número del torneo.');
       return;
