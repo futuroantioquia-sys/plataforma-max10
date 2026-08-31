@@ -3,37 +3,52 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    "DESCARGA LA APP AHORA"  ·  dirección, 31/08/2026
 
-   La plataforma misma se lo pide al papá apenas entra. Antes esto era una
-   franjita discreta que decía "ten la plataforma en tu celular" y la gente ni
-   la miraba. La dirección lo dijo claro: la gente es muy dispersa. Entonces
-   ahora es un aviso grande, con el escudo, y el botón dice lo que hay que
-   hacer: DESCARGA LA APP AHORA.
+   La plataforma misma se lo pide al papá apenas entra.
 
-   Cómo se comporta:
+   ── POR QUÉ SE REHIZO (31/08/2026, mismo día) ───────────────────────────────
+   Un papá abrió la plataforma y NO le salió nada. Al mirar el pantallazo se
+   vio la razón: estaba en un iPhone, pero con CHROME, no con Safari. Y el
+   código de antes dejaba a ese caso por fuera: descartaba Chrome-en-iPhone
+   creyendo que se portaba como un Android, y en Android esperaba un aviso
+   del navegador que en iPhone no existe. Resultado: pantalla muda.
 
-     · Sale a los 2 segundos de abrir, no de una. Así no le tapa el teclado
-       al que está escribiendo su clave en la pantalla de entrada.
-     · Si ya la tiene instalada, no sale nunca. No se molesta a quien ya hizo
-       la tarea.
-     · Si la cierra, vuelve a salir a los 7 días. Antes eran 30 y en la
-       práctica era no volver a pedírselo nunca.
-     · En iPhone Apple no deja poner el botón: allá se muestra la instrucción
-       con la flecha apuntando abajo, que es donde está el botón Compartir.
+   Y no era el único hueco. En Firefox o Samsung Internet de Android tampoco
+   llega ese aviso del navegador, así que ahí también quedaba mudo.
+
+   La regla ahora es otra: A NADIE SE LE DEJA SIN RESPUESTA. Siempre se le
+   dice qué hacer con el aparato que tiene en la mano. Son cuatro casos:
+
+     1. BOTON  · el navegador sí ofrece instalar (Chrome de Android o de
+                 computador). Sale el botón verde y lo hace todo.
+     2. SAFARI · iPhone con Safari. No hay botón —Apple no lo permite— y se
+                 le indica Compartir → "Agregar a pantalla de inicio".
+     3. OTRO-IOS · iPhone con Chrome, Firefox o Edge. En iPhone SOLO Safari
+                 puede dejar el ícono. Se le dice, y se le copia el enlace
+                 para que lo pegue allá. ESTE ES EL CASO QUE FALLABA.
+     4. MENU   · cualquier otro navegador. Se le manda al menú del navegador,
+                 donde la opción de instalar siempre está.
+
+   Además: sale a los 2 segundos, no de una, para no taparle el teclado a
+   quien está escribiendo su clave. Si ya la tiene instalada, no sale nunca.
+   Si le da la X, vuelve a los 7 días.
    ───────────────────────────────────────────────────────────────────────── */
 
 import { useEffect, useState } from 'react';
 
 const LLAVE_CERRADO = 'futuro-instalar-cerrado';
 const DIAS_QUIETO   = 7;
-const ESPERA_MS     = 2000;
+const ESPERA_MS     = 2000;   // para no estorbar al que está escribiendo
+const ESPERA_MENU   = 4500;   // si el navegador no ofreció nada, se le explica igual
+
+type Modo = 'boton' | 'safari' | 'otro-ios' | 'menu';
 
 export function InstalarApp() {
-  const [aviso, setAviso]     = useState<any>(null);   // el permiso de Chrome
-  const [enIPhone, setEnIPhone] = useState(false);
-  const [ver, setVer]         = useState(false);
+  const [modo, setModo]   = useState<Modo | null>(null);
+  const [aviso, setAviso] = useState<any>(null);   // el permiso del navegador
+  const [copiado, setCopiado] = useState(false);
 
   useEffect(() => {
-    /* 1 · El ayudante. Sin él no hay "instalar". */
+    /* El ayudante. Sin él no hay "instalar". */
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => { /* no pasa nada */ });
     }
@@ -50,29 +65,49 @@ export function InstalarApp() {
       if (cuando && Date.now() - cuando < DIAS_QUIETO * 24 * 60 * 60 * 1000) return;
     } catch { /* sin localStorage: se muestra igual */ }
 
-    let t: any;
     const ua = navigator.userAgent || '';
-    const esIPhone = /iPhone|iPad|iPod/i.test(ua) && !/CriOS|FxiOS/i.test(ua);
-    if (esIPhone) {
-      setEnIPhone(true);
-      t = setTimeout(() => setVer(true), ESPERA_MS);
-      return () => clearTimeout(t);
+
+    /* ¿Es un aparato de Apple? Los iPad nuevos se hacen pasar por computador
+       Mac, así que también se mira si la pantalla responde al dedo. */
+    const esIOS = /iPhone|iPad|iPod/i.test(ua) ||
+      (/Macintosh/i.test(ua) && (navigator as any).maxTouchPoints > 1);
+
+    const tiempos: any[] = [];
+
+    if (esIOS) {
+      /* CriOS = Chrome · FxiOS = Firefox · EdgiOS = Edge · OPiOS/OPT = Opera.
+         En iPhone TODOS usan por dentro el motor de Safari, pero solo el
+         Safari de verdad puede dejar el ícono en la pantalla. */
+      const esSafariDeVerdad = !/CriOS|FxiOS|EdgiOS|OPiOS|OPT\//i.test(ua);
+      tiempos.push(setTimeout(
+        () => setModo(esSafariDeVerdad ? 'safari' : 'otro-ios'), ESPERA_MS));
+      return () => tiempos.forEach(clearTimeout);
     }
 
-    /* 2 · Android / computador: Chrome avisa cuando se puede instalar. */
+    /* Android / computador. Si el navegador ofrece instalar, ese es el camino
+       bueno. Ese ofrecimiento puede llegar tarde, así que si llega después de
+       haber mostrado la explicación del menú, se cambia al botón. */
     const alPoder = (e: any) => {
       e.preventDefault();
       setAviso(e);
-      t = setTimeout(() => setVer(true), ESPERA_MS);
+      tiempos.push(setTimeout(() => setModo('boton'), ESPERA_MS));
+      setModo(m => (m === 'menu' ? 'boton' : m));
     };
     window.addEventListener('beforeinstallprompt', alPoder);
-    return () => { window.removeEventListener('beforeinstallprompt', alPoder); clearTimeout(t); };
+
+    /* Y si nunca llegó, tampoco se le deja mudo: se le manda al menú. */
+    tiempos.push(setTimeout(() => setModo(m => m ?? 'menu'), ESPERA_MENU));
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', alPoder);
+      tiempos.forEach(clearTimeout);
+    };
   }, []);
 
-  if (!ver) return null;
+  if (!modo) return null;
 
   function cerrar() {
-    setVer(false);
+    setModo(null);
     try { localStorage.setItem(LLAVE_CERRADO, String(Date.now())); } catch { /* nada */ }
   }
 
@@ -85,6 +120,41 @@ export function InstalarApp() {
     setAviso(null);
     cerrar();
   }
+
+  /** Copia la dirección para que la pegue en Safari. */
+  async function copiarEnlace() {
+    const url = window.location.origin;
+    let ok = false;
+    try { await navigator.clipboard.writeText(url); ok = true; }
+    catch {
+      /* Navegadores viejos: se copia a la antigua. */
+      try {
+        const c = document.createElement('textarea');
+        c.value = url; c.style.position = 'fixed'; c.style.opacity = '0';
+        document.body.appendChild(c); c.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(c);
+      } catch { /* ni modo: abajo se le muestra la dirección para que la escriba */ }
+    }
+    setCopiado(ok);
+  }
+
+  /* ── Los textos de cada caso ─────────────────────────────────────────── */
+  const titulo = modo === 'otro-ios'
+    ? 'Para tenerla en tu iPhone'
+    : 'Descarga la app de Futuro Antioquia';
+
+  const bajada =
+      modo === 'otro-ios' ? 'En iPhone solo se puede desde Safari. Es un momentico.'
+    : modo === 'safari'   ? 'No ocupa espacio y abre sola, sin buscar la dirección.'
+    :                       'Queda el escudo en tu pantalla. No ocupa espacio.';
+
+  const CAJA: React.CSSProperties = {
+    marginTop: 11, background: '#2B3547', border: '1px solid #4A5568',
+    borderRadius: 12, padding: '11px 13px',
+    color: '#fff', fontSize: 12.5, fontWeight: 700, lineHeight: 1.55,
+  };
+  const VERDE: React.CSSProperties = { color: '#5BE39B' };
 
   return (
     <div
@@ -114,29 +184,15 @@ export function InstalarApp() {
         <img src="/icono-192.png" alt=""
              style={{ width: 52, height: 52, borderRadius: 13, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0, paddingRight: 14 }}>
-          <p style={{ color: '#fff', fontWeight: 900, fontSize: 15, lineHeight: 1.25 }}>
-            Descarga la app de Futuro Antioquia
-          </p>
+          <p style={{ color: '#fff', fontWeight: 900, fontSize: 15, lineHeight: 1.25 }}>{titulo}</p>
           <p style={{ color: 'rgba(255,255,255,.62)', fontSize: 12, lineHeight: 1.45, marginTop: 3 }}>
-            {enIPhone
-              ? 'No ocupa espacio y abre sola, sin buscar la dirección.'
-              : 'Queda el escudo en tu pantalla. No ocupa espacio.'}
+            {bajada}
           </p>
         </div>
       </div>
 
-      {enIPhone ? (
-        /* iPhone: no hay botón que valga, se explica dónde tocar. */
-        <div
-          style={{
-            marginTop: 11, background: '#2B3547', border: '1px solid #4A5568',
-            borderRadius: 12, padding: '11px 13px',
-            color: '#fff', fontSize: 12.5, fontWeight: 700, lineHeight: 1.55,
-          }}>
-          Oprime <b style={{ color: '#5BE39B' }}>Compartir</b> aquí abajo ⬇ y escoge{' '}
-          <b style={{ color: '#5BE39B' }}>“Agregar a pantalla de inicio”</b>.
-        </div>
-      ) : (
+      {/* 1 · El navegador sí deja instalar: un botón y ya. */}
+      {modo === 'boton' && (
         <button
           onClick={instalar}
           style={{
@@ -146,6 +202,50 @@ export function InstalarApp() {
           }}>
           ⬇ DESCARGA LA APP AHORA
         </button>
+      )}
+
+      {/* 2 · iPhone con Safari: se le señala el botón Compartir. */}
+      {modo === 'safari' && (
+        <div style={CAJA}>
+          Oprime <b style={VERDE}>Compartir</b> aquí abajo ⬇ y escoge{' '}
+          <b style={VERDE}>“Agregar a pantalla de inicio”</b>.
+        </div>
+      )}
+
+      {/* 3 · iPhone con Chrome u otro: hay que pasarse a Safari. */}
+      {modo === 'otro-ios' && (
+        <>
+          <div style={CAJA}>
+            <b style={VERDE}>1.</b> Copia el enlace con el botón de abajo.<br />
+            <b style={VERDE}>2.</b> Abre <b style={VERDE}>Safari</b> y pégalo en la barra de arriba.<br />
+            <b style={VERDE}>3.</b> Allá oprime <b style={VERDE}>Compartir</b> y luego{' '}
+            <b style={VERDE}>“Agregar a pantalla de inicio”</b>.
+          </div>
+          <button
+            onClick={copiarEnlace}
+            style={{
+              marginTop: 10, width: '100%', background: copiado ? '#20293a' : '#00B050',
+              border: copiado ? '1px solid #00B050' : 0, borderRadius: 12,
+              color: copiado ? '#5BE39B' : '#fff', fontWeight: 900, fontSize: 13.5,
+              letterSpacing: .5, padding: '13px 0', cursor: 'pointer',
+            }}>
+            {copiado ? '✓ COPIADO · AHORA ÁBRELO EN SAFARI' : '📋 COPIAR EL ENLACE'}
+          </button>
+          {copiado && (
+            <p style={{ color: 'rgba(255,255,255,.5)', fontSize: 11, textAlign: 'center', marginTop: 7 }}>
+              {typeof window !== 'undefined' ? window.location.host : ''}
+            </p>
+          )}
+        </>
+      )}
+
+      {/* 4 · Cualquier otro navegador: al menú, que ahí siempre está. */}
+      {modo === 'menu' && (
+        <div style={CAJA}>
+          Abre el menú del navegador <b style={VERDE}>(⋮ arriba a la derecha)</b> y escoge{' '}
+          <b style={VERDE}>“Instalar aplicación”</b> o{' '}
+          <b style={VERDE}>“Agregar a pantalla de inicio”</b>.
+        </div>
       )}
     </div>
   );
