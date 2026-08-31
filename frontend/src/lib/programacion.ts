@@ -75,18 +75,35 @@ function aFila(r: any): FilaProgramacion {
  *  que no haya nada programado. */
 export async function getProgramacion(): Promise<FilaProgramacion[] | undefined> {
   try {
-    const res = await fetch(
-      `${SB_URL}/rest/v1/${TABLA_PROGRAMACION}?select=*&order=fecha.asc,hora.asc`,
-      { headers: HDR, cache: 'no-store' },
-    );
-    if (res.status === 404) return undefined;
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      if (/does not exist|schema cache/i.test(txt)) return undefined;
-      return [];
+    /* SE TRAE DE A PEDAZOS. REGLA DE LA CASA (dirección, 29/08/2026):
+       la base NUNCA entrega todo de un solo viaje —corta en las primeras
+       mil filas—, y aquí siempre son miles. Todo lo que se lea de la base se
+       pide de a pedazos hasta que diga que ya no hay más. No volver a asumir
+       que con una sola petición llega todo. */
+    const todas: any[] = [];
+    const PASO = 1000;
+    let desde = 0;
+    for (let vuelta = 0; vuelta < 80; vuelta++) {
+      const res = await fetch(
+        `${SB_URL}/rest/v1/${TABLA_PROGRAMACION}?select=*&order=fecha.asc,hora.asc`,
+        {
+          headers: { ...HDR, Range: `${desde}-${desde + PASO - 1}`, 'Range-Unit': 'items' },
+          cache: 'no-store',
+        },
+      );
+      if (res.status === 404) return undefined;
+      if (!res.ok && res.status !== 206) {
+        const txt = await res.text().catch(() => '');
+        if (/does not exist|schema cache/i.test(txt)) return undefined;
+        return desde > 0 ? todas.map(aFila) : [];
+      }
+      const filas = await res.json();
+      const lote = Array.isArray(filas) ? filas : [];
+      todas.push(...lote);
+      if (lote.length === 0) break;
+      desde += lote.length;
     }
-    const filas = await res.json();
-    return Array.isArray(filas) ? filas.map(aFila) : [];
+    return todas.map(aFila);
   } catch {
     return [];    // sin internet: la pantalla avisa y no borra nada
   }

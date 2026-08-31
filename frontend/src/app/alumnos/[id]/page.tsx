@@ -791,9 +791,16 @@ export default function PerfilDeportista() {
                 onClick={() => inputFotoRef.current?.click()}
                 title="Clic para cambiar la foto"
                 style={{
-                  /* GRANDE, como estaba antes: todo el ancho de la tarjeta.
-                     En celular eso es prácticamente toda la pantalla de ancho. */
+                  /* CON UN TAMAÑO MÁXIMO (dirección, 29/08/2026).
+                     Iba al ancho completo de la tarjeta: en el celular se veía
+                     bien, pero en el computador quedaba un cartel enorme que se
+                     comía la pantalla y se veía feo al lado de la ficha de
+                     administración, donde la foto es una tarjetica.
+                     Ahora tiene tope: 260 px. En el celular sigue ocupando casi
+                     todo el ancho —no se nota el tope— y en el computador queda
+                     del tamaño de una foto de carnet. */
                   width: '100%',
+                  maxWidth: 260,
                   margin: '0 auto',
                   aspectRatio: '3 / 4',
                   borderRadius: 14,
@@ -1142,7 +1149,7 @@ export default function PerfilDeportista() {
           <div className="flex flex-col items-center border-l border-white/30 pl-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/MAX%2010.png" alt="MAX10" className="h-7 object-contain" />
-            <p className="text-white/75 text-[9px] leading-none mt-0.5 tracking-wide">CONECTA · GESTIONA · GANA</p>
+            <p className="text-white/50 text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
           </div>
         </div>
       </header>

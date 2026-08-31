@@ -872,6 +872,9 @@ export default function CrearPospartidoPage() {
   /* La casilla del marcador del rival: se le hace foco cuando se intenta
      guardar sin haberla llenado. — 27/08/2026 */
   const cajaRival = useRef<HTMLInputElement | null>(null);
+  /* La casilla del BREVE RESUMEN, para poder llevarlo hasta allá cuando la
+     deje en blanco al cerrar el partido. — dirección, 31/08/2026 */
+  const cajaResumen = useRef<HTMLTextAreaElement | null>(null);
   const [golesNos, setGolesNos]   = useState('');   // ya no se escribe: se calcula
   const [golesEllos, setGolesEllos] = useState('');
   /* AUTOGOLES DEL RIVAL: goles que suman a nuestro marcador pero que no los
@@ -1305,7 +1308,9 @@ export default function CrearPospartidoPage() {
   /* LOS FILTROS DEL BANCO GENERAL (dirección, 29/08/2026): con 38 partidos y
      subiendo, la dirección necesita poder buscar por estado, por formador y
      por día. */
-  const [filtroEstado, setFiltroEstado]         = useState('');
+  /* SE PUEDEN ESCOGER VARIOS ESTADOS A LA VEZ (dirección, 29/08/2026): por
+     ejemplo SIN INICIAR + A MEDIAS, que es "lo que falta". Lista vacía = todos. */
+  const [filtroEstados, setFiltroEstados]       = useState<string[]>([]);
   const [filtroProfeBanco, setFiltroProfeBanco] = useState('');
   const [bancoDesde, setBancoDesde]             = useState('');
   const [bancoHasta, setBancoHasta]             = useState('');
@@ -1866,6 +1871,65 @@ export default function CrearPospartidoPage() {
       cajaRival.current?.focus();
       return;
     }
+    /* ── DOS REVISIONES ANTES DE CERRAR ────────────────────────────────────
+       (dirección, 31/08/2026)
+
+       El problema real no es el dato: es que hay planillas que se cierran sin
+       haberlas trabajado. Se marca TERMINADO y por dentro está en blanco. Por
+       eso, al oprimir GUARDAR DEFINITIVO —y SOLO ahí, el avance nunca se
+       estorba— se revisan dos cosas:
+
+         1. EL COMENTARIO ES OBLIGATORIO. Un partido cerrado sin una línea de
+            resumen no sirve para nada: no se sabe cómo se jugó. Esta sí es
+            talanquera, no pasa.
+
+         2. EL ARQUERO SIN ATAJADAS es un RECORDERIS, no una talanquera. Un
+            arquero que jugó los 60 minutos y quedó en cero atajadas casi
+            siempre significa que la planilla no se llenó. Casi siempre, pero
+            no siempre —puede haber un partido en que de verdad no le llegara
+            ninguna—, así que se le avisa con los nombres y él decide.
+       ──────────────────────────────────────────────────────────────────── */
+    if (cerrar) {
+      /* 1 · El comentario. Se piden unas cuantas letras de verdad, para que
+             un punto o una letra suelta no cuente como resumen. */
+      if (limpiar(resumen).length < 15) {
+        setError(
+          'Falta el BREVE RESUMEN DEL JUEGO. Un partido no queda TERMINADO sin al menos ' +
+          'un renglón contando cómo se jugó. Escríbelo abajo del marcador y vuelve a ' +
+          'oprimir GUARDAR DEFINITIVO. Lo que ya escribiste está a salvo en este aparato.',
+        );
+        cajaResumen.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        cajaResumen.current?.focus();
+        return;
+      }
+
+      /* 2 · Los arqueros que jugaron y quedaron sin ninguna atajada. */
+      const arquerosEnCero = filas.filter(f => {
+        if (!esPortero(f.posicion)) return false;
+        const jugo = f.titular === 'Titular' || f.titular === 'Suplente';
+        if (!jugo) return false;
+        const ata = Number(String(f.ataja ?? '').trim());
+        return !Number.isFinite(ata) || ata <= 0;
+      });
+
+      if (arquerosEnCero.length) {
+        const nombres = arquerosEnCero
+          .map(f => `   ·  ${limpiar(f.deportista).toUpperCase() || 'SIN NOMBRE'}`)
+          .join('\n');
+        const seguir = confirm(
+          (arquerosEnCero.length === 1
+            ? 'ESTE ARQUERO JUGÓ Y QUEDÓ CON CERO ATAJADAS:'
+            : 'ESTOS ARQUEROS JUGARON Y QUEDARON CON CERO ATAJADAS:') +
+          `\n\n${nombres}\n\n` +
+          'Revisa que la columna ATA sí se haya llenado, porque un arquero sin ' +
+          'ninguna atajada es muy raro.\n\n' +
+          'Si de verdad no le llegó ninguna, sigue y ciérralo.\n\n' +
+          '¿Cerrar el partido de todas formas?',
+        );
+        if (!seguir) return;
+      }
+    }
+
     /* CERRAR ES UNA DECISIÓN, ASÍ QUE SE PREGUNTA. Después de esto la planilla
        queda bloqueada y hay que oprimir EDITAR para volver a tocarla. */
     if (cerrar && !confirm(
@@ -2001,6 +2065,15 @@ export default function CrearPospartidoPage() {
        "LIGA DESARROLLO SUB 8". — 27/08/2026 */
     return [t.torneo, t.programa, t.categoria].map(limpiar).filter(Boolean).join(' ')
         || `TORNEO ${num}`;
+  }, [cuadro]);
+
+  /** EL FORMADOR DEL TORNEO, el del cuadro de Torneos y Competencias. Es el
+   *  dueño del pospartido: a su banco llega y él lo llena, así ese día lo haya
+   *  reemplazado un compañero. — dirección, 29/08/2026 */
+  const formadorDeTorneoNum = useCallback((num: string): string => {
+    const n = parseInt(num, 10);
+    if (!cuadro || !Number.isFinite(n) || n < 1 || n > cuadro.length) return '';
+    return String(limpiar(cuadro[n - 1].formador) ?? '').toUpperCase();
   }, [cuadro]);
 
   /** Los partidos del banco, agrupados por torneo y ordenados por fecha.
@@ -2389,9 +2462,11 @@ export default function CrearPospartidoPage() {
     const pelarNom = (x: any) => String(x ?? '')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, ' ').trim().toUpperCase();
-    /* Los formadores que aparecen en el banco, para el filtro. */
+    /* Los formadores que aparecen en el banco, para el filtro. Se toman del
+       cuadro de Torneos y Competencias —el dueño del equipo—, NO del D.T que
+       se haya escrito en la programación. — dirección, 29/08/2026 */
     const profesDelBanco = [...new Set((banco ?? [])
-      .flatMap((f: any) => [f.dt, f.at])
+      .map(f => formadorDeTorneoNum(f.torneo_num))
       .map(pelarNom).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
     /* AL FORMADOR SOLO SUS PARTIDOS (dirección, 29/08/2026). Él no escoge
        torneo ni fecha: abre lo que la dirección le creó desde Programación de
@@ -2407,10 +2482,9 @@ export default function CrearPospartidoPage() {
        quien llena el pospartido en su perfil. */
     const todos = [...(banco ?? [])]
       .filter(f => !mios || mios.has(String(f.torneo_num).trim()))
-      .filter(f => !filtroEstado || estadoDe(f) === filtroEstado)
+      .filter(f => !filtroEstados.length || filtroEstados.includes(estadoDe(f)))
       .filter(f => !filtroProfeBanco
-                || pelarNom((f as any).dt) === filtroProfeBanco
-                || pelarNom((f as any).at) === filtroProfeBanco)
+                || pelarNom(formadorDeTorneoNum(f.torneo_num)) === filtroProfeBanco)
       .filter(f => {
         if (!bancoDesde && !bancoHasta) return true;
         const d = String(f.fecha ?? '');
@@ -2506,22 +2580,28 @@ export default function CrearPospartidoPage() {
                 </div>
                 {/* FILTRAR POR ESTADO Y POR FORMADOR (dirección, 29/08/2026):
                     con 38 partidos, sin esto toca leerlos todos. */}
-                {!esProfe && (
-                  <select
-                    value={filtroEstado}
-                    onChange={e => setFiltroEstado(e.target.value)}
-                    title="Ver solo los que están en ese estado"
-                    style={{
-                      background: filtroEstado ? AMBAR : 'rgba(255,255,255,.18)',
-                      border: 'none', height: 30,
-                    }}
-                    className="shrink-0 rounded-lg px-2 text-white text-[11px] font-black outline-none cursor-pointer">
-                    <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS ESTADOS</option>
-                    <option value="SIN INICIAR" style={{ color: '#111827', backgroundColor: 'white' }}>SIN INICIAR</option>
-                    <option value="A MEDIAS" style={{ color: '#111827', backgroundColor: 'white' }}>A MEDIAS</option>
-                    <option value="TERMINADO" style={{ color: '#111827', backgroundColor: 'white' }}>TERMINADO</option>
-                  </select>
-                )}
+                {/* LOS TRES ESTADOS, DE BOTONES (dirección, 29/08/2026): se
+                    pueden prender dos o los tres. Prendiendo SIN INICIAR y
+                    A MEDIAS queda "todo lo que falta" de una. */}
+                {!esProfe && (['SIN INICIAR', 'A MEDIAS', 'TERMINADO'] as const).map(e => {
+                  const prendido = filtroEstados.includes(e);
+                  const cuantos = (banco ?? []).filter(x => estadoDe(x) === e).length;
+                  const suColor = e === 'TERMINADO' ? '#5BE39B' : e === 'A MEDIAS' ? AMBAR : GRIS;
+                  return (
+                    <button
+                      key={e}
+                      onClick={() => setFiltroEstados(prev =>
+                        prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e])}
+                      title={`Ver los que están ${e.toLowerCase()}. Se pueden prender varios.`}
+                      className="shrink-0 rounded-lg px-2 h-[30px] flex items-center gap-1.5
+                        text-white text-[11px] font-black"
+                      style={{ background: prendido ? AMBAR : 'rgba(255,255,255,.18)' }}>
+                      <span className="rounded-full shrink-0"
+                            style={{ width: 8, height: 8, background: suColor }} />
+                      {e} · {cuantos}
+                    </button>
+                  );
+                })}
 
                 {!esProfe && (
                   <select
@@ -2567,9 +2647,9 @@ export default function CrearPospartidoPage() {
                   </>
                 )}
 
-                {!esProfe && (!!filtroEstado || !!filtroProfeBanco || !!bancoDesde || !!bancoHasta) && (
+                {!esProfe && (filtroEstados.length > 0 || !!filtroProfeBanco || !!bancoDesde || !!bancoHasta) && (
                   <button
-                    onClick={() => { setFiltroEstado(''); setFiltroProfeBanco(''); setBancoDesde(''); setBancoHasta(''); }}
+                    onClick={() => { setFiltroEstados([]); setFiltroProfeBanco(''); setBancoDesde(''); setBancoHasta(''); }}
                     title="Quitar los filtros"
                     className="shrink-0 rounded-lg px-2.5 h-[30px] flex items-center gap-1 text-white text-[11px] font-black"
                     style={{ background: 'rgba(255,255,255,.18)' }}>
@@ -2607,19 +2687,31 @@ export default function CrearPospartidoPage() {
                         {/* EL TORNEO Y EL PROFE EN EL MISMO RENGLÓN (dirección,
                             29/08/2026): el formador iba en una tercera línea y
                             engordaba toda la fila. Ahora son solo dos líneas. */}
-                        <p className="font-black text-[12.5px] leading-tight truncate">
-                          <span className="text-white">{nombreDeTorneoNum(f.torneo_num)}</span>
-                          {!!(f as any).dt && (
-                            <span style={{ color: '#5BE39B' }}>
-                              {'  ·  '}{String((f as any).dt).toUpperCase()}
-                            </span>
-                          )}
-                          {!!(f as any).at && (
-                            <span className="text-white/45">
-                              {'  ·  '}{String((f as any).at).toUpperCase()}
-                            </span>
-                          )}
-                        </p>
+                        {/* EL DUEÑO DEL EQUIPO EN VERDE (dirección, 29/08/2026):
+                            el que aparece en Torneos y Competencias, que es a
+                            quien le llega el pospartido. Si ese día lo dirigió
+                            otro, ese otro sale detrás, apagadito y con la
+                            palabra DIRIGIÓ, para que no se confunda con el
+                            dueño. */}
+                        {(() => {
+                          const dueno = formadorDeTorneoNum(f.torneo_num);
+                          const dt = String((f as any).dt ?? '').toUpperCase();
+                          const otro = !!dt && pelarNom(dt) !== pelarNom(dueno);
+                          return (
+                            <p className="font-black text-[12.5px] leading-tight truncate">
+                              <span className="text-white">{nombreDeTorneoNum(f.torneo_num)}</span>
+                              {!!dueno && (
+                                /* SE DICE CON TODAS LAS LETRAS quién lo va a
+                                   llenar, para que no se confunda con el que
+                                   dirigió ese día. — dirección, 29/08/2026 */
+                                <span style={{ color: GRIS }}>{'  ·  GESTIONA '}{dueno}</span>
+                              )}
+                              {otro && (
+                                <span className="text-white/45">{'  ·  DIRIGIÓ '}{dt}</span>
+                              )}
+                            </p>
+                          );
+                        })()}
                         <p className="text-white/50 text-[11px] font-semibold leading-tight truncate">
                           {/* EL DÍA EN QUE SE JUEGA, de primero: es lo que más se
                               busca en el listado. — dirección, 29/08/2026 */}
@@ -2628,7 +2720,14 @@ export default function CrearPospartidoPage() {
                           )}
                           {etiquetaFecha(f.jornada)}
                           {f.rival ? ` · vs ${f.rival.toUpperCase()}` : ' · sin rival'}
-                          {res ? ` · ${res.texto} ${f.goles_nos || '0'} — ${f.goles_ellos || '0'}` : ''}
+                          {/* CADA RESULTADO DE SU COLOR (dirección, 29/08/2026):
+                              VICTORIA en verde, EMPATE en naranja y DERROTA en
+                              rojo. De un vistazo se lee cómo le fue a cada uno. */}
+                          {res && (
+                            <span className="font-black" style={{ color: res.color }}>
+                              {` · ${res.texto} ${f.goles_nos || '0'} — ${f.goles_ellos || '0'}`}
+                            </span>
+                          )}
                         </p>
                       </div>
 
@@ -3931,11 +4030,21 @@ export default function CrearPospartidoPage() {
                  pointerEvents: soloMira ? 'none' : undefined,
                }}>
             <label htmlFor="resumen-juego"
-              className="block text-white font-black text-[13px] tracking-wide mb-2">
+              className="flex items-center gap-2 text-white font-black text-[13px] tracking-wide mb-2">
               BREVE RESUMEN DEL JUEGO
+              {/* Se avisa desde el principio que sin esto no se puede cerrar,
+                  para que no se enteren cuando ya oprimieron. — 31/08/2026 */}
+              <span className="rounded-md px-1.5 py-0.5 text-[9.5px] font-black tracking-wider"
+                    style={{
+                      background: limpiar(resumen).length >= 15 ? 'rgba(0,176,80,.18)' : 'rgba(224,163,58,.18)',
+                      color:      limpiar(resumen).length >= 15 ? '#5BE39B' : AMBAR,
+                    }}>
+                {limpiar(resumen).length >= 15 ? 'LISTO' : 'OBLIGATORIO PARA CERRAR'}
+              </span>
             </label>
             <textarea
               id="resumen-juego"
+              ref={cajaResumen}
               value={resumen}
               onChange={e => setResumen(e.target.value)}
               rows={4}

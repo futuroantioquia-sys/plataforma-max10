@@ -822,26 +822,55 @@ function EstadoCuentaInner() {
     const m = f.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
   };
-  function esMalDescuento(row: PagoRow): boolean {
-    if (row.estado !== 'PAGÓ') return false;
+  /* ── LA RESTA BIEN HECHA (dirección, 31/08/2026) ─────────────────────────
+     Antes esto solo decía "sí o no" y la casilla naranja siempre restaba
+     contra la tarifa COMPLETA. Por eso a un papá que pagó $124.000 teniendo
+     derecho al descuento —le faltaron 200 pesos— le salía DEBE $14.000.
+     Estaba cobrándole el descuento entero por doscientos pesos.
+
+     Son DOS cosas distintas y ahora se separan:
+
+       · MAL DESCUENTO — se tomó el 10% sin tener derecho (pagó del 6 en
+         adelante, o debe un mes anterior). Ahí sí debe todo el descuento.
+         Se le resta contra la tarifa COMPLETA.
+
+       · LE FALTÓ — tenía derecho al descuento, pero no cuadró la cuenta y
+         pagó de menos. Se le resta contra el valor CON descuento, que es lo
+         que de verdad le tocaba pagar.
+
+     La resta siempre es la misma idea: LO QUE DEBÍA PAGAR menos LO QUE PAGÓ.
+     Lo único que cambia es cuál de los dos valores era el suyo. */
+  type Revision = { clase: 'MAL_DESCUENTO' | 'FALTO'; debe: number; debia: number } | null;
+
+  function revisarPago(row: PagoRow): Revision {
+    if (row.estado !== 'PAGÓ') return null;
     const mesNum = MES_NUM[row.detalle];
-    if (mesNum === undefined || mesNum === 0) return false;   // no aplica a matrícula
-    if (row.vCargado === 'AUTORIZADO') return false;          // el admin lo autorizó como bueno
-    // GRANDFATHER: el naranja SOLO aplica a pagos NUEVOS (del 5-ago-2026 en adelante).
-    // Lo que ya estaba en verde PAGÓ (histórico, antes de esa fecha) NUNCA se marca naranja.
+    if (mesNum === undefined || mesNum === 0) return null;    // no aplica a matrícula
+    if (row.vCargado === 'AUTORIZADO') return null;           // el admin lo autorizó como bueno
+    // GRANDFATHER: el aviso SOLO aplica a pagos NUEVOS (del 5-ago-2026 en adelante).
+    // Lo que ya estaba en verde PAGÓ (histórico, antes de esa fecha) NUNCA se marca.
     const fp = fechaPagoDate(row.fecha);
-    if (!fp || fp < new Date(2026, 7, 5)) return false;
+    if (!fp || fp < new Date(2026, 7, 5)) return null;
     const C = tarifaNum, P = montoNum(row.vPagado);
-    if (!C || !P) return false;
-    if (P >= C) return false;                                 // pagó completo o de más → ok
-    if (P < Math.round(C * 0.9)) return true;                 // menos que el 90% → mal
-    // tomó el 10%: válido solo si pagó HASTA EL 5 del mes y está AL DÍA
-    const hastaEl5 = !!fp && fp <= new Date(2026, mesNum - 1, 5, 23, 59, 59);
+    if (!C || !P) return null;
+    if (P >= C) return null;                                  // pagó completo o de más → ok
+
+    /* ¿Tenía derecho al 10% de pronto pago? Sí, si pagó HASTA EL 5 del mes
+       y no venía debiendo ningún mes anterior. */
+    const hastaEl5 = fp <= new Date(2026, mesNum - 1, 5, 23, 59, 59);
     const enMora = pagos.some(r => {
       const m = MES_NUM[r.detalle];
       return m !== undefined && m > 0 && m < mesNum && m >= mesAfilNum && r.estado === 'PEND';
     });
-    return !(hastaEl5 && !enMora);
+    const teniaDerecho = hastaEl5 && !enMora;
+
+    /* Lo que le tocaba pagar a ÉL: con descuento si le correspondía,
+       la tarifa completa si no. */
+    const debia = teniaDerecho ? Math.round(C * 0.9) : C;
+    const debe  = debia - P;
+    if (debe <= 0) return null;                               // pagó lo suyo → ok
+
+    return { clase: teniaDerecho ? 'FALTO' : 'MAL_DESCUENTO', debe, debia };
   }
 
   /* ─── Filas según año seleccionado ─── */
@@ -1232,8 +1261,12 @@ function EstadoCuentaInner() {
                 const esNoPaga     = row.estado === 'NOPAGA';   // mes exonerado: no se cobra, verde "NO PAGA"
                 const isPaid       = becado || row.estado === 'PAGÓ';
                 const isPaidReal   = row.estado === 'PAGÓ';   // pago REAL (ignora el becado), para edición del admin
-                const malDesc      = !becado && isPaid && esMalDescuento(row);  // pagó con mal descuento
-                const debeDesc     = malDesc ? Math.max(0, tarifaNum - montoNum(row.vPagado)) : 0; // diferencia que debe
+                /* El aviso de la casilla ESTADO. `revision` trae la clase
+                   —mal descuento o le faltó— y la resta ya bien hecha. */
+                const revision     = !becado && isPaid ? revisarPago(row) : null;
+                const malDesc      = revision !== null;                 // hay algo que avisar
+                const soloFalto    = revision?.clase === 'FALTO';       // tenía derecho, se quedó corto
+                const debeDesc     = revision?.debe ?? 0;               // lo que de verdad debe
                 const isProx       = !becado && row.estado === 'PROX';
                 // hasSoporte: true si hay algún soporte que cubra este mes (PEND o PROX)
                 // El padre puede pagar un mes próximo por adelantado — soporte tiene prioridad sobre PROX
@@ -1335,16 +1368,24 @@ function EstadoCuentaInner() {
                               title={isPaid && malDesc ? 'Clic para validar el descuento o revertir el pago' : undefined}
                               className={cn('rounded font-black text-white transition w-full',
                                 !isPaid ? 'bg-red-500 hover:bg-red-600 px-3 py-1 text-[11px]'
+                                /* AMBAR = le faltó un pedacito · NARANJA = tomó un descuento
+                                   que no era suyo. Dos problemas distintos, dos colores. */
+                                : soloFalto ? 'bg-[#E0A33A] hover:brightness-110 px-1 py-[3px] text-[9px] leading-tight'
                                 : malDesc ? 'bg-orange-500 hover:bg-orange-600 px-1 py-[3px] text-[8px] leading-tight'
                                 : 'bg-green-500 hover:bg-green-600 px-3 py-1 text-[11px]')}>
                                 {!isPaid ? 'PEND'
+                                  : soloFalto ? <>LE FALTARON<br/>{ensurePeso(String(debeDesc))}</>
                                   : malDesc ? <>PAGÓ CON MAL DESCUENTO<br/>DEBE: {ensurePeso(String(debeDesc))}</>
                                   : 'PAGÓ'}
                             </button>
                           : isPaid
                               ? <span className={cn('rounded font-black w-full block text-center text-white cursor-default',
-                                  malDesc ? 'bg-orange-500 px-1 py-[3px] text-[8px] leading-tight' : 'bg-green-500 px-2 py-1 text-[11px]')}>
-                                  {malDesc ? <>PAGÓ CON MAL DESCUENTO<br/>DEBE: {ensurePeso(String(debeDesc))}</> : 'PAGÓ'}
+                                  soloFalto ? 'bg-[#E0A33A] px-1 py-[3px] text-[9px] leading-tight'
+                                  : malDesc ? 'bg-orange-500 px-1 py-[3px] text-[8px] leading-tight'
+                                  : 'bg-green-500 px-2 py-1 text-[11px]')}>
+                                  {soloFalto ? <>LE FALTARON<br/>{ensurePeso(String(debeDesc))}</>
+                                    : malDesc ? <>PAGÓ CON MAL DESCUENTO<br/>DEBE: {ensurePeso(String(debeDesc))}</>
+                                    : 'PAGÓ'}
                                 </span>
                               : (esProfesor || esReadonly)
                                 ? isProx
@@ -1812,7 +1853,12 @@ function EstadoCuentaInner() {
       {/* ── MODAL MAL DESCUENTO: validar (queda PAGÓ verde) o revertir el pago ── */}
       {malDescModal !== null && (() => {
         const row = pagosVista[malDescModal];
-        const debe = Math.max(0, tarifaNum - montoNum(row?.vPagado || ''));
+        /* La MISMA cuenta de la casilla, no una aparte: antes este modal
+           volvía a restar contra la tarifa completa y decía otra cifra.
+           — dirección, 31/08/2026 */
+        const rev  = row ? revisarPago(row) : null;
+        const debe = rev?.debe ?? 0;
+        const falto = rev?.clase === 'FALTO';
         return (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div className="bg-[#3C4759] rounded-2xl shadow-2xl p-6 w-full max-w-sm">
@@ -1821,20 +1867,29 @@ function EstadoCuentaInner() {
                   <span className="text-[#E0A33A] text-xl font-black">!</span>
                 </div>
                 <div>
-                  <h3 className="font-black text-white text-base leading-tight">Pagó con mal descuento</h3>
+                  <h3 className="font-black text-white text-base leading-tight">
+                    {falto ? 'Le faltó un poco' : 'Pagó con mal descuento'}
+                  </h3>
                   <p className="text-xs text-white/70 mt-0.5">{row?.detalle}</p>
                 </div>
               </div>
+              {/* La cuenta a la vista, renglón por renglón, para que se entienda
+                  de dónde sale la cifra y no toque adivinar. — 31/08/2026 */}
               <div className="bg-[rgba(224,163,58,.14)] border border-[rgba(224,163,58,.45)] rounded-xl p-3 mb-5 text-xs text-white space-y-1">
+                <p><span className="font-bold">Le tocaba pagar:</span> {ensurePeso(String(rev?.debia ?? 0))}
+                  <span className="text-white/60"> {falto ? '(con el descuento de pronto pago)' : '(sin descuento: no le correspondía)'}</span></p>
                 {row?.vPagado && <p><span className="font-bold">Pagó:</span> {ensurePeso(row.vPagado)}</p>}
-                <p><span className="font-bold">Debe:</span> {ensurePeso(String(debe))}</p>
+                <p className="pt-1 border-t border-white/15">
+                  <span className="font-bold">{falto ? 'Le faltaron:' : 'Debe:'}</span> {ensurePeso(String(debe))}</p>
                 {row?.fecha && <p><span className="font-bold">Fecha:</span> {row.fecha}</p>}
               </div>
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => autorizarDescuento(malDescModal)}
                   className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 text-sm font-black transition">
-                  ✓ Validar el mal descuento (queda PAGÓ verde)
+                  {falto
+                    ? '✓ Dejarlo así de todas formas (queda PAGÓ verde)'
+                    : '✓ Validar el mal descuento (queda PAGÓ verde)'}
                 </button>
                 <button
                   onClick={() => { const i = malDescModal; setMalDescModal(null); setConfirmRevert(i); }}

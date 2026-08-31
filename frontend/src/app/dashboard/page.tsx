@@ -13,7 +13,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { esSuperAdmin, esDeportivo, getSesion } from '@/lib/permisos';
 import { cn } from '@/lib/utils';
 import LoadingBall from '@/components/LoadingBall';
-import { getDeportistas, countSoportesPendientes, countSolicitudesFacturaPendientes, countLibroPagos, getResumenVisitas, getVisitasPorDia } from '@/lib/db';
+import { getDeportistas, countSoportesPendientes, countSolicitudesFacturaPendientes, countLibroPagos, getResumenVisitas, getVisitasPorDia, getMensajes } from '@/lib/db';
 import { contarSolicitudesEnEstudio } from '@/lib/retiro';
 
 // ── PALETA ───────────────────────────────────────────────────────
@@ -261,6 +261,11 @@ function DashboardAdmin() {
   // Solicitudes de retiro SIN RESOLVER (26/08/2026). Se cuentan de la tabla
   // de solicitudes, no del estado de las fichas: ver contarSolicitudesEnEstudio.
   const [retirosEnEstudio,   setRetirosEnEstudio]   = useState(0);
+  /* MENSAJES SIN RESPONDER (dirección, 29/08/2026): en el tablero no había
+     ningún aviso y los mensajes de los papás se quedaban esperando. Se cuenta
+     una conversación por cada deportista cuyo ÚLTIMO mensaje lo escribió él y
+     nadie le ha contestado. */
+  const [mensajesSinResponder, setMensajesSinResponder] = useState(0);
   // Rol (se resuelve en cliente para evitar desajustes de hidratación)
   const [esSuper, setEsSuper] = useState(false); // ADMON → gestiona administradores
   const [esDep,   setEsDep]   = useState(false); // deportivo → sin finanzas
@@ -278,6 +283,18 @@ function DashboardAdmin() {
       }).catch(() => {});
 
       countSoportesPendientes().then(n => setPendientesSoportes(n)).catch(() => {});
+
+      getMensajes().then(ms => {
+        const ultimo = new Map<string, any>();
+        (ms ?? []).forEach(m => {
+          const k = `${String(m.codigo ?? '').trim().toUpperCase()}|${m.para}`;
+          const antes = ultimo.get(k);
+          if (!antes || String(antes.createdAt) < String(m.createdAt)) ultimo.set(k, m);
+        });
+        let n = 0;
+        ultimo.forEach(m => { if (m?.de === 'calidoso') n++; });
+        setMensajesSinResponder(n);
+      }).catch(() => {});
 
       // Solicitudes de factura de los acudientes que siguen sin facturar
       countSolicitudesFacturaPendientes().then(n => setPendientesFacturas(n)).catch(() => {});
@@ -343,8 +360,44 @@ function DashboardAdmin() {
             microciclos. Va ANTES del microciclo porque ese es el orden en que
             se trabaja: primero se programa, después se planea la semana. */}
         <AccesoCard titulo="Programación de Competencia" icono={CalendarDays} href="/programacion" descripcion="Qué se juega, cuándo y dónde · de aquí salen los microciclos" color="verde" />
-        <AccesoCard titulo="Postpartido"            icono={Trophy}     href="/postpartido"  descripcion="Resultado y desempeño individual" color="verde" />
+        {/* "Postpartido" SALIÓ DE SEGUIMIENTO (dirección, 29/08/2026): se pasó
+            a CONTROLANDO LA EMPRESA, que es lo que de verdad es —un control de
+            la labor del formador—, y no un módulo de trabajo del día a día. */}
         <AccesoCard titulo="Torneos y Competencias" icono={Trophy}    href="/torneos"      descripcion="Cuadro de equipos inscritos" color="verde" />
+      </CategoriaSection>
+
+      {/* ── CONTROLANDO LA EMPRESA ─────────────────────────────────────────
+          NO es para trabajar: es para VIGILAR el trabajo (dirección,
+          29/08/2026). Aquí la dirección entra a ver si cada formador está al
+          día con lo suyo. Arranca con el Banco General de Post Partidos —que
+          es justamente eso, un control de la labor del profe— y de aquí en
+          adelante se le irán colgando los demás renglones: asistencias,
+          informes, microciclos… */}
+      <CategoriaSection emoji="🛡️" titulo="Controlando la empresa" color="verde" delay={250}>
+        <AccesoCard
+          titulo="Control Post Partido"
+          icono={Trophy}
+          href="/postpartido"
+          descripcion="Quién lo gestiona · sin iniciar, a medias o terminado · por fecha y por profe"
+          color="verde" />
+        <AccesoCard
+          titulo="Control Asistencia"
+          icono={Clipboard}
+          href="/control-asistencias"
+          descripcion="Quién está al día, semana por semana · por mes y por profe"
+          color="verde" />
+        <AccesoCard
+          titulo="Control Micro Ciclos"
+          icono={CalendarDays}
+          href="/control-microciclos"
+          descripcion="Qué planeación está montada · una por semana · por mes y por profe"
+          color="verde" />
+        <AccesoCard
+          titulo="Control Informes"
+          icono={ClipboardList}
+          href="/control-informes"
+          descripcion="Qué informes hicieron los profes y cuáles faltan"
+          color="verde" />
       </CategoriaSection>
 
       {/* Categoría: Finanzas — oculta para el Administrador Deportivo */}
@@ -365,7 +418,7 @@ function DashboardAdmin() {
           Creada el 22/08/2026: Mensajes y Cumpleaños estaban sueltos en Gestión,
           que es donde se administra la plataforma, no donde se habla con la gente. */}
       <CategoriaSection emoji="💬" titulo="Comunicaciones" color="verde" delay={400}>
-        <AccesoCard titulo="Mensajes"   icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"      color="verde" />
+        <AccesoCard badge={mensajesSinResponder} titulo="Mensajes"   icono={MessageCircle} href="/mensajes"  descripcion="Comunicación con padres"      color="verde" />
         <AccesoCard titulo="Cumpleaños" icono={Cake}          href="/cumpleanos" descripcion="Ayer, hoy y mañana · tarjeta" color="verde" />
       </CategoriaSection>
 

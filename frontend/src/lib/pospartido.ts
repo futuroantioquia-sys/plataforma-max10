@@ -311,27 +311,45 @@ export async function borrarPlanilla(num: string, jornada: string): Promise<void
  *  `undefined` = la tabla todavía no existe. */
 export async function getBanco(): Promise<FichaBanco[] | undefined> {
   try {
-    const pedir = (cols: string) => fetch(
-      `${SB_URL}/rest/v1/${TABLA_POSPARTIDO}?select=${cols}` +
-      `&order=actualizada_en.desc&limit=1000`,
-      { headers: HDR, cache: 'no-store' },
+    /* DE A PEDAZOS. REGLA DE LA CASA (dirección, 29/08/2026): la base corta
+       en las primeras mil filas. Nunca se asume que con un solo viaje llega
+       todo; se pide hasta que diga que ya no hay más. */
+    const pedir = (cols: string, desde: number) => fetch(
+      `${SB_URL}/rest/v1/${TABLA_POSPARTIDO}?select=${cols}&order=actualizada_en.desc`,
+      {
+        headers: { ...HDR, Range: `${desde}-${desde + 999}`, 'Range-Unit': 'items' },
+        cache: 'no-store',
+      },
     );
     const BASICAS = 'torneo_num,jornada,fecha,rival,goles_nos,goles_ellos,definitivo,actualizada_en';
     /* Se piden también D.T y A.T; si la base todavía no las tiene, se vuelve a
        pedir sin ellas para que el banco no se caiga. — 29/08/2026 */
-    let res = await pedir(`${BASICAS},dt,at`);
-    if (!res.ok && res.status !== 404) {
-      const previo = await res.text().catch(() => '');
-      if (/dt|at|column|schema cache/i.test(previo)) res = await pedir(BASICAS);
+    let columnas = `${BASICAS},dt,at`;
+    const todas: any[] = [];
+    let desde = 0;
+    for (let vuelta = 0; vuelta < 80; vuelta++) {
+      let res = await pedir(columnas, desde);
+      /* Si la base todavía no tiene D.T y A.T, se vuelve a pedir sin ellas. */
+      if (!res.ok && res.status !== 206 && res.status !== 404 && columnas !== BASICAS) {
+        const previo = await res.text().catch(() => '');
+        if (/dt|at|column|schema cache/i.test(previo)) {
+          columnas = BASICAS;
+          res = await pedir(columnas, desde);
+        }
+      }
+      if (res.status === 404) return undefined;
+      if (!res.ok && res.status !== 206) {
+        const txt = await res.text().catch(() => '');
+        if (/does not exist/i.test(txt)) return undefined;
+        break;
+      }
+      const filas = await res.json();
+      const lote = Array.isArray(filas) ? filas : [];
+      todas.push(...lote);
+      if (lote.length === 0) break;
+      desde += lote.length;
     }
-    if (res.status === 404) return undefined;
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      return /does not exist/i.test(txt) ? undefined : [];
-    }
-    const filas = await res.json();
-    if (!Array.isArray(filas)) return [];
-    return filas.map((f: any) => ({
+    return todas.map((f: any) => ({
       torneo_num:     String(f?.torneo_num ?? ''),
       jornada:        String(f?.jornada ?? ''),
       fecha:          String(f?.fecha ?? ''),

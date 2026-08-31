@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageCircle, Send, Search, ArrowLeft, GraduationCap, Building2 } from 'lucide-react';
+import { MessageCircle, Send, Search, ArrowLeft, GraduationCap, Building2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
-import { getMensajes, enviarMensaje, marcarConversacionLeida, getDeportistas } from '@/lib/db';
+import { getMensajes, enviarMensaje, marcarConversacionLeida, getDeportistas, getProfes, getTelefonosWhatsApp, guardarTelefonoWhatsApp } from '@/lib/db';
 import type { Mensaje, Deportista, DestinoMensaje } from '@/lib/db';
 
 /* ── Helpers ── */
@@ -18,9 +18,72 @@ const codigoDe   = (dep: Deportista | undefined | null) => colDe(dep, /^c[oó]d/
 const proyectoDe = (dep: Deportista | undefined | null) => colDe(dep, /^proy/i);
 const up = (s: string) => (s ?? '').trim().toUpperCase();
 
+/* ── A QUIÉN LE ESCRIBIERON ─────────────────────────────────────────────────
+   El papá escoge un asunto al escribir —MENSAJE AL DIRECTOR, ACLARACIÓN
+   PAGOS…— y ese asunto queda al principio del texto. De ahí se saca a cuál
+   de las tres bandejas pertenece. — dirección, 29/08/2026 */
+type Bandeja = 'DIRECTOR' | 'CONTABLE' | 'FORMADOR';
+
+function bandejaDe(m: { texto?: string; para?: string }): Bandeja {
+  if (m?.para === 'profesor') return 'FORMADOR';
+  const t = String(m?.texto ?? '').toUpperCase();
+  /* Primero el asunto exacto, que es el que escribe la plataforma. */
+  if (/MENSAJE AL DIRECTOR/.test(t)) return 'DIRECTOR';
+  if (/ACLARACI[OÓ]N PAGOS|[ÁA]REA CONTABLE/.test(t)) return 'CONTABLE';
+  /* Y si es un mensaje viejo, sin asunto, se adivina por lo que dice. */
+  if (/PAGO|CONTAB|CARTERA|FACTUR|COBRO|MENSUALIDAD/.test(t)) return 'CONTABLE';
+  return 'DIRECTOR';
+}
+
+/** El asunto que se le pone al mensaje según a quién va. */
+const ASUNTO: Record<Bandeja, string> = {
+  DIRECTOR: 'MENSAJE AL DIRECTOR',
+  CONTABLE: 'ACLARACIÓN PAGOS',
+  FORMADOR: 'MENSAJE AL FORMADOR',
+};
+
+/** El celular, listo para WhatsApp: 3113795701 → 573113795701 */
+function celularWhatsApp(bruto: string): string {
+  const d = String(bruto || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('57') && d.length >= 12) return d;
+  if (d.length === 10 && d.startsWith('3')) return '57' + d;
+  if (d.length >= 10) return d;
+  return '';
+}
+const celularDe = (d: Deportista | undefined | null) =>
+  colDe(d, /celular.*acud|acud.*celular/i) || colDe(d, /^n[uú]mero de celular|^celular|^tel/i);
+
 function iniciales(nombre: string): string {
   return (nombre || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 }
+/** "SAB 29 AGO · 16:03" — el día y la hora en que lo escribieron.
+ *  Antes solo salía la hora y no se sabía si el mensaje era de hoy o de hace
+ *  tres semanas. — dirección, 29/08/2026 */
+function fechaHora(iso: string): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const dias  = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
+    const meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${hh}:${mm}`;
+  } catch { return ''; }
+}
+
+/** "29 AGO" — para la lista de la izquierda, que es angosta. */
+function diaCorto(iso: string): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+    return `${d.getDate()} ${meses[d.getMonth()]}`;
+  } catch { return ''; }
+}
+
 function horaCorta(iso: string): string {
   if (!iso) return '';
   try {
@@ -39,6 +102,8 @@ type Conv = {
   proyecto: string;
   avatar: string;
   icono?: 'profe' | 'inst';
+  bandeja: Bandeja;
+  profe: string;             // el formador del proyecto, para poder filtrar
 };
 
 export default function MensajesPage() {
@@ -50,8 +115,17 @@ export default function MensajesPage() {
   const [mensajes,   setMensajes]   = useState<Mensaje[]>([]);
   const [convActiva, setConvActiva] = useState<string | null>(null);
   const [nuevoMsg,   setNuevoMsg]   = useState('');
+  /* EL WHATSAPP ES OBLIGATORIO PARA ESCRIBIR (dirección, 29/08/2026): sin un
+     número no se le puede responder al acudiente, y era lo que más se perdía.
+     Queda guardado, así que solo lo escribe la primera vez. */
+  const [miWhatsApp, setMiWhatsApp] = useState('');
   const [busqueda,   setBusqueda]   = useState('');
   const [soloPendientes, setSoloPendientes] = useState(false);
+  /* LAS TRES BANDEJAS Y EL FILTRO POR PROFE (dirección, 29/08/2026). */
+  const [bandeja, setBandeja]       = useState<Bandeja | ''>('');
+  const [filtroProfe, setFiltroProfe] = useState('');
+  const [profePorProy, setProfePorProy] = useState<Record<string, string>>({});
+  const [telefonos, setTelefonos]   = useState<Record<string, any>>({});
   const [enviando,   setEnviando]   = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -67,6 +141,30 @@ export default function MensajesPage() {
     } catch {}
   }
   useEffect(() => { setMounted(true); recargar(); }, []);
+  /* Quién es el formador de cada proyecto, y el WhatsApp de cada deportista. */
+  useEffect(() => {
+    (async () => {
+      try {
+        const profes = await getProfes();
+        const mapa: Record<string, string> = {};
+        (profes ?? []).forEach(p => {
+          (p.proyectos ?? []).forEach(py => {
+            const k = up(String(py ?? ''));
+            if (k && !mapa[k]) mapa[k] = up(String(p.usuario ?? ''));
+          });
+        });
+        setProfePorProy(mapa);
+      } catch { /* nada */ }
+      try {
+        const tels = await getTelefonosWhatsApp();
+        setTelefonos(tels);
+        try {
+          const mio = String((tels as any)?.[localStorage.getItem('futuro-calidoso-id') ?? '']?.telefono ?? '');
+          if (mio) setMiWhatsApp(mio);
+        } catch { /* nada */ }
+      } catch { /* nada */ }
+    })();
+  }, []);
   // Refresco periódico para ver mensajes nuevos
   useEffect(() => {
     const t = setInterval(recargar, 15000);
@@ -101,35 +199,53 @@ export default function MensajesPage() {
   const visibles = useMemo(() => {
     if (esCalidoso)   return mensajes.filter(m => up(m.codigo) === up(calidosoCodigo));
     if (esProfe)      return mensajes.filter(m => m.para === 'profesor'   && profeCodigos.has(up(m.codigo)));
-    return mensajes.filter(m => m.para === 'institucion');   // institución
+    /* LA ADMINISTRACIÓN VE TODO (dirección, 29/08/2026): los que van a la
+       institución —director y contable— y también los que los papás le
+       escriben al formador, para poder vigilar que sí les respondan. */
+    return mensajes;
   }, [mensajes, esCalidoso, esProfe, calidosoCodigo, profeCodigos]);
 
   /* ── Construcción de conversaciones ── */
   const conversaciones = useMemo<Conv[]>(() => {
     if (esCalidoso) {
       return [
-        { key: 'PROFESOR',    codigo: calidosoCodigo, para: 'profesor',    titulo: 'Profesor',    subtitulo: 'Tu formador',      nombre: calidosoNombre, proyecto: calidosoProyecto, avatar: 'PR', icono: 'profe' },
-        { key: 'INSTITUCION', codigo: calidosoCodigo, para: 'institucion', titulo: 'Institución', subtitulo: 'Administración',   nombre: calidosoNombre, proyecto: calidosoProyecto, avatar: 'IN', icono: 'inst' },
+        /* TRES BANDEJAS PARA EL ACUDIENTE (dirección, 29/08/2026): así ve
+           por separado si le respondió el director, el área contable o el
+           profesor de su hijo. */
+        { key: 'DIRECTOR',  codigo: calidosoCodigo, para: 'institucion', titulo: 'Dirección',     subtitulo: 'Mensajes al director',   nombre: calidosoNombre, proyecto: calidosoProyecto, avatar: 'DI', icono: 'inst',  bandeja: 'DIRECTOR', profe: '' },
+        { key: 'CONTABLE',  codigo: calidosoCodigo, para: 'institucion', titulo: 'Área contable', subtitulo: 'Pagos y cartera',        nombre: calidosoNombre, proyecto: calidosoProyecto, avatar: 'CO', icono: 'inst',  bandeja: 'CONTABLE', profe: '' },
+        { key: 'FORMADOR',  codigo: calidosoCodigo, para: 'profesor',    titulo: 'Profesor',      subtitulo: 'El formador de tu hijo', nombre: calidosoNombre, proyecto: calidosoProyecto, avatar: 'PR', icono: 'profe', bandeja: 'FORMADOR', profe: '' },
       ];
     }
-    const para: DestinoMensaje = esProfe ? 'profesor' : 'institucion';
     const map = new Map<string, Conv>();
     // Ordenar por más reciente
     const ordenados = [...visibles].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     ordenados.forEach(m => {
-      const key = up(m.codigo);
+      /* UNA CONVERSACIÓN POR CÓDIGO **Y POR BANDEJA** (dirección, 29/08/2026):
+         el mismo papá puede tener un hilo con el director y otro con el
+         contable; si la llave fuera solo el código se pisarían. */
+      const b = bandejaDe(m);
+      const key = `${up(m.codigo)}|${b}`;
       if (map.has(key)) return;
-      const dep = deps.find(d => up(codigoDe(d)) === key);
+      const dep = deps.find(d => up(codigoDe(d)) === up(m.codigo));
       const nombre = m.nombre || dep?._nombre || m.codigo;
+      const proyecto = m.proyecto || proyectoDe(dep);
       map.set(key, {
-        key, codigo: m.codigo, para,
+        key, codigo: m.codigo, para: m.para,
         titulo: nombre,
-        subtitulo: `Código ${m.codigo}${m.proyecto || proyectoDe(dep) ? ' · ' + (m.proyecto || proyectoDe(dep)) : ''}`,
-        nombre, proyecto: m.proyecto || proyectoDe(dep), avatar: iniciales(nombre),
+        /* EN LOS MENSAJES AL FORMADOR SE DICE DE QUÉ FORMADOR SE TRATA
+           (dirección, 29/08/2026): es lo que permite vigilar si están
+           respondiendo. */
+        subtitulo: `Código ${m.codigo}${proyecto ? ' · ' + proyecto : ''}`
+          + (b === 'FORMADOR' && (profePorProy[up(proyecto)] ?? '')
+              ? ` · PROFE ${profePorProy[up(proyecto)]}` : ''),
+        nombre, proyecto, avatar: iniciales(nombre),
+        bandeja: b,
+        profe: profePorProy[up(proyecto)] ?? '',
       });
     });
     return [...map.values()];
-  }, [esCalidoso, esProfe, visibles, deps, calidosoCodigo, calidosoNombre, calidosoProyecto]);
+  }, [esCalidoso, esProfe, visibles, deps, calidosoCodigo, calidosoNombre, calidosoProyecto, profePorProy]);
 
   /* ── Seleccionar primera conversación por defecto ── */
   useEffect(() => {
@@ -143,9 +259,9 @@ export default function MensajesPage() {
   const hilo = useMemo(() => {
     if (!conv) return [];
     return visibles
-      .filter(m => up(m.codigo) === up(conv.codigo) && m.para === conv.para)
+      .filter(m => up(m.codigo) === up(conv.codigo) && bandejaDe(m) === conv.bandeja)
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
-  }, [visibles, conv]);
+  }, [visibles, conv, esCalidoso]);
 
   const soyEmisor = (m: Mensaje) =>
     esCalidoso ? m.de === 'calidoso' : esProfe ? m.de === 'profesor' : m.de === 'admin';
@@ -163,12 +279,12 @@ export default function MensajesPage() {
     const s = new Set<string>();
     conversaciones.forEach(c => {
       const u = visibles
-        .filter(m => up(m.codigo) === up(c.codigo) && m.para === c.para)
+        .filter(m => up(m.codigo) === up(c.codigo) && bandejaDe(m) === c.bandeja)
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
       if (u && u.de === 'calidoso') s.add(c.key);
     });
     return s;
-  }, [conversaciones, visibles]);
+  }, [conversaciones, visibles, esCalidoso]);
 
   const totalPendientes = clavesPendientes.size;
   const totalSinLeer = useMemo(
@@ -198,22 +314,94 @@ export default function MensajesPage() {
     const texto = nuevoMsg.trim();
     if (!texto || !conv || enviando) return;
     if (!conv.codigo) { alert('No se pudo identificar el deportista de esta conversación.'); return; }
+
+    /* SIN WHATSAPP NO SE MANDA (dirección, 29/08/2026). Solo se le exige al
+       acudiente: la administración y el profe ya tienen por dónde responder. */
+    let telLimpio = '';
+    if (esCalidoso) {
+      telLimpio = celularWhatsApp(miWhatsApp);
+      if (!telLimpio) {
+        alert('Escribe tu número de WhatsApp para poder responderte.\n\nSon 10 números, empezando por 3.');
+        return;
+      }
+    }
     setEnviando(true);
     const de = esCalidoso ? 'calidoso' : esProfe ? 'profesor' : 'admin';
     const deportistaId = esCalidoso
       ? calidosoId
       : (deps.find(d => up(codigoDe(d)) === up(conv.codigo))?.id ?? '');
+    /* El número queda anotado al final del mensaje —para que se vea en el
+       hilo— y guardado en la ficha, para que no lo tenga que volver a
+       escribir la próxima vez. */
+    /* EL ASUNTO LO PONE LA PLATAFORMA (dirección, 29/08/2026): así el
+       mensaje cae siempre en la bandeja correcta y no depende de lo que el
+       papá escriba. */
+    const conAsunto = esCalidoso && !new RegExp(ASUNTO[conv.bandeja], 'i').test(texto)
+      ? `${ASUNTO[conv.bandeja]}\n${texto}`
+      : texto;
+    const textoFinal = esCalidoso && telLimpio
+      ? `${conAsunto}\n\nWhatsApp de contacto: ${miWhatsApp.trim()}`
+      : conAsunto;
+    if (esCalidoso && telLimpio && deportistaId) {
+      try {
+        await guardarTelefonoWhatsApp(deportistaId, miWhatsApp.trim(), {
+          codigo: conv.codigo, nombre: conv.nombre,
+        });
+      } catch { /* si no se pudo guardar, el mensaje igual va con el número */ }
+    }
     const ok = await enviarMensaje({
       deportistaId, codigo: conv.codigo, nombre: conv.nombre,
-      texto, de: de as any, para: conv.para, proyecto: conv.proyecto,
+      texto: textoFinal, de: de as any, para: conv.para, proyecto: conv.proyecto,
     });
     setEnviando(false);
     if (ok) { setNuevoMsg(''); await recargar(); }
     else alert('No se pudo enviar el mensaje. Revisa la conexión.');
   }
 
+  /* ── RESPONDER POR WHATSAPP ───────────────────────────────────────────────
+     Se arma el mensaje con lo que el acudiente escribió y, debajo, la palabra
+     RESPUESTA con lo que se haya escrito en la caja. Así el papá lee en el
+     mismo WhatsApp a qué se le está respondiendo. — dirección, 29/08/2026 */
+  function abrirWhatsApp() {
+    if (!conv) return;
+    const dep = deps.find(d => up(codigoDe(d)) === up(conv.codigo));
+    /* PRIMERO EL NÚMERO QUE ÉL MISMO DEJÓ en el mensaje —"WhatsApp de
+       contacto: 311…"—, que es el bueno; después el guardado en su ficha, y
+       de último el celular del acudiente. — dirección, 29/08/2026 */
+    const deSuMensaje = (() => {
+      for (const m of [...hilo].reverse()) {
+        if (m.de !== 'calidoso') continue;
+        const cap = String(m.texto ?? '').match(/whats?app[^0-9]{0,20}([0-9][0-9\s.-]{8,})/i);
+        const n = celularWhatsApp(cap?.[1] ?? '');
+        if (n) return n;
+      }
+      return '';
+    })();
+    const guardado = telefonos?.[dep?.id ?? '']?.telefono ?? '';
+    const tel = deSuMensaje || celularWhatsApp(guardado || celularDe(dep));
+    if (!tel) {
+      alert('Este deportista no tiene un número de WhatsApp válido en su ficha.');
+      return;
+    }
+    /* El último mensaje que escribió el acudiente: eso es lo que se cita. */
+    const suyo = [...hilo].reverse().find(m => m.de === 'calidoso');
+    const respuesta = nuevoMsg.trim();
+    const texto =
+      `Buen día, ${conv.nombre}.\n\n` +
+      (suyo ? `Usted nos escribió:\n"${suyo.texto.trim()}"\n\n` : '') +
+      `RESPUESTA:\n${respuesta || ''}` +
+      `\n\nACADEMIA DE FÚTBOL FUTURO ANTIOQUIA`;
+    const esCelular = /Android|iPhone|iPad/i.test(navigator.userAgent || '');
+    const enlace = esCelular
+      ? `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`
+      : `https://web.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}`;
+    window.open(enlace, 'whatsappFA');
+  }
+
   /* ── Filtro de búsqueda + "solo pendientes" (profe / institución) ── */
   const convsFiltradas = conversaciones.filter(c => {
+    if (bandeja && c.bandeja !== bandeja) return false;
+    if (filtroProfe && c.profe !== filtroProfe) return false;
     if (soloPendientes && !clavesPendientes.has(c.key)) return false;
     const t = busqueda.trim().toLowerCase();
     if (!t) return true;
@@ -256,7 +444,7 @@ export default function MensajesPage() {
           )}
           <div className="text-right leading-tight hidden lg:block">
             <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-            <p className="text-white/75 text-[9px] font-semibold tracking-wide">CONECTA · GESTIONA · GANA</p>
+            <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
           </div>
         </div>
       </header>
@@ -303,6 +491,52 @@ export default function MensajesPage() {
                     Viendo solo pendientes. Vuelve a tocar el botón para ver todas.
                   </p>
                 )}
+
+                {/* LAS TRES BANDEJAS (dirección, 29/08/2026): al director, al
+                    área contable o al formador. La que esté prendida se pone
+                    naranja, como en toda la plataforma. */}
+                {!esProfe && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(['DIRECTOR', 'CONTABLE', 'FORMADOR'] as Bandeja[]).map(b => {
+                      const cuantos = conversaciones.filter(c => c.bandeja === b).length;
+                      const prendido = bandeja === b;
+                      return (
+                        <button key={b}
+                          onClick={() => { setBandeja(prendido ? '' : b); if (b !== 'FORMADOR') setFiltroProfe(''); }}
+                          title={`Ver solo los mensajes al ${b.toLowerCase()}`}
+                          className="text-[10.5px] font-black px-2 py-1 rounded-lg border"
+                          style={{
+                            background: prendido ? '#E0A33A' : 'transparent',
+                            borderColor: prendido ? '#E0A33A' : '#4A5568',
+                            color: '#ffffff',
+                          }}>
+                          {b} · {cuantos}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Y si son los del formador, por cuál formador. */}
+                {!esProfe && bandeja === 'FORMADOR' && (
+                  <select
+                    value={filtroProfe}
+                    onChange={e => setFiltroProfe(e.target.value)}
+                    title="Ver los mensajes de los deportistas de un formador"
+                    className="w-full text-[11px] font-black rounded-lg px-2 py-1 outline-none cursor-pointer"
+                    style={{
+                      background: filtroProfe ? '#E0A33A' : '#2B3547',
+                      border: `1px solid ${filtroProfe ? '#E0A33A' : '#4A5568'}`,
+                      color: '#ffffff',
+                    }}>
+                    <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS PROFES</option>
+                    {[...new Set(conversaciones.filter(c => c.bandeja === 'FORMADOR').map(c => c.profe).filter(Boolean))]
+                      .sort((a, b) => a.localeCompare(b, 'es'))
+                      .map(pr => (
+                        <option key={pr} value={pr} style={{ color: '#111827', backgroundColor: 'white' }}>{pr}</option>
+                      ))}
+                  </select>
+                )}
               </div>
             )}
             <div className="overflow-y-auto flex-1">
@@ -331,10 +565,22 @@ export default function MensajesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
                         <p className="text-sm font-semibold text-white truncate">{c.titulo}</p>
-                        {ultimo && <span className="text-[10px] text-white/40 flex-shrink-0">{horaCorta(ultimo.createdAt)}</span>}
+                        {ultimo && (
+                          <span className="text-[10px] text-white/40 flex-shrink-0 text-right leading-tight">
+                            {diaCorto(ultimo.createdAt)}<br />{horaCorta(ultimo.createdAt)}
+                          </span>
+                        )}
                       </div>
                       {!esCalidoso && c.codigo && (
-                        <p className="text-[10px] font-bold text-[#16a34a] mt-0.5 truncate">Código {c.codigo}</p>
+                        <p className="text-[10px] font-bold text-[#16a34a] mt-0.5 truncate">
+                          Código {c.codigo}
+                          {/* EL PROFE, EN LA LISTA (dirección, 29/08/2026): con
+                              el nombre de USUARIO —MARTIN, no "MARTIN MORA"—,
+                              que es como se le dice en toda la plataforma. */}
+                          {c.bandeja === 'FORMADOR' && c.profe && (
+                            <span style={{ color: '#5BE39B' }}>{'  ·  PROFE '}{c.profe}</span>
+                          )}
+                        </p>
                       )}
                       <p className="text-xs text-white/40 truncate mt-0.5">{ultimo ? ultimo.texto : c.subtitulo}</p>
                       {pend && (
@@ -366,11 +612,34 @@ export default function MensajesPage() {
                 <div className="min-w-0">
                   <p className="font-semibold text-white text-sm truncate">{conv.titulo}</p>
                   <p className="text-xs text-white/40 truncate">{conv.subtitulo}</p>
+                  {!esCalidoso && (
+                    <p className="text-[10.5px] font-black mt-0.5" style={{ color: '#5BE39B' }}>
+                      {conv.bandeja === 'FORMADOR'
+                        ? `MENSAJE AL FORMADOR${conv.profe ? ' · ' + conv.profe : ''}`
+                        : conv.bandeja === 'CONTABLE' ? 'MENSAJE AL ÁREA CONTABLE'
+                        : 'MENSAJE AL DIRECTOR'}
+                    </p>
+                  )}
                 </div>
                 {clavesPendientes.has(conv.key) && (
                   <span className="ml-auto bg-amber-400 text-[#064e1e] text-[10px] font-black px-2.5 py-1 rounded-full flex-shrink-0">
                     {esCalidoso ? 'ESPERANDO RESPUESTA' : 'FALTA RESPONDER'}
                   </span>
+                )}
+
+                {/* RESPONDER POR WHATSAPP (dirección, 29/08/2026): abre el chat
+                    del acudiente con lo que él escribió citado y la palabra
+                    RESPUESTA debajo, para escribirle de una. Si ya hay algo
+                    escrito en la caja de abajo, se manda eso mismo. */}
+                {!esCalidoso && (
+                  <button
+                    onClick={abrirWhatsApp}
+                    title="Responder por WhatsApp al acudiente"
+                    className={cn('ml-auto flex-shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-black text-white flex items-center gap-1.5',
+                      clavesPendientes.has(conv.key) && 'ml-2')}
+                    style={{ background: '#25D366' }}>
+                    WHATSAPP
+                  </button>
                 )}
               </div>
 
@@ -399,13 +668,36 @@ export default function MensajesPage() {
                           <p className="text-[10px] font-bold text-[#16a34a] mb-0.5">{m.de === 'profesor' ? 'Profesor' : 'Institución'}</p>
                         )}
                         <p className="whitespace-pre-wrap break-words">{m.texto}</p>
-                        <p className={cn('text-[10px] mt-1', yo ? 'text-white/60' : 'text-white/40')}>{horaCorta(m.createdAt)}</p>
+                        <p className={cn('text-[10px] font-bold mt-1', yo ? 'text-white/60' : 'text-white/40')}>{fechaHora(m.createdAt)}</p>
                       </div>
                     </div>
                   );
                 })}
                 <div ref={bottomRef} />
               </div>
+
+              {/* EL WHATSAPP, OBLIGATORIO PARA EL ACUDIENTE (dirección,
+                  29/08/2026). Se muestra solo a él; queda guardado. */}
+              {esCalidoso && (
+                <div className="px-3 pt-3 flex items-center gap-2">
+                  <span className="text-[11px] font-black text-white/60 shrink-0">MI WHATSAPP</span>
+                  <input
+                    value={miWhatsApp}
+                    onChange={e => setMiWhatsApp(e.target.value)}
+                    inputMode="numeric"
+                    placeholder="3113795701"
+                    className="flex-1 rounded-xl px-3 py-2 text-sm text-white outline-none"
+                    style={{
+                      background: '#2B3547',
+                      border: `1px solid ${celularWhatsApp(miWhatsApp) ? '#00B050' : '#E0A33A'}`,
+                    }} />
+                  {!celularWhatsApp(miWhatsApp) && (
+                    <span className="text-[10.5px] font-black" style={{ color: '#E0A33A' }}>
+                      OBLIGATORIO
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Input */}
               <div className="p-3 border-t border-[#4A5568] flex gap-2 items-end">

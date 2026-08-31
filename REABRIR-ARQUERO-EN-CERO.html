@@ -1,0 +1,136 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Reabrir los partidos con el arquero en cero</title>
+<style>
+:root{--lienzo:#333F50;--panel:#3C4759;--campo:#2B3547;--borde:#4A5568;--verde:#00B050;--ambar:#E0A33A}
+*{box-sizing:border-box;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{background:var(--lienzo);color:#fff;padding:18px;max-width:900px;margin:0 auto}
+h1{font-size:19px;font-weight:900}
+.sub{color:#ffffff8c;font-size:12.5px;margin-top:6px;line-height:1.6}
+.sub b{color:#fff}
+.caja{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:14px;margin-top:14px}
+ol{margin:0;padding-left:20px;font-size:13px;line-height:2}
+ol b{color:#5BE39B}
+textarea{width:100%;height:280px;background:var(--campo);border:1px solid var(--borde);border-radius:11px;
+ color:#fff;font-family:Consolas,monospace;font-size:11.5px;padding:11px;line-height:1.5;resize:vertical}
+button{border:0;border-radius:11px;padding:12px 18px;font-weight:900;font-size:13px;color:#fff;cursor:pointer}
+.b2{background:var(--verde)}
+.b1{background:var(--campo);border:1px solid var(--borde)}
+.fila{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.ok{color:#5BE39B;font-size:12.5px;font-weight:800}
+.aviso{border-radius:11px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-top:12px;
+ background:rgba(224,163,58,.14);border:1px solid var(--ambar)}
+.aviso b{color:var(--ambar)}
+</style></head><body>
+
+<h1>Pasar a A MEDIAS los partidos cerrados con el arquero en cero</h1>
+<p class="sub">
+Un partido marcado <b>TERMINADO</b> en el que el arquero que jugo quedo con <b>cero atajadas</b>
+casi siempre quiere decir que la planilla nunca se lleno. Esto los devuelve a <b>A MEDIAS</b>
+para que el formador los vuelva a trabajar.
+</p>
+<p class="sub">
+<b>No borra nada.</b> Todo lo que ya estaba escrito se queda igual: minutos, goles, tarjetas,
+calificaciones y marcador. Lo unico que cambia es el sello de cerrado.
+</p>
+
+<div class="aviso">
+<b>Antes que nada:</b> si Chrome te ofrece <b>traducir</b> la pagina de Supabase, dile que <b>NO</b>.
+La traduccion automatica danna esa pantalla y sale el error de &ldquo;una extension del navegador
+provoco un error&rdquo;.
+</div>
+
+<div class="caja">
+  <ol>
+    <li>Oprime <b>COPIAR EL TEXTO</b>.</li>
+    <li>Oprime <b>ABRIR SUPABASE</b>. Se abre una pagina en blanco para escribir.</li>
+    <li>Si Chrome ofrece traducir, escoge <b>No traducir</b>.</li>
+    <li>Haz clic dentro del cuadro grande y pega con <b>Ctrl + V</b>.</li>
+    <li>Oprime <b>RUN</b> (arriba a la derecha) o <b>Ctrl + Enter</b>.</li>
+    <li>Abajo te sale <b>la lista de los partidos que se reabrieron</b> y el total.</li>
+    <li>Vuelve a la plataforma y oprime <b>Ctrl + F5</b>.</li>
+  </ol>
+
+  <div class="fila">
+    <button class="b2" id="copiar">1 &middot; COPIAR EL TEXTO</button>
+    <button class="b1" id="abrir">2 &middot; ABRIR SUPABASE</button>
+    <span class="ok" id="listo"></span>
+  </div>
+</div>
+
+<div class="caja">
+  <textarea id="sql" readonly spellcheck="false">
+-- ===========================================================================
+--  PASAR A "A MEDIAS" LOS PARTIDOS CERRADOS CON EL ARQUERO EN CERO ATAJADAS
+--  Direccion, 31/08/2026
+--
+--  Busca los partidos que estan TERMINADO (definitivo) y en los que hay un
+--  arquero que aparece como Titular o Suplente con la columna ATA en cero o
+--  en blanco. Esos los devuelve a A MEDIAS.
+--
+--  NO BORRA NADA: solo quita el sello de cerrado. Todo lo escrito se queda.
+--  Se puede correr varias veces sin problema.
+-- ===========================================================================
+
+with reabiertos as (
+  update public.pospartido_planillas as p
+     set definitivo = false
+   where p.definitivo is true
+     and exists (
+           select 1
+             from jsonb_array_elements(
+                    case when jsonb_typeof(p.filas::jsonb) = 'array'
+                         then p.filas::jsonb
+                         else '[]'::jsonb end
+                  ) as f
+            where coalesce(f->>'posicion', '') ~* '(porter|arquer|golero)'
+              and coalesce(f->>'titular',  '') in ('Titular', 'Suplente')
+              and coalesce(
+                    nullif(regexp_replace(coalesce(f->>'ataja',''), '[^0-9]', '', 'g'), ''),
+                    '0'
+                  )::int <= 0
+         )
+  returning p.torneo_num, p.jornada, p.fecha, p.rival
+)
+select resultado, torneo, num_fecha, dia, rival
+  from (
+    select 1 as orden,
+           'PASADO A MEDIAS'::text  as resultado,
+           coalesce(torneo_num,'')::text as torneo,
+           coalesce(jornada,'')::text    as num_fecha,
+           coalesce(fecha,'')::text      as dia,
+           coalesce(rival,'')::text      as rival
+      from reabiertos
+    union all
+    select 2,
+           ('TOTAL: ' || (select count(*) from reabiertos)::text
+            || ' partido(s) devuelto(s) a A MEDIAS')::text,
+           ''::text, ''::text, ''::text, ''::text
+  ) t
+ order by orden, torneo, num_fecha;
+</textarea>
+</div>
+
+<p class="sub" style="margin-top:14px">
+Despues de esto, cuando el formador vuelva a cerrar uno de esos partidos, la plataforma le va a
+pedir el <b>breve resumen del juego</b> y le va a avisar si el arquero sigue en cero atajadas.
+</p>
+
+<script>
+const SQL = document.getElementById('sql');
+
+document.getElementById('copiar').onclick = async () => {
+  SQL.select();
+  let ok = false;
+  try { await navigator.clipboard.writeText(SQL.value); ok = true; }
+  catch { try { ok = document.execCommand('copy'); } catch {} }
+  document.getElementById('listo').textContent = ok
+    ? 'Copiado. Ahora abre Supabase y pega con Ctrl + V.'
+    : 'No se pudo copiar solo: seleccionalo con Ctrl + A y copia con Ctrl + C.';
+};
+
+document.getElementById('abrir').onclick = () => {
+  window.open('https://supabase.com/dashboard/project/fykdyalpuydkwfjqguip/sql/new', '_blank');
+};
+</script></body></html>

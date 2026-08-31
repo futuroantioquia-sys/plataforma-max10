@@ -104,7 +104,10 @@ export default function ControlInformesPage() {
     const map: Record<string, string> = {};
     profes.forEach(p => (p.proyectos ?? []).forEach(proy => {
       const k = (proy ?? '').trim().toUpperCase();
-      if (k) map[k] = (p.nombre && p.nombre.trim()) ? p.nombre.trim() : p.usuario;
+      /* SOLO EL NOMBRE DE USUARIO (dirección, 29/08/2026): "CASTRO", no
+         "ALEJANDRO CASTRO ESTRADA". Es como se le dice al profe en toda la
+         plataforma y así la columna no engorda la fila. */
+      if (k) map[k] = String(p.usuario ?? '').trim().toUpperCase();
     }));
     return map;
   }, [profes]);
@@ -221,23 +224,41 @@ export default function ControlInformesPage() {
   const totDeport = filtradas.length;
   const conInforme = filtradas.filter(f => f.total > 0).length;
   const sinInforme = totDeport - conInforme;
-  const totInformes = filtradas.reduce((a, f) => a + f.total, 0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const totInformes = filtradas.reduce((a, f) => a + f.total, 0);   // por si vuelve
+  /* CUÁNTOS TIENEN EL PRIMERO Y CUÁNTOS EL SEGUNDO (dirección, 29/08/2026):
+     el total solo no decía en cuál de los dos informes va el atraso. */
+  const conInf1 = filtradas.filter(f => !!f.inf1).length;
+  const conInf2 = filtradas.filter(f => !!f.inf2).length;
 
   const hayFiltro = !!(fPrograma || fProfe || fProyecto || fEstado || q);
   function limpiar() { setFPrograma(''); setFProfe(''); setFProyecto(''); setFEstado(''); setQ(''); }
 
-  const th: React.CSSProperties = { background: '#6d28d9', color: '#fff', border: '1px solid #fff', padding: '9px 10px', fontSize: 11, fontWeight: 900, letterSpacing: '0.03em', textAlign: 'left', whiteSpace: 'nowrap' };
-  const td: React.CSSProperties = { border: '1px solid #ede9fe', padding: '7px 10px', fontSize: 13, color: '#111827', whiteSpace: 'nowrap' };
-  const selCls = 'w-full text-sm border border-[#4A5568] rounded-xl px-3 py-2 bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-purple-400';
+  /* DISEÑO DE LA CASA (dirección, 29/08/2026): gris y verde, como todos los
+     demás módulos. Antes esta pantalla era morada y desentonaba. */
+  const th: React.CSSProperties = { background: '#00B050', color: '#fff', border: '1px solid #fff', padding: '9px 10px', fontSize: 11, fontWeight: 900, letterSpacing: '0.03em', textAlign: 'left', whiteSpace: 'nowrap' };
+  const td: React.CSSProperties = { background: '#2B3547', border: '1px solid #ffffff', padding: '7px 10px', fontSize: 13, color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap' };
+  /** EL BOTÓN DE FILTRO ESTÁNDAR DE LA APP: transparente con borde blanco,
+   *  y NARANJA cuando está filtrando. — dirección, 29/08/2026 */
+  const botonFiltro = (encendido: boolean): React.CSSProperties => ({
+    background: encendido ? '#E0A33A' : 'transparent',
+    border: `1px solid ${encendido ? '#E0A33A' : 'rgba(255,255,255,.6)'}`,
+    color: '#ffffff',
+    height: 32,
+  });
+  const opcion: React.CSSProperties = { color: '#111827', backgroundColor: 'white' };
+
+  const selCls = 'w-full text-sm border border-[#4A5568] rounded-xl px-3 py-2 bg-[#3C4759] focus:outline-none focus:ring-2 focus:ring-[#00B050]';
 
   function chipInf(val: string) {
-    if (val) return <span className="inline-block bg-green-100 text-green-800 border border-[rgba(0,176,80,.45)] text-[11px] font-black px-2 py-0.5 rounded-md">✓ {val}</span>;
+    if (val) return <span className="inline-block text-[#5BE39B] border border-[rgba(0,176,80,.45)] text-[11px] font-black px-2 py-0.5 rounded-md" style={{ background: 'rgba(0,176,80,.18)' }}>✓ {val}</span>;
     return <span className="inline-block text-white/40 text-[13px] font-black">—</span>;
   }
 
   return (
     <div className="min-h-screen bg-[#333F50]">
-      <header className="bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20">
+      <header className="px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20"
+        style={{ background: 'linear-gradient(to right, #333F50, #0EA142)' }}>
         <button onClick={() => { window.location.href = '/dashboard'; }} title="Volver al menú principal" className="text-white/80 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <ClipboardList className="w-6 h-6 text-white" />
         <div className="flex-1 min-w-0">
@@ -246,67 +267,97 @@ export default function ControlInformesPage() {
         </div>
         {cargandoInf && <span className="text-white/70 text-[11px] font-bold hidden sm:inline">cargando informes…</span>}
         <button onClick={cargar} title="Actualizar" className="text-white/80 hover:text-white transition"><RefreshCw className={`w-4 h-4 ${cargandoInf ? 'animate-spin' : ''}`} /></button>
+        {/* EL LOGO, COMO EN TODOS LOS MÓDULOS (dirección, 29/08/2026). */}
+        <div className="hidden sm:flex flex-col items-end flex-shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
+          <p className="text-white/80 text-[9px] font-semibold tracking-wide mt-0.5 text-right leading-tight">
+            CONECTA · GESTIONA · GANA
+          </p>
+        </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-3 py-4 space-y-4">
-        {/* Filtros */}
-        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Programa</label>
-              <select value={fPrograma} onChange={e => setFPrograma(e.target.value)} className={selCls}>
-                <option value="">Todos</option>
-                {programas.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Proyecto</label>
-              <select value={fProyecto} onChange={e => setFProyecto(e.target.value)} className={selCls}>
-                <option value="">Todos</option>
-                {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Formador (profe)</label>
-              <select value={fProfe} onChange={e => setFProfe(e.target.value)} className={selCls}>
-                <option value="">Todos</option>
-                {formadores.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Estado</label>
-              <select value={fEstado} onChange={e => setFEstado(e.target.value)} className={selCls}>
-                <option value="">Todos</option>
-                <option value="con">Con informe</option>
-                <option value="sin">Sin informe</option>
-              </select>
-            </div>
+      {/* MÁS ANCHO (dirección, 29/08/2026): con seis columnas de datos, el
+          cuadro no cabía en 6xl y la última —VER— quedaba cortada. */}
+      <main className="mx-auto px-3 py-4 space-y-4 w-full" style={{ maxWidth: 1550 }}>
+        {/* ── LOS FILTROS, EN LA BARRA VERDE ────────────────────────────────
+            DISEÑO ESTÁNDAR DE LA APP (dirección, 29/08/2026): todos los
+            filtros de todos los módulos se ven igual —barra verde, botones
+            transparentes con borde blanco y letra blanca, y NARANJA el que
+            esté filtrando en ese momento—. Así uno sabe de una dónde está
+            parado, sin importar en qué pantalla esté. */}
+        <div className="rounded-2xl px-4 py-3 flex flex-wrap items-center gap-2"
+             style={{ background: 'linear-gradient(to right, #05502A, #00B050)' }}>
+          <ClipboardList className="w-5 h-5 text-white shrink-0" />
+          <div className="min-w-0 mr-2">
+            <h2 className="text-white font-black text-[15px] tracking-wide leading-tight">INFORMES</h2>
+            <p className="text-white/75 text-[11px] font-semibold">{filas.length} deportistas</p>
           </div>
-          <div className="flex items-center gap-2 mt-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por código o nombre…"
-                className="w-full pl-9 pr-3 py-2 border border-[#4A5568] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400" />
+
+          <div className="flex flex-wrap items-center gap-2 ml-auto">
+            <select value={fPrograma} onChange={e => setFPrograma(e.target.value)}
+              title="Ver solo un programa" style={botonFiltro(!!fPrograma)}
+              className="rounded-lg px-2 text-[11.5px] font-black outline-none cursor-pointer">
+              <option value="" style={opcion}>TODOS LOS PROGRAMAS</option>
+              {programas.map(p => <option key={p} value={p} style={opcion}>{p}</option>)}
+            </select>
+
+            <select value={fProyecto} onChange={e => setFProyecto(e.target.value)}
+              title="Ver solo un proyecto" style={botonFiltro(!!fProyecto)}
+              className="rounded-lg px-2 text-[11.5px] font-black outline-none cursor-pointer">
+              <option value="" style={opcion}>TODOS LOS PROYECTOS</option>
+              {proyectos.map(p => <option key={p} value={p} style={opcion}>{p}</option>)}
+            </select>
+
+            <select value={fProfe} onChange={e => setFProfe(e.target.value)}
+              title="Ver solo los de un formador" style={botonFiltro(!!fProfe)}
+              className="rounded-lg px-2 text-[11.5px] font-black outline-none cursor-pointer">
+              <option value="" style={opcion}>TODOS LOS PROFES</option>
+              {formadores.map(p => <option key={p} value={p} style={opcion}>{p}</option>)}
+            </select>
+
+            <select value={fEstado} onChange={e => setFEstado(e.target.value)}
+              title="Con informe o sin informe" style={botonFiltro(!!fEstado)}
+              className="rounded-lg px-2 text-[11.5px] font-black outline-none cursor-pointer">
+              <option value="" style={opcion}>TODOS LOS ESTADOS</option>
+              <option value="con" style={opcion}>CON INFORME</option>
+              <option value="sin" style={opcion}>SIN INFORME</option>
+            </select>
+
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
+                      style={{ color: q ? '#ffffff' : 'rgba(255,255,255,.7)' }} />
+              <input value={q} onChange={e => setQ(e.target.value)}
+                placeholder="BUSCAR CÓDIGO O NOMBRE"
+                style={{ ...botonFiltro(!!q), width: 250 }}
+                className="rounded-lg pl-8 pr-2 text-[11.5px] font-black outline-none
+                  placeholder:text-white/60 placeholder:font-black" />
             </div>
+
             {hayFiltro && (
-              <button onClick={limpiar} className="flex items-center gap-1 text-[12px] font-bold text-white/70 hover:text-white border border-[#4A5568] rounded-xl px-3 py-2">
-                <X className="w-3.5 h-3.5" /> Limpiar
+              <button onClick={limpiar} title="Quitar los filtros"
+                style={botonFiltro(false)}
+                className="rounded-lg px-2.5 flex items-center gap-1 text-[11px] font-black">
+                <X className="w-3.5 h-3.5" /> VER TODOS
               </button>
             )}
           </div>
         </div>
 
         {/* Resumen */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-5 gap-2">
           {[
             { n: totDeport,    l: 'Activos',       c: 'text-white' },
             { n: conInforme,   l: 'Con informe',   c: 'text-[#5BE39B]' },
             { n: sinInforme,   l: 'Sin informe',   c: 'text-[#F08A87]' },
-            { n: totInformes,  l: 'Total informes', c: 'text-purple-700' },
+            { n: conInf1,      l: 'Inf 1',          c: 'text-[#5BE39B]' },
+            { n: conInf2,      l: 'Inf 2',          c: 'text-[#5BE39B]' },
+            /* "TOTAL INFORMES" SE QUITÓ POR AHORA (dirección, 29/08/2026):
+               con INF 1 e INF 2 se lee mejor dónde está el atraso. */
           ].map(s => (
-            <div key={s.l} className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-3 text-center">
-              <p className={`font-black text-2xl leading-none ${s.c}`}>{s.n}</p>
-              <p className="text-white/40 text-[10px] font-bold uppercase tracking-wide mt-1">{s.l}</p>
+            <div key={s.l} className="bg-[#3C4759] rounded-xl border border-[#4A5568] shadow-sm px-2 py-2 text-center">
+              <p className={`font-black text-xl leading-none ${s.c}`}>{s.n}</p>
+              <p className="text-white/40 text-[9px] font-bold uppercase tracking-wide mt-1 whitespace-nowrap">{s.l}</p>
             </div>
           ))}
         </div>
@@ -336,19 +387,22 @@ export default function ControlInformesPage() {
                 </thead>
                 <tbody>
                   {filtradas.map(f => (
-                    <tr key={f.id} className="hover:bg-purple-50/50">
-                      <td style={td}><span className="inline-block bg-green-100 text-green-800 border border-[rgba(0,176,80,.45)] text-[11px] font-black px-2 py-0.5 rounded-md">{f.estado || 'Activo'}</span></td>
-                      <td style={td}><span className="bg-purple-600 text-white text-[11px] font-black px-2 py-0.5 rounded-md">{f.codigo || '—'}</span></td>
-                      <td style={{ ...td, whiteSpace: 'normal', minWidth: 180 }}>
-                        <button onClick={() => router.push(`/alumnos/${f.id}?volver=${encodeURIComponent(urlRegreso())}`)} className="font-bold text-white hover:text-purple-700 text-left">{f.nombre}</button>
+                    <tr key={f.id} className="hover:brightness-110">
+                      <td style={td}><span className="inline-block text-[#5BE39B] border border-[rgba(0,176,80,.45)] text-[11px] font-black px-2 py-0.5 rounded-md" style={{ background: 'rgba(0,176,80,.18)' }}>{f.estado || 'Activo'}</span></td>
+                      <td style={td}><span className="text-white text-[11px] font-black px-2 py-0.5 rounded-md" style={{ background: '#00B050' }}>{f.codigo || '—'}</span></td>
+                      {/* TODAS LAS FILAS DEL MISMO ALTO (dirección, 29/08/2026):
+                          el nombre no se parte en dos renglones; la columna se
+                          hace ancha y punto. */}
+                      <td style={{ ...td, minWidth: 260 }}>
+                        <button onClick={() => router.push(`/alumnos/${f.id}?volver=${encodeURIComponent(urlRegreso())}`)} className="font-bold text-white hover:text-[#5BE39B] text-left">{f.nombre}</button>
                       </td>
                       <td style={td}>{f.programa || '—'}</td>
                       <td style={td}>{f.proyecto || '—'}</td>
-                      <td style={{ ...td, whiteSpace: 'normal' }}>{f.profe || <span className="text-white/40">sin asignar</span>}</td>
+                      <td style={{ ...td, minWidth: 140 }}>{f.profe || <span className="text-white/40">sin asignar</span>}</td>
                       <td style={{ ...td, textAlign: 'center' }}>{chipInf(f.inf1)}</td>
                       <td style={{ ...td, textAlign: 'center' }}>{chipInf(f.inf2)}</td>
                       <td style={{ ...td, textAlign: 'center' }}>
-                        <span className={`inline-block min-w-[28px] text-[12px] font-black px-2 py-0.5 rounded-md ${f.total > 0 ? 'bg-purple-100 text-purple-800' : 'bg-[#2B3547] text-white/40'}`}>{f.total}</span>
+                        <span className={`inline-block min-w-[28px] text-[12px] font-black px-2 py-0.5 rounded-md ${f.total > 0 ? 'bg-[rgba(0,176,80,.18)] text-[#5BE39B] border border-[rgba(0,176,80,.45)]' : 'bg-[#20293a] text-white/35'}`}>{f.total}</span>
                       </td>
                       <td style={{ ...td, textAlign: 'center' }}>
                         {f.total > 0 ? (
