@@ -122,7 +122,7 @@ export function InstalarApp() {
   }
 
   /** Copia la dirección para que la pegue en Safari. */
-  async function copiarEnlace() {
+  async function copiarEnlace(): Promise<boolean> {
     const url = window.location.origin;
     let ok = false;
     try { await navigator.clipboard.writeText(url); ok = true; }
@@ -137,6 +137,35 @@ export function InstalarApp() {
       } catch { /* ni modo: abajo se le muestra la dirección para que la escriba */ }
     }
     setCopiado(ok);
+    return ok;
+  }
+
+  /* ── UN SOLO BOTÓN PARA EL iPHONE (dirección, 31/08/2026) ────────────────
+     Antes aquí salían tres pasos numerados y un botón de copiar. La dirección
+     lo dijo sin rodeos: "pide muchas cosas enredadas". Y tenía razón: al papá
+     hay que darle UNA cosa que oprimir, no una lista.
+
+     Ahora el botón intenta abrir Safari de una. iOS entiende una dirección
+     que empiece por x-safari-https y se la pasa a Safari; unos navegadores lo
+     permiten y otros no, y no hay forma de saberlo de antemano. Entonces se
+     intenta, y si al segundo la pantalla SIGUE aquí —señal de que no abrió—
+     ahí sí se le copia el enlace y se le dice que lo pegue en Safari. Nunca
+     se queda sin salida, pero al que le funciona no le tocó leer nada. */
+  function abrirEnSafari() {
+    const url = window.location.origin;
+    let sigueAqui = true;
+    const seFue = () => { sigueAqui = false; };
+    window.addEventListener('pagehide', seFue);
+    window.addEventListener('blur', seFue);
+
+    try { window.location.href = url.replace(/^https?:\/\//, 'x-safari-https://'); }
+    catch { sigueAqui = true; }
+
+    setTimeout(() => {
+      window.removeEventListener('pagehide', seFue);
+      window.removeEventListener('blur', seFue);
+      if (sigueAqui && document.visibilityState === 'visible') copiarEnlace();
+    }, 1200);
   }
 
   /* ── Los textos de cada caso ─────────────────────────────────────────── */
@@ -145,7 +174,7 @@ export function InstalarApp() {
     : 'Descarga la app de Futuro Antioquia';
 
   const bajada =
-      modo === 'otro-ios' ? 'En iPhone solo se puede desde Safari. Es un momentico.'
+      modo === 'otro-ios' ? 'En iPhone solo Safari puede dejar el ícono. Un toque y listo.'
     : modo === 'safari'   ? 'No ocupa espacio y abre sola, sin buscar la dirección.'
     :                       'Queda el escudo en tu pantalla. No ocupa espacio.';
 
@@ -212,29 +241,24 @@ export function InstalarApp() {
         </div>
       )}
 
-      {/* 3 · iPhone con Chrome u otro: hay que pasarse a Safari. */}
+      {/* 3 · iPhone con Chrome u otro: un botón, y ya. */}
       {modo === 'otro-ios' && (
         <>
-          <div style={CAJA}>
-            <b style={VERDE}>1.</b> Copia el enlace con el botón de abajo.<br />
-            <b style={VERDE}>2.</b> Abre <b style={VERDE}>Safari</b> y pégalo en la barra de arriba.<br />
-            <b style={VERDE}>3.</b> Allá oprime <b style={VERDE}>Compartir</b> y luego{' '}
-            <b style={VERDE}>“Agregar a pantalla de inicio”</b>.
-          </div>
           <button
-            onClick={copiarEnlace}
+            onClick={abrirEnSafari}
             style={{
-              marginTop: 10, width: '100%', background: copiado ? '#20293a' : '#00B050',
-              border: copiado ? '1px solid #00B050' : 0, borderRadius: 12,
-              color: copiado ? '#5BE39B' : '#fff', fontWeight: 900, fontSize: 13.5,
-              letterSpacing: .5, padding: '13px 0', cursor: 'pointer',
+              marginTop: 11, width: '100%', background: '#00B050', border: 0, borderRadius: 12,
+              color: '#fff', fontWeight: 900, fontSize: 14, letterSpacing: .5,
+              padding: '13px 0', cursor: 'pointer',
             }}>
-            {copiado ? '✓ COPIADO · AHORA ÁBRELO EN SAFARI' : '📋 COPIAR EL ENLACE'}
+            ABRIR EN SAFARI
           </button>
+          {/* Solo si el botón no logró abrir Safari aparece la explicación. */}
           {copiado && (
-            <p style={{ color: 'rgba(255,255,255,.5)', fontSize: 11, textAlign: 'center', marginTop: 7 }}>
-              {typeof window !== 'undefined' ? window.location.host : ''}
-            </p>
+            <div style={{ ...CAJA, marginTop: 10 }}>
+              <b style={VERDE}>Enlace copiado.</b> Abre <b style={VERDE}>Safari</b>, pégalo arriba,
+              y allá oprime <b style={VERDE}>Compartir → “Agregar a pantalla de inicio”</b>.
+            </div>
           )}
         </>
       )}

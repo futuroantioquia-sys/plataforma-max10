@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { rutaAnterior } from '@/components/RastreoRuta';
 import { ArrowLeft, Cake, RefreshCw, Download, Search, CalendarDays, Eye, MessageCircle, Check, Phone, X } from 'lucide-react';
 import {
   getDeportistas, getIdsConFoto, getFotosPorIds, getCumpleEnviados, marcarCumpleEnviado,
@@ -214,6 +215,23 @@ function rrEn(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h:
 
 export default function CumpleanosPage() {
   const router = useRouter();
+
+  /* ── LA FLECHA DE ATRÁS DEVUELVE A DONDE ESTABA (dirección, 31/08/2026) ──
+     Antes esta flecha mandaba SIEMPRE al tablero, viniera uno de donde
+     viniera. Si estaba en Total Afiliados y entraba a Cumpleaños, al
+     devolverse aparecía en el tablero y tocaba volver a buscar el listado.
+
+     La plataforma ya lleva la cuenta de por dónde viene uno —lo hace el
+     RastreoRuta del layout, y así funcionan las fichas de los deportistas—,
+     así que aquí se usa lo mismo. Si por lo que sea no hay pantalla anterior
+     (entró directo escribiendo la dirección, o refrescó), se va al tablero
+     como antes: nunca se queda sin salida. */
+  function volverAtras() {
+    const aqui = typeof window !== 'undefined' ? window.location.pathname : '/cumpleanos';
+    const prev = rutaAnterior(aqui);
+    if (prev && !prev.startsWith('/cumpleanos')) { router.push(prev); return; }
+    router.push('/dashboard');
+  }
   const [deps, setDeps]     = useState<Deportista[]>([]);
   const [fotos, setFotos]   = useState<Record<string, string>>({});
   const [idsConFoto, setIdsConFoto] = useState<Set<string>>(new Set());
@@ -1235,7 +1253,7 @@ export default function CumpleanosPage() {
         .cumple-oscuro option { color: #111827; background: #ffffff; }
       `}</style>
       <header className="bg-gradient-to-r from-[#00B050] to-[#00B050] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20">
-        <button onClick={() => { window.location.href = '/dashboard'; }} title="Volver al menú principal" className="text-white/80 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
+        <button onClick={volverAtras} title="Volver a la pantalla anterior" className="text-white/80 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <Cake className="w-6 h-6 text-white" />
         <div className="flex-1 min-w-0">
           <h1 className="text-white font-black text-lg leading-tight">Cumpleaños</h1>

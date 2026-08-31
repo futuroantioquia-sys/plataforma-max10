@@ -26,8 +26,9 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Trophy, Plus, Trash2, Search, X, Check,
-  Loader2, AlertTriangle, Download, Save, CalendarPlus,
+  Loader2, AlertTriangle, Download, Save, CalendarPlus, Users,
 } from 'lucide-react';
+import { getDeportistas, type Deportista } from '@/lib/db';
 import { useSoloLectura } from '@/lib/permisos';
 import {
   getCuadro, guardarFilas, borrarFila, nuevoId,
@@ -48,6 +49,64 @@ const GRIS   = '#7C879A';
 const BLANCO = '1px solid #ffffff';
 
 type Estado = 'cargando' | 'sin-tabla' | 'listo';
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VER EL EQUIPO DE CADA TORNEO  ·  dirección, 31/08/2026
+
+   "Que en Torneos nos aparezcan los deportistas que están agregados, un VER
+   EQUIPO en cada renglón para examinar, ya que al parecer cargamos mal
+   algunos deportistas."
+
+   El deportista NO se guarda dentro del torneo: es al revés. Cada ficha tiene
+   cuatro casillas de competencia (C1 a C4) y ahí queda escrito el NÚMERO del
+   torneo que juega. Entonces para armar el equipo de un torneo hay que leer
+   todas las fichas y recoger las que tengan ese número.
+
+   Y ya que se está mirando, la pantalla misma señala lo que huele mal, que es
+   justo lo que hay que cazar:
+     · el deportista de otro PROGRAMA metido en este torneo
+     · el de otra CATEGORÍA (un SUB 9 en un torneo SUB 8)
+     · el RETIRADO o PAUSADO que quedó cargado
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/** Lee una casilla de la ficha por el nombre de la columna. */
+function casillaDe(dep: Deportista, rx: RegExp): string {
+  const cols = (dep as any)?._columnas ?? {};
+  const k = Object.keys(cols).find(k => rx.test(k.trim()));
+  return k ? String(cols[k] ?? '') : '';
+}
+
+/** Las cuatro casillas de competencia de la ficha (C1..C4). */
+const RX_COMPETENCIAS = [
+  /^compite$|torneo.?1|^c\s*1$/i,
+  /torneo.?2|^c\s*2$/i,
+  /torneo.?3|^c\s*3$/i,
+  /torneo.?4|^c\s*4$/i,
+];
+const CLAVES_VIRTUALES = ['__TORNEO1__', '__TORNEO2__', '__TORNEO3__', '__TORNEO4__'];
+
+/** Los números de torneo que tiene puestos el deportista en su ficha. */
+function torneosDelDeportista(dep: Deportista): number[] {
+  const cols = (dep as any)?._columnas ?? {};
+  return RX_COMPETENCIAS
+    .map((rx, i) => casillaDe(dep, rx) || String(cols[CLAVES_VIRTUALES[i]] ?? ''))
+    .map(v => parseInt(String(v).trim(), 10))
+    .filter(n => Number.isFinite(n) && n > 0);
+}
+
+/** Sin tildes y en mayúsculas, para poder comparar sin sorpresas. */
+function norm(v: any): string {
+  return limpiar(v).toUpperCase()
+    .replace(/[ÁÀÄÂ]/g, 'A').replace(/[ÉÈËÊ]/g, 'E').replace(/[ÍÌÏÎ]/g, 'I')
+    .replace(/[ÓÒÖÔ]/g, 'O').replace(/[ÚÙÜÛ]/g, 'U').replace(/Ñ/g, 'N')
+    .replace(/\s+/g, ' ').trim();
+}
+
+/** "DESARROLLO SUB 9" → "9". Vacío si no dice ninguna. */
+function subDe(v: any): string {
+  const m = norm(v).match(/SUB\s*(\d+)/);
+  return m ? m[1] : '';
+}
 
 /* ── Una casilla que se escribe encima ───────────────────────────────────── */
 /* ── LA CASILLA DE PROGRAMA ───────────────────────────────────────────────
@@ -286,6 +345,17 @@ export default function TorneosPage() {
      listas se escoge de lo que ya existe en el cuadro. */
   const [filtroFormador, setFiltroFormador] = useState('');
   const [filtroTorneoCuadro, setFiltroTorneoCuadro] = useState('');
+  /* Tercer filtro, aparte de los otros dos (dirección, 31/08/2026). */
+  const [filtroPrograma, setFiltroPrograma] = useState('');
+
+  /* ── El equipo de cada torneo ───────────────────────────────────────────
+     Las fichas se piden UNA vez y por detrás: el cuadro abre de una, y los
+     equipos van apareciendo cuando lleguen. Si no llegan, el cuadro sigue
+     sirviendo igual que siempre. */
+  const [deportistas, setDeportistas] = useState<Deportista[] | null>(null);
+  const [fallaDeps, setFallaDeps]     = useState('');
+  /** El renglón cuyo equipo se está mirando. */
+  const [verEquipo, setVerEquipo]     = useState<{ f: FilaTorneo; n: number } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado]   = useState(false);
   const [error, setError]     = useState('');
@@ -504,10 +574,76 @@ export default function TorneosPage() {
       .map((f, i) => ({ f, n: i + 1 }))
       .filter(({ f }) => !filtroFormador || igual(f.formador, filtroFormador))
       .filter(({ f }) => !filtroTorneoCuadro || igual(f.torneo, filtroTorneoCuadro))
+      .filter(({ f }) => !filtroPrograma || igual(f.programa, filtroPrograma))
       .filter(({ f }) => !q ||
         `${f.torneo} ${f.programa} ${f.categoria} ${f.nombre} ${f.formador}`
           .toUpperCase().includes(q));
-  }, [filas, buscar, filtroFormador, filtroTorneoCuadro]);
+  }, [filas, buscar, filtroFormador, filtroTorneoCuadro, filtroPrograma]);
+
+  /* ── Se traen las fichas una sola vez, por detrás ───────────────────────
+     No se espera a esto para pintar el cuadro: el # de deportistas aparece
+     en cada renglón cuando llegue. */
+  useEffect(() => {
+    if (estado !== 'listo' || deportistas !== null) return;
+    let vivo = true;
+    getDeportistas()
+      .then(ds => { if (vivo) setDeportistas(Array.isArray(ds) ? ds : []); })
+      .catch(() => {
+        if (!vivo) return;
+        setDeportistas([]);
+        setFallaDeps('No se pudieron traer las fichas de los deportistas. Vuelve a entrar a la pantalla.');
+      });
+    return () => { vivo = false; };
+  }, [estado, deportistas]);
+
+  /** Número de torneo → los deportistas que lo tienen escrito en su ficha. */
+  const equipoPorTorneo = useMemo(() => {
+    const m = new Map<number, Deportista[]>();
+    (deportistas ?? []).forEach(d => {
+      torneosDelDeportista(d).forEach(n => {
+        const y = m.get(n);
+        if (y) y.push(d); else m.set(n, [d]);
+      });
+    });
+    /* Ordenados por código, igual que en Total Afiliados. */
+    m.forEach(lista => lista.sort((a, b) => {
+      const ca = parseInt(casillaDe(a, /^c[oó]d/i).replace(/\D/g, ''), 10);
+      const cb = parseInt(casillaDe(b, /^c[oó]d/i).replace(/\D/g, ''), 10);
+      if (Number.isFinite(ca) && Number.isFinite(cb) && ca !== cb) return ca - cb;
+      return norm((a as any)._nombre).localeCompare(norm((b as any)._nombre), 'es');
+    }));
+    return m;
+  }, [deportistas]);
+
+  /**
+   * Revisa a un deportista contra el torneo donde está metido y devuelve los
+   * avisos, en cristiano. Lista vacía = está donde debe estar.
+   */
+  function avisosDe(dep: Deportista, f: FilaTorneo): string[] {
+    const avisos: string[] = [];
+
+    const est = casillaDe(dep, /^estado$/i);
+    /* "SOLICITA RETIRO" NO es estar retirado: está en estudio y sigue
+       entrenando. Es la misma regla de Total Afiliados y del pospartido. */
+    if (est && !/solicit/i.test(est) && /retir|pausa|inactiv/i.test(est)) {
+      avisos.push(norm(est) || 'RETIRADO');
+    }
+
+    const progDep = norm(casillaDe(dep, /^programa$/i));
+    const progTor = norm(f.programa);
+    if (progDep && progTor && !progDep.includes(progTor) && !progTor.includes(progDep)) {
+      avisos.push(`ES DE ${progDep}`);
+    }
+
+    /* La categoría se compara por el número del SUB, no por el texto: así
+       "SUB 1" no se confunde con "SUB 10". El proyecto de la ficha sirve de
+       respaldo cuando la casilla de categoría viene vacía. */
+    const subDep = subDe(casillaDe(dep, /^categor/i)) || subDe(casillaDe(dep, /^proy/i));
+    const subTor = subDe(f.categoria);
+    if (subDep && subTor && subDep !== subTor) avisos.push(`ES SUB ${subDep}`);
+
+    return avisos;
+  }
 
   const torneosDistintos = useMemo(
     () => new Set(filas.map(f => limpiar(f.torneo).toUpperCase()).filter(Boolean)).size,
@@ -679,6 +815,26 @@ export default function TorneosPage() {
                 ))}
               </select>
 
+              {/* PROGRAMA — el tercer filtro, en su propio botón
+                  (dirección, 31/08/2026). Se prende en ámbar como los otros. */}
+              <select
+                value={filtroPrograma}
+                onChange={e => setFiltroPrograma(e.target.value)}
+                title="Ver solo los equipos de un programa"
+                style={{
+                  height: 36,
+                  background: filtroPrograma ? AMBAR : CAMPO,
+                  border: `1px solid ${filtroPrograma ? AMBAR : BORDE}`,
+                }}
+                className="shrink-0 rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer">
+                <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS PROGRAMAS</option>
+                {sugerencias.programa.map(t => (
+                  <option key={t} value={String(t).toUpperCase()} style={{ color: '#111827', backgroundColor: 'white' }}>
+                    {String(t).toUpperCase()}
+                  </option>
+                ))}
+              </select>
+
               <select
                 value={filtroFormador}
                 onChange={e => setFiltroFormador(e.target.value)}
@@ -796,6 +952,7 @@ export default function TorneosPage() {
                       { h: 'NOMBRE', w: 150 },
                       { h: 'FORMADOR', w: 165 },
                       { h: 'VALOR DEL TORNEO', w: 140 },
+                      { h: 'EQUIPO', w: 104 },
                       { h: '', w: 52 },
                     ].map((c, i) => (
                       <th key={i}
@@ -864,6 +1021,46 @@ export default function TorneosPage() {
                         <CasillaPlata valor={f.valor} bloqueada={soloLectura}
                           onChange={n => editar(f.id, 'valor', n)} />
                       </td>
+                      {/* ── VER EQUIPO ────────────────────────────────────
+                          Cuántos deportistas tienen escrito ESTE número de
+                          torneo en su ficha, y cuántos de esos traen algún
+                          aviso. En cero se pinta ámbar: un torneo sin nadie
+                          cargado casi siempre es un error. */}
+                      <td className="px-1 py-[5px] text-center"
+                        style={{ borderRight: BLANCO, borderBottom: BLANCO, background: CAMPO }}>
+                        {(() => {
+                          if (deportistas === null) {
+                            return <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" style={{ color: GRIS }} />;
+                          }
+                          const equipo = equipoPorTorneo.get(n) ?? [];
+                          const conAviso = equipo.filter(d => avisosDe(d, f).length > 0).length;
+                          const vacio = equipo.length === 0;
+                          return (
+                            <button
+                              onClick={() => setVerEquipo({ f, n })}
+                              title={vacio
+                                ? 'Este torneo no tiene ningún deportista cargado'
+                                : `Ver los ${equipo.length} deportistas de este torneo`}
+                              className="rounded-lg px-2 mx-auto flex items-center gap-1.5 transition hover:brightness-125"
+                              style={{
+                                height: 28,
+                                background: PANEL,
+                                border: `1px solid ${vacio ? AMBAR : conAviso ? ROJO : BORDE}`,
+                              }}>
+                              <Users className="w-3.5 h-3.5" style={{ color: vacio ? AMBAR : '#fff' }} />
+                              <span className="text-[11.5px] font-black" style={{ color: vacio ? AMBAR : '#fff' }}>
+                                {equipo.length}
+                              </span>
+                              {conAviso > 0 && (
+                                <span className="text-[10px] font-black rounded px-1"
+                                  style={{ background: ROJO, color: '#fff' }}>
+                                  {conAviso}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })()}
+                      </td>
                       {/* Eliminar */}
                       <td className="px-1 py-[5px]" style={{ borderRight: BLANCO, borderBottom: BLANCO, background: CAMPO }}>
                         {!soloLectura && (
@@ -880,7 +1077,7 @@ export default function TorneosPage() {
                   ))}
                   {visibles.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-10 text-center text-white/45 text-[13px] font-semibold"
+                      <td colSpan={10} className="py-10 text-center text-white/45 text-[13px] font-semibold"
                         style={{ background: PANEL }}>
                         Ningún torneo coincide con “{buscar}”.
                       </td>
@@ -927,6 +1124,122 @@ export default function TorneosPage() {
               </div>
             )}
           </>
+        )}
+
+        {/* ══ LA VENTANA DEL EQUIPO ══════════════════════════════════════════
+            Los deportistas que tienen ESE número de torneo escrito en su
+            ficha. Arriba se avisa cuántos salieron con algo raro, y esos
+            quedan de primeros para no tener que buscarlos. — 31/08/2026 */}
+        {verEquipo && (() => {
+          const { f, n } = verEquipo;
+          const equipo = equipoPorTorneo.get(n) ?? [];
+          const conAvisos = equipo
+            .map(d => ({ d, avisos: avisosDe(d, f) }))
+            .sort((a, b) => b.avisos.length - a.avisos.length);
+          const cuantosMal = conAvisos.filter(x => x.avisos.length > 0).length;
+          const nombreTorneo = [f.torneo, f.programa, f.categoria, f.nombre]
+            .map(limpiar).filter(Boolean).join(' · ');
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,.65)' }}
+              onClick={() => setVerEquipo(null)}>
+              <div className="rounded-2xl w-full max-w-2xl flex flex-col"
+                style={{ background: PANEL, border: `1px solid ${BORDE}`, maxHeight: '86vh' }}
+                onClick={e => e.stopPropagation()}>
+
+                {/* Encabezado */}
+                <div className="px-5 py-4 flex items-start gap-3 shrink-0"
+                  style={{ background: `linear-gradient(to right, ${LIENZO}, #0EA142)`, borderRadius: '15px 15px 0 0' }}>
+                  <Users className="w-5 h-5 text-white shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-white font-black text-[15px] leading-tight">
+                      TORNEO {n} · {equipo.length} {equipo.length === 1 ? 'DEPORTISTA' : 'DEPORTISTAS'}
+                    </h3>
+                    <p className="text-white/75 text-[12px] font-semibold mt-1 leading-snug">{nombreTorneo || '—'}</p>
+                  </div>
+                  <button onClick={() => setVerEquipo(null)} className="shrink-0 text-white/70 hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* El resumen: lo primero que se quiere saber */}
+                <div className="px-5 py-3 shrink-0" style={{ borderBottom: `1px solid ${BORDE}` }}>
+                  {equipo.length === 0 ? (
+                    <p className="text-[12.5px] font-bold leading-relaxed" style={{ color: AMBAR }}>
+                      Ningún deportista tiene el número {n} en su ficha. O el torneo todavía no se ha
+                      cargado, o se cargó con otro número.
+                    </p>
+                  ) : cuantosMal === 0 ? (
+                    <p className="text-[12.5px] font-bold" style={{ color: '#5BE39B' }}>
+                      ✓ Los {equipo.length} están donde deben estar.
+                    </p>
+                  ) : (
+                    <p className="text-[12.5px] font-bold leading-relaxed" style={{ color: ROJO }}>
+                      ⚠ {cuantosMal} {cuantosMal === 1 ? 'deportista no cuadra' : 'deportistas no cuadran'} con
+                      este torneo. Van de primeros, marcados en rojo.
+                    </p>
+                  )}
+                </div>
+
+                {/* La lista */}
+                <div className="overflow-y-auto px-4 py-3" style={{ background: LIENZO }}>
+                  {conAvisos.map(({ d, avisos }, i) => {
+                    const mal = avisos.length > 0;
+                    return (
+                      <div key={(d as any).id ?? i}
+                        className="rounded-xl px-3 py-2.5 mb-2 flex items-center gap-3"
+                        style={{ background: PANEL, border: `1px solid ${mal ? ROJO : BORDE}` }}>
+                        <span className="rounded-md px-2 py-0.5 text-white font-black text-[11px] shrink-0"
+                          style={{ background: mal ? ROJO : VERDE }}>
+                          {limpiar(casillaDe(d, /^c[oó]d/i)) || '—'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-black text-[12.5px] leading-tight truncate">
+                            {limpiar((d as any)._nombre) || '—'}
+                          </p>
+                          <p className="text-white/50 text-[11px] font-semibold mt-0.5 truncate">
+                            {[casillaDe(d, /^programa$/i), casillaDe(d, /^categor/i) || casillaDe(d, /^proy/i)]
+                              .map(limpiar).filter(Boolean).join(' · ') || 'sin programa ni categoría en la ficha'}
+                          </p>
+                        </div>
+                        {mal && (
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            {avisos.map(a => (
+                              <span key={a} className="rounded px-1.5 py-0.5 text-[9.5px] font-black whitespace-nowrap"
+                                style={{ background: 'rgba(192,80,77,.22)', color: '#F08A87', border: `1px solid ${ROJO}` }}>
+                                {a}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pie: cómo se corrige */}
+                <div className="px-5 py-3 shrink-0" style={{ borderTop: `1px solid ${BORDE}`, borderRadius: '0 0 15px 15px' }}>
+                  <p className="text-white/45 text-[11px] font-semibold leading-relaxed">
+                    Esto sale de las fichas: cada deportista lleva el número del torneo en sus casillas de
+                    competencia. Para sacar o cambiar a alguien se corrige en <b className="text-white/70">su ficha</b>,
+                    no aquí.
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {!!fallaDeps && (
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 rounded-xl px-4 py-2.5 flex items-center gap-2"
+            style={{ background: PANEL, border: `1px solid ${AMBAR}` }}>
+            <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: AMBAR }} />
+            <span className="text-white text-[12px] font-semibold">{fallaDeps}</span>
+            <button onClick={() => setFallaDeps('')} className="shrink-0 text-white/50 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         )}
       </main>
     </div>
