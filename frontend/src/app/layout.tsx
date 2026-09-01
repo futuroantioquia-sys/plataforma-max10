@@ -4,6 +4,7 @@ import { BotonInicioFlotante } from '@/components/BotonInicioFlotante';
 import { AvisoMantenimiento } from '@/components/AvisoMantenimiento';
 import { RastreoRuta } from '@/components/RastreoRuta';
 import { InstalarApp } from '@/components/InstalarApp';
+import { AvisoVersion } from '@/components/AvisoVersion';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], preload: false, display: 'swap' });
@@ -46,6 +47,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <BotonInicioFlotante />
         <AvisoMantenimiento />
         <InstalarApp />
+        {/* Dice qué versión está viendo cada quien, avisa cuando hay una nueva,
+            y detecta si alguien entró por una dirección vieja de Vercel que
+            nunca se actualiza. — dirección, 01/09/2026 */}
+        <AvisoVersion />
       </body>
     </html>
   );
