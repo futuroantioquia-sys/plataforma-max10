@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getDeportistas, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares, addCalificacionEscolar, renameCalificacionEscolar, deleteCalificacionEscolar, enviarMensaje, getEvaluaciones } from '@/lib/db';
+import { getDeportistas, getDeportistaPorId, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares, addCalificacionEscolar, renameCalificacionEscolar, deleteCalificacionEscolar, enviarMensaje, getEvaluaciones } from '@/lib/db';
 import { partirNombre } from '@/lib/nombres';
 import type { Deportista, CalificacionEscolar, Evaluacion } from '@/lib/db';
 import { createClient } from '@/lib/supabase/client';
@@ -222,7 +222,32 @@ export default function PerfilDeportista() {
   const inputCalifRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    getDeportistas().then(lista => {
+    /* ── VELOCIDAD AL ABRIR UN DEPORTISTA (02/09/2026) ──────────────────
+       Antes esta pantalla llamaba getDeportistas(), que baja las MÁS DE MIL
+       fichas de la academia —con todas sus columnas— para quedarse con UNA.
+       Y era justo esa llamada la que sostenía el "cargando": el formador no
+       veía nada hasta que terminara. En datos móviles eso son varios megas
+       para ver a un solo niño.
+
+       Ahora se pide únicamente esa ficha con getDeportistaPorId(), que ya
+       existía en db.ts justo para esto. La lista completa queda SOLO como
+       respaldo para el caso que esa función no puede resolver: los calidosos
+       con id temporal (dep-xxxx), que no es un uuid y hay que buscar por
+       nombre. Para todos los demás no se baja nunca. */
+    let vivo = true;
+    (async () => {
+      const unica = await getDeportistaPorId(id).catch(() => null);
+      if (!vivo) return;
+      if (unica) {
+        setDep(unica);
+        setEdits({ ...unica._columnas });
+        setLoading(false);
+        return;
+      }
+
+      // Respaldo: id temporal de calidoso, o no se pudo pedir la ficha suelta.
+      const lista = await getDeportistas().catch(() => [] as Deportista[]);
+      if (!vivo) return;
       let d = lista.find(x => x.id === id);
 
       // Para calidosos con IDs temporales (dep-xxxxx), buscar por nombre
@@ -242,7 +267,7 @@ export default function PerfilDeportista() {
 
       if (d) { setDep(d); setEdits({ ...d._columnas }); }
       setLoading(false);
-    });
+    })();
     getFoto(id).then(f => { if (f) setFoto(f); }).catch(() => {
       try { const fotos = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}'); if (fotos[id]) setFoto(fotos[id]); } catch {}
     });
@@ -264,6 +289,9 @@ export default function PerfilDeportista() {
     }).catch(() => {});
     // Calificaciones escolares (boletines) que sube el acudiente
     getCalificacionesEscolares(id).then(setCalifs).catch(() => {});
+
+    // Si el formador se sale antes de que llegue la respuesta, no se toca la pantalla.
+    return () => { vivo = false; };
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function subirDoc(e: React.ChangeEvent<HTMLInputElement>, tipo: 'ti' | 'rc' | 'eps') {
