@@ -1,0 +1,79 @@
+<meta charset="utf-8">
+<title>Destrabar la plataforma</title>
+<style>
+  *{box-sizing:border-box;margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif}
+  body{background:#333F50;color:#fff;min-height:100vh;display:flex;align-items:center;
+       justify-content:center;padding:24px}
+  .caja{max-width:520px;width:100%;background:#3C4759;border:1px solid #4A5568;
+        border-radius:16px;padding:28px 30px}
+  h1{font-size:22px;font-weight:900;margin-bottom:8px}
+  .sub{color:#7C879A;font-size:14.5px;line-height:1.5;margin-bottom:20px}
+  button{width:100%;background:#00B050;border:0;border-radius:12px;color:#fff;
+         font-weight:900;font-size:15px;padding:16px;cursor:pointer}
+  button:hover{filter:brightness(1.15)}
+  button:disabled{opacity:.5;cursor:default}
+  #log{margin-top:18px;background:#2B3547;border:1px solid #4A5568;border-radius:10px;
+       padding:14px 16px;font-size:14px;line-height:1.7;color:#E6EAF0;display:none}
+  .ok{color:#5BE39B;font-weight:800}
+  .mal{color:#E0A33A;font-weight:800}
+  .fin{margin-top:16px;font-size:15px;line-height:1.5;color:#5BE39B;font-weight:700;display:none}
+</style>
+
+<div class="caja">
+  <h1>Destrabar la plataforma</h1>
+  <p class="sub">Úsalo solo si la plataforma se queda mostrando
+    <b>&laquo;Sin conexión&raquo;</b> aunque el internet esté bueno.<br><br>
+    Esto borra el ayudante que la plataforma deja guardado en este navegador
+    (el que permite instalarla en el celular). No borra ningún dato tuyo:
+    ni deportistas, ni pagos, ni partidos. Todo eso vive en la base, no aquí.</p>
+
+  <button id="b" onclick="destrabar()">DESTRABAR AHORA</button>
+
+  <div id="log"></div>
+  <p class="fin" id="fin">Listo. Ahora abre la plataforma otra vez y haz <b>Ctrl + F5</b>.</p>
+</div>
+
+<script>
+function decir(txt, clase) {
+  var l = document.getElementById('log');
+  l.style.display = 'block';
+  l.innerHTML += '<div><span class="' + (clase || '') + '">' + txt + '</span></div>';
+}
+
+async function destrabar() {
+  var b = document.getElementById('b');
+  b.disabled = true;
+  b.textContent = 'TRABAJANDO…';
+
+  /* 1 · El ayudante (service worker) */
+  try {
+    if ('serviceWorker' in navigator) {
+      var regs = await navigator.serviceWorker.getRegistrations();
+      if (!regs.length) {
+        decir('No había ningún ayudante guardado.', 'mal');
+      } else {
+        for (var r of regs) { await r.unregister(); }
+        decir('✓ Ayudantes borrados: ' + regs.length, 'ok');
+      }
+    } else {
+      decir('Este navegador no usa ayudantes.', 'mal');
+    }
+  } catch (e) {
+    decir('No se pudo borrar el ayudante: ' + e, 'mal');
+  }
+
+  /* 2 · Las copias guardadas */
+  try {
+    if (window.caches) {
+      var nombres = await caches.keys();
+      for (var n of nombres) { await caches.delete(n); }
+      decir('✓ Copias guardadas borradas: ' + nombres.length, 'ok');
+    }
+  } catch (e) {
+    decir('No se pudieron borrar las copias: ' + e, 'mal');
+  }
+
+  b.textContent = 'YA QUEDÓ';
+  document.getElementById('fin').style.display = 'block';
+}
+</script>

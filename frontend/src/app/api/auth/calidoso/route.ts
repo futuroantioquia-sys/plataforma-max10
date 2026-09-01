@@ -26,6 +26,33 @@ const HDRS = {
   'Content-Type': 'application/json',
 };
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   ANOTAR EL INGRESO  ·  dirección, 31/08/2026
+
+   POR QUÉ SE VUELVE A PONER ESTO. El contador de ACCESOS TOTALES del tablero
+   llevaba congelado en 844 desde el 28 de agosto. La razón no era la base ni
+   el contador: era que NADIE estaba anotando los ingresos.
+
+   Antes el ingreso del calidoso se anotaba en la ruta vieja
+   /api/calidoso-login. Cuando la entrada se pasó a /api/auth/calidoso, la
+   anotación se quedó en la ruta vieja, que ya nadie usa. Desde ese día la
+   tabla de visitas no volvió a crecer.
+
+   Aquí queda de nuevo, en la ruta que sí se usa hoy. Regla de siempre: esto
+   NUNCA puede tumbar la entrada. Si falla la anotación, el papá entra igual.
+   ───────────────────────────────────────────────────────────────────────── */
+async function anotarIngreso(codigo: string, tipo: string): Promise<void> {
+  try {
+    await fetch(`${SB_URL}/rest/v1/visitas`, {
+      method:  'POST',
+      headers: { ...HDRS, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body:    JSON.stringify({ codigo: String(codigo ?? '').trim() || null, tipo }),
+      cache:   'no-store',
+    });
+  } catch { /* que no se anote una visita jamás puede impedir entrar */ }
+}
+
+
 /* ── Límite de intentos: 10 por IP cada 10 minutos ───────────────────────── */
 const INTENTOS = new Map<string, { n: number; hasta: number }>();
 const VENTANA_MS = 10 * 60 * 1000;
@@ -152,6 +179,9 @@ export async function POST(request: NextRequest) {
   // El id del deportista viaja DENTRO de la firma: así el servidor sabe de
   // quién es esta sesión y puede negar el acceso a los datos de otros niños.
   const firma = await crearFirma('deportista', id || undefined);
+  /* Queda anotado el ingreso ANTES de responder. — 31/08/2026 */
+  await anotarIngreso(codigo, 'calidoso');
+
   const res = NextResponse.json({ ok: true, id, nombre, retirado });
   const base = { path: '/', maxAge: DUR_SEG, sameSite: 'lax' as const, secure: true };
   res.cookies.set(COOKIE_LEGIBLE, 'deportista', base);

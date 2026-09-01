@@ -103,8 +103,46 @@ async function tipoGuardado(usuario: string): Promise<string | null> {
   } catch { return null; }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   ANOTAR EL INGRESO  ·  dirección, 31/08/2026
+
+   El contador de ACCESOS TOTALES del tablero llevaba congelado en 844 desde el
+   28 de agosto. No era la base ni el contador: era que NADIE estaba anotando
+   los ingresos. La anotación se había quedado en una ruta vieja que ya no se
+   usa, y desde entonces la tabla de visitas no volvió a crecer.
+
+   Aquí queda en `darSesion`, que es por donde pasan TODOS los ingresos de
+   administración y de los formadores — sea cual sea el camino que tomen. Así
+   no se puede volver a quedar por fuera.
+
+   Regla de siempre: esto NUNCA puede tumbar la entrada. Si falla la anotación,
+   la persona entra igual. */
+async function anotarIngreso(quien: string, tipo: string): Promise<void> {
+  try {
+    await fetch(`${SB_URL}/rest/v1/visitas`, {
+      method:  'POST',
+      headers: {
+        apikey: SB_KEY,
+        Authorization: `Bearer ${SB_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body:  JSON.stringify({ codigo: String(quien ?? '').trim().toUpperCase() || null, tipo }),
+      cache: 'no-store',
+    });
+  } catch { /* que no se anote una visita jamás puede impedir entrar */ }
+}
+
 async function darSesion(role: string, extra: Record<string, any> = {}) {
   const firma = await crearFirma(role);
+
+  /* Queda anotado el ingreso. El "quién" es el usuario si viene; si no, el rol.
+     El "tipo" dice si fue administración o un formador. — 31/08/2026 */
+  const tipo = role === 'profesor' ? 'profesor'
+             : role === '1'        ? 'administracion'
+             :                       String(role || 'app');
+  await anotarIngreso(String(extra?.usuario ?? extra?.nombre ?? ''), tipo);
+
   const res = NextResponse.json({ ok: true, ...extra });
   const base = { path: '/', maxAge: DUR_SEG, sameSite: 'lax' as const, secure: true };
   res.cookies.set(COOKIE_LEGIBLE, role, base);                       // legible (UI)

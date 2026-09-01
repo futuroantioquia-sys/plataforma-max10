@@ -3178,18 +3178,36 @@ export async function getVisitasPorDia(dias: number = 30): Promise<VisitaDia[]> 
   return [];
 }
 
-/** Totales rápidos: total de visitas y visitantes únicos (deportistas distintos que entraron). */
+/** Totales rápidos: total de visitas y visitantes únicos (deportistas distintos que entraron).
+ *
+ *  REGLA DE LA CASA (dirección, 31/08/2026): la base NUNCA entrega todo de un
+ *  solo viaje —corta en las primeras mil filas—. Los ÚNICOS se contaban
+ *  trayendo la lista entera y midiendo su largo, y eso iba derecho a
+ *  congelarse en 1.000 el día que se pasara de ahí: de 746 no falta tanto.
+ *
+ *  Ahora las dos cuentas se piden igual: no se traen las filas, se le pregunta
+ *  a la base CUÁNTAS hay y ella responde el número exacto. Es más rápido y no
+ *  tiene techo. */
 export async function getResumenVisitas(): Promise<{ total: number; unicos: number }> {
+  /** Le pregunta a la base cuántas filas tiene esa tabla. Sin traerlas. */
+  const contar = async (tabla: string, campo: string): Promise<number> => {
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/${tabla}?select=${campo}`,
+        { headers: { ...VISITAS_HDR, 'Prefer': 'count=exact', 'Range': '0-0' }, cache: 'no-store' },
+      );
+      if (!res.ok && res.status !== 206) return 0;
+      const cr = res.headers.get('content-range');   // "0-0/123"
+      if (cr && cr.includes('/')) return parseInt(cr.split('/')[1], 10) || 0;
+      return 0;
+    } catch { return 0; }
+  };
+
   try {
-    const [rTotal, rUnicos] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/visitas?select=id`, { headers: { ...VISITAS_HDR, 'Prefer': 'count=exact', 'Range': '0-0' } }),
-      fetch(`${SUPABASE_URL}/rest/v1/codigos_con_acceso?select=codigo`, { headers: VISITAS_HDR }),
+    const [total, unicos] = await Promise.all([
+      contar('visitas', 'id'),
+      contar('codigos_con_acceso', 'codigo'),
     ]);
-    let total = 0;
-    const cr = rTotal.headers.get('content-range'); // "0-0/123"
-    if (cr && cr.includes('/')) total = parseInt(cr.split('/')[1]) || 0;
-    let unicos = 0;
-    if (rUnicos.ok) { const d = await rUnicos.json(); if (Array.isArray(d)) unicos = d.length; }
     return { total, unicos };
   } catch { return { total: 0, unicos: 0 }; }
 }

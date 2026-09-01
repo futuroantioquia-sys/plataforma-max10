@@ -26,9 +26,13 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Trophy, Plus, Trash2, Search, X, Check,
-  Loader2, AlertTriangle, Download, Save, CalendarPlus, Users,
+  Loader2, AlertTriangle, Download, Save, CalendarPlus, Users, Zap,
 } from 'lucide-react';
-import { getDeportistas, type Deportista } from '@/lib/db';
+
+/** Donde queda apuntado el filtro que dejó puesto la dirección, para que al
+ *  volver de cargar un torneo el cuadro salga igual que como lo dejó. */
+const LLAVE_FILTROS = 'futuro-torneos-filtros';
+import { getDeportistas, updateColumnasDeportista, type Deportista } from '@/lib/db';
 import { useSoloLectura } from '@/lib/permisos';
 import {
   getCuadro, guardarFilas, borrarFila, nuevoId,
@@ -93,6 +97,10 @@ function torneosDelDeportista(dep: Deportista): number[] {
     .map(v => parseInt(String(v).trim(), 10))
     .filter(n => Number.isFinite(n) && n > 0);
 }
+
+/** Un reparo sobre un deportista. `grave` es lo que de verdad hay que
+ *  corregir; lo que no es grave se muestra en gris, como dato. */
+type Aviso = { texto: string; grave: boolean };
 
 /** Sin tildes y en mayúsculas, para poder comparar sin sorpresas. */
 function norm(v: any): string {
@@ -348,6 +356,68 @@ export default function TorneosPage() {
   /* Tercer filtro, aparte de los otros dos (dirección, 31/08/2026). */
   const [filtroPrograma, setFiltroPrograma] = useState('');
 
+  /* ── EL FILTRO NO SE PIERDE AL SALIR Y VOLVER ───────────────────────────
+     (dirección, 31/08/2026) Se filtra por un programa, se entra con el botón
+     CARGAR a ponerle el torneo al equipo, y al devolverse el cuadro salía
+     otra vez completo: tocaba armar el mismo filtro cada vez, para cada
+     equipo. Ahora se guarda lo que haya puesto —la búsqueda y las tres
+     listas— y al volver queda tal cual estaba.
+
+     SE GUARDA EN sessionStorage A PROPÓSITO, no en localStorage: dura
+     mientras el navegador esté abierto. Si se cierra y se vuelve otro día,
+     el cuadro abre COMPLETO. Así nadie se asusta creyendo que se perdieron
+     torneos por un filtro que quedó puesto la semana pasada.
+
+     Y de todas formas, mientras haya filtro puesto esas listas se ven
+     AMARILLAS: el aviso ya está a la vista. */
+  /* CUIDADO CON ESTE INTERRUPTOR — aquí me equivoqué el 31/08/2026 y el
+     filtro se seguía perdiendo. Tiene que ser un ESTADO, no un useRef.
+
+     Con useRef pasaba esto: al abrir la pantalla corrían los dos efectos
+     seguidos, uno detrás del otro. El de leer recuperaba "ASOBDIM" y prendía
+     el interruptor; pero el de guardar corría de una, en ese mismo instante,
+     cuando el filtro todavía estaba VACÍO en la pantalla — y guardaba el
+     vacío encima de ASOBDIM. Se borraba solo, medio segundo después de
+     haberlo recuperado.
+
+     Siendo un ESTADO, React espera a repintar con las dos cosas listas —el
+     filtro ya puesto Y el interruptor prendido— y solo ahí guarda. */
+  const [filtrosRecuperados, setFiltrosRecuperados] = useState(false);
+  useEffect(() => {
+    try {
+      const g = JSON.parse(sessionStorage.getItem(LLAVE_FILTROS) || '{}');
+      if (typeof g.buscar   === 'string') setBuscar(g.buscar);
+      if (typeof g.torneo   === 'string') setFiltroTorneoCuadro(g.torneo);
+      if (typeof g.programa === 'string') setFiltroPrograma(g.programa);
+      if (typeof g.formador === 'string') setFiltroFormador(g.formador);
+    } catch { /* nada guardado, o ilegible: el cuadro abre limpio */ }
+    setFiltrosRecuperados(true);
+  }, []);
+  useEffect(() => {
+    /* No guardar antes de haber recuperado, o el primer repintado (todo
+       vacío) borraría justo lo que veníamos a rescatar. */
+    if (!filtrosRecuperados) return;
+    try {
+      sessionStorage.setItem(LLAVE_FILTROS, JSON.stringify({
+        buscar,
+        torneo:   filtroTorneoCuadro,
+        programa: filtroPrograma,
+        formador: filtroFormador,
+      }));
+    } catch { /* sin espacio o en modo incógnito: no pasa nada */ }
+  }, [filtrosRecuperados, buscar, filtroTorneoCuadro, filtroPrograma, filtroFormador]);
+
+  /* CINTURÓN Y TIRANTES: al volver, el filtro se recupera de una, pero la
+     lista de torneos de la base se demora un instante en llegar. En ese
+     instante la lista desplegable todavía no tiene la opción "ASOBDIM", y
+     una lista sin la opción se ve VACÍA aunque el filtro sí esté puesto.
+     Esto la mete de una para que se vea desde el primer momento. */
+  function opcionSuelta(valor: string, lista: any[]) {
+    if (!valor) return null;
+    if (lista.some(t => String(t).toUpperCase() === valor)) return null;
+    return <option value={valor} style={{ color: '#111827', backgroundColor: 'white' }}>{valor}</option>;
+  }
+
   /* ── El equipo de cada torneo ───────────────────────────────────────────
      Las fichas se piden UNA vez y por detrás: el cuadro abre de una, y los
      equipos van apareciendo cuando lleguen. Si no llegan, el cuadro sigue
@@ -356,6 +426,79 @@ export default function TorneosPage() {
   const [fallaDeps, setFallaDeps]     = useState('');
   /** El renglón cuyo equipo se está mirando. */
   const [verEquipo, setVerEquipo]     = useState<{ f: FilaTorneo; n: number } | null>(null);
+  /** El deportista que se está sacando ahora, para el reloj de arena. */
+  const [sacando, setSacando]         = useState<string>('');
+
+  /* ═══ MARCAR PRIMERO, GUARDAR DESPUÉS ═══════════════════════════════════
+     (dirección, 31/08/2026)
+
+     PASÓ DE VERDAD Y COSTÓ CARO: este botón escribía en el momento. Un torneo
+     que tenía mal el PROGRAMA hacía que salieran marcados los 15 deportistas
+     buenos, y un clic los sacó a todos. Tocó devolverlos desde el respaldo.
+
+     La dirección lo dijo mejor que yo: "por eso es bueno los botones de
+     guardar info en todos los módulos". Así que ahora funciona como el resto
+     de la plataforma:
+
+       1. Se MARCA a quién sacar. Marcar no escribe nada, es solo una raya.
+       2. Se ve la cuenta de cuántos van marcados.
+       3. Solo al oprimir GUARDAR se escribe en las fichas, y preguntando.
+
+     Mientras no se oprima GUARDAR, no pasa absolutamente nada. Y si se cierra
+     la ventana con marcas sin guardar, se avisa antes de botarlas. */
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+
+  const marcar = (id: string) => setMarcados(prev => {
+    const s = new Set(prev);
+    if (s.has(id)) s.delete(id); else s.add(id);
+    return s;
+  });
+
+  /** Cierra la ventana del equipo, avisando si hay marcas sin guardar. */
+  function cerrarEquipo() {
+    if (marcados.size && !confirm(
+      `Hay ${marcados.size} ${marcados.size === 1 ? 'deportista marcado' : 'deportistas marcados'} sin guardar.\n\n` +
+      'Si cierras, las marcas se pierden y NO se saca a nadie.\n\n¿Cerrar de todas formas?',
+    )) return;
+    setMarcados(new Set());
+    setVerEquipo(null);
+  }
+
+  /* ── SACAR A UN DEPORTISTA DE UN TORNEO ─────────────────────────────────
+     (dirección, 31/08/2026)
+
+     OJO CON LO QUE HACE Y LO QUE NO. El número del torneo NO vive en este
+     cuadro: vive en la ficha del deportista, en sus casillas de competencia
+     (C1 a C4). Entonces esto va a la ficha, busca en cuál de las cuatro está
+     ese número, y la deja en blanco. Las otras tres no se tocan.
+
+     NO borra al deportista, NO le quita el proyecto y NO le toca nada más de
+     la ficha. Lo único que se va es ese número. Si mañana sí tiene que jugar
+     ese torneo, se le vuelve a poner desde Total Afiliados. */
+  async function sacarDelTorneo(dep: Deportista, n: number): Promise<boolean> {
+    const cols: Record<string, any> = { ...((dep as any)?._columnas ?? {}) };
+    let toco = false;
+
+    RX_COMPETENCIAS.forEach((rx, i) => {
+      /* La casilla puede estar con su nombre de verdad (C1, TORNEO 1…) */
+      const k = Object.keys(cols).find(k => rx.test(k.trim()));
+      if (k && parseInt(String(cols[k] ?? '').trim(), 10) === n) { cols[k] = ''; toco = true; }
+      /* …o con la llave interna que usa la plataforma. */
+      const kv = CLAVES_VIRTUALES[i];
+      if (kv in cols && parseInt(String(cols[kv] ?? '').trim(), 10) === n) { cols[kv] = ''; toco = true; }
+    });
+
+    if (!toco) return false;
+    const ok = await updateColumnasDeportista(String((dep as any).id), cols);
+    if (ok) {
+      /* Se refresca la lista de esta pantalla para que el contador baje ya. */
+      setDeportistas(prev => (prev ?? []).map(d =>
+        String((d as any).id) === String((dep as any).id)
+          ? ({ ...(d as any), _columnas: cols } as Deportista)
+          : d));
+    }
+    return ok;
+  }
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado]   = useState(false);
   const [error, setError]     = useState('');
@@ -619,28 +762,45 @@ export default function TorneosPage() {
    * Revisa a un deportista contra el torneo donde está metido y devuelve los
    * avisos, en cristiano. Lista vacía = está donde debe estar.
    */
-  function avisosDe(dep: Deportista, f: FilaTorneo): string[] {
-    const avisos: string[] = [];
+  function avisosDe(dep: Deportista, f: FilaTorneo): Aviso[] {
+    const avisos: Aviso[] = [];
 
     const est = casillaDe(dep, /^estado$/i);
     /* "SOLICITA RETIRO" NO es estar retirado: está en estudio y sigue
        entrenando. Es la misma regla de Total Afiliados y del pospartido. */
     if (est && !/solicit/i.test(est) && /retir|pausa|inactiv/i.test(est)) {
-      avisos.push(norm(est) || 'RETIRADO');
+      avisos.push({ texto: norm(est) || 'RETIRADO', grave: true });
     }
 
     const progDep = norm(casillaDe(dep, /^programa$/i));
     const progTor = norm(f.programa);
     if (progDep && progTor && !progDep.includes(progTor) && !progTor.includes(progDep)) {
-      avisos.push(`ES DE ${progDep}`);
+      avisos.push({ texto: `ES DE ${progDep}`, grave: true });
     }
 
-    /* La categoría se compara por el número del SUB, no por el texto: así
-       "SUB 1" no se confunde con "SUB 10". El proyecto de la ficha sirve de
-       respaldo cuando la casilla de categoría viene vacía. */
+    /* ── LA CATEGORÍA: NO TODO DESCUADRE ES UN PROBLEMA ──────────────────
+       (dirección, 31/08/2026)
+
+       En fútbol subir a un niño de categoría es normal y hasta bueno: un
+       SUB 8 jugando el SUB 9 es un premio, no un error. Lo que NO puede pasar
+       es lo contrario: un SUB 11 metido en un torneo SUB 9 está sobre-edad, y
+       eso puede costar el partido o el torneo.
+
+       Por eso no se pintan igual:
+         · MAYOR que la categoría → rojo, cuenta como problema. Es lo grave.
+         · menor que la categoría → gris, solo informativo. Está subiendo.
+
+       La comparación es por el NÚMERO del SUB, no por el texto, para que
+       "SUB 1" no se confunda con "SUB 10". */
     const subDep = subDe(casillaDe(dep, /^categor/i)) || subDe(casillaDe(dep, /^proy/i));
     const subTor = subDe(f.categoria);
-    if (subDep && subTor && subDep !== subTor) avisos.push(`ES SUB ${subDep}`);
+    if (subDep && subTor && subDep !== subTor) {
+      const mayor = parseInt(subDep, 10) > parseInt(subTor, 10);
+      avisos.push({
+        texto: mayor ? `SOBRE-EDAD · SUB ${subDep}` : `sube de SUB ${subDep}`,
+        grave: mayor,
+      });
+    }
 
     return avisos;
   }
@@ -808,6 +968,7 @@ export default function TorneosPage() {
                 }}
                 className="shrink-0 rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer">
                 <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS TORNEOS</option>
+                {opcionSuelta(filtroTorneoCuadro, sugerencias.torneo)}
                 {sugerencias.torneo.map(t => (
                   <option key={t} value={String(t).toUpperCase()} style={{ color: '#111827', backgroundColor: 'white' }}>
                     {String(t).toUpperCase()}
@@ -828,6 +989,7 @@ export default function TorneosPage() {
                 }}
                 className="shrink-0 rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer">
                 <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS PROGRAMAS</option>
+                {opcionSuelta(filtroPrograma, sugerencias.programa)}
                 {sugerencias.programa.map(t => (
                   <option key={t} value={String(t).toUpperCase()} style={{ color: '#111827', backgroundColor: 'white' }}>
                     {String(t).toUpperCase()}
@@ -846,6 +1008,7 @@ export default function TorneosPage() {
                 }}
                 className="shrink-0 rounded-lg px-2 text-white text-[11.5px] font-black outline-none cursor-pointer">
                 <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS FORMADORES</option>
+                {opcionSuelta(filtroFormador, sugerencias.formador)}
                 {sugerencias.formador.map(t => (
                   <option key={t} value={String(t).toUpperCase()} style={{ color: '#111827', backgroundColor: 'white' }}>
                     {String(t).toUpperCase()}
@@ -940,11 +1103,17 @@ export default function TorneosPage() {
             <div className="rounded-xl overflow-auto"
               style={{ border: `1px solid ${BORDE}`, maxHeight: 'calc(100vh - 230px)' }}>
               <table className="text-[12px]"
-                style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 960 }}>
+                style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 1060 }}>
                 <thead>
                   <tr>
                     {[
-                      { h: '', w: 40 },          /* el chulo */
+                      /* CARGAR TORNEO: se va derecho a la matriz del pospartido
+                         de ESTE renglón, sin tener que escribir el número allá.
+                         (dirección, 31/08/2026) */
+                      { h: 'CARGAR TORNEO', w: 92 },
+                      /* El chulo de siempre. Ahora sí lleva título, porque nadie
+                         adivinaba para qué era. (dirección, 31/08/2026) */
+                      { h: 'CARGAR PROG', w: 78 },
                       { h: '# TOR', w: 62 },
                       { h: 'TORNEO', w: 200 },
                       { h: 'PROGRAMA', w: 175 },
@@ -969,6 +1138,23 @@ export default function TorneosPage() {
                 <tbody>
                   {visibles.map(({ f, n }) => (
                     <tr key={f.id} style={{ background: PANEL }}>
+                      {/* ── CARGAR TORNEO ──────────────────────────────────
+                          (dirección, 31/08/2026) Lleva de una a la MATRIZ del
+                          pospartido de ESTE torneo — la lista con la columna
+                          CARGAR TORNEO y los estados PAGÓ · NO PAGA. Antes
+                          tocaba irse a Post Partido y escribir el número a
+                          mano; el número ya lo sabemos, es el de este renglón. */}
+                      <td className="px-1 py-[5px] text-center"
+                        style={{ borderRight: BLANCO, borderBottom: BLANCO, background: CAMPO }}>
+                        <button
+                          onClick={() => router.push(`/postpartido?matriz=${n}`)}
+                          title={`Cargarle el torneo ${n} a los deportistas — abre la matriz del pospartido`}
+                          className="rounded-lg px-2 mx-auto flex items-center gap-1.5 transition hover:brightness-125"
+                          style={{ height: 28, background: PANEL, border: `1px solid ${VERDE}` }}>
+                          <Zap className="w-3.5 h-3.5 shrink-0" style={{ color: VERDE }} />
+                          <span className="text-[10px] font-black text-white whitespace-nowrap">CARGAR</span>
+                        </button>
+                      </td>
                       {/* EL CHULO — para escoger los torneos que juegan un día
                           y crearles el partido de una. — 29/08/2026 */}
                       <td className="px-1 py-[5px] text-center"
@@ -1033,11 +1219,14 @@ export default function TorneosPage() {
                             return <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" style={{ color: GRIS }} />;
                           }
                           const equipo = equipoPorTorneo.get(n) ?? [];
-                          const conAviso = equipo.filter(d => avisosDe(d, f).length > 0).length;
+                          /* En rojo solo va lo GRAVE. Un niño que sube de
+                             categoría no es un error y no debe asustar. */
+                          const conAviso = equipo
+                            .filter(d => avisosDe(d, f).some(a => a.grave)).length;
                           const vacio = equipo.length === 0;
                           return (
                             <button
-                              onClick={() => setVerEquipo({ f, n })}
+                              onClick={() => { setMarcados(new Set()); setVerEquipo({ f, n }); }}
                               title={vacio
                                 ? 'Este torneo no tiene ningún deportista cargado'
                                 : `Ver los ${equipo.length} deportistas de este torneo`}
@@ -1077,7 +1266,7 @@ export default function TorneosPage() {
                   ))}
                   {visibles.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="py-10 text-center text-white/45 text-[13px] font-semibold"
+                      <td colSpan={11} className="py-10 text-center text-white/45 text-[13px] font-semibold"
                         style={{ background: PANEL }}>
                         Ningún torneo coincide con “{buscar}”.
                       </td>
@@ -1135,15 +1324,29 @@ export default function TorneosPage() {
           const equipo = equipoPorTorneo.get(n) ?? [];
           const conAvisos = equipo
             .map(d => ({ d, avisos: avisosDe(d, f) }))
-            .sort((a, b) => b.avisos.length - a.avisos.length);
-          const cuantosMal = conAvisos.filter(x => x.avisos.length > 0).length;
+            .map(x => ({ ...x, graves: x.avisos.filter(a => a.grave).length }))
+            .sort((a, b) => b.graves - a.graves || b.avisos.length - a.avisos.length);
+          const cuantosMal = conAvisos.filter(x => x.graves > 0).length;
           const nombreTorneo = [f.torneo, f.programa, f.categoria, f.nombre]
             .map(limpiar).filter(Boolean).join(' · ');
+
+          /* ── CUANDO FALLAN TODOS, EL ERROR NO ES DE LOS NIÑOS ─────────────
+             (dirección, 31/08/2026)
+
+             Si de 15 deportistas los 15 salen marcados, lo más probable NO es
+             que los 15 estén mal cargados: es que el RENGLÓN DEL TORNEO tiene
+             mal el programa o la categoría, y entonces todo el equipo se ve
+             mal contra un patrón equivocado.
+
+             Esto importa de verdad, porque el botón de sacarlos a todos está
+             ahí al lado: sin este aviso, un renglón mal escrito podía costar
+             el equipo completo. Con tres o más ya se avisa. */
+          const todosMal = equipo.length >= 3 && cuantosMal === equipo.length;
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
               style={{ background: 'rgba(0,0,0,.65)' }}
-              onClick={() => setVerEquipo(null)}>
+              onClick={cerrarEquipo}>
               <div className="rounded-2xl w-full max-w-2xl flex flex-col"
                 style={{ background: PANEL, border: `1px solid ${BORDE}`, maxHeight: '86vh' }}
                 onClick={e => e.stopPropagation()}>
@@ -1158,7 +1361,7 @@ export default function TorneosPage() {
                     </h3>
                     <p className="text-white/75 text-[12px] font-semibold mt-1 leading-snug">{nombreTorneo || '—'}</p>
                   </div>
-                  <button onClick={() => setVerEquipo(null)} className="shrink-0 text-white/70 hover:text-white">
+                  <button onClick={cerrarEquipo} className="shrink-0 text-white/70 hover:text-white">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -1175,21 +1378,56 @@ export default function TorneosPage() {
                       ✓ Los {equipo.length} están donde deben estar.
                     </p>
                   ) : (
-                    <p className="text-[12.5px] font-bold leading-relaxed" style={{ color: ROJO }}>
-                      ⚠ {cuantosMal} {cuantosMal === 1 ? 'deportista no cuadra' : 'deportistas no cuadran'} con
-                      este torneo. Van de primeros, marcados en rojo.
-                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {todosMal ? (
+                        <p className="text-[12.5px] font-bold leading-relaxed flex-1 min-w-[240px]"
+                           style={{ color: AMBAR }}>
+                          ⚠ Están marcados <b>LOS {equipo.length}</b>. Cuando fallan todos, casi siempre el
+                          error no está en los deportistas sino en <b>este renglón del torneo</b>: revisa que
+                          el PROGRAMA diga <b>{limpiar(f.programa) || '(vacío)'}</b> y la CATEGORÍA{' '}
+                          <b>{limpiar(f.categoria) || '(vacío)'}</b>. Si el renglón está mal, corrígelo
+                          primero — no los saques.
+                        </p>
+                      ) : (
+                        <p className="text-[12.5px] font-bold leading-relaxed flex-1 min-w-[240px]" style={{ color: ROJO }}>
+                          ⚠ {cuantosMal} {cuantosMal === 1 ? 'deportista no cuadra' : 'deportistas no cuadran'} con
+                          este torneo. Van de primeros, marcados en rojo.
+                        </p>
+                      )}
+                      {/* MARCAR LOS QUE NO CUADRAN. Solo pone la raya: no escribe
+                          nada. Lo que escribe es el GUARDAR de abajo. */}
+                      {!soloLectura && (
+                        <button
+                          onClick={() => {
+                            const ids = conAvisos.filter(x => x.graves > 0).map(x => String((x.d as any).id));
+                            const todosYa = ids.every(i => marcados.has(i));
+                            setMarcados(todosYa ? new Set() : new Set(ids));
+                          }}
+                          className="shrink-0 rounded-lg px-3 h-9 flex items-center gap-2
+                            text-white text-[11px] font-black transition hover:brightness-110"
+                          style={{ background: '#20293a', border: `1px solid ${ROJO}`, color: '#F08A87' }}>
+                          {conAvisos.filter(x => x.graves > 0).every(x => marcados.has(String((x.d as any).id)))
+                            ? 'QUITAR LAS MARCAS'
+                            : `MARCAR LOS ${cuantosMal}`}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 
                 {/* La lista */}
                 <div className="overflow-y-auto px-4 py-3" style={{ background: LIENZO }}>
                   {conAvisos.map(({ d, avisos }, i) => {
-                    const mal = avisos.length > 0;
+                    const mal = avisos.some(a => a.grave);
+                    const estaMarcado = marcados.has(String((d as any).id));
                     return (
                       <div key={(d as any).id ?? i}
-                        className="rounded-xl px-3 py-2.5 mb-2 flex items-center gap-3"
-                        style={{ background: PANEL, border: `1px solid ${mal ? ROJO : BORDE}` }}>
+                        className="rounded-xl px-3 py-2.5 mb-2 flex items-center gap-3 transition"
+                        style={{
+                          background: estaMarcado ? 'rgba(192,80,77,.16)' : PANEL,
+                          border: `1px solid ${estaMarcado ? ROJO : mal ? ROJO : BORDE}`,
+                          opacity: estaMarcado ? .75 : 1,
+                        }}>
                         <span className="rounded-md px-2 py-0.5 text-white font-black text-[11px] shrink-0"
                           style={{ background: mal ? ROJO : VERDE }}>
                           {limpiar(casillaDe(d, /^c[oó]d/i)) || '—'}
@@ -1203,28 +1441,104 @@ export default function TorneosPage() {
                               .map(limpiar).filter(Boolean).join(' · ') || 'sin programa ni categoría en la ficha'}
                           </p>
                         </div>
-                        {mal && (
+                        {avisos.length > 0 && (
                           <div className="flex flex-col items-end gap-1 shrink-0">
                             {avisos.map(a => (
-                              <span key={a} className="rounded px-1.5 py-0.5 text-[9.5px] font-black whitespace-nowrap"
-                                style={{ background: 'rgba(192,80,77,.22)', color: '#F08A87', border: `1px solid ${ROJO}` }}>
-                                {a}
+                              <span key={a.texto}
+                                className="rounded px-1.5 py-0.5 text-[9.5px] font-black whitespace-nowrap"
+                                style={a.grave
+                                  ? { background: 'rgba(192,80,77,.22)', color: '#F08A87', border: `1px solid ${ROJO}` }
+                                  : { background: 'rgba(255,255,255,.07)', color: GRIS, border: `1px solid ${BORDE}` }}>
+                                {a.texto}
                               </span>
                             ))}
                           </div>
+                        )}
+
+                        {/* LA MARCA DE ESTE RENGLÓN. Marcar no escribe: solo lo
+                            apunta para el GUARDAR de abajo. — 31/08/2026 */}
+                        {mal && !soloLectura && (
+                          <button
+                            onClick={() => marcar(String((d as any).id))}
+                            title={estaMarcado ? 'Quitar la marca' : 'Marcar para sacarlo de este torneo'}
+                            className="shrink-0 rounded-lg px-2.5 h-8 flex items-center gap-1.5
+                              text-[10.5px] font-black transition hover:brightness-125"
+                            style={estaMarcado
+                              ? { background: ROJO, border: `1px solid ${ROJO}`, color: '#fff' }
+                              : { background: '#20293a', border: `1px solid ${BORDE}`, color: GRIS }}>
+                            {estaMarcado ? <><Check className="w-3.5 h-3.5" /> MARCADO</> : 'MARCAR'}
+                          </button>
                         )}
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Pie: cómo se corrige */}
-                <div className="px-5 py-3 shrink-0" style={{ borderTop: `1px solid ${BORDE}`, borderRadius: '0 0 15px 15px' }}>
-                  <p className="text-white/45 text-[11px] font-semibold leading-relaxed">
-                    Esto sale de las fichas: cada deportista lleva el número del torneo en sus casillas de
-                    competencia. Para sacar o cambiar a alguien se corrige en <b className="text-white/70">su ficha</b>,
-                    no aquí.
-                  </p>
+                {/* ── EL PIE: AQUÍ SE GUARDA, Y SOLO AQUÍ ────────────────────
+                    Mientras esta barra no se oprima, no se ha escrito nada.
+                    — dirección, 31/08/2026 */}
+                <div className="px-5 py-3 shrink-0"
+                     style={{ borderTop: `1px solid ${BORDE}`, borderRadius: '0 0 15px 15px' }}>
+                  {marcados.size > 0 ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex-1 min-w-[200px]">
+                        <p className="text-white font-black text-[13px]">
+                          {marcados.size} {marcados.size === 1 ? 'marcado' : 'marcados'} para sacar del torneo {n}
+                        </p>
+                        <p className="text-white/45 text-[11px] font-semibold mt-0.5">
+                          Todavía no se ha guardado nada. Puedes seguir marcando o quitar marcas.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setMarcados(new Set())}
+                        disabled={sacando !== ''}
+                        className="shrink-0 rounded-lg px-3 h-10 text-white/70 text-[11px] font-black
+                          transition hover:brightness-125 disabled:opacity-50"
+                        style={{ background: '#20293a', border: `1px solid ${BORDE}` }}>
+                        QUITAR LAS MARCAS
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const malos = conAvisos.map(x => x.d)
+                            .filter(d => marcados.has(String((d as any).id)));
+                          if (!malos.length) return;
+                          const nombres = malos.slice(0, 12)
+                            .map(d => `   ·  ${(limpiar((d as any)._nombre) || '—').toUpperCase()}`).join('\n');
+                          if (todosMal && !confirm(
+                            `OJO: est\u00e1n marcados LOS ${equipo.length}, o sea el equipo COMPLETO.\n\n` +
+                            'Cuando fallan todos, lo normal es que el error est\u00e9 en el rengl\u00f3n del ' +
+                            'torneo —el PROGRAMA o la CATEGOR\u00cdA mal escritos— y no en los deportistas.\n\n' +
+                            'Si los sacas a todos, el torneo queda sin nadie.\n\n' +
+                            '¿De verdad quieres seguir?',
+                          )) return;
+                          if (!confirm(
+                            `¿Sacar del torneo ${n} a ${malos.length} ${malos.length === 1 ? 'deportista' : 'deportistas'}?\n\n` +
+                            `${nombreTorneo}\n\n${nombres}` +
+                            (malos.length > 12 ? `\n   …y ${malos.length - 12} más` : '') +
+                            '\n\nA cada uno se le quita ÚNICAMENTE el número de este torneo de su ficha.\n' +
+                            'No se borra ning\u00fan deportista ni se le toca nada m\u00e1s.',
+                          )) return;
+                          setSacando('TODOS');
+                          for (const d of malos) await sacarDelTorneo(d, n);
+                          setSacando('');
+                          setMarcados(new Set());
+                        }}
+                        disabled={sacando !== ''}
+                        className="shrink-0 rounded-lg px-4 h-10 flex items-center gap-2
+                          text-white text-[12px] font-black transition hover:brightness-110 disabled:opacity-50"
+                        style={{ background: ROJO }}>
+                        {sacando === 'TODOS'
+                          ? <><Loader2 className="w-4 h-4 animate-spin" /> GUARDANDO…</>
+                          : <><Save className="w-4 h-4" /> GUARDAR — SACAR {marcados.size}</>}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-white/45 text-[11px] font-semibold leading-relaxed">
+                      Esto sale de las fichas: cada deportista lleva el número del torneo en sus casillas de
+                      competencia. <b className="text-white/70">Marcar no borra nada</b> — solo al oprimir
+                      GUARDAR se toca la ficha.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

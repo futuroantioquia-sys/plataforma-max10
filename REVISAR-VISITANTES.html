@@ -1,0 +1,124 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="google" content="notranslate">
+<title>Por que no suben los visitantes</title>
+<style>
+:root{--lienzo:#333F50;--panel:#3C4759;--campo:#2B3547;--borde:#4A5568;--verde:#00B050;--ambar:#E0A33A}
+*{box-sizing:border-box;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{background:var(--lienzo);color:#fff;padding:18px;max-width:900px;margin:0 auto}
+h1{font-size:19px;font-weight:900}
+.sub{color:#ffffff8c;font-size:12.5px;margin-top:6px;line-height:1.6}
+.sub b{color:#fff}
+.caja{background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:14px;margin-top:14px}
+ol{margin:0;padding-left:20px;font-size:13px;line-height:2}
+ol b{color:#5BE39B}
+textarea{width:100%;height:280px;background:var(--campo);border:1px solid var(--borde);border-radius:11px;
+ color:#fff;font-family:Consolas,monospace;font-size:11.5px;padding:11px;line-height:1.5;resize:vertical}
+button{border:0;border-radius:11px;padding:12px 18px;font-weight:900;font-size:13px;color:#fff;cursor:pointer}
+.b2{background:var(--verde)}
+.b1{background:var(--campo);border:1px solid var(--borde)}
+.fila{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.ok{color:#5BE39B;font-size:12.5px;font-weight:800}
+.aviso{border-radius:11px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-top:12px;
+ background:rgba(224,163,58,.14);border:1px solid var(--ambar)}
+.aviso b{color:var(--ambar)}
+</style></head><body>
+
+<h1>Por que no suben los contadores de visitantes</h1>
+<p class="sub">
+ACCESOS TOTALES lleva quieto en <b>844</b> desde el 28 de agosto, mientras DEPORTISTAS UNICOS
+si sigue subiendo. Eso no cuadra, y esto averigua por que.
+</p>
+<p class="sub">
+<b>Esto NO cambia nada.</b> Solo pregunta y muestra cinco datos en pantalla. No escribe, no borra,
+no toca ninguna tabla. Se puede correr las veces que sea.
+</p>
+
+<div class="aviso">
+<b>Antes que nada:</b> si Chrome te ofrece <b>traducir</b> la pagina de Supabase, dile que <b>NO</b>.
+La traduccion automatica danna esa pantalla y sale el error de &ldquo;una extension del navegador
+provoco un error&rdquo;.
+</div>
+
+<div class="caja">
+  <ol>
+    <li>Oprime <b>COPIAR EL TEXTO</b>.</li>
+    <li>Oprime <b>ABRIR SUPABASE</b>. Se abre una pagina en blanco para escribir.</li>
+    <li>Si Chrome ofrece traducir, escoge <b>No traducir</b>.</li>
+    <li>Haz clic dentro del cuadro grande y pega con <b>Ctrl + V</b>.</li>
+    <li>Oprime <b>RUN</b> (arriba a la derecha) o <b>Ctrl + Enter</b>.</li>
+    <li>Abajo salen <b>cinco renglones</b>. Mandame el pantallazo de esos cinco.</li>
+    
+  </ol>
+
+  <div class="fila">
+    <button class="b2" id="copiar">1 &middot; COPIAR EL TEXTO</button>
+    <button class="b1" id="abrir">2 &middot; ABRIR SUPABASE</button>
+    <span class="ok" id="listo"></span>
+  </div>
+</div>
+
+<div class="caja">
+  <textarea id="sql" readonly spellcheck="false">
+-- ===========================================================================
+--  POR QUE NO SUBEN LOS CONTADORES DE VISITANTES
+--  Direccion, 31/08/2026
+--
+--  Esto NO cambia nada. Solo pregunta y muestra. Es para saber por que
+--  ACCESOS TOTALES se quedó quieto en 844 desde el 28 de agosto mientras
+--  DEPORTISTAS UNICOS si sigue subiendo.
+-- ===========================================================================
+
+select orden, pregunta, respuesta from (
+
+  select 1 as orden, &#x27;Cuantas filas tiene la tabla VISITAS&#x27;::text as pregunta,
+         (select count(*) from public.visitas)::text as respuesta
+
+  union all
+  select 2, &#x27;Cuantos codigos distintos han entrado&#x27;,
+         (select count(*) from public.codigos_con_acceso)::text
+
+  union all
+  select 3, &#x27;Columnas que tiene VISITAS&#x27;,
+         (select coalesce(string_agg(column_name, &#x27;, &#x27; order by ordinal_position), &#x27;(no existe la tabla)&#x27;)
+            from information_schema.columns
+           where table_schema=&#x27;public&#x27; and table_name=&#x27;visitas&#x27;)
+
+  union all
+  select 4, &#x27;VISITAS tiene el candado (RLS) puesto&#x27;,
+         (select case when bool_or(c.relrowsecurity) then &#x27;SI - con candado&#x27; else &#x27;no&#x27; end
+            from pg_class c join pg_namespace n on n.oid=c.relnamespace
+           where n.nspname=&#x27;public&#x27; and c.relname=&#x27;visitas&#x27;)
+
+  union all
+  select 5, &#x27;Permisos de escritura de VISITAS&#x27;,
+         (select coalesce(string_agg(policyname || &#x27; [&#x27; || cmd || &#x27;]&#x27;, &#x27; | &#x27;),
+                          &#x27;(NINGUNA POLITICA: si el candado esta puesto, NADIE puede escribir)&#x27;)
+            from pg_policies where schemaname=&#x27;public&#x27; and tablename=&#x27;visitas&#x27;)
+
+) t order by orden;
+</textarea>
+</div>
+
+<p class="sub" style="margin-top:14px">
+Con esos cinco renglones ya se sabe si el problema es que la tabla tiene el <b>candado puesto sin
+permiso de escritura</b> —que es lo que sospecho— o si es otra cosa. Y de ahi sale el arreglo.
+</p>
+
+<script>
+const SQL = document.getElementById('sql');
+
+document.getElementById('copiar').onclick = async () => {
+  SQL.select();
+  let ok = false;
+  try { await navigator.clipboard.writeText(SQL.value); ok = true; }
+  catch { try { ok = document.execCommand('copy'); } catch {} }
+  document.getElementById('listo').textContent = ok
+    ? 'Copiado. Ahora abre Supabase y pega con Ctrl + V.'
+    : 'No se pudo copiar solo: seleccionalo con Ctrl + A y copia con Ctrl + C.';
+};
+
+document.getElementById('abrir').onclick = () => {
+  window.open('https://supabase.com/dashboard/project/fykdyalpuydkwfjqguip/sql/new', '_blank');
+};
+</script></body></html>

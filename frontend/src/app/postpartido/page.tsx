@@ -35,7 +35,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, AlertTriangle, Loader2, ChevronDown, FileDown, Save, Check, Trash2,
-  Archive, X, Zap, GripVertical,
+  Archive, X, Zap, GripVertical, Users,
 } from 'lucide-react';
 import { getCuadro, limpiar, type FilaTorneo } from '@/lib/torneos';
 import { esSuperAdmin, esAccesoTotal, esProfesor } from '@/lib/permisos';
@@ -1455,6 +1455,91 @@ export default function CrearPospartidoPage() {
      numerado, y un botón VER POST PARTIDO. Al abrir uno, lo ve completo pero
      NO puede escribir: todas las casillas quedan bloqueadas. */
   const [abriPlanilla, setAbriPlanilla] = useState(false);
+
+  /* El número que se escribe para abrir la MATRIZ de un torneo desde el
+     listado, sin pasar por un partido. — dirección, 31/08/2026 */
+  const [numMatriz, setNumMatriz] = useState('');
+
+  /* ── LA OTRA FORMA DE BUSCAR (dirección, 31/08/2026) ─────────────────────
+     Escribir el número es rápido cuando uno se lo sabe. Pero con 67 torneos
+     casi nunca se lo sabe. Así que aquí van tres listas —PROGRAMA, PROFE y
+     CATEGORÍA— y debajo aparecen los torneos que cumplen, con su número y su
+     nombre, para abrirlos de un clic. Las listas salen del cuadro de Torneos
+     y Competencias: no hay nada escrito a mano. */
+  const [busPrograma, setBusPrograma] = useState('');
+  const [busProfe,    setBusProfe]    = useState('');
+  const [busCategoria, setBusCategoria] = useState('');
+
+  /** Las opciones de cada lista, sacadas del cuadro y sin repetir. */
+  const opcionesCuadro = useMemo(() => {
+    const juntar = (campo: 'programa' | 'formador' | 'categoria') => {
+      const s = new Set<string>();
+      (cuadro ?? []).forEach(f => {
+        /* Un torneo puede ser de VARIOS programas ("DESARROLLO, SELECCIÓN"):
+           se parte por la coma para que cada uno aparezca aparte. */
+        String((f as any)[campo] ?? '').split(',').forEach(x => {
+          const v = limpiar(x).toUpperCase();
+          if (v) s.add(v);
+        });
+      });
+      return Array.from(s).sort((a, b) => a.localeCompare(b, 'es'));
+    };
+    return {
+      programas:   juntar('programa'),
+      profes:      juntar('formador'),
+      categorias:  juntar('categoria'),
+    };
+  }, [cuadro]);
+
+  /** Los torneos que cumplen con las tres listas. Vacío = no se ha escogido nada. */
+  const torneosHallados = useMemo(() => {
+    if (!busPrograma && !busProfe && !busCategoria) return [];
+    const tiene = (campo: any, buscado: string) =>
+      !buscado || String(campo ?? '').split(',')
+        .map(x => limpiar(x).toUpperCase()).includes(buscado);
+    return (cuadro ?? [])
+      .map((f, i) => ({ f, n: i + 1 }))
+      .filter(({ f }) => tiene(f.programa, busPrograma))
+      .filter(({ f }) => tiene(f.formador, busProfe))
+      .filter(({ f }) => tiene(f.categoria, busCategoria));
+  }, [cuadro, busPrograma, busProfe, busCategoria]);
+
+  /** Abre la matriz de un torneo por su número. */
+  function abrirMatrizNum(n: number | string) {
+    const v = String(n || '').trim();
+    if (!v) return;
+    ultimoArmado.current = '';
+    ultimaJornada.current = '';
+    setNumTorneo(v);
+    setJornada('');
+    setAbriPlanilla(true);
+    try { window.scrollTo({ top: 0 }); } catch { /* nada */ }
+  }
+  function abrirMatriz() { abrirMatrizNum(numMatriz); }
+
+  /* ── ENTRAR DIRECTO A LA MATRIZ DE UN TORNEO ────────────────────────────
+     (dirección, 31/08/2026) En TORNEOS Y COMPETENCIAS cada renglón tiene el
+     botón CARGAR TORNEO. Ese botón trae para acá con el número puesto en la
+     dirección — /postpartido?matriz=10 — y aquí la matriz se abre sola.
+     Así nadie tiene que acordarse del número ni escribirlo otra vez, que era
+     justo donde se equivocaba uno y terminaba cargándole el torneo al equipo
+     que no era.
+     Se lee de window.location y no del useSearchParams de Next, porque ese
+     obliga a envolver toda la pantalla en un <Suspense>. Y se hace UNA sola
+     vez: si después la dirección se mueve a otro torneo dentro de la misma
+     pantalla, el enlace viejo no la puede devolver. */
+  const yaAbriPorEnlace = useRef(false);
+  useEffect(() => {
+    if (yaAbriPorEnlace.current) return;
+    let pedido = '';
+    try {
+      pedido = new URLSearchParams(window.location.search).get('matriz') ?? '';
+    } catch { /* sin dirección legible: no pasa nada */ }
+    pedido = pedido.replace(/\D+/g, '');   // solo el número, por si viene sucio
+    if (!pedido) return;
+    yaAbriPorEnlace.current = true;
+    abrirMatrizNum(pedido);
+  }, []);
   /* LOS FILTROS DEL BANCO GENERAL (dirección, 29/08/2026): con 38 partidos y
      subiendo, la dirección necesita poder buscar por estado, por formador y
      por día. */
@@ -1521,6 +1606,29 @@ export default function CrearPospartidoPage() {
    *  columnas clavadas a la izquierda queden en su sitio. */
   const verCodigo = esAdmonPrincipal;
   const ANCHO_COD = verCodigo ? 84 : 0;
+
+  /* ── LA COLUMNA PROGRAMA, ENSEGUIDA DEL CÓDIGO ──────────────────────────
+     (dirección, 31/08/2026) En la MATRIZ se está cobrando un torneo, y el
+     programa de cada deportista es justo lo que hay que ver ahí: se descubre
+     de una si en la lista se coló alguien de otro programa, sin tener que
+     abrirle la ficha.
+
+     Va SOLO en la matriz. En la planilla del partido no: ahí el cuadro ya es
+     ancho —minutos, tarjetas, goles, calificación— y una columna más obliga a
+     correr la pantalla para el lado. */
+  const programaPorId = useMemo(() => {
+    const m = new Map<string, string>();
+    convocables.forEach(d => {
+      m.set(d.id, String(getCol(d, /^program/i) ?? '').trim().toUpperCase());
+    });
+    return m;
+  }, [convocables]);
+
+  const verPrograma = enMatriz;
+  const ANCHO_PROG  = verPrograma ? 132 : 0;
+  /** Dónde arranca la columna del NOMBRE, que es la que queda clavada.
+   *  Es la suma de lo que va antes: CÓDIGO + PROGRAMA. */
+  const IZQ_NOMBRE = ANCHO_COD + ANCHO_PROG;
 
   /* ── QUÉ COLUMNAS SE VEN ─────────────────────────────────────────────────
      En la MATRIZ solo van CÓDIGO · N° · DEPORTISTA · CARGAR TORNEO: es una
@@ -2732,6 +2840,131 @@ export default function CrearPospartidoPage() {
             </div>
           ) : (
             <>
+              {/* ── LA PUERTA DE LA MATRIZ (dirección, 31/08/2026) ───────────
+                  "Al principio, cuando cargué el valor de los torneos, en el
+                  pospartido colocaba el número y me aparecía el torneo y los
+                  niños. Con el nuevo cambio no sé dónde quedó."
+
+                  Y tenía razón: la MATRIZ nunca se borró —sigue completa, con
+                  su columna de CARGAR TORNEO para los cobros— pero se quedó
+                  sin puerta. Cuando administración pasó a entrar por el
+                  listado de partidos, la única forma de abrir la planilla
+                  quedó siendo oprimir un partido, y eso siempre trae una
+                  # FECHA. La matriz es justamente la pantalla SIN fecha.
+
+                  Aquí queda la entrada de vuelta: se escribe el número y se
+                  abre la lista viva de ese torneo, sin partido de por medio.
+                  Solo para administración: el formador no carga cobros. */}
+              {!esProfe && (
+                <div className="flex flex-wrap items-center gap-2 px-4 py-3 rounded-2xl mb-3"
+                     style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+                  <Users className="w-4 h-4 shrink-0" style={{ color: '#5BE39B' }} />
+                  <div className="min-w-0">
+                    <p className="text-white font-black text-[12.5px] leading-tight">
+                      VER EL EQUIPO Y CARGAR EL TORNEO
+                    </p>
+                    <p className="text-white/45 text-[10.5px] font-semibold leading-tight mt-0.5">
+                      La lista del torneo, sin partido de por medio. Trae la columna CARGAR TORNEO
+                      con la carga masiva y los cuatro estados.
+                    </p>
+                  </div>
+                  <input
+                    value={numMatriz}
+                    inputMode="numeric"
+                    placeholder="N°"
+                    onChange={e => setNumMatriz(e.target.value.replace(/[^\d]/g, ''))}
+                    onKeyDown={e => { if (e.key === 'Enter') abrirMatriz(); }}
+                    style={{ width: 74, height: 36, background: CAMPO, border: `1px solid ${BORDE}` }}
+                    className="ml-auto rounded-lg text-center text-white font-black text-[16px]
+                      outline-none placeholder:text-white/25"
+                  />
+                  <button
+                    onClick={abrirMatriz}
+                    disabled={!numMatriz}
+                    title="Abrir la lista de deportistas de ese torneo"
+                    className="shrink-0 rounded-lg px-3 h-9 text-white text-[11px] font-black
+                      transition hover:brightness-110 disabled:opacity-40"
+                    style={{ background: VERDE }}>
+                    ABRIR LA LISTA
+                  </button>
+
+                  {/* ── O BÚSCALO POR PROGRAMA, PROFE Y CATEGORÍA ─────────────
+                      (dirección, 31/08/2026) Con 67 torneos casi nadie se sabe
+                      el número. Se escoge de las listas y abajo salen los que
+                      cumplen, para abrirlos de un clic. */}
+                  <div className="w-full flex flex-wrap items-center gap-2 pt-3 mt-1"
+                       style={{ borderTop: `1px solid ${BORDE}` }}>
+                    <span className="text-white/40 text-[10px] font-black uppercase tracking-widest shrink-0">
+                      O búscalo
+                    </span>
+                    {([
+                      { v: busPrograma,  set: setBusPrograma,  cero: 'TODOS LOS PROGRAMAS',  ops: opcionesCuadro.programas },
+                      { v: busProfe,     set: setBusProfe,     cero: 'TODOS LOS PROFES',     ops: opcionesCuadro.profes },
+                      { v: busCategoria, set: setBusCategoria, cero: 'TODAS LAS CATEGORÍAS', ops: opcionesCuadro.categorias },
+                    ]).map((sel, i) => (
+                      <select
+                        key={i}
+                        value={sel.v}
+                        onChange={e => sel.set(e.target.value)}
+                        style={{
+                          height: 34,
+                          background: sel.v ? AMBAR : CAMPO,
+                          border: `1px solid ${sel.v ? AMBAR : BORDE}`,
+                        }}
+                        className="rounded-lg px-2 text-white text-[11px] font-black outline-none cursor-pointer">
+                        <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>{sel.cero}</option>
+                        {sel.ops.map(o => (
+                          <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o}</option>
+                        ))}
+                      </select>
+                    ))}
+                    {(busPrograma || busProfe || busCategoria) && (
+                      <button
+                        onClick={() => { setBusPrograma(''); setBusProfe(''); setBusCategoria(''); }}
+                        className="rounded-lg px-2.5 h-[34px] text-white/60 text-[10.5px] font-black"
+                        style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                        VER TODOS
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Lo que encontró */}
+                  {(busPrograma || busProfe || busCategoria) && (
+                    <div className="w-full">
+                      {torneosHallados.length === 0 ? (
+                        <p className="text-white/40 text-[11.5px] font-semibold py-2">
+                          Ningún torneo cumple con eso. Cambia alguna lista o oprime VER TODOS.
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {torneosHallados.map(({ f, n: num }) => (
+                            <button
+                              key={num}
+                              onClick={() => abrirMatrizNum(num)}
+                              title="Abrir la lista de este torneo"
+                              className="rounded-lg px-3 py-2 text-left transition hover:brightness-125"
+                              style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                              <span className="flex items-center gap-2">
+                                <span className="rounded-md px-2 py-0.5 text-white font-black text-[12px]"
+                                      style={{ background: VERDE }}>{num}</span>
+                                <span className="min-w-0">
+                                  <span className="block text-white font-black text-[11.5px] leading-tight">
+                                    {[f.torneo, f.categoria, f.nombre].map(limpiar).filter(Boolean).join(' · ')}
+                                  </span>
+                                  <span className="block text-white/45 text-[10px] font-bold leading-tight">
+                                    {[limpiar(f.programa), limpiar(f.formador)].filter(Boolean).join(' · ')}
+                                  </span>
+                                </span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center gap-2 px-4 py-3 rounded-2xl mb-3"
                    style={{ background: VERDE }}>
                 <Archive className="w-5 h-5 text-white shrink-0" />
@@ -3023,7 +3256,13 @@ export default function CrearPospartidoPage() {
         style={{ background: CAMPO, borderBottom: `1px solid ${BORDE}` }}>
 
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 sm:flex-1">
-          <button onClick={() => router.push('/dashboard')} aria-label="Volver"
+          {/* LA FLECHA DEVUELVE A TORNEOS Y COMPETENCIAS (dirección, 31/08/2026).
+              De allá se viene: en cada renglón está el botón CARGAR TORNEO, se
+              carga el equipo y se vuelve al cuadro a seguir con el siguiente.
+              Mandar al tablero rompía esa vuelta y tocaba entrar otra vez.
+              Al FORMADOR no: él no maneja el cuadro de torneos, a él la flecha
+              lo sigue devolviendo a su tablero. */}
+          <button onClick={() => router.push(esProfe ? '/dashboard' : '/torneos')} aria-label="Volver"
             className="rounded-xl flex items-center justify-center shrink-0"
             style={{ width: 44, height: 44, background: PANEL, border: `1px solid ${BORDE}` }}>
             <ArrowLeft className="w-5 h-5 text-white" />
@@ -3550,7 +3789,7 @@ export default function CrearPospartidoPage() {
           style={{
             border: `1px solid ${BORDE}`,
             maxHeight: 'calc(100vh - 330px)',
-            maxWidth: enMatriz ? 660 : undefined,
+            maxWidth: enMatriz ? 800 : undefined,   /* 660 + la columna PROGRAMA */
           }}>
           <table className="text-[11.5px]"
             style={{
@@ -3582,6 +3821,21 @@ export default function CrearPospartidoPage() {
                   </th>
                 )}
 
+                {/* PROGRAMA · enseguida del código, y solo en la matriz. */}
+                {verPrograma && (
+                  <th
+                    title="El programa de cada deportista, tomado de su ficha."
+                    className="px-2 py-3 text-center font-black text-[12.5px] tracking-wide whitespace-nowrap text-white select-none"
+                    style={{
+                      background: CAMPO,
+                      borderRight: BLANCO, borderBottom: BLANCO, borderTop: BLANCO,
+                      width: ANCHO_PROG,
+                      position: 'sticky', top: 0, left: ANCHO_COD, zIndex: 17,
+                    }}>
+                    PROGRAMA
+                  </th>
+                )}
+
                 {ordenVisible.map((clave, i) => {
                   const c = COLUMNAS[clave];
                   /* SOLO EL NOMBRE QUEDA CLAVADO (dirección, 27/08/2026).
@@ -3591,7 +3845,7 @@ export default function CrearPospartidoPage() {
                      correr el cuadro para el lado, el número se va debajo y el
                      nombre se queda a la vista. */
                   const fija = clave === 'deportista';
-                  const izq  = ANCHO_COD;
+                  const izq  = IZQ_NOMBRE;
                   return (
                     <th key={clave}
                       /* En la MATRIZ no se arrastran columnas: son solo cuatro
@@ -3697,10 +3951,30 @@ export default function CrearPospartidoPage() {
                         );
                       })()}
 
+                    {/* PROGRAMA · enseguida del código, y solo en la matriz.
+                        Si la ficha no lo trae, va una rayita: mejor un hueco
+                        a la vista que una casilla vacía que parece un error. */}
+                    {verPrograma && (() => {
+                      const prog = programaPorId.get(idDeLaFila(f)) || '';
+                      return (
+                        <td className="px-1.5 py-[4px] text-center"
+                          style={{
+                            borderRight: BLANCO, borderBottom: BLANCO,
+                            background: CAMPO,
+                            position: 'sticky', left: ANCHO_COD, zIndex: 7,
+                          }}>
+                          <span className="text-white text-[11px] font-black tracking-wide block truncate"
+                            title={prog}>
+                            {prog || <span className="text-white/30">—</span>}
+                          </span>
+                        </td>
+                      );
+                    })()}
+
                     {ordenVisible.map((clave, k) => {
                       /* Igual que en el título: el único clavado es el nombre. */
                       const fija = clave === 'deportista';
-                      const izq  = ANCHO_COD;
+                      const izq  = IZQ_NOMBRE;
                       /* TODAS las casillas llevan el mismo gris oscuro: antes
                          las dos primeras iban en un gris más oscuro y, al mover
                          las columnas de lugar, quedaba una franja distinta en
@@ -3788,7 +4062,7 @@ export default function CrearPospartidoPage() {
                   desconectaba todo lo demás. */}
               {filas.length === 0 && (
                 <tr>
-                  <td colSpan={ordenVisible.length + (verCodigo ? 1 : 0) + (verCargar ? 1 : 0)} className="py-8 text-center"
+                  <td colSpan={ordenVisible.length + (verCodigo ? 1 : 0) + (verPrograma ? 1 : 0) + (verCargar ? 1 : 0)} className="py-8 text-center"
                     style={{ background: PANEL, borderRight: BLANCO, borderBottom: BLANCO }}>
                     <p className="text-white/70 text-[13px] font-black">
                       Este torneo todavía no tiene deportistas asignados.

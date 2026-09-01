@@ -721,16 +721,38 @@ export default function GeneralPage() {
     const celAcud    = todas.filter(c => /^celular del acudiente$/i.test(c.trim())); // después de PROFE
     const cal        = todas.filter(c => /^cal$/i.test(c.trim()));      // después de COMPETENCIA
     const com        = todas.filter(c => /^com$/i.test(c.trim()));      // después de COMPETENCIA
-    const compite     = todas.filter(c => /^compite$/i.test(c.trim()));
     const competencia = todas.filter(c => /^competencia$/i.test(c.trim()));
-    const torneo2     = todas.filter(c => /torneo.?2/i.test(c.trim()));
-    const torneo3     = todas.filter(c => /torneo.?3/i.test(c.trim()));
-    const torneo4     = todas.filter(c => /torneo.?4/i.test(c.trim()));
+
+    /* ── LAS CUATRO COMPETENCIAS SE RECONOCEN CON UNA SOLA REGLA ────────────
+       (dirección, 31/08/2026 — BUG DE VERDAD, encontrado con los datos reales)
+
+       QUÉ PASABA: la dirección puso un torneo en C1 y le apareció también en
+       otra casilla, y el mismo torneo salía repetido hasta tres veces.
+
+       POR QUÉ: la primera competencia se buscaba con /^compite$/ —el nombre
+       viejo de esa columna—, pero en las fichas se llama __TORNEO1__. Como no
+       la reconocía, no la sacaba del montón de "las demás columnas", y después
+       la volvía a agregar en su puesto de torneo. Resultado: __TORNEO1__
+       quedaba DOS VECES en la tabla. Dos casillas distintas en pantalla,
+       la misma casilla por dentro: se escribía en una y aparecía en la otra.
+
+       Lo comprobé contra el respaldo: de 57 columnas de una ficha real,
+       __TORNEO1__ salía dos veces y las otras tres una sola vez.
+
+       LA CURA: usar `numCompetencia()`, que es la función que YA sabe
+       reconocer los cuatro nombres —C1, TORNEO 1, COMPITE y __TORNEO1__— y que
+       usa el resto de la pantalla. Una sola regla para todos, así no se puede
+       volver a desalinear. */
+    const comp1 = todas.filter(c => numCompetencia(c) === 1);
+    const comp2 = todas.filter(c => numCompetencia(c) === 2);
+    const comp3 = todas.filter(c => numCompetencia(c) === 3);
+    const comp4 = todas.filter(c => numCompetencia(c) === 4);
     // Estas columnas las ubicamos manualmente, así que las sacamos del bloque "resto"
     const excluidas = new Set([
       ...fecha, ...tipoAfil, ...estado, ...cod, ...programa, ...proyecto, ...profe,
       ...sedeEnt, ...jornadaEnt,
-      ...celAcud, ...cal, ...com, ...compite, ...competencia, ...torneo2, ...torneo3, ...torneo4,
+      ...celAcud, ...cal, ...com, ...competencia,
+      ...comp1, ...comp2, ...comp3, ...comp4,
       VPOS,
     ]);
     const resto    = todas.filter(c => !excluidas.has(c));
@@ -740,10 +762,10 @@ export default function GeneralPage() {
       ...(competencia.length ? competencia : [VTC]),
       ...cal,
       ...com,
-      ...(compite.length ? compite : [VT1]),
-      ...(torneo2.length ? torneo2 : [VT2]),
-      ...(torneo3.length ? torneo3 : [VT3]),
-      ...(torneo4.length ? torneo4 : [VT4]),
+      ...(comp1.length ? comp1 : [VT1]),
+      ...(comp2.length ? comp2 : [VT2]),
+      ...(comp3.length ? comp3 : [VT3]),
+      ...(comp4.length ? comp4 : [VT4]),
       VPOS,
     ];
 
@@ -760,7 +782,13 @@ export default function GeneralPage() {
 
     // PROGRAMA queda ENSEGUIDA de TIPO DE AFILIACIÓN, y justo después van
     // VALOR MENSUALIDAD y CONSIGNA A, que se calculan solas.
-    return [...fecha, ...tipoAfil, ...programa, VMEN, VCON, ...estado, ...cod, ...resto];
+    /* CINTURÓN Y TIRANTES (31/08/2026): aunque el reparto de arriba quede
+       bien, aquí se bota cualquier repetida. Una columna repetida significa
+       dos casillas en pantalla escribiendo en el mismo dato, y eso confunde
+       de una forma muy difícil de entender para quien la está usando. */
+    const armadas = [...fecha, ...tipoAfil, ...programa, VMEN, VCON, ...estado, ...cod, ...resto];
+    const vistas = new Set<string>();
+    return armadas.filter(c => (vistas.has(c) ? false : (vistas.add(c), true)));
   }, [deportistas]);
 
   // DEPORTISTA/NOMBRE/ALUMNO/JUGADOR/ATLETA nunca se ocultan (columna crítica)
@@ -900,10 +928,78 @@ export default function GeneralPage() {
     getCuadro().then(c => setCuadroTorneos(c ?? [])).catch(() => {});
   }, []);
 
-  /** Los torneos que puede escoger este deportista: los de SU programa.
-   *  Si su programa no tiene torneos cargados, se muestran todos (para no
-   *  dejar la casilla muerta) y así se ve que falta cargarlos. */
-  const torneosDePrograma = useCallback((programa: string) => {
+  /* ═══ LA EDAD MANDA EN LA LISTA ═══════════════════════════════════════
+     (dirección, 31/08/2026)
+
+     "Me salen muchas categorías que no son necesarias."
+
+     Y es cierto: al deportista se le ofrecían los 67 torneos de su programa,
+     desde SUB 6 hasta SUB 15, cuando solo dos le sirven.
+
+     CÓMO SE CUENTA. El SUB dice la EDAD, y la edad sale del año de nacimiento:
+     un niño de 2019 cumple 7 en 2026, entonces es SUB 7. La cuenta es
+     sencilla: SUB = año de hoy − año de nacimiento.
+
+     OJO CON EL MES — NO SE MIRA, Y ES A PROPÓSITO (dirección, 31/08/2026):
+     "alguien nacido en 2019 en diciembre sigue siendo SUB 7". La categoría va
+     por AÑO DE NACIMIENTO, no por la fecha exacta del cumpleaños: el que nació
+     el 2 de enero y el que nació el 31 de diciembre del mismo año juegan la
+     misma categoría TODO el año. Por eso aquí solo se lee el AÑO y nunca el
+     mes ni el día. Si algún día alguien piensa en "afinar" esto restando
+     fechas completas, estaría dañándolo.
+
+     QUÉ SE MUESTRA. Su categoría y UNA más arriba, ni una más:
+       · Nacido en 2019 → SUB 7 y SUB 8
+       · Nacido en 2018 → SUB 8 y SUB 9
+     Subir de categoría es normal en fútbol; bajar no, porque sería sobre-edad.
+     Por eso solo se abre para arriba, y solo un año.
+
+     SI NO SE SABE LA EDAD no se esconde nada: al que le falte el año de
+     nacimiento en la ficha se le siguen mostrando todos, para no dejarlo sin
+     poder escoger. Lo mismo con un torneo cuyo nombre no diga ningún SUB. */
+
+  /* ── EL ÚLTIMO TORNEO ESCOGIDO, DE PRIMERO (dirección, 31/08/2026) ──────
+     Pasando torneos se repite el mismo una y otra vez, deportista tras
+     deportista. Que toque bajar a buscarlo cada vez es un desgaste tonto.
+     Entonces el último que se escogió queda de primero en la lista, en su
+     propio grupito, y los demás quedan abajo. Se recuerda en este computador,
+     así que sigue ahí aunque se cierre la pantalla. */
+  const LLAVE_ULTIMO_TORNEO = 'futuro-ultimo-torneo';
+  const [ultimoTorneo, setUltimoTorneo] = useState('');
+  useEffect(() => {
+    try { setUltimoTorneo(localStorage.getItem(LLAVE_ULTIMO_TORNEO) || ''); } catch { /* nada */ }
+  }, []);
+  function recordarTorneo(num: string) {
+    const v = String(num ?? '').trim();
+    if (!v) return;                       // dejarlo en "—" no se recuerda
+    setUltimoTorneo(v);
+    try { localStorage.setItem(LLAVE_ULTIMO_TORNEO, v); } catch { /* nada */ }
+  }
+
+  /** El año de nacimiento de la ficha. 0 si no está.
+   *  Se lee derecho de la ficha —sin pasar por getValCelda— porque esto corre
+   *  más arriba en la pantalla, antes de que esa ayuda exista. El año de
+   *  nacimiento no se anda editando mientras se asignan torneos, así que no
+   *  se pierde nada. */
+  const anioNacimiento = (dep: Deportista): number => {
+    const cols: Record<string, any> = (dep as any)?._columnas ?? {};
+    const k = Object.keys(cols).find(k => /^(a[ñn]o)$/i.test(k.trim()))
+           ?? Object.keys(cols).find(k => /a[ñn]o.*nacim|nacim.*a[ñn]o/i.test(k.trim()));
+    const m = String(k ? cols[k] : '').match(/(19|20)\d{2}/);
+    return m ? parseInt(m[0], 10) : 0;
+  };
+
+  /** El número del SUB que dice un texto. "COPA ABC SUB 10 REGOL" → 10 */
+  const subDelTexto = (v: any): number => {
+    const m = String(v ?? '').toUpperCase().match(/SUB\s*(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+
+  /** Los torneos que puede escoger este deportista: los de SU programa y de
+   *  SU edad (o un año más). Si su programa no tiene torneos cargados, se
+   *  muestran todos (para no dejar la casilla muerta) y así se ve que falta
+   *  cargarlos. */
+  const torneosDePrograma = useCallback((programa: string, dep?: Deportista) => {
     const k = llavePrograma(programa);
     const conNumero = cuadroTorneos.map((f, i) => ({ f, n: i + 1 }));
     /* UN TORNEO PUEDE SER DE VARIOS PROGRAMAS (dirección, 27/08/2026).
@@ -919,7 +1015,25 @@ export default function GeneralPage() {
           .filter(Boolean)
           .includes(k))
       : [];
-    const lista = suyos.length ? suyos : conNumero;
+    let lista = suyos.length ? suyos : conNumero;
+
+    /* ── Y ahora la edad ──────────────────────────────────────────────── */
+    const anio = dep ? anioNacimiento(dep) : 0;
+    if (anio) {
+      const suSub = new Date().getFullYear() - anio;      // 2026 − 2019 = 7
+      const cabe = (f: any) => {
+        /* El SUB puede venir en la CATEGORÍA ("SUB 10") o en el nombre del
+           torneo ("RAVE SOCCER SUB 10"). Se mira primero la categoría. */
+        const sub = subDelTexto(f.categoria) || subDelTexto(f.torneo) || subDelTexto(f.nombre);
+        if (!sub) return true;                            // sin SUB: no se esconde
+        return sub === suSub || sub === suSub + 1;        // la suya y una arriba
+      };
+      const deSuEdad = lista.filter(({ f }) => cabe(f));
+      /* Si de su edad no hay ninguno, se le muestran todos: es peor dejarlo
+         sin poder escoger que mostrarle de más. */
+      if (deSuEdad.length) lista = deSuEdad;
+    }
+
     return lista.map(({ f, n }) => ({
       num: String(n),
       etiqueta: etiquetaTorneo(f, n),
@@ -2334,7 +2448,7 @@ export default function GeneralPage() {
                                   .filter(c => numCompetencia(c) && c !== col)
                                   .map(c => getValCelda(dep, c).trim())
                                   .filter(Boolean);
-                                const opsTorneo = torneosDePrograma(progDep)
+                                const opsTorneo = torneosDePrograma(progDep, dep)
                                   .filter(t => !yaPuestos.includes(t.num));
                                 const ayuda = nombreDelNumero(puesto) ||
                                   (puesto ? puesto : `Escoge la competencia ${nComp} · solo salen los torneos de ${progDep || 'su programa'}`);
@@ -2357,6 +2471,7 @@ export default function GeneralPage() {
                                         const v = e.target.value;
                                         const antes = puesto;
                                         setCelda(dep.id, col, v);
+                                        recordarTorneo(v);   // para que salga de primero la próxima
                                         /* Estando parado en un grupo se ofrece
                                            hacerlo con todos (dirección, 27/08/2026):
                                            si escogió un torneo, cargárselo a todos;
@@ -2379,11 +2494,28 @@ export default function GeneralPage() {
                                       {puesto && !opsTorneo.some(t => t.num === puesto) && (
                                         <option value={puesto} style={{ color: '#111827', backgroundColor: 'white' }}>{puesto}</option>
                                       )}
-                                      {opsTorneo.map(t => (
-                                        <option key={t.num} value={t.num} style={{ color: '#111827', backgroundColor: 'white' }}>
-                                          {t.etiqueta}
-                                        </option>
-                                      ))}
+                                      {(() => {
+                                        /* El último que se escogió arriba del todo, apartado
+                                           en su grupito para que se vea que es ese. */
+                                        const arriba = opsTorneo.filter(t => t.num === ultimoTorneo);
+                                        const resto  = opsTorneo.filter(t => t.num !== ultimoTorneo);
+                                        const pinta = (t: { num: string; etiqueta: string }) => (
+                                          <option key={t.num} value={t.num} style={{ color: '#111827', backgroundColor: 'white' }}>
+                                            {t.etiqueta}
+                                          </option>
+                                        );
+                                        if (!arriba.length) return opsTorneo.map(pinta);
+                                        return (
+                                          <>
+                                            <optgroup label="EL ÚLTIMO QUE USASTE" style={{ color: '#111827', backgroundColor: 'white' }}>
+                                              {arriba.map(pinta)}
+                                            </optgroup>
+                                            <optgroup label="LOS DEMÁS" style={{ color: '#111827', backgroundColor: 'white' }}>
+                                              {resto.map(pinta)}
+                                            </optgroup>
+                                          </>
+                                        );
+                                      })()}
                                     </select>
                                   </td>
                                 );
