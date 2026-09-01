@@ -1748,10 +1748,13 @@ function EstadoCuentaInner() {
                   <div>
                     <label className="text-xs font-black text-white/70 uppercase tracking-wide block mb-1">Producto</label>
                     <select value={selProdId} onChange={e => setSelProdId(e.target.value)}
-                      className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-green-500">
-                      <option value="">— Selecciona un producto —</option>
+                      className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-semibold text-white bg-[#2B3547] focus:outline-none focus:border-green-500">
+                      {/* La lista que se despliega la pinta Windows, no la pagina:
+                          se le dice fondo blanco y letra oscura para que no
+                          quede blanco sobre blanco. */}
+                      <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>— Selecciona un producto —</option>
                       {productosLst.map(p => (
-                        <option key={p.id} value={p.id}>
+                        <option key={p.id} value={p.id} style={{ color: '#111827', backgroundColor: 'white' }}>
                           {p.tipo === 'torneo' ? '🏆' : '👟'} {p.descripcion} — ${Number(p.valor).toLocaleString('es-CO')}
                         </option>
                       ))}
@@ -1854,12 +1857,12 @@ function EstadoCuentaInner() {
                   <label className="block text-[11px] font-bold text-white/70 uppercase tracking-wide mb-1">Tu mensaje</label>
                   <textarea value={pagosMsgTexto} onChange={e => setPagosMsgTexto(e.target.value)} rows={4}
                     placeholder="Escribe aquí tu mensaje..."
-                    className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 resize-none mb-3"
+                    className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm text-white bg-[#2B3547] placeholder:text-white/35 focus:outline-none focus:ring-2 resize-none mb-3"
                     style={{ ['--tw-ring-color' as any]: msgDestino.color }} />
                   <label className="block text-[11px] font-bold text-white/70 uppercase tracking-wide mb-1">WhatsApp de contacto</label>
                   <input value={pagosMsgWa} onChange={e => setPagosMsgWa(e.target.value)} inputMode="tel"
                     placeholder="Ej: 3001234567"
-                    className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 mb-4"
+                    className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm text-white bg-[#2B3547] placeholder:text-white/35 focus:outline-none focus:ring-2 mb-4"
                     style={{ ['--tw-ring-color' as any]: msgDestino.color }} />
                   <div className="flex gap-3">
                     <button onClick={() => setMsgDestino(null)} disabled={enviandoPagos}
@@ -2148,7 +2151,20 @@ function EstadoCuentaInner() {
         </div>
       )}
 
-      {/* ── MODAL REGISTRAR PAGO ── */}
+      {/* ── MODAL REGISTRAR PAGO ─────────────────────────────────────────────
+          BLANCO SOBRE BLANCO (dirección, 01/09/2026 — «no permite editar como
+          lo hacía antes»).
+
+          Sí permitía: el cuadro venía lleno con el valor, la descripción y lo
+          pagado, y se podía escribir encima. Lo que pasaba es que a estas
+          casillas se les puso la letra BLANCA cuando la plataforma se volvió
+          oscura, pero nunca se les dijo qué fondo llevar — y el navegador les
+          pone el suyo, que es blanco. Letra blanca sobre fondo blanco: se
+          escribía bien, no se veía nada, y parecía dañado.
+
+          Se les pone el fondo oscuro de la plataforma. Mismo arreglo en el
+          cuadro de los torneos, en el nombre del soporte, en el mensaje y en
+          el buscador de Asignación de Proyecto: era el mismo descuido. */}
       {editIdx !== null && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-[#3C4759] rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 w-full max-w-sm">
@@ -2162,7 +2178,7 @@ function EstadoCuentaInner() {
                 <input
                   value={editForm.vCargado || ''}
                   onChange={e => setEditForm(f => ({ ...f, vCargado: e.target.value }))}
-                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white bg-[#2B3547] placeholder:text-white/35 [color-scheme:dark]"
                   placeholder="$138.000"
                 />
               </div>
@@ -2171,7 +2187,7 @@ function EstadoCuentaInner() {
                 <input
                   value={editForm.destino || ''}
                   onChange={e => setEditForm(f => ({ ...f, destino: e.target.value }))}
-                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white bg-[#2B3547] placeholder:text-white/35 [color-scheme:dark]"
                   placeholder="Ej: Transferencia, efectivo..."
                 />
               </div>
@@ -2186,7 +2202,7 @@ function EstadoCuentaInner() {
                       setEditForm(f => ({ ...f, fecha: `${day}/${m}/${y.slice(2)}` }));
                     }
                   }}
-                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white bg-[#2B3547] placeholder:text-white/35 [color-scheme:dark]"
                 />
                 {editForm.fecha && (
                   <p className="text-[11px] text-[#5BE39B] font-bold mt-1">→ {editForm.fecha}</p>
@@ -2197,7 +2213,7 @@ function EstadoCuentaInner() {
                 <input
                   value={editForm.vPagado || ''}
                   onChange={e => setEditForm(f => ({ ...f, vPagado: e.target.value }))}
-                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white bg-[#2B3547] placeholder:text-white/35 [color-scheme:dark]"
                   placeholder="$138.000"
                 />
               </div>
@@ -2247,7 +2263,7 @@ function EstadoCuentaInner() {
                   value={formTorneo.vCargado}
                   inputMode="numeric"
                   onChange={e => setFormTorneo(f => ({ ...f, vCargado: e.target.value }))}
-                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white bg-[#2B3547] placeholder:text-white/35 [color-scheme:dark]"
                   placeholder="$ 253.500"
                 />
               </div>
@@ -2256,7 +2272,7 @@ function EstadoCuentaInner() {
                 <input
                   value={formTorneo.medio}
                   onChange={e => setFormTorneo(f => ({ ...f, medio: e.target.value }))}
-                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white bg-[#2B3547] placeholder:text-white/35 [color-scheme:dark]"
                   placeholder="Ej: Transferencia, efectivo..."
                 />
               </div>
@@ -2267,7 +2283,7 @@ function EstadoCuentaInner() {
                   value={formTorneo.fecha}
                   onChange={e => setFormTorneo(f => ({ ...f, fecha: e.target.value }))}
                   style={{ colorScheme: 'dark' }}
-                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white bg-[#2B3547] placeholder:text-white/35 [color-scheme:dark]"
                 />
                 {formTorneo.fecha && (
                   <p className="text-[11px] text-[#5BE39B] font-bold mt-1">→ {formatFecha(formTorneo.fecha)}</p>
@@ -2279,7 +2295,7 @@ function EstadoCuentaInner() {
                   value={formTorneo.vPagado}
                   inputMode="numeric"
                   onChange={e => setFormTorneo(f => ({ ...f, vPagado: e.target.value }))}
-                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white"
+                  className="w-full border border-[#4A5568] rounded-xl px-3 py-2.5 text-sm font-bold mt-1 focus:outline-none focus:ring-2 focus:ring-green-400 text-white bg-[#2B3547] placeholder:text-white/35 [color-scheme:dark]"
                   placeholder="$ 253.500"
                 />
               </div>
@@ -2433,7 +2449,7 @@ function EstadoCuentaInner() {
                       if (e.key === 'Escape') { setPendingFiles([]); setMesesSelSoporte([]); setShowNombreModal(false); }
                     }}
                     placeholder="Ej: Pago julio 2026"
-                    className="w-full border-2 border-[rgba(0,176,80,.45)] rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-green-600"
+                    className="w-full border-2 border-[rgba(0,176,80,.45)] rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-[#2B3547] placeholder:text-white/35 focus:outline-none focus:border-green-600"
                   />
                 </div>
 
