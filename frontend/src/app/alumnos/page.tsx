@@ -350,6 +350,66 @@ function PuntoAcceso({ cod, accesos }: { cod: string; accesos: Set<string> }) {
   );
 }
 
+/* ── DOCUMENTOS E INFORMES EN EL LISTADO DEL PROYECTO (31/08/2026) ─────────
+   El formador venía pidiendo poder ver, sin entrar al perfil de cada niño,
+   qué papeles están cargados y qué informes ya hizo. Los dos datos YA se
+   estaban trayendo en esta pantalla (getResumenDocumentos y
+   getEvaluacionesResumen); lo único que faltaba era pintarlos.
+
+   Se usa el mismo lenguaje del consolidado de Asistencia para que no haya que
+   aprender nada nuevo: pastilla verde = está, apagada = falta; y en los
+   informes el semáforo rojo / naranja / verde. */
+
+/** Avance de un informe: qué tan lleno está y cuál es, para poder abrirlo. */
+type InfAvance = { id: string; llenos: number; total: number };
+
+/** Pastilla de documento: verde si está cargado, apagada si falta. */
+function PastillaDoc({ etiqueta, titulo, ok }: { etiqueta: string; titulo: string; ok: boolean }) {
+  return (
+    <span
+      title={`${titulo}: ${ok ? 'cargado' : 'pendiente'}`}
+      className="inline-flex items-center justify-center rounded font-black select-none"
+      style={{
+        background: ok ? VERDE : 'rgba(255,255,255,.07)',
+        color:      ok ? '#ffffff' : 'rgba(255,255,255,.40)',
+        border:     ok ? '1px solid transparent' : '1px dashed rgba(255,255,255,.22)',
+        fontSize: 8, letterSpacing: '.04em', padding: '2px 4px', minWidth: 30, lineHeight: 1.5,
+      }}>
+      {etiqueta}
+    </span>
+  );
+}
+
+/** Pastilla de informe con semáforo. Se le da clic y abre ESE informe. */
+function PastillaInf({ n, inf, onAbrir }: { n: 1 | 2 | 3; inf?: InfAvance; onAbrir: () => void }) {
+  /* Mismo criterio del consolidado (dirección, 27/08/2026):
+     ROJO = no lo ha hecho, o lo abrió y no puso nada
+     NARANJA = lo empezó y va a medias
+     VERDE = terminado */
+  const llenos = inf?.llenos ?? 0;
+  const total  = inf?.total  ?? 0;
+  const estado = llenos <= 0 ? 'falta' : (total > 0 && llenos >= total) ? 'listo' : 'medias';
+  const color  = estado === 'listo' ? VERDE : estado === 'medias' ? '#E0A33A' : '#C0504D';
+  const cuenta = total > 0 ? ` (${llenos} de ${total})` : '';
+  const ayuda  = estado === 'listo'  ? `Informe ${n} terminado${cuenta} · clic para revisarlo`
+               : estado === 'medias' ? `Informe ${n} a medias${cuenta} · clic para revisarlo`
+               : inf?.id             ? `Informe ${n} abierto pero sin llenar · clic para revisarlo`
+               :                       `Informe ${n} sin hacer`;
+  return (
+    <span
+      title={ayuda}
+      onClick={() => { if (inf?.id) onAbrir(); }}
+      className="inline-flex items-center justify-center rounded font-black select-none"
+      style={{
+        background: color, color: '#ffffff',
+        fontSize: 8, letterSpacing: '.04em', padding: '2px 4px', minWidth: 30, lineHeight: 1.5,
+        cursor: inf?.id ? 'pointer' : 'default',
+      }}>
+      {`INF ${n}`}
+    </span>
+  );
+}
+
 function DashboardProyecto({
   proy, lista, programa, pal, fotos, fotosProfe, esProfe, accesos, resumen,
   onFotoProfe, onVerPerfil, onPosicion, onCal, onCom,
@@ -417,7 +477,11 @@ function DashboardProyecto({
     } catch { return fromCols; }
   });
   // ── Estado de INFORMES de valoración por código (INF1/INF2/INF3) — admin y profe ──
-  const [infMap, setInfMap] = useState<Record<string, Set<string>>>({});
+  /* Además del número de informe se guarda CUÁNTAS casillas lleva llenas, para
+     poder pintar en la tabla el mismo semáforo del consolidado de Asistencia:
+     rojo sin hacer · naranja a medias · verde terminado. El dato ya venía en
+     getEvaluacionesResumen(); antes se estaba botando. — 31/08/2026 */
+  const [infMap, setInfMap] = useState<Record<string, Record<string, InfAvance>>>({});
   useEffect(() => {
     // Resumen liviano (codigo + numero de informe). Antes se traia la
     // valoracion COMPLETA de cada deportista, fotos incluidas.
@@ -426,17 +490,41 @@ function DashboardProyecto({
     const cods = lista.map(d => getCol(d, /^c[oó]d/i).trim().toUpperCase()).filter(Boolean);
     if (!cods.length) { setInfMap({}); return; }
     getEvaluacionesResumen(cods).then(evs => {
-      const m: Record<string, Set<string>> = {};
+      const m: Record<string, Record<string, InfAvance>> = {};
       evs.forEach((ev: any) => {
         const c = String(ev.codigo ?? '').trim().toUpperCase();
         const n = (String(ev.numeroInforme ?? '').match(/[123]/) || [])[0];
         if (!c || !n) return;
-        (m[c] = m[c] || new Set()).add(n);
+        const nuevo: InfAvance = {
+          id:     String(ev.id ?? ''),
+          llenos: Number(ev.llenos ?? 0),
+          total:  Number(ev.total  ?? 0),
+        };
+        /* Si hay varios guardados del mismo informe, manda el MÁS LLENO: es el
+           que refleja de verdad hasta dónde llegó el formador. Mismo criterio
+           que usa el consolidado. */
+        if (!m[c]) m[c] = {};
+        const antes = m[c][n];
+        if (!antes || nuevo.llenos > antes.llenos) m[c][n] = nuevo;
       });
       setInfMap(m);
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esProfe, lista.length, proy]);
+
+  /** Abre ESE informe en Vista Dinámica, en otra pestaña, y le dice por dónde
+   *  volver: al listado de ESTE proyecto. Igual que en el consolidado. */
+  function abrirInforme(cod: string, idEv: string) {
+    if (!idEv) return;
+    const volver = `/alumnos?proyecto=${encodeURIComponent(proy)}`;
+    const url = `/valoracion-dinamica?cod=${encodeURIComponent(cod)}`
+              + `&ev=${encodeURIComponent(idEv)}`
+              + `&volver=${encodeURIComponent(volver)}`;
+    try {
+      const w = window.open(url, '_blank');
+      if (!w) window.location.href = url;
+    } catch { window.location.href = url; }
+  }
 
   // ── Subir foto del deportista desde el listado (profe/admin) ──
   const [fotosLocal,   setFotosLocal]   = useState<Record<string, string>>({});
@@ -884,6 +972,13 @@ function DashboardProyecto({
                   <th className="border border-white px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-left" style={{ minWidth: 230, width: '100%' }}>
                     POSICIÓN <span className="text-white/40 font-normal normal-case">(máx. 3)</span>
                   </th>
+                  {/* ── DOCUMENTOS E INFORMES (31/08/2026) ── */}
+                  <th className="border border-white px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center" style={{ minWidth: 156 }}>
+                    DOCUMENTOS
+                  </th>
+                  <th className="border border-white px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center" style={{ minWidth: 120 }}>
+                    INFORMES
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -965,11 +1060,39 @@ function DashboardProyecto({
                           readOnly={!esProfe}
                         />
                       </td>
+
+                      {/* ── DOCUMENTOS — qué papeles están cargados (31/08/2026) ── */}
+                      <td className="border border-white px-2 py-1.5 whitespace-nowrap" style={{ verticalAlign: 'middle', background: PANEL }}>
+                        <span className="inline-flex items-center gap-1 justify-center w-full">
+                          {/* Con ?. aunque el tipo diga que siempre llega: esta pantalla ya
+                              se cayó antes por un dato que no venía. — 31/08/2026 */}
+                          <PastillaDoc etiqueta="DOC" titulo="Documento de identidad (TI o RC)" ok={!!resumen?.conDoc?.has(dep.id)} />
+                          <PastillaDoc etiqueta="EPS" titulo="Afiliación a EPS"                 ok={!!resumen?.conEps?.has(dep.id)} />
+                          <PastillaDoc etiqueta="NOT" titulo="Notas escolares"                  ok={!!resumen?.conEsc?.has(dep.id)} />
+                          <PastillaDoc etiqueta="FOT" titulo="Foto del deportista"              ok={!!resumen?.conFoto?.has(dep.id)} />
+                        </span>
+                      </td>
+
+                      {/* ── INFORMES — los tres de valoración, con semáforo (31/08/2026) ── */}
+                      <td className="border border-white px-2 py-1.5 whitespace-nowrap" style={{ verticalAlign: 'middle', background: PANEL }}>
+                        {(() => {
+                          const cod  = getCol(dep, /^c[oó]d/i).trim().toUpperCase();
+                          const info = infMap[cod] ?? {};
+                          return (
+                            <span className="inline-flex items-center gap-1 justify-center w-full">
+                              {([1, 2, 3] as const).map(n => (
+                                <PastillaInf key={n} n={n} inf={info[String(n)]} onAbrir={() => abrirInforme(cod, info[String(n)]?.id ?? '')} />
+                              ))}
+                            </span>
+                          );
+                        })()}
+                      </td>
                     </tr>
                   );
                 })}
+                {/* +5 = # · VAL · POSICIÓN · DOCUMENTOS · INFORMES */}
                 {filtrada.length === 0 && (
-                  <tr><td colSpan={cols.length + 3} className="py-10 text-center text-sm text-white/45 border border-white" style={{ background: PANEL }}>Sin resultados</td></tr>
+                  <tr><td colSpan={cols.length + 5} className="py-10 text-center text-sm text-white/45 border border-white" style={{ background: PANEL }}>Sin resultados</td></tr>
                 )}
               </tbody>
             </table>
