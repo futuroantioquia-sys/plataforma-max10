@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Users, ClipboardList, CalendarDays, Trophy, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Users, ClipboardList, CalendarDays, Trophy, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import { getProfes, contarDeportistasPorProyecto } from '@/lib/db';
+import { getSesion } from '@/lib/permisos';
 
 /* El conteo de cada proyecto se guarda en este teléfono. Así, de la segunda
    vez en adelante, el número aparece de una y solo se actualiza por detrás.
@@ -19,6 +20,23 @@ export default function MisProyectosPage() {
   const [conteoProyecto, setConteoProyecto] = useState<Record<string, number>>({});
   const [conteoFallo, setConteoFallo] = useState(false);
   const [cargando,       setCargando]       = useState(true);
+
+  /* ── ESTA ES LA PUERTA DEL FORMADOR ──────────────────────────────────────
+     (dirección, 01/09/2026 — «salgo del perfil de profe para administrador y
+      me sale este error»)
+
+     Si aquí entra un administrador —por la flecha de atrás, por un enlace
+     viejo o porque otra pantalla lo mandó por equivocación— no ve nada suyo:
+     ve la tarjeta del profe en blanco y el aviso «Sin proyectos asignados»,
+     que parece una falla grave y no lo es. Se le devuelve a su tablero.
+
+     Si la sesión viene vacía no se toca nada: de eso ya se encarga el
+     servidor, y así un formador nunca queda rebotando entre dos pantallas. */
+  useEffect(() => {
+    const rol = getSesion();
+    if (rol && rol !== 'profesor') router.replace('/dashboard');
+  }, [router]);
+
   useEffect(() => {
     // 0. Conteo de la última vez: se pinta de una, sin esperar al servidor.
     try {
@@ -233,6 +251,11 @@ export default function MisProyectosPage() {
               {[
                 { texto: 'GESTIONAR ASISTENCIA', Icono: ClipboardList, ir: () => escoger('asistencia'), varios: proyectosProfe.length > 1 },
                 { texto: 'MICROCICLOS',          Icono: CalendarDays,  ir: () => escoger('microciclo'), varios: proyectosProfe.length > 1 },
+                /* MI CONSOLIDADO (dirección, 01/09/2026): hasta hoy el formador
+                   solo tenía pantallas para LLENAR y ninguna para VER cómo va.
+                   Esta le muestra sus grupos: asistencia, microciclos e
+                   informes, y abriendo un grupo, niño por niño. */
+                { texto: 'MI CONSOLIDADO', Icono: BarChart3, ir: () => { setMenu(null); router.push('/consolidado'); }, varios: false },
                 ...(vePospartido
                   ? [{ texto: 'POSPARTIDOS', Icono: Trophy, ir: () => { setMenu(null); router.push('/postpartido'); }, varios: false }]
                   : []),

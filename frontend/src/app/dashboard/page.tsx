@@ -7,7 +7,7 @@ import {
   Star, MessageCircle, Clipboard, ClipboardList, UserPlus, LayoutList,
   Link2, Copy, Check, QrCode, BarChart3, Trophy, Upload, FolderKanban,
   LogOut, Zap, Shield, Dumbbell, HardHat, Clock, UserCog, Calculator, Cake, CalendarDays,
-  UserMinus, FileText, RefreshCw,
+  UserMinus, FileText,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { esSuperAdmin, esDeportivo, getSesion } from '@/lib/permisos';
@@ -364,13 +364,6 @@ function DashboardAdmin() {
             a CONTROLANDO LA EMPRESA, que es lo que de verdad es —un control de
             la labor del formador—, y no un módulo de trabajo del día a día. */}
         <AccesoCard titulo="Torneos y Competencias" icono={Trophy}    href="/torneos"      descripcion="Cuadro de equipos inscritos" color="verde" />
-        {/* NO SE PONE AQUÍ "CARGAR TORNEOS" (dirección, 31/08/2026).
-            Lo intenté y estaba mal: la pantalla suelta /cargar-torneos es la
-            versión VIEJA del 27/08 —cobra uno por uno, sin carga masiva y sin
-            el estado NO PAGA—. Lo bueno vive hoy en el POST PARTIDO, en la
-            matriz del torneo: ahí está la carga masiva y los cuatro estados.
-            Mandar a la dirección a la pantalla vieja era peor que no tener
-            enlace. Se entra por Post Partido → VER EL EQUIPO Y CARGAR EL TORNEO. */}
       </CategoriaSection>
 
       {/* ── CONTROLANDO LA EMPRESA ─────────────────────────────────────────
@@ -387,17 +380,21 @@ function DashboardAdmin() {
           href="/postpartido"
           descripcion="Quién lo gestiona · sin iniciar, a medias o terminado · por fecha y por profe"
           color="verde" />
+        {/* Antes apuntaba a /control-asistencias, que NUNCA se construyó: era un
+            enlace roto. Ahora lleva al CONSOLIDADO, que trae asistencia,
+            microciclos e informes en una sola pantalla. — 01/09/2026 */}
         <AccesoCard
           titulo="Control Asistencia"
           icono={Clipboard}
-          href="/control-asistencias"
-          descripcion="Quién está al día, semana por semana · por mes y por profe"
+          href="/consolidado"
+          descripcion="Quién está al día · por grupo y por deportista"
           color="verde" />
+        {/* Igual que el de arriba: /control-microciclos tampoco existía. */}
         <AccesoCard
           titulo="Control Micro Ciclos"
           icono={CalendarDays}
-          href="/control-microciclos"
-          descripcion="Qué planeación está montada · una por semana · por mes y por profe"
+          href="/consolidado"
+          descripcion="Qué planeación está montada · una por semana"
           color="verde" />
         <AccesoCard
           titulo="Control Informes"
@@ -703,31 +700,10 @@ function WelcomeBar({ usuario }: { usuario: any }) {
           </h1>
           <p className="text-white/45 text-xs sm:text-sm mt-0.5 capitalize">{fecha}</p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* ── BOTÓN ACTUALIZAR (dirección, 31/08/2026) ────────────────────
-              Cuando la plataforma se instala como app —en el computador o en
-              el celular— la ventana ya NO trae la flechita de recargar del
-              navegador. Y después de subir cambios hay que recargar para
-              verlos. Las teclas (Ctrl+R) siguen sirviendo, pero no hay por
-              qué acordarse de eso: aquí queda el botón, a la vista.
-
-              Recarga de verdad, pidiéndole todo otra vez a internet. Nada se
-              pierde: lo que está guardado, guardado está. */}
-          <button
-            onClick={() => window.location.reload()}
-            title="Traer la versión más reciente de la plataforma"
-            className="flex items-center gap-2 border rounded-xl px-3 py-1.5 shadow-sm
-              transition hover:brightness-125 active:scale-95"
-            style={{ background: PANEL, borderColor: BORDE }}>
-            <RefreshCw className="w-3.5 h-3.5" style={{ color: VERDE }} />
-            <span className="text-xs font-bold text-white/70 uppercase tracking-wide">Actualizar</span>
-          </button>
-
-          <div className="hidden sm:flex items-center gap-2 border rounded-xl px-3 py-1.5 shadow-sm"
-            style={{ background: PANEL, borderColor: BORDE }}>
-            <Zap className="w-3.5 h-3.5" style={{ color: VERDE }} />
-            <span className="text-xs font-bold text-white/70 uppercase tracking-wide">Activa</span>
-          </div>
+        <div className="hidden sm:flex items-center gap-2 border rounded-xl px-3 py-1.5 shadow-sm flex-shrink-0"
+          style={{ background: PANEL, borderColor: BORDE }}>
+          <Zap className="w-3.5 h-3.5" style={{ color: VERDE }} />
+          <span className="text-xs font-bold text-white/70 uppercase tracking-wide">Activa</span>
         </div>
       </div>
     </div>

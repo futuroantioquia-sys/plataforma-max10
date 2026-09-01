@@ -7,6 +7,7 @@ import { ArrowLeft, Users, FileDown, Save, CheckCircle2, ChevronDown, ChevronUp,
 import { getDeportistas, getDeportistasPorProyecto, getAsistencia, getAsistenciaPorProyecto, getAsistenciaDeportistas, saveAsistenciaProyecto, saveAsistenciaLocal, deleteAsistenciaFecha, getCalificaciones, saveCalificacion, getValoracionesAnio, getJornadaMes, saveJornadaMes, getProfes, getResumenGestion, getEvaluacionesResumen } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
+import { esProfesor } from '@/lib/permisos';
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DIAS_SEMANA  = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
@@ -400,17 +401,23 @@ function AsistenciaInner() {
     if (prgParam) setPrograma(prgParam);
     if (proyParam) setProyecto(proyParam);
 
-    // 1. Detectar rol desde cookies/localStorage
-    const cookies = document.cookie.split(';').map(c => c.trim());
-    const isAdmin = cookies.some(c => c === 'futuro-session=1');
-    let isProfe = !isAdmin && cookies.some(c => c === 'futuro-session=profesor');
-    if (!isProfe && !isAdmin) {
-      try {
-        const g = localStorage.getItem('futuro-profe-proyectos');
-        const n = localStorage.getItem('futuro-profe-nombre');
-        if (g && n) isProfe = true;
-      } catch {}
-    }
+    /* ── 1. QUIÉN ENTRÓ: SE LEE DE LA SESIÓN, NO DEL APARATO ─────────────────
+       (dirección, 01/09/2026 — «salgo del perfil de profe para administrador
+        y me sale este error»)
+
+       QUÉ PASABA. Aquí solo se reconocía como administrador al ADMON —la
+       sesión "1"—. Los demás administradores (acceso total, deportivo,
+       contabilidad) no daban ni administrador ni formador, y entonces se caía
+       a un repuesto: «si en este computador quedaron guardados los grupos de
+       un profe, entonces es un profe». Como esos datos quedan del formador que
+       usó el equipo antes, el administrador terminaba tratado como formador y
+       la pantalla lo mandaba a MIS PROYECTOS — la del profe, vacía, con el
+       «Sin proyectos asignados». Por eso pasaba de vez en cuando y no siempre:
+       dependía de quién hubiera entrado antes en ese computador.
+
+       LA CURA. El rol se lee ÚNICAMENTE de la sesión, que la firma el
+       servidor. Lo que haya guardado en el aparato no decide quién es nadie. */
+    const isProfe = esProfesor();
 
     // 2. Sincronizar estado de UI con el rol real
     setEsProfe(isProfe);
@@ -1609,7 +1616,7 @@ ${estilos}</style></head><body><div id="pdfArea">${cuerpo}</div></body></html>`;
           <div className="flex flex-col items-end flex-shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/MAX%2010.png" alt="MAX 10 SPORT" className="h-7 w-auto object-contain" />
-            <p className="text-white/75 text-[9px] font-semibold tracking-wide mt-0.5 text-right leading-tight">CONECTA · GESTIONA · GANA</p>
+            <p className="text-white/60 text-[8px] mt-0.5 text-right leading-tight">Conecta, Gestiona, Gana</p>
           </div>
         </div>
       </header>

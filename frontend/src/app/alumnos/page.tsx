@@ -12,7 +12,7 @@ import {
 import { BalonCargando } from '@/components/BalonCargando';
 import { cn } from '@/lib/utils';
 import { getDeportistas, getDeportistasPorProyecto, saveDeportistas, getCodigosConAcceso, getFotosDeportistas, getResumenDocumentos, getEvaluacionesResumen, saveFoto, getCalificaciones } from '@/lib/db';
-import { useSoloLectura } from '@/lib/permisos';
+import { useSoloLectura, esProfesor } from '@/lib/permisos';
 import type { Deportista } from '@/lib/db';
 
 const FOTOS_PROFE_KEY = 'futuro_fotos_profes';
@@ -1216,16 +1216,15 @@ function AlumnosPageContent() {
   }
   // Detección de profesor — se hace en useEffect (cliente) para evitar mismatch de SSR
   const [esProfe, setEsProfe] = useState(false);
+  /* EL ROL SE LEE DE LA SESIÓN, NO DEL APARATO (dirección, 01/09/2026).
+     Antes, si la sesión no era exactamente el ADMON, se miraba si en este
+     computador habían quedado guardados los grupos de algún profe y con eso se
+     daba por hecho que quien estaba era un formador. Los administradores de
+     acceso total, deportivo y contabilidad caían en esa trampa: la pantalla se
+     les ponía en modo profe y la flecha de atrás los mandaba a MIS PROYECTOS,
+     la pantalla del formador, vacía. Ahora manda la sesión y nada más. */
   useEffect(() => {
-    try {
-      const cookies = document.cookie.split(';').map(c => c.trim());
-      // Admin (futuro-session=1) nunca es profe, aunque localStorage tenga datos viejos
-      if (cookies.some(c => c === 'futuro-session=1')) return;
-      if (cookies.some(c => c === 'futuro-session=profesor')) { setEsProfe(true); return; }
-      const g = localStorage.getItem('futuro-profe-proyectos');
-      const n = localStorage.getItem('futuro-profe-nombre');
-      if (g && n) setEsProfe(true);
-    } catch {}
+    setEsProfe(esProfesor());
   }, []);
   const autoNavRef = useRef(false);
 
@@ -1479,7 +1478,7 @@ function AlumnosPageContent() {
           )}
           <div className="text-right leading-tight border-l border-white/20 pl-3">
             <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-            <p className="text-white/75 text-[9px] font-semibold tracking-wide">CONECTA · GESTIONA · GANA</p>
+            <p className="text-white/60 text-[11px]">Conecta, Gestiona, Gana</p>
           </div>
         </div>
       </header>

@@ -1,0 +1,57 @@
+====================================================================
+   MIS BOTONES  ·  FUTURO ANTIOQUIA / MAX 10 SPORT
+   Creado el 01/09/2026
+====================================================================
+
+Estos son los TRES unicos archivos que usted necesita en el dia a dia.
+Todo lo demas que hay en la carpeta de arriba son herramientas de una
+sola vez, que ya se usaron. No las abra.
+
+
+   1 - PRENDER MI PLATAFORMA
+   -------------------------
+   Prende la copia de su computador.
+   Espere a que diga la palabra  Ready  y ahi entre a:
+        localhost:3000/login
+   NO cierre la ventana negra mientras use la pagina.
+   Sirve para ver un cambio antes de publicarlo.
+
+
+   2 - PUBLICAR EN INTERNET
+   ------------------------
+   Manda los cambios a internet, para que los vean los profes
+   y los papas. Espere a que diga  LISTO.
+   Despues entre a:
+        plataforma-max10.vercel.app
+   y oprima  Ctrl + F5.
+
+
+   3 - RESPALDAR LA BASE
+   ---------------------
+   Guarda una copia de TODA la base de datos en la carpeta
+   RESPALDO. Ya hay un respaldo automatico diario; este es
+   para cuando quiera uno de una, antes de algo delicado.
+
+
+--------------------------------------------------------------------
+LAS DOS DIRECCIONES, PARA NO CONFUNDIRLAS
+--------------------------------------------------------------------
+
+   SU COMPUTADOR (con la ventana negra abierta):
+        localhost:3000/login
+
+   INTERNET (siempre prendida, la que ven todos):
+        plataforma-max10.vercel.app
+
+
+--------------------------------------------------------------------
+SI WINDOWS BLOQUEA ALGUNO
+--------------------------------------------------------------------
+
+   Clic derecho sobre el archivo  ->  Propiedades  ->  abajo del
+   todo marque la casilla  Desbloquear  ->  Aceptar.
+
+   Si eso no sirve, avisele a Claude por el chat: el le escribe
+   una copia nueva y esa pasa sin problema.
+
+====================================================================

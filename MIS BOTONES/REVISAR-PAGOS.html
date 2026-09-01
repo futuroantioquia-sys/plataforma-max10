@@ -1,0 +1,142 @@
+<meta charset="utf-8">
+<title>Revisar los pagos confirmados</title>
+<style>
+  *{box-sizing:border-box;margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif}
+  body{background:#333F50;color:#fff;min-height:100vh;padding:26px}
+  .caja{max-width:820px;margin:0 auto;background:#3C4759;border:1px solid #4A5568;
+        border-radius:16px;padding:26px 30px}
+  h1{font-size:23px;font-weight:900;margin-bottom:7px}
+  .sub{color:#7C879A;font-size:14.5px;line-height:1.5;margin-bottom:20px}
+  button{width:100%;background:#00B050;border:0;border-radius:12px;color:#fff;
+         font-weight:900;font-size:15px;padding:15px;cursor:pointer}
+  button:hover{filter:brightness(1.12)}
+  button:disabled{opacity:.5;cursor:default}
+  .cod{margin-top:12px}
+  .cod input{width:100%;background:#2B3547;border:1px solid #4A5568;border-radius:10px;
+             padding:11px 13px;color:#fff;font-size:15px;font-family:Consolas,monospace}
+  .cod label{display:block;font-size:11px;font-weight:900;letter-spacing:1px;
+             color:#7C879A;margin-bottom:6px}
+  #log{margin-top:20px;display:none}
+  .b{background:#2B3547;border:1px solid #4A5568;border-radius:11px;
+     padding:14px 17px;margin-bottom:9px;font-size:14.5px;line-height:1.6}
+  .b.ok{border-left:4px solid #00B050}
+  .b.mal{border-left:4px solid #C0504D}
+  .b.amb{border-left:4px solid #E0A33A}
+  .t{font-weight:900;font-size:12px;letter-spacing:1px;margin-bottom:6px}
+  .ok .t{color:#5BE39B}.mal .t{color:#C0504D}.amb .t{color:#E0A33A}
+  code{font-family:Consolas,monospace;background:#1f2733;padding:2px 6px;
+       border-radius:4px;color:#5BE39B;font-size:13.5px}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+  th{background:#00B050;padding:6px 8px;text-align:left;font-size:11px}
+  td{padding:5px 8px;border-top:1px solid #4A556855}
+</style>
+
+<div class="caja">
+  <h1>Revisar los pagos confirmados</h1>
+  <p class="sub">Esto NO cambia nada. Solo mira y cuenta, para saber por qué los chulos
+     del Libro Contable salen en rojo cuando deberían estar en verde.</p>
+
+  <div class="cod">
+    <label>CÓDIGO DEL DEPORTISTA PARA REVISAR (opcional)</label>
+    <input id="cod" value="24298" placeholder="24298">
+  </div>
+
+  <button id="b" onclick="revisar()" style="margin-top:14px">REVISAR</button>
+  <div id="log"></div>
+</div>
+
+<script>
+const URL_BASE = 'https://fykdyalpuydkwfjqguip.supabase.co';
+const CLAVE    = 'sb_publishable_r070aJtc2s6cP23mYqw6qA_4uJjk4o0';
+const HDR = { apikey: CLAVE, Authorization: 'Bearer ' + CLAVE };
+
+function di(clase, titulo, html) {
+  const l = document.getElementById('log');
+  l.style.display = 'block';
+  l.innerHTML += '<div class="b ' + clase + '"><div class="t">' + titulo + '</div>' + html + '</div>';
+}
+
+async function revisar() {
+  const b = document.getElementById('b');
+  b.disabled = true; b.textContent = 'REVISANDO…';
+  document.getElementById('log').innerHTML = '';
+
+  /* 1 · ¿Cuántas filas tiene la tabla de pagos? */
+  let total = null;
+  try {
+    const r = await fetch(URL_BASE + '/rest/v1/pagos_estado?select=deportista_id&limit=1',
+      { headers: { ...HDR, Prefer: 'count=exact', Range: '0-0' } });
+    const rango = r.headers.get('content-range') || '';
+    total = rango.includes('/') ? rango.split('/')[1] : null;
+    if (!r.ok) {
+      const t = await r.text();
+      di('mal', 'LA TABLA DE PAGOS NO DEJA LEER',
+        'El servidor respondió <code>' + r.status + '</code>.<br><br>' +
+        'Esto pasa cuando se le activó una protección (RLS) a la tabla y no se dejó ' +
+        'permiso de lectura. <b>Esa es la causa de que los chulos salgan en rojo.</b>' +
+        '<br><br><small style="color:#7C879A">Detalle: ' + t.slice(0,200) + '</small>');
+      b.disabled = false; b.textContent = 'REVISAR OTRA VEZ'; return;
+    }
+    if (total === '0' || total === null) {
+      di('mal', 'LA TABLA DE PAGOS SE VE VACÍA',
+        'El servidor contestó bien, pero dice que hay <b>' + (total ?? 'un número desconocido') +
+        '</b> filas.<br><br>Si usted sabe que sí hay pagos publicados, es una protección ' +
+        '(RLS) escondiendo las filas.');
+    } else {
+      di('ok', 'LA TABLA DE PAGOS SE LEE BIEN',
+        'Tiene <b>' + Number(total).toLocaleString('es-CO') + '</b> filas y el servidor las entrega.');
+    }
+  } catch (e) {
+    di('mal', 'NO SE PUDO CONECTAR', 'No hubo respuesta del servidor.<br><small>' + e + '</small>');
+    b.disabled = false; b.textContent = 'REVISAR OTRA VEZ'; return;
+  }
+
+  /* 2 · ¿Cuántas están marcadas como PAGADAS? */
+  try {
+    const r = await fetch(URL_BASE + '/rest/v1/pagos_estado?select=deportista_id,detalle,estado,v_pagado&limit=1000',
+      { headers: HDR });
+    const filas = await r.json();
+    if (Array.isArray(filas)) {
+      const pagadas = filas.filter(f => /PAG/i.test(String(f.estado||'')) ||
+                                        String(f.v_pagado||'').replace(/\D/g,'').length > 0);
+      di(pagadas.length ? 'ok' : 'amb', 'DE LAS PRIMERAS 1.000 FILAS',
+        '<b>' + pagadas.length + '</b> están marcadas como pagadas.<br>' +
+        'Así es como el Libro decide poner el chulo en verde.');
+
+      /* ¿La llave es el CÓDIGO o el UUID? Es la diferencia clave. */
+      const conUuid = filas.filter(f => /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(String(f.deportista_id||''))).length;
+      const conCod  = filas.length - conUuid;
+      di('amb', 'CÓMO ESTÁN GUARDADAS',
+        '<b>' + conCod + '</b> guardadas con el <b>código</b> del deportista (ej. 24298)<br>' +
+        '<b>' + conUuid + '</b> guardadas con el <b>identificador largo</b> (ej. 3f2a-…)<br><br>' +
+        'El Libro tiene que traducir las largas a código usando las fichas. Si las fichas ' +
+        'no alcanzan a cargar, esas filas <b>nunca se ponen verdes</b>.');
+    }
+  } catch (e) { di('mal', 'ERROR LEYENDO LAS FILAS', String(e)); }
+
+  /* 3 · El deportista puntual */
+  const cod = document.getElementById('cod').value.trim();
+  if (cod) {
+    try {
+      const r = await fetch(URL_BASE + '/rest/v1/pagos_estado?select=deportista_id,detalle,estado,v_pagado&deportista_id=eq.' + encodeURIComponent(cod),
+        { headers: HDR });
+      const filas = await r.json();
+      if (Array.isArray(filas) && filas.length) {
+        let t = '<table><tr><th>MES</th><th>ESTADO</th><th>VALOR</th></tr>';
+        filas.forEach(f => { t += '<tr><td>' + (f.detalle||'—') + '</td><td>' + (f.estado||'—') +
+                                  '</td><td>' + (f.v_pagado||'—') + '</td></tr>'; });
+        t += '</table>';
+        di('ok', 'PAGOS GUARDADOS DEL CÓDIGO ' + cod, 'Hay <b>' + filas.length + '</b>:' + t);
+      } else {
+        di('amb', 'EL CÓDIGO ' + cod + ' NO TIENE PAGOS GUARDADOS',
+          'Con el código directo no aparece nada. Puede que sus pagos estén guardados ' +
+          'con el identificador largo en vez del código.');
+      }
+    } catch (e) { di('mal', 'ERROR BUSCANDO EL CÓDIGO', String(e)); }
+  }
+
+  di('amb', 'QUÉ HACER AHORA', 'Tome un pantallazo de TODA esta página y mándemela por el chat. ' +
+     'Con esto sé exactamente qué arreglar, sin adivinar.');
+  b.disabled = false; b.textContent = 'REVISAR OTRA VEZ';
+}
+</script>

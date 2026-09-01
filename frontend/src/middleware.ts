@@ -45,13 +45,7 @@ export async function middleware(request: NextRequest) {
   if (rol === 'profesor') {
     const permitida = RUTAS_PROFESOR.some(r => pathname === r || pathname.startsWith(r + '/'));
     if (!permitida) {
-      /* A DÓNDE SE DEVUELVE EL FORMADOR (dirección, 29/08/2026).
-         Antes caía en CONTROL DE ASISTENCIA, que es la pantalla grande de la
-         administración —con todos los programas y todos los proyectos—. Al
-         oprimir "atrás" el profe terminaba ahí y parecía que estuviera viendo
-         lo del administrador. Ahora se devuelve a MIS PROYECTOS, que es su
-         casa. */
-      return NextResponse.redirect(new URL('/mis-proyectos', request.url));
+      return NextResponse.redirect(new URL('/asistencia', request.url));
     }
   }
 
@@ -88,6 +82,16 @@ export async function middleware(request: NextRequest) {
   // puerta también para cualquier rol nuevo que se agregue mañana.
   if (RUTAS_SOLO_ADMIN.some(r => pathname === r || pathname.startsWith(r + '/'))) {
     if (!ROLES_ADMIN.includes(rol)) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // MIS PROYECTOS es la puerta del FORMADOR y de nadie más (01/09/2026).
+  // Un administrador que caiga ahí no ve nada suyo: ve la tarjeta del profe en
+  // blanco y un «Sin proyectos asignados» que asusta sin motivo. Se le devuelve
+  // a su tablero. (En la pantalla hay el mismo cuidado, para el botón de atrás.)
+  if (pathname === '/mis-proyectos' || pathname.startsWith('/mis-proyectos/')) {
+    if (rol !== 'profesor') {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }

@@ -10,7 +10,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle, UserPlus, AlertCircle, Search, RefreshCw } from 'lucide-react';
-import { getDeportistas, saveDeportistas, invalidarCache } from '@/lib/db';
+import { getDeportistas, updateColumnasDeportista, invalidarCache } from '@/lib/db';
 import { createClient } from '@/lib/supabase/client';
 import type { Deportista } from '@/lib/db';
 import { cn } from '@/lib/utils';
@@ -277,31 +277,62 @@ export default function AsignacionPage() {
 
   function cancelar() { setSelected(null); setExito(false); setError(''); }
 
-  function guardar() {
+  /* ── SE GUARDA UNA FICHA, NO LAS MIL CIENTO SESENTA Y OCHO ────────────────
+     (dirección, 01/09/2026 — «a varios de estos deportistas ya se les había
+      puesto el proyecto, ¿por qué se les quitó?»)
+
+     QUÉ PASABA. Al asignar UN deportista, esta pantalla mandaba a guardar la
+     lista COMPLETA de la academia — las 1.168 fichas — con la copia que tenía
+     cargada desde que se abrió. Dos daños, los dos silenciosos:
+
+       1. PISABA LO DE OTROS. Todo lo que se hubiera cambiado en otra pantalla,
+          en otra pestaña o desde otro computador DESPUÉS de abrir esta se
+          volvía a escribir como estaba antes. Ahí es donde un proyecto ya
+          puesto "se quitaba" solo.
+
+       2. NI SIQUIERA ESPERABA. El guardado salía sin `await`: la pantalla
+          decía "¡Asignado!" de una, sin saber si la nube había recibido algo.
+          Mandar 1.168 fichas tarda; si en ese momento se cambiaba de pantalla
+          o se cerraba, el envío se cortaba a medias y no quedaba nada — pero
+          en la pantalla se había visto el mensaje de éxito.
+
+     LA CURA. Se escribe SOLO la ficha del deportista escogido, con la
+     herramienta que ya existía para eso (`updateColumnasDeportista`). Es un
+     envío chiquito, se espera a que la nube conteste, y el "¡Asignado!" ya solo
+     aparece cuando de verdad quedó guardado. Si falla, lo dice. */
+  async function guardar() {
     if (!selected) return;
     if (!form.programa.trim()) { setError('Selecciona un programa.'); return; }
     const proy = form.proyNuevo.trim() || form.proyecto.trim();
     if (!proy) { setError('Selecciona o escribe un proyecto.'); return; }
 
     setGuardando(true); setError('');
-    try {
-      const actualizada = todos.map(d => {
-        if (d.id !== selected.id) return d;
-        const cols = { ...d._columnas };
-        const setCampo = (rx: RegExp, nombre: string, valor: string) => {
-          const k = Object.keys(cols).find(c => rx.test(c)) ?? nombre;
-          cols[k] = valor;
-        };
-        setCampo(/^program/i, 'PROGRAMA', form.programa);
-        setCampo(/^proy/i,    'PROY',     proy);
-        return { ...d, _columnas: cols };
-      });
-      saveDeportistas(actualizada);
-      setTodos(actualizada);
-      setProgramas(getProgramasExistentes(actualizada));
-      setExito(true);
-      setSelected(null);
-    } catch { setError('Error al guardar.'); }
+
+    /* La versión más fresca de la ficha, por si la lista se actualizó. */
+    const actual = todos.find(d => d.id === selected.id) ?? selected;
+    const cols = { ...actual._columnas };
+    const setCampo = (rx: RegExp, nombre: string, valor: string) => {
+      const k = Object.keys(cols).find(c => rx.test(c)) ?? nombre;
+      cols[k] = valor;
+    };
+    setCampo(/^program/i, 'PROGRAMA', form.programa);
+    setCampo(/^proy/i,    'PROY',     proy);
+
+    let quedo = false;
+    try { quedo = await updateColumnasDeportista(actual.id, cols); }
+    catch { quedo = false; }
+
+    if (!quedo) {
+      setGuardando(false);
+      setError('No se pudo guardar en la nube: el deportista NO quedó asignado. Intente otra vez.');
+      return;
+    }
+
+    const actualizada = todos.map(d => (d.id === actual.id ? { ...d, _columnas: cols } : d));
+    setTodos(actualizada);
+    setProgramas(getProgramasExistentes(actualizada));
+    setExito(true);
+    setSelected(null);
     setGuardando(false);
   }
 
@@ -367,9 +398,15 @@ export default function AsignacionPage() {
               {/* Buscador */}
               <div className="flex items-center gap-2 bg-[#3C4759] rounded-xl border border-[#4A5568] px-3 py-2 shadow-sm">
                 <Search className="w-4 h-4 text-white/40 flex-shrink-0" />
+                {/* EL BUSCADOR ESCRIBÍA EN BLANCO SOBRE BLANCO (dirección,
+                    01/09/2026). La casilla tenía la letra blanca, pero no se le
+                    había dicho que el fondo fuera el de la barra: el navegador
+                    le ponía el suyo, que es blanco. Se escribía bien, pero no se
+                    veía nada. Con `bg-transparent` toma el fondo oscuro de la
+                    barra y la letra blanca vuelve a verse. */}
                 <input type="text" placeholder="Buscar nombre, código o programa..."
                   value={busqueda} onChange={e => setBusqueda(e.target.value)}
-                  className="flex-1 text-sm focus:outline-none placeholder:text-white/40 text-white" />
+                  className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-white/40 text-white" />
               </div>
 
               {/* Tabla */}
@@ -510,7 +547,7 @@ export default function AsignacionPage() {
                       </select>
                       {form.programa === '__NUEVO_PROG__' && (
                         <input type="text" placeholder="Nombre del nuevo programa"
-                          className="mt-2 w-full border border-blue-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]"
+                          className="mt-2 w-full border border-[#4A5568] rounded-xl px-4 py-2.5 text-sm bg-[#2B3547] text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]"
                           onChange={e => setForm(f => ({ ...f, programa: e.target.value }))} />
                       )}
                     </div>
@@ -532,7 +569,7 @@ export default function AsignacionPage() {
                         <input type="text" placeholder="Nombre del nuevo proyecto"
                           value={form.proyNuevo}
                           onChange={e => setForm(f => ({ ...f, proyNuevo: e.target.value }))}
-                          className="mt-2 w-full border border-blue-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]" />
+                          className="mt-2 w-full border border-[#4A5568] rounded-xl px-4 py-2.5 text-sm bg-[#2B3547] text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]" />
                       )}
                     </div>
 
