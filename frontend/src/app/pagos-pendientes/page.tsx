@@ -54,6 +54,8 @@ export default function PagosPendientesPage() {
   const [soportes,   setSoportes]   = useState<SoporteEnriquecido[]>([]);
   const [cargando,   setCargando]   = useState(true);
   const [viendoIdx,  setViendoIdx]  = useState<number | null>(null);
+  /* Aviso de "copiado" al lado del código, en la ficha del visor. */
+  const [copiado, setCopiado] = useState('');
   const [accion,     setAccion]     = useState<{ idx: number; tipo: 'confirmar' | 'rechazar' } | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [toast,      setToast]      = useState<{ msg: string; ok: boolean } | null>(null);
@@ -364,12 +366,26 @@ export default function PagosPendientesPage() {
 
       </main>
 
-      {/* ── Modal: ver imagen completa ── */}
+      {/* ── Modal: ver el soporte, CON LA FICHA AL LADO ──────────────────────
+          (dirección, 01/09/2026)
+
+          «Como esto es una relación muy manual de los pagos por orientar, que
+           visualmente se vea a un lado el nombre y el código, para que la
+           contadora recuerde el dato y lo edite fácilmente.»
+
+          Antes, al abrir el comprobante la pantalla se oscurecía por completo y
+          el renglón —con el nombre y el código— quedaba tapado. Tocaba cerrar,
+          leer el código, y volver a abrir para comparar con la foto. Ahora la
+          ficha va pegada a la foto: código grande, nombre, programa, proyecto y
+          los meses que está pagando. El código se copia con un clic, y desde
+          ahí mismo se puede ir a la Cuenta o al Libro sin cerrar nada. */}
       {viendoIdx !== null && soportes[viendoIdx] && (
         <div
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
-          onClick={() => setViendoIdx(null)}>
-          <div className={`relative w-full ${esPdfDato(datoVista) ? 'max-w-4xl' : 'max-w-2xl'}`} onClick={e => e.stopPropagation()}>
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => { setViendoIdx(null); setCopiado(''); }}>
+          <div className={`relative w-full ${esPdfDato(datoVista) ? 'max-w-6xl' : 'max-w-5xl'} flex flex-col lg:flex-row items-start gap-4`}
+            onClick={e => e.stopPropagation()}>
+          <div className="relative w-full lg:flex-1 min-w-0">
             {esPdfDato(datoVista) ? (
               /* PDF: se muestra dentro del visor del navegador. En celulares que no
                  saben mostrarlo, el boton de abajo lo abre o lo descarga. */
@@ -398,11 +414,112 @@ export default function PagosPendientesPage() {
               />
             )}
             <button
-              onClick={() => setViendoIdx(null)}
+              onClick={() => { setViendoIdx(null); setCopiado(''); }}
               style={{ background: PANEL, border: `1px solid ${BORDE}` }}
               className="absolute -top-3 -right-3 w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-white hover:opacity-70 transition text-lg font-black">
               ×
             </button>
+          </div>
+
+          {/* ── LA FICHA, AL LADO DE LA FOTO ── */}
+          {(() => {
+            const s = soportes[viendoIdx];
+            const cod = String(s.depCodigo || '').trim();
+            return (
+              <aside className="w-full lg:w-[290px] lg:shrink-0 rounded-2xl shadow-2xl overflow-hidden"
+                style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+
+                <div className="px-4 py-2.5" style={{ background: VERDE }}>
+                  <p className="text-white font-black text-[11px] tracking-widest">A QUIÉN LE PERTENECE</p>
+                </div>
+
+                <div className="px-4 py-4 space-y-3.5">
+
+                  {/* CÓDIGO — lo que la contadora necesita tener a la mano */}
+                  <div>
+                    <p className="text-[9.5px] font-black tracking-widest mb-1" style={{ color: GRIS }}>CÓDIGO</p>
+                    <button
+                      onClick={() => {
+                        if (!cod || cod === '—') return;
+                        try {
+                          navigator.clipboard.writeText(cod);
+                          setCopiado(cod);
+                          setTimeout(() => setCopiado(''), 1800);
+                        } catch { /* si el navegador no deja copiar, igual se ve el número */ }
+                      }}
+                      title={cod && cod !== '—' ? 'Clic para copiar el código' : 'Este deportista no tiene código'}
+                      style={{ background: CAMPO, border: `1px solid ${BORDE}` }}
+                      className="w-full rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 hover:opacity-85 transition">
+                      <span className="font-black text-[26px] leading-none tracking-wider" style={{ color: '#5BE39B' }}>
+                        {cod || '—'}
+                      </span>
+                      <span className="text-[10px] font-black" style={{ color: copiado === cod && cod ? '#5BE39B' : GRIS }}>
+                        {copiado === cod && cod ? '¡COPIADO!' : 'COPIAR'}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* NOMBRE */}
+                  <div>
+                    <p className="text-[9.5px] font-black tracking-widest mb-1" style={{ color: GRIS }}>DEPORTISTA</p>
+                    <p className="text-white font-black text-[14.5px] leading-snug">{s.depNombre || '—'}</p>
+                  </div>
+
+                  {/* PROGRAMA · PROYECTO */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[9.5px] font-black tracking-widest mb-1" style={{ color: GRIS }}>PROGRAMA</p>
+                      <p className="text-white font-semibold text-[12px] leading-snug">{s.depPrograma || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9.5px] font-black tracking-widest mb-1" style={{ color: GRIS }}>PROYECTO</p>
+                      <p className="text-white font-semibold text-[12px] leading-snug">{s.depProyecto || '—'}</p>
+                    </div>
+                  </div>
+
+                  {/* MESES que dice estar pagando */}
+                  <div>
+                    <p className="text-[9.5px] font-black tracking-widest mb-1.5" style={{ color: GRIS }}>DICE PAGAR</p>
+                    {s.meses && s.meses.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {s.meses.map(m => (
+                          <span key={m} className="px-2 py-0.5 rounded-md text-white text-[11px] font-bold"
+                            style={{ background: VERDE }}>{m}</span>
+                        ))}
+                      </div>
+                    ) : <p className="text-[12px] font-semibold" style={{ color: GRIS }}>No dijo el mes</p>}
+                  </div>
+
+                  {/* Cuándo lo mandó el papá */}
+                  <div>
+                    <p className="text-[9.5px] font-black tracking-widest mb-1" style={{ color: GRIS }}>LO MANDÓ</p>
+                    <p className="text-white font-semibold text-[12px]">
+                      {s.created_at
+                        ? new Date(s.created_at).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+                        : (s.fecha || '—')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Ir a comprobar, sin cerrar la foto de memoria */}
+                <div className="px-4 pb-4 flex gap-2">
+                  <button
+                    onClick={() => router.push(`/alumnos/${s.depId}/estado-cuenta?readonly=1`)}
+                    style={{ background: CAMPO, border: `1px solid ${BORDE}` }}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-white font-black text-[11.5px] hover:opacity-85 transition">
+                    <Eye className="w-3.5 h-3.5" /> Cuenta
+                  </button>
+                  <button
+                    onClick={() => router.push(`/contabilidad?codigo=${encodeURIComponent(cod)}`)}
+                    disabled={!cod || cod === '—'}
+                    style={{ background: CAMPO, border: `1px solid ${BORDE}` }}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-white font-black text-[11.5px] hover:opacity-85 transition disabled:opacity-35">
+                    <BookOpen className="w-3.5 h-3.5" /> Libro
+                  </button>
+                </div>
+              </aside>
+            );
+          })()}
           </div>
         </div>
       )}

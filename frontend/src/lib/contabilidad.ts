@@ -47,11 +47,35 @@ export interface MovCont {
   _via?: string;         // 'cuenta' | 'nombre' | 'concepto' | ''
   _pendiente?: boolean;
 }
-export type MapeoIdx = { cuenta: Record<string, string>; nombre: Record<string, string> };
+export type MapeoIdx = {
+  cuenta: Record<string, string>;
+  nombre: Record<string, string>;
+  /* ── EL PAGADOR DEL QR (dirección, 01/09/2026) ──────────────────────────
+     En un PAGO QR la REFERENCIA es la cuenta del recaudo, la MISMA para todo
+     el que pague por ese canal. Por eso esos movimientos tienen prohibido
+     aprender por referencia: cruzarían el pago de un niño con el de otro.
+
+     Lo único propio de esa familia es el NOMBRE DEL PAGADOR que el banco
+     escribe en la DESCRIPCIÓN ("PAGO QR SANTIAGO CAMP"). Aquí se guarda a qué
+     código corresponde ese texto. Es la libreta de equivalencias del QR.
+
+     OJO: lo que se aprende aquí NUNCA se aplica solo. Llega como PROPUESTA
+     —en amarillo, pendiente— y no entra a la contabilidad hasta que la
+     dirección la confirme. Dos familias pueden tener nombres parecidos, y el
+     banco además corta el nombre; por eso siempre pasa por ojo humano. */
+  pagador: Record<string, string>;
+};
+
+/** La llave con la que se guarda un pagador: la descripción del banco, tal
+ *  cual, sin tildes ni signos. No se le adivina ni se le recorta nada — el
+ *  banco la escribe siempre igual, y así no hay forma de equivocarse. */
+export function clavePagador(descripcion: any): string {
+  return normNombre(descripcion);
+}
 
 // ── Diccionario ──
 export async function getMapeoIndex(): Promise<MapeoIdx> {
-  const idx: MapeoIdx = { cuenta: {}, nombre: {} };
+  const idx: MapeoIdx = { cuenta: {}, nombre: {}, pagador: {} };
   try {
     // Paginar por si supera el límite por defecto
     let desde = 0; const paso = 1000;
@@ -62,6 +86,7 @@ export async function getMapeoIndex(): Promise<MapeoIdx> {
         if (!r.clave || !r.codigo) return;
         // Cuentas: se indexan sin ceros a la izquierda para que el cruce no falle
         if (r.tipo === 'cuenta') idx.cuenta[normCuenta(r.clave)] = String(r.codigo);
+        else if (r.tipo === 'pagador') idx.pagador[r.clave] = String(r.codigo);
         else idx.nombre[r.clave] = String(r.codigo);
       });
       if (!data || data.length < paso) break;
@@ -106,7 +131,9 @@ export async function guardarMapeo(entradas: { tipo: string; clave: string; codi
     .filter(e => e.clave && e.codigo)
     .map(e => {
       // Las cuentas se guardan sin ceros a la izquierda (clave canónica)
-      const clave = e.tipo === 'cuenta' ? normCuenta(e.clave) : e.clave;
+      const clave = e.tipo === 'cuenta' ? normCuenta(e.clave)
+                  : e.tipo === 'pagador' ? clavePagador(e.clave)
+                  : e.clave;
       return { id: `${e.tipo[0]}_${clave}`.slice(0, 120), tipo: e.tipo, clave, codigo: String(e.codigo) };
     })
     .filter(e => e.clave);

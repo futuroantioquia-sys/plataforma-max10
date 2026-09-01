@@ -6,7 +6,7 @@ import { ArrowLeft, Upload, Calculator, Save, Search, Download, Database, CheckC
 import { getDeportistas, publicarPagosEstado, getPagadosKeys } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 import {
-  normNombre, soloDigitos, normCuenta, clasificarConcepto, mesDesdeFecha, hashMov,
+  normNombre, soloDigitos, normCuenta, clasificarConcepto, mesDesdeFecha, hashMov, clavePagador,
   getMapeoIndex, guardarMapeo, guardarMovimientos, getMovimientos, ultimoSaldo,
   hashesExistentes, contarMapeo, sembrarDiccionario, contarMovimientos, importarHistorico,
   getConceptos, guardarConcepto, borrarConcepto, actualizarMovimiento, asignarCodigoBulk,
@@ -432,7 +432,7 @@ export default function ContabilidadPage() {
   };
 
   const [mapeoCount, setMapeoCount] = useState(0);
-  const [idx, setIdx] = useState<MapeoIdx>({ cuenta: {}, nombre: {} });
+  const [idx, setIdx] = useState<MapeoIdx>({ cuenta: {}, nombre: {}, pagador: {} });
   const [revision, setRevision] = useState<MovCont[]>([]);
   const mapeoQueue = useRef<Record<string, { tipo: string; clave: string; codigo: string }>>({});
   const [cargando, setCargando] = useState(false);
@@ -584,6 +584,15 @@ export default function ContabilidadPage() {
         const refDig = soloDigitos(ref);
         if (refDig.length >= 5) aprender.push({ tipo: 'cuenta', clave: refDig, codigo: cod });
         else { const kn = normNombre(ref); if (kn) aprender.push({ tipo: 'nombre', clave: kn, codigo: cod }); }
+      }
+      /* ── Y AQUÍ SE APRENDE EL PAGADOR DEL QR (dirección, 01/09/2026) ───────
+         En un PAGO QR la referencia no sirve —es la cuenta del recaudo—, así
+         que se guarda a qué código corresponde el NOMBRE que el banco escribió
+         en la descripción. La próxima vez que llegue un pago de ese mismo
+         pagador, el código viene propuesto (en amarillo) y usted confirma. */
+      if (cod && /PAGO\s*QR/i.test(m.descripcion || '')) {
+        const kp = clavePagador(m.descripcion);
+        if (kp) aprender.push({ tipo: 'pagador', clave: kp, codigo: cod });
       }
     }
     if (aprender.length) { try { await guardarMapeo(aprender); } catch { /* noop */ } }
@@ -842,6 +851,22 @@ export default function ContabilidadPage() {
           const kn = normNombre(referencia);
           if (kn && idxLocal.nombre[kn]) { codigo = idxLocal.nombre[kn]; via = 'nombre'; }
         }
+        /* ── 3) EL PAGADOR DEL QR — PROPUESTA, NO SENTENCIA ───────────────────
+           (dirección, 01/09/2026)
+
+           A un PAGO QR no se le puede creer la referencia: es la cuenta del
+           recaudo, la misma para todos. Pero el banco sí escribe en la
+           DESCRIPCIÓN el nombre de quien pagó ("PAGO QR SANTIAGO CAMP"), y eso
+           sí es de esa familia.
+
+           Si esa descripción ya se le enseñó a la plataforma, el código llega
+           puesto — pero la fila queda PENDIENTE (en amarillo). No entra sola:
+           la dirección la confirma. Así, si dos apellidos se parecen o el banco
+           cortó el nombre, el error se ve antes de contabilizarlo. */
+        if (!codigo) {
+          const kp = clavePagador(descripcion);
+          if (kp && idxLocal.pagador[kp]) { codigo = idxLocal.pagador[kp]; via = 'pagador'; }
+        }
         // Se pasan debito/credito para que las reglas de "solo debito" (tarjeta de
         // credito) no marquen por error un pago que ENTRA.
         const clas = clasificarConcepto(descripcion, { debito, credito });
@@ -885,7 +910,9 @@ export default function ContabilidadPage() {
         } else if (clas.concepto) {
           concepto = clas.concepto;
         }
-        const pendiente = !codigo && !clas.concepto;
+        /* Lo propuesto por el pagador SIEMPRE queda pendiente, aunque ya traiga
+           código: esa es toda la gracia de que sea una propuesta. */
+        const pendiente = (!codigo && !clas.concepto) || via === 'pagador';
 
         saldo = saldo + credito - debito;
         // Huella por OCURRENCIA: la 1.ª conserva la huella original (compatibilidad con lo
@@ -2360,12 +2387,59 @@ export default function ContabilidadPage() {
                         ) : (
                           <span>{m.codigo
                             ? m.codigo
-                            : (m.referencia
-                                ? <span className="block truncate" style={{ color: '#64748b', fontWeight: 700, fontStyle: 'italic', fontSize: 10 }}
-                                    title={'Cuenta del extracto (sin asignar): ' + m.referencia + ' — clic para anexarle el código del deportista'}>
-                                    {m.referencia}
-                                  </span>
-                                : <span style={{ color: '#cbd5e1' }}>—</span>)}</span>
+                            : (() => {
+                                /* ── LA PROPUESTA DEL PAGADOR ─────────────────
+                                   Esta fila no tiene código, pero el nombre que
+                                   el banco escribió en la descripción ya se le
+                                   enseñó a la plataforma. Se muestra el código
+                                   en AMARILLO, como propuesta. Un clic en el
+                                   chulito lo pone —y queda pendiente de guardar,
+                                   igual que cualquier cambio hecho a mano. */
+                                const kp = clavePagador(m.descripcion);
+                                const propuesto = kp ? idx.pagador[kp] : '';
+                                if (propuesto) {
+                                  return (
+                                    <span onClick={e => { e.stopPropagation(); cambiarCampoLibro(m, 'codigo', propuesto); }}
+                                      title={`Propuesta: este pagador ya se cruzó antes con el código ${propuesto} (${codMap[propuesto] || 'sin nombre'}). Clic para ponérselo; queda pendiente hasta que oprima Guardar.`}
+                                      style={{ display: 'inline-block', background: '#E0A33A', color: '#111827',
+                                               borderRadius: 4, padding: '1px 5px', fontWeight: 900, fontSize: 10.5 }}>
+                                      ✓ {propuesto}
+                                    </span>
+                                  );
+                                }
+                                /* ── LA CUENTA DEL QR NO ES UN CÓDIGO ─────────
+                                   (dirección, 01/09/2026)
+
+                                   En un PAGO QR la referencia es NUESTRA cuenta
+                                   de recaudo — la misma para todo el que pague
+                                   por ahí. Mostrarla en la columna CÓDIGO daba
+                                   a entender que ese pago ya estaba cruzado con
+                                   alguien, cuando no lo está con nadie, y
+                                   además invitaba a guardarla como si fuera el
+                                   código de un deportista. No se muestra: se
+                                   dice, con todas las letras, que está sin
+                                   asignar. La cuenta sigue estando a la vista
+                                   al pasar el mouse. */
+                                if (/PAGO\s*QR/i.test(m.descripcion || '')) {
+                                  return (
+                                    <span style={{ color: '#94a3b8', fontWeight: 800, fontSize: 9.5, fontStyle: 'italic' }}
+                                      title={'PAGO QR sin asignar. El número del extracto (' + (m.referencia || '—') +
+                                             ') es NUESTRA cuenta de recaudo, no el código de un deportista: la comparten todos los que pagan por QR. ' +
+                                             'Clic para escribir el código que corresponde.'}>
+                                      QR · SIN ASIGNAR
+                                    </span>
+                                  );
+                                }
+                                if (m.referencia) {
+                                  return (
+                                    <span className="block truncate" style={{ color: '#64748b', fontWeight: 700, fontStyle: 'italic', fontSize: 10 }}
+                                      title={'Cuenta del extracto (sin asignar): ' + m.referencia + ' — clic para anexarle el código del deportista'}>
+                                      {m.referencia}
+                                    </span>
+                                  );
+                                }
+                                return <span style={{ color: '#cbd5e1' }}>—</span>;
+                              })()}</span>
                         )}
                       </td>
                       <td style={{ ...tdC, textAlign: 'left', padding: '2px 4px' }} title={m.deportista}>
@@ -2954,7 +3028,7 @@ function DiccionarioEditor({ codMap, flash, onCount }: {
               <tr><td colSpan={5} className="text-center py-10 text-white/40 font-semibold">No hay cruces que coincidan.</td></tr>
             ) : vis.map((r, i) => (
               <tr key={r.id} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
-                <td style={{ ...td, fontSize: 10, color: '#64748b', fontWeight: 700 }}>{r.tipo === 'cuenta' ? 'CUENTA' : 'NOMBRE'}</td>
+                <td style={{ ...td, fontSize: 10, color: '#64748b', fontWeight: 700 }}>{r.tipo === 'cuenta' ? 'CUENTA' : r.tipo === 'pagador' ? 'PAGADOR QR' : 'NOMBRE'}</td>
                 <td style={{ ...td, textAlign: 'left' }} title={r.clave}>
                   <input value={r.clave} onChange={e => editarLocalClave(r.id, e.target.value)}
                     className="w-full border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold" />
@@ -3006,7 +3080,17 @@ function DesconocidasEditor({ deportistas, conceptos, flash }: {
       if ((m.codigo || '').trim()) continue;
       if (!(Number(m.credito) > 0)) continue;
       const ref = String(m.referencia || '').trim();
-      const key = ref || '(sin referencia)';
+      /* ── LOS PAGO QR SE AGRUPAN POR EL PAGADOR, NO POR LA CUENTA ───────────
+         (dirección, 01/09/2026)
+
+         Todos los pagos por QR traen la MISMA referencia: la cuenta del
+         recaudo. Agrupados por ahí, los pagos de veinte familias distintas
+         caían en un solo montón — y asignarle un código a ese montón se los
+         hubiera pegado todos al mismo niño. Se agrupan por la descripción, que
+         es donde el banco escribe quién pagó. */
+      const esQR = /PAGO\s*QR/i.test(m.descripcion || '');
+      const key = esQR ? (String(m.descripcion || '').trim() || '(sin descripción)')
+                       : (ref || '(sin referencia)');
       if (!map[key]) map[key] = { key, ref, movs: [], total: 0, ejemplo: m.descripcion || '' };
       map[key].movs.push(m);
       map[key].total += Number(m.credito) || 0;
@@ -3025,6 +3109,14 @@ function DesconocidasEditor({ deportistas, conceptos, flash }: {
     const refConfiable = !/null/i.test(g.ref || '') && !g.movs.some(m => /PAGO\s*QR/i.test(m.descripcion || ''));
     if (refConfiable && refDig.length >= 5) await guardarMapeo([{ tipo: 'cuenta', clave: refDig, codigo: cod }]);
     else if (refConfiable) { const kn = normNombre(g.ref); if (kn) await guardarMapeo([{ tipo: 'nombre', clave: kn, codigo: cod }]); }
+    else {
+      /* PAGO QR: no se aprende la cuenta (es la del recaudo, compartida), pero
+         sí el NOMBRE DEL PAGADOR que va en la descripción. Aquí el grupo ya es
+         de un solo pagador, porque arriba se agrupó por descripción. */
+      const desc = g.movs.find(m => /PAGO\s*QR/i.test(m.descripcion || ''))?.descripcion || '';
+      const kp = clavePagador(desc);
+      if (kp) await guardarMapeo([{ tipo: 'pagador', clave: kp, codigo: cod }]);
+    }
     // 2) corregir los movimientos existentes (agrupados por mes para el Detalle)
     const porMes: Record<string, string[]> = {};
     for (const m of g.movs) { const mes = mesDesdeFecha(m.fecha); (porMes[mes] = porMes[mes] || []).push(m.id || ''); }
@@ -3093,7 +3185,16 @@ function FilaDesconocida({ g, deportistas, conceptos, onAsignar, busy }: {
   }, [q, deportistas]);
   return (
     <tr style={{ background: '#fff' }}>
-      <td style={{ ...td, textAlign: 'left', fontWeight: 700 }}>{g.ref || '(sin referencia)'}</td>
+      {/* En un PAGO QR no se muestra la referencia: es la LLAVE de Futuro
+          Antioquia (la cuenta de recaudo), igual para todos los que pagan por
+          ahí. Se muestra el pagador, que es lo que distingue a esta familia. */}
+      <td style={{ ...td, textAlign: 'left', fontWeight: 700 }}>
+        {/PAGO\s*QR/i.test(g.ejemplo || '')
+          ? <span title={'Llave de recaudo de Futuro Antioquia: ' + (g.ref || '—') + ' — la comparten todos los pagos por QR, por eso no identifica a nadie.'}>
+              {g.ejemplo || '(sin descripción)'}
+            </span>
+          : (g.ref || '(sin referencia)')}
+      </td>
       <td style={td}>{g.movs.length}</td>
       <td style={{ ...td, textAlign: 'right', color: '#16a34a', fontWeight: 700 }}>{fmt(g.total)}</td>
       <td style={{ ...td, textAlign: 'left', maxWidth: 240 }} className="truncate" title={g.ejemplo}>{g.ejemplo}</td>
