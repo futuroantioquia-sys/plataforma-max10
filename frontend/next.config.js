@@ -1,3 +1,7 @@
+/* Vercel pasó a plan Pro el 01/09/2026. Esta línea existe para forzar una
+   publicación nueva: los cambios del 31/08 y el arreglo del caché se subieron
+   a GitHub mientras la cuenta estaba pausada, así que Vercel nunca los puso
+   en cola. Con un cambio nuevo se dispara la publicación de todo lo pendiente. */
 /** @type {import('next').NextConfig} */
 
 // ── Cabeceras de seguridad ───────────────────────────────────────────────────
