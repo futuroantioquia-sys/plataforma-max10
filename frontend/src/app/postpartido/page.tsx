@@ -261,6 +261,37 @@ function getCol(dep: Deportista, rx: RegExp): string {
   return k ? String(dep._columnas[k] ?? '') : '';
 }
 
+/** Un nombre, comparable: sin tildes, sin espacios de más, en mayúsculas. */
+function pelarNombre(x: any): string {
+  return String(x ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+/** ¿Estos dos nombres son la misma persona?
+ *  Iguales, o uno contenido en el otro: en el cuadro de torneos y en la
+ *  programación va el apellido ("OSCAR"), y en el ingreso el nombre completo
+ *  ("OSCAR DAVID MEJIA"). Es EXACTAMENTE la misma regla que usa esMiTorneo
+ *  para decidir de quién es un equipo; se saca aparte para que el banco no
+ *  termine usando una regla distinta y los dos no se contradigan. */
+function mismaPersona(a: any, b: any): boolean {
+  const x = pelarNombre(a);
+  const y = pelarNombre(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  /* SE COMPARA POR PALABRAS COMPLETAS, NO POR PEDAZOS.
+     Aquí había una trampa: comparando con "¿uno contiene al otro?", el profe
+     RIOS daba igual a un LARIOS, y BARRIOS también. Un apellido corto metido
+     dentro de otro más largo hacía pasar a la persona equivocada, y en este
+     módulo eso significa entregarle el partido de un equipo a quien no es.
+     Comparando palabra por palabra: RIOS ≠ LARIOS, pero OSCAR sí encuentra a
+     OSCAR DAVID MEJÍA. — dirección, 01/09/2026 */
+  const px = x.split(' ').filter(Boolean);
+  const py = y.split(' ').filter(Boolean);
+  const [corto, largo] = px.length <= py.length ? [px, py] : [py, px];
+  return corto.every(p => largo.includes(p));
+}
+
 /** Las cuatro casillas de competencia de la ficha (C1..C4). */
 const RX_COMPETENCIAS = [
   /^compite$|torneo.?1|^c\s*1$/i,
@@ -2349,6 +2380,58 @@ export default function CrearPospartidoPage() {
     return String(limpiar(cuadro[n - 1].formador) ?? '').toUpperCase();
   }, [cuadro]);
 
+  /* ═══ EL REEMPLAZO: QUIÉN GESTIONA UN PARTIDO ═════════════════════════════
+     (dirección, 01/09/2026)
+
+     ESTA REGLA LE DA LA VUELTA A LA DEL 29/08. Léala antes de cambiarla.
+
+     ANTES: el pospartido llegaba SIEMPRE al banco del formador que aparece en
+     Torneos y Competencias, así ese día lo hubiera reemplazado otro. El que
+     dirigió le pasaba los datos por fuera y el oficial los transcribía.
+
+     AHORA: manda el D.T que la dirección escribe en PROGRAMACIÓN DE
+     COMPETENCIA. Si ahí quedó un profe distinto, ese profe es el responsable:
+     el partido le llega a SU banco y él lo llena. Es lo lógico — el que estuvo
+     en la cancha es el que sabe qué pasó.
+
+     Y AL FORMADOR OFICIAL TAMBIÉN LE LLEGA, pero SOLO PARA MIRAR. Ve el
+     partido completo de su equipo y no puede escribir, porque él no fue el
+     responsable de ese juego.
+
+     OJO CON LO QUE FALLÓ LA VEZ PASADA: el 29/08 se probó repartir también
+     por A.T y se dañó —a un profe se le llenaba el banco de partidos ajenos—.
+     Por eso aquí SOLO cuenta el D.T. El A.T es asistente, no responsable, y
+     no gestiona nada.
+
+     QUIÉN NOMBRA AL SUPLENTE: la dirección, en Programación de Competencia.
+     Los profes no se pasan partidos entre ellos. */
+
+  /** El D.T escrito en el partido; si no hay, el formador del torneo. */
+  const responsableDe = useCallback((f: FichaBanco): string => {
+    const dt = pelarNombre((f as any).dt);
+    return dt || pelarNombre(formadorDeTorneoNum(f.torneo_num));
+  }, [formadorDeTorneoNum]);
+
+  /** Este partido es MÍO: yo lo lleno y lo cierro. */
+  const loGestionoYo = useCallback(
+    (f: FichaBanco) => mismaPersona(responsableDe(f), nombreProfe),
+    [responsableDe, nombreProfe],
+  );
+
+  /** El equipo es mío, pero ese día lo dirigió otro: lo veo, no lo escribo. */
+  const soloLoMiro = useCallback(
+    (f: FichaBanco) =>
+      !loGestionoYo(f) && mismaPersona(formadorDeTorneoNum(f.torneo_num), nombreProfe),
+    [loGestionoYo, formadorDeTorneoNum, nombreProfe],
+  );
+
+  /** ¿Este partido me toca a mí, de alguna de las dos formas? Es lo que decide
+   *  si aparece en mi banco. */
+  const meAparece = useCallback(
+    (f: FichaBanco) => loGestionoYo(f) || soloLoMiro(f),
+    [loGestionoYo, soloLoMiro],
+  );
+
   /** Los partidos del banco, agrupados por torneo y ordenados por fecha.
    *
    *  SOLO LOS DEL TORNEO EN EL QUE SE ESTÁ (dirección, 27/08/2026): estando en
@@ -2390,12 +2473,14 @@ export default function CrearPospartidoPage() {
     /* Al formador, además, solo se le muestran SUS torneos: sin número escrito
        el banco le serviría de atajo para abrir el partido de otro.
        — 27/08/2026 */
-    const mios = esProfe ? new Set(misTorneos.map(t => t.num)) : null;
+    /* Ya no se filtra por "mis torneos" sino por "los partidos que me tocan":
+       los que yo gestiono MÁS los de mis equipos que dirigió otro, que veo de
+       solo lectura. — dirección, 01/09/2026 */
     const grupos = new Map<string, FichaBanco[]>();
     for (const f of banco ?? []) {
       const num = String(f.torneo_num).trim();
       if (soloEste && num !== soloEste) continue;
-      if (mios && !mios.has(num)) continue;
+      if (esProfe && !meAparece(f)) continue;
       if (!grupos.has(f.torneo_num)) grupos.set(f.torneo_num, []);
       grupos.get(f.torneo_num)!.push(f);
     }
@@ -2415,7 +2500,7 @@ export default function CrearPospartidoPage() {
         };
       })
       .sort((a, b) => (parseInt(a.num, 10) || 0) - (parseInt(b.num, 10) || 0));
-  }, [banco, nombreDeTorneoNum, numTorneo, esProfe, misTorneos, ordenBanco]);
+  }, [banco, nombreDeTorneoNum, numTorneo, esProfe, meAparece, ordenBanco]);
 
   /** Suelta el renglón que se venía arrastrando encima de otro del mismo torneo. */
   function soltarFilaBanco(numT: string, listaActual: FichaBanco[], destino: FichaBanco) {
@@ -2501,7 +2586,32 @@ export default function CrearPospartidoPage() {
 
   /** ¿Esta pantalla es de solo mirar? Para administración, SÍ: la información
    *  del partido la llena el formador. — dirección, 29/08/2026 */
-  const soloMira = esAdmon;
+  /* ── EL PARTIDO QUE ESTOY MIRANDO AHORA ─────────────────────────────────
+     Se busca en el banco por sus dos señas: número de torneo Y # fecha, que
+     es como se identifica una planilla en toda la pantalla. */
+  const partidoAbierto = useMemo<FichaBanco | null>(() => {
+    const t = String(numTorneo || '').trim();
+    const j = String(jornada || '').trim();
+    if (!t || !j) return null;                       // en la MATRIZ no hay partido
+    return (banco ?? []).find(
+      f => String(f.torneo_num).trim() === t && String(f.jornada).trim() === j,
+    ) ?? null;
+  }, [banco, numTorneo, jornada]);
+
+  /** El formador oficial abriendo un partido que ese día dirigió otro:
+   *  lo ve completo y no puede escribir nada. — dirección, 01/09/2026 */
+  const mirandoDeOtro = esProfe && !!partidoAbierto && soloLoMiro(partidoAbierto);
+
+  /** Quién dirigió el partido que estoy mirando de solo lectura, para poder
+   *  decírselo con nombre propio en vez de un "no puedes editar" seco. */
+  const dirigioOtro = mirandoDeOtro ? responsableDe(partidoAbierto!) : '';
+
+  /** ¿Esta pantalla es de solo mirar?
+   *  · La administración: SÍ, siempre — la información la llena el formador.
+   *  · El formador oficial cuyo equipo dirigió otro ese día: SÍ.
+   *  Este solo interruptor apaga TODA la escritura de la planilla: las
+   *  casillas, los guardados y el cargue del torneo. — 29/08 y 01/09/2026 */
+  const soloMira = esAdmon || mirandoDeOtro;
 
   /* ── Encabezados de la planilla ──────────────────────────────────────────
      El orden lo manda la dirección: se agarra un título y se arrastra al lado
@@ -2744,7 +2854,7 @@ export default function CrearPospartidoPage() {
     /* AL FORMADOR SOLO SUS PARTIDOS (dirección, 29/08/2026). Él no escoge
        torneo ni fecha: abre lo que la dirección le creó desde Programación de
        Competencia, y lo llena. Nada más. */
-    const mios = esProfe ? new Set(misTorneos.map(t => t.num)) : null;
+    /* (ver la regla del reemplazo, 01/09/2026) */
     /* EL PARTIDO ES DEL FORMADOR DEL TORNEO, PUNTO (dirección, 29/08/2026).
        Se probó a mandárselo también a quien figurara de D.T o de A.T en la
        programación, y no sirvió: se le llenaba el banco a un profe con
@@ -2754,7 +2864,7 @@ export default function CrearPospartidoPage() {
        un compañero, el que fue le pasa los datos y el formador oficial es
        quien llena el pospartido en su perfil. */
     const todos = [...(banco ?? [])]
-      .filter(f => !mios || mios.has(String(f.torneo_num).trim()))
+      .filter(f => !esProfe || meAparece(f))
       .filter(f => !filtroEstados.length || filtroEstados.includes(estadoDe(f)))
       .filter(f => !filtroProfeBanco
                 || pelarNom(formadorDeTorneoNum(f.torneo_num)) === filtroProfeBanco)
@@ -3092,20 +3202,36 @@ export default function CrearPospartidoPage() {
                             palabra DIRIGIÓ, para que no se confunda con el
                             dueño. */}
                         {(() => {
-                          const dueno = formadorDeTorneoNum(f.torneo_num);
-                          const dt = String((f as any).dt ?? '').toUpperCase();
-                          const otro = !!dt && pelarNom(dt) !== pelarNom(dueno);
+                          /* GESTIONA = el responsable de verdad. Desde el
+                             01/09/2026 ese es el D.T del partido cuando la
+                             dirección puso a un suplente; si no hay D.T
+                             escrito, sigue siendo el formador del torneo.
+                             Cuando son personas distintas se muestran las dos,
+                             para que se vea de un vistazo que hubo reemplazo:
+                             quién responde, y de quién es el equipo. */
+                          const gestiona = responsableDe(f);
+                          const dueno    = pelarNombre(formadorDeTorneoNum(f.torneo_num));
+                          const hubo     = !!dueno && !!gestiona && !mismaPersona(gestiona, dueno);
+                          /* Al formador oficial se le marca en ámbar el partido
+                             que solo puede mirar: así no lo abre esperando
+                             llenarlo. */
+                          const soloMirar = esProfe && soloLoMiro(f);
                           return (
                             <p className="font-black text-[12.5px] leading-tight truncate">
                               <span className="text-white">{nombreDeTorneoNum(f.torneo_num)}</span>
-                              {!!dueno && (
-                                /* SE DICE CON TODAS LAS LETRAS quién lo va a
-                                   llenar, para que no se confunda con el que
-                                   dirigió ese día. — dirección, 29/08/2026 */
-                                <span style={{ color: GRIS }}>{'  ·  GESTIONA '}{dueno}</span>
+                              {!!gestiona && (
+                                <span style={{ color: soloMirar ? AMBAR : GRIS }}>
+                                  {'  ·  GESTIONA '}{gestiona}
+                                </span>
                               )}
-                              {otro && (
-                                <span className="text-white/45">{'  ·  DIRIGIÓ '}{dt}</span>
+                              {hubo && (
+                                <span className="text-white/45">{'  ·  EQUIPO DE '}{dueno}</span>
+                              )}
+                              {soloMirar && (
+                                <span className="text-[10px] font-black rounded px-1.5 py-0.5 ml-2"
+                                  style={{ background: AMBAR, color: CAMPO }}>
+                                  SOLO VER
+                                </span>
                               )}
                             </p>
                           );
@@ -3381,7 +3507,17 @@ export default function CrearPospartidoPage() {
               <ArrowLeft className="w-3.5 h-3.5" />
               {esProfe ? 'VOLVER A MIS PARTIDOS' : 'VOLVER A LA LISTA'}
             </button>
-            {soloMira && (
+            {/* SE DICE CON NOMBRE PROPIO POR QUÉ NO PUEDE ESCRIBIR.
+                Un "no puedes editar" seco deja al formador creyendo que la
+                plataforma se dañó. Diciéndole QUIÉN dirigió, entiende de una
+                que su equipo está en manos del compañero que sí estuvo.
+                — dirección, 01/09/2026 */}
+            {mirandoDeOtro ? (
+              <span className="text-[11.5px] font-bold" style={{ color: AMBAR }}>
+                Este partido de tu equipo lo dirigió {dirigioOtro || 'otro formador'},
+                y él es quien lo llena. Aquí solo lo puedes ver.
+              </span>
+            ) : soloMira && (
               <span className="text-[11.5px] font-bold" style={{ color: AMBAR }}>
                 Estás mirando el partido. La información la llena el formador.
               </span>
