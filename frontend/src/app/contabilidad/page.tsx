@@ -156,7 +156,6 @@ function terceroPorDescripcion(desc: any, directorio: TerceroLibro[]): TerceroLi
 // Columnas del Libro (para anchos ajustables por el usuario). El orden DEBE
 // coincidir con el orden en que se pintan las celdas en el cuerpo de la tabla.
 const COLS_LIBRO: { key: string; label: string; def: number }[] = [
-  { key: 'acciones',   label: '',            def: 88 },
   { key: 'num',        label: 'N°',          def: 74 },
   { key: 'cuenta',     label: 'CUENTA',      def: 62 },
   { key: 'fecha',      label: 'FECHA',       def: 102 },
@@ -168,6 +167,14 @@ const COLS_LIBRO: { key: string; label: string; def: number }[] = [
   { key: 'codigo',     label: 'CÓDIGO',      def: 88 },
   { key: 'deportista', label: 'DEPORTISTA',  def: 252 },
   { key: 'detalle',    label: 'DETALLE',     def: 212 },
+  /* CONFIRMAR Y EDITAR, SEPARADAS Y AL FINAL (dirección, 01/09/2026).
+     Antes era UNA sola columna sin título al principio del cuadro: para
+     confirmar un pago tocaba leerlo hasta el final —concepto, código,
+     deportista, detalle— y devolverse hasta el principio a darle al chulo.
+     Ahora van al final, cada una con su nombre, y de primera la que más se
+     usa: se confirma justo donde uno termina de mirar. */
+  { key: 'confirmar',  label: 'CONFIRMAR',   def: 80 },
+  { key: 'editar',     label: 'EDITAR',      def: 62 },
 ];
 
 // Caché en memoria del libro: al volver del estado de cuenta NO se recarga de la nube
@@ -1724,6 +1731,46 @@ export default function ContabilidadPage() {
     }
     // eslint-disable-next-line
   }, []);
+
+  /* ── ENTRAR DIRECTO AL LIBRO, FILTRADO POR UN DEPORTISTA ─────────────────
+     (dirección, 01/09/2026)
+
+     PARA QUÉ: el papá manda la foto del pago a PAGOS PENDIENTES. Antes de
+     darle OK hay que comprobar que esa plata SÍ entró al banco, y eso solo se
+     ve aquí, en el Libro. Hasta hoy tocaba salirse, entrar a Contabilidad,
+     escoger la pestaña Libro, acordarse del código y escribirlo. Ahora el
+     botón LIBRO de allá trae para acá con el código puesto en la dirección:
+        /contabilidad?codigo=23067
+     y esta pantalla se abre sola en el Libro, en TODAS las cuentas —porque el
+     pago pudo entrar a cualquiera de las tres—, con ese código en el filtro y
+     en modo EXACTO, para que no salgan códigos parecidos.
+
+     VA DESPUÉS de la restauración de arriba, y a propósito: si la dirección
+     llega por este enlace, manda el enlace, no lo que quedó guardado de la
+     última visita.
+
+     Se lee de window.location y no del useSearchParams de Next, porque ese
+     obliga a envolver toda la pantalla en un <Suspense>. */
+  const entrePorEnlace = useRef(false);
+  /** El deportista que me trajo desde PAGOS PENDIENTES. Mientras tenga valor,
+   *  arriba se ve la barra para devolverse a confirmarle el pago. */
+  const [vengoDePendientes, setVengoDePendientes] = useState('');
+  useEffect(() => {
+    if (entrePorEnlace.current) return;
+    let cod = '';
+    try { cod = new URLSearchParams(window.location.search).get('codigo') ?? ''; } catch { /* nada */ }
+    cod = cod.trim();
+    if (!cod) return;
+    entrePorEnlace.current = true;
+    saltarReset.current = true;          // que no se reinicie el bloque de filas
+    setVista('libro');
+    setLibroBanco('TODAS');
+    setFilCodModo('exacto');
+    setFilChulo('todos');                // que no se esconda por el chulo
+    setFil(f => ({ ...filVacio, codigo: cod, banco: f.banco }));
+    setVengoDePendientes(cod);
+    // eslint-disable-next-line
+  }, []);
   // Al cambiar de cuenta o de filtro, volvemos a mostrar desde el primer bloque
   // (saltamos el primer montaje y la restauración, para no borrar el estado recuperado)
   useEffect(() => {
@@ -1943,19 +1990,42 @@ export default function ContabilidadPage() {
 
       <main className={`${vista === 'libro' ? 'max-w-none' : 'max-w-6xl'} mx-auto px-3 sm:px-6 py-5 space-y-4`}>
 
+        {/* ── LA VUELTA A PAGOS PENDIENTES ───────────────────────────────
+            (dirección, 01/09/2026) Si llegué aquí desde el botón LIBRO de
+            Pagos Pendientes, es para comprobar UNA cosa: que la plata del
+            papá sí entró. Comprobada, hay que devolverse de una a darle OK y
+            quitar ese pendiente. Sin esta barra tocaba adivinar el camino de
+            vuelta. La flecha del navegador también sirve; esto es para que se
+            vea, y para que se vea de quién se está hablando. */}
+        {!!vengoDePendientes && (
+          <div className="rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3"
+            style={{ background: '#3C4759', border: '2px solid #E0A33A' }}>
+            <button
+              onClick={() => router.push('/pagos-pendientes')}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-white font-black text-[12px] transition hover:brightness-110"
+              style={{ background: '#00B050' }}>
+              <ArrowLeft className="w-4 h-4" /> VOLVER A PAGOS PENDIENTES
+            </button>
+            <p className="text-white text-[12.5px] font-semibold">
+              Estás viendo los movimientos del código{' '}
+              <b style={{ color: '#E0A33A' }}>{vengoDePendientes}</b>.
+              Si el pago aparece, devuélvete y dale <b style={{ color: '#5BE39B' }}>OK</b>.
+            </p>
+            <button
+              onClick={() => { setVengoDePendientes(''); setFil(x => ({ ...x, codigo: '' })); }}
+              title="Quitar el filtro y quedarme en el libro completo"
+              className="ml-auto text-white/55 hover:text-white text-[11.5px] font-bold underline">
+              Ver el libro completo
+            </button>
+          </div>
+        )}
+
         {/* Controles */}
         <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4 flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Cuenta bancaria</label>
-            {/* La letra va BLANCA: sobre el gris oscuro quedaba negra y no se
-                leía. Las opciones sí van oscuras, porque la lista que abre el
-                navegador es blanca. — 27/08/2026 */}
-            <select value={banco} onChange={e => setBanco(e.target.value)}
-              className="border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-semibold text-white
-                focus:outline-none focus:ring-2 focus:ring-green-500 bg-[#3C4759] cursor-pointer">
-              {BANCOS.map(b => (
-                <option key={b} value={b} style={{ color: '#111827', backgroundColor: 'white' }}>{b}</option>
-              ))}
+            <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Cuenta bancaria</label>
+            <select value={banco} onChange={e => setBanco(e.target.value)} className="border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 bg-[#3C4759]">
+              {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
           <label className="flex items-center gap-2 bg-[#16a34a] text-white text-sm font-black px-4 py-2 rounded-xl cursor-pointer hover:bg-[#064e1e] transition">
@@ -2043,7 +2113,7 @@ export default function ContabilidadPage() {
               <div className="flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
                 {['TODAS', ...BANCOS].map(b => (
                   <button key={b} onClick={() => setLibroBanco(b)}
-                    className={`text-xs font-black px-2.5 py-1.5 rounded-lg transition ${libroBanco === b ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white hover:bg-[#16a34a] hover:text-white'}`}>
+                    className={`text-xs font-black px-2.5 py-1.5 rounded-lg transition ${libroBanco === b ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white/70 hover:bg-[#2B3547]'}`}>
                     {b === 'TODAS' ? 'Todas las cuentas' : b.replace('Bancolombia ', '')}
                   </button>
                 ))}
@@ -2059,37 +2129,38 @@ export default function ContabilidadPage() {
                   Se pueden prender los dos a la vez: ahí salen todas las filas sin concepto. */}
               <button onClick={() => setSoloEgresoSinConc(v => !v)}
                 title="EGRESOS sin clasificar: filas con DÉBITO (plata que salió) a las que todavía les falta el CONCEPTO"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloEgresoSinConc ? 'bg-[#E0A33A] text-white border-[#E0A33A]' : 'text-[#E0A33A] bg-[#2B3547] border-[#E0A33A] hover:bg-[#E0A33A] hover:text-white'}`}>
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloEgresoSinConc ? 'bg-red-600 text-white border-red-600' : 'text-[#F08A87] bg-[rgba(192,80,77,.14)] border-[rgba(192,80,77,.45)] hover:bg-[rgba(192,80,77,.20)]'}`}>
                 {soloEgresoSinConc ? '✓ ' : '↑ '}Egresos sin concepto ({egresoSinConcCount.toLocaleString('es-CO')})
               </button>
               <button onClick={() => setSoloIngresoSinConc(v => !v)}
                 title="INGRESOS sin clasificar: filas con CRÉDITO (plata que entró) a las que todavía les falta el CONCEPTO"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloIngresoSinConc ? 'bg-[#E0A33A] text-white border-[#E0A33A]' : 'text-[#E0A33A] bg-[#2B3547] border-[#E0A33A] hover:bg-[#E0A33A] hover:text-white'}`}>
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloIngresoSinConc ? 'bg-emerald-600 text-white border-emerald-600' : 'text-[#5BE39B] bg-emerald-50 border-emerald-200 hover:bg-emerald-100'}`}>
                 {soloIngresoSinConc ? '✓ ' : '↓ '}Ingresos sin concepto ({ingresoSinConcCount.toLocaleString('es-CO')})
               </button>
               <button onClick={() => setSoloSinDetalle(v => !v)}
                 title="Filas del libro que todavía no tienen DETALLE"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSinDetalle ? 'bg-[#E0A33A] text-white border-[#E0A33A]' : 'text-[#E0A33A] bg-[#2B3547] border-[#E0A33A] hover:bg-[#E0A33A] hover:text-white'}`}>
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSinDetalle ? 'bg-violet-600 text-white border-violet-600' : 'text-violet-700 bg-violet-50 border-violet-200 hover:bg-violet-100'}`}>
                 {soloSinDetalle ? '✓ ' : ''}Sin detalle ({sinDetalleCount.toLocaleString('es-CO')})
               </button>
               {numProblemas > 0 && (
                 <button onClick={() => setSoloSospechosas(v => !v)}
                   title="Filas en ROJO por revisar: codigo que no corresponde a ningun deportista, o pagos del mismo mes que suman mas que la mensualidad. No se publican hasta que usted las confirme."
-                  className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSospechosas ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'text-white bg-[#2B3547] border-[#4A5568] hover:bg-[#16a34a] hover:border-[#16a34a] hover:text-white'}`}>
+                  className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSospechosas ? 'bg-red-600 text-white border-red-600' : 'text-[#F08A87] bg-[rgba(192,80,77,.14)] border-[rgba(192,80,77,.45)] hover:bg-[rgba(192,80,77,.20)]'}`}>
                   {soloSospechosas ? '✓ ' : '⚠ '}Sospechosas ({numProblemas.toLocaleString('es-CO')})
                 </button>
               )}
-              {/* RECLASIFICAR CONCEPTOS se retiró de la barra (dirección,
-                  27/08/2026): ya no se necesita. La función `reclasificarConceptos`
-                  se deja escrita más arriba por si algún día hay que volver a
-                  correrla; simplemente no tiene botón. */}
+              <button onClick={reclasificarConceptos} disabled={reclasificando}
+                title="Aplica las reglas de CONCEPTO (intereses a favor, tarjeta de crédito, 4x1000, cuota de manejo, servicio de nómina) a TODO el libro. Muestra primero cuántas filas cambia y pide confirmación. No toca ninguna fila con código de deportista y no publica nada."
+                className="flex items-center gap-1.5 text-sm font-black text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1.5 rounded-lg hover:bg-sky-100 transition disabled:opacity-60">
+                🏷 {reclasificando ? 'Reclasificando…' : 'Reclasificar conceptos'}
+              </button>
               {/* NÓMINA POR DESCRIPCIÓN: las transferencias que el banco siempre
                   describe igual (p. ej. "TRANSF A Diana Fernan") quedan con
                   concepto NOMINA, la cédula en CÓDIGO y el nombre del empleado. */}
               {nominaDescPendientes.length > 0 && (
                 <button onClick={aplicarNominaDescripcion} disabled={aplicandoNomina}
                   title="Reconoce por la descripción del banco (PAGO A NOMIN fredy alexander r, PAGO A PROVE sol marina vill, TRANSF A Diana Fernan…) a quién le corresponde el pago, según el directorio de Nómina y Proveedores. Le pone la cédula, el nombre completo y el concepto de su tipo. Muestra primero cuántas cambia y pide confirmación. No publica nada."
-                  className="flex items-center gap-1.5 text-sm font-black border px-3 py-1.5 rounded-lg transition disabled:opacity-60 text-white bg-[#2B3547] border-[#4A5568] hover:bg-[#16a34a] hover:border-[#16a34a] hover:text-white">
+                  className="flex items-center gap-1.5 text-sm font-black text-teal-700 bg-teal-50 border border-teal-200 px-3 py-1.5 rounded-lg hover:bg-teal-100 transition disabled:opacity-60">
                   👤 {aplicandoNomina ? 'Marcando…' : `Nómina y proveedores por descripción (${nominaDescPendientes.length.toLocaleString('es-CO')})`}
                 </button>
               )}
@@ -2102,17 +2173,17 @@ export default function ContabilidadPage() {
                   del semaforo; aqui se pueden volver a ver cuando se necesiten. */}
               <button onClick={() => setFilChulo(v => (v === 'verde' ? 'todos' : 'verde'))}
                 title="Pagos ya confirmados en el estado de cuenta. Se les apaga el color del semaforo."
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${filChulo === 'verde' ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'text-white bg-[#2B3547] border-[#4A5568] hover:bg-[#16a34a] hover:border-[#16a34a] hover:text-white'}`}>
+                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${filChulo === 'verde' ? 'bg-gray-700 text-white border-gray-700' : 'text-white/70 bg-[#333F50] border-[#4A5568] hover:bg-[#2B3547]'}`}>
                 {filChulo === 'verde' ? '✓ ' : ''}Confirmados ({confirmadosCount.toLocaleString('es-CO')})
               </button>
               <button onClick={confirmarVerdes} disabled={publicandoVerdes || !verdesPendientes.length}
                 title="Publica al estado de cuenta SOLO los pagos verdes (valor exacto). No toca amarillos, rojos ni morados."
-                className="flex items-center gap-1.5 text-sm font-black border px-3 py-1.5 rounded-lg transition disabled:opacity-50 text-white bg-[#2B3547] border-[#4A5568] hover:bg-[#16a34a] hover:border-[#16a34a] hover:text-white">
+                className="flex items-center gap-1.5 text-sm font-black text-white bg-green-600 border border-green-600 px-3 py-1.5 rounded-lg hover:bg-green-700 transition disabled:opacity-50">
                 ✓ {publicandoVerdes ? 'Confirmando…' : `Confirmar los ${verdesPendientes.length.toLocaleString('es-CO')} verdes`}
               </button>
               <button onClick={confirmarMatriculas} disabled={publicandoMatr || !matriculasPendientes.length}
                 title="Publica al estado de cuenta las MATRÍCULAS que aún no están. El botón de los verdes no las incluye, porque la matrícula no se compara contra la mensualidad."
-                className="flex items-center gap-1.5 text-sm font-black border px-3 py-1.5 rounded-lg transition disabled:opacity-50 text-white bg-[#2B3547] border-[#4A5568] hover:bg-[#16a34a] hover:border-[#16a34a] hover:text-white">
+                className="flex items-center gap-1.5 text-sm font-black text-white bg-indigo-600 border border-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50">
                 🎓 {publicandoMatr ? 'Confirmando…' : `Confirmar ${matriculasPendientes.length.toLocaleString('es-CO')} matrículas`}
               </button>
               <span className="w-px h-6 bg-[#2B3547] mx-1" />
@@ -2126,19 +2197,19 @@ export default function ContabilidadPage() {
                   TODOS los movimientos de TODAS las cuentas de un solo golpe, sin
                   respetar el semaforo. Ahora se publica con "Confirmar verdes",
                   "Confirmar matriculas" o el chulo de cada fila. */}
-              <button onClick={() => setPanelCols(v => !v)} className={`ml-auto flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${panelCols ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'text-white bg-[#2B3547] border-[#4A5568] hover:bg-[#16a34a] hover:border-[#16a34a] hover:text-white'}`}>
+              <button onClick={() => setPanelCols(v => !v)} className={`ml-auto flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${panelCols ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'text-white/70 bg-[#3C4759] border-[#4A5568] hover:bg-[#2B3547]'}`}>
                 ⚙ Columnas
               </button>
-              <button onClick={exportarLibro} disabled={!libroFiltrado.length} className="flex items-center gap-1.5 text-sm font-black border px-3 py-1.5 rounded-lg transition disabled:opacity-50 text-white bg-[#2B3547] border-[#4A5568] hover:bg-[#16a34a] hover:border-[#16a34a] hover:text-white">
+              <button onClick={exportarLibro} disabled={!libroFiltrado.length} className="flex items-center gap-1.5 text-sm font-black text-[#5BE39B] bg-[rgba(0,176,80,.14)] border border-[rgba(0,176,80,.45)] px-3 py-1.5 rounded-lg hover:bg-green-100 transition disabled:opacity-50">
                 <Download className="w-4 h-4" /> Exportar Excel
               </button>
               <button onClick={eliminarFilasPorNumero} disabled={borrandoFilas}
                 title="Eliminar filas basura del libro escribiendo su N° (la columna gris de la izquierda)"
-                className="flex items-center gap-1.5 text-sm font-black text-[#F08A87] bg-[#2B3547] border border-[#C0504D] px-3 py-1.5 rounded-lg hover:bg-[#C0504D] hover:text-white transition disabled:opacity-50">
+                className="flex items-center gap-1.5 text-sm font-black text-[#F08A87] bg-[rgba(192,80,77,.14)] border border-[rgba(192,80,77,.45)] px-3 py-1.5 rounded-lg hover:bg-[rgba(192,80,77,.20)] transition disabled:opacity-50">
                 <Trash2 className="w-4 h-4" /> {borrandoFilas ? 'Eliminando…' : 'Eliminar filas'}
               </button>
               <button onClick={abrirNuevaFila} title="Agregar un movimiento manualmente al libro (no vino del Excel del banco)"
-                className="flex items-center gap-1.5 text-sm font-black border px-3 py-1.5 rounded-lg transition text-white bg-[#2B3547] border-[#4A5568] hover:bg-[#16a34a] hover:border-[#16a34a] hover:text-white">
+                className="flex items-center gap-1.5 text-sm font-black text-white bg-[#16a34a] border border-[#16a34a] px-3 py-1.5 rounded-lg hover:bg-[#064e1e] transition">
                 <Plus className="w-4 h-4" /> Agregar fila
               </button>
             </div>
@@ -2178,18 +2249,7 @@ export default function ContabilidadPage() {
               {conceptos.map(c => <option key={c.id} value={c.nombre} />)}
             </datalist>
             <div ref={scrollRef} className="overflow-x-auto" style={{ maxHeight: '72vh' }}>
-              {/* EL LIBRO OCUPA TODO EL ANCHO DE LA PANTALLA (dirección,
-                  27/08/2026). Antes el cuadro medía exactamente la suma de las
-                  columnas y, en una pantalla grande, sobraba un pedazo gris a
-                  la derecha. Ahora: si las columnas caben, se estiran hasta
-                  llenar; si no caben, el cuadro se corre para el lado como
-                  siempre. */}
-              <table className="border-collapse text-xs"
-                style={{
-                  tableLayout: 'fixed',
-                  width: '100%',
-                  minWidth: colsVis.reduce((s, c) => s + (colW[c.key] ?? c.def), 0),
-                }}>
+              <table className="border-collapse text-xs" style={{ tableLayout: 'fixed', width: colsVis.reduce((s, c) => s + (colW[c.key] ?? c.def), 0) }}>
                 <colgroup>
                   {colsVis.map(c => <col key={c.key} style={{ width: colW[c.key] ?? c.def }} />)}
                 </colgroup>
@@ -2204,15 +2264,6 @@ export default function ContabilidadPage() {
                   </tr>
                   {/* Fila de filtros por columna (una casilla por columna) */}
                   <tr>
-                    <th style={thFil}>
-                      <select value={filChulo} onChange={e => setFilChulo(e.target.value as 'todos' | 'verde' | 'rojo')}
-                        title="Filtrar por el chulo: todos, solo confirmados (verde) o solo pendientes (rojo)"
-                        style={{ ...inpFil, cursor: 'pointer', textAlign: 'center', fontWeight: 800 }}>
-                        <option value="todos">Todos</option>
-                        <option value="verde">🟢 Confirmados</option>
-                        <option value="rojo">🔴 Pendientes</option>
-                      </select>
-                    </th>
                     <th style={thFil}></th>
                     {esTodas && <th style={thFil}><input value={fil.banco} onChange={e => setFil(f => ({ ...f, banco: e.target.value }))} placeholder="613…" style={inpFil} /></th>}
                     <th style={thFil}><input value={fil.fecha} onChange={e => setFil(f => ({ ...f, fecha: e.target.value }))} placeholder="2026-08…" style={inpFil} /></th>
@@ -2248,38 +2299,31 @@ export default function ContabilidadPage() {
                     </th>
                     <th style={thFil}><input value={fil.deportista} onChange={e => setFil(f => ({ ...f, deportista: e.target.value }))} placeholder="nombre…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.detalle} onChange={e => setFil(f => ({ ...f, detalle: e.target.value }))} placeholder="detalle…" style={inpFil} /></th>
+                    <th style={thFil}>
+                      <select value={filChulo} onChange={e => setFilChulo(e.target.value as 'todos' | 'verde' | 'rojo')}
+                        title="Filtrar por el chulo: todos, solo confirmados (verde) o solo pendientes (rojo)"
+                        style={{ ...inpFil, cursor: 'pointer', textAlign: 'center', fontWeight: 800 }}>
+                        <option value="todos">Todos</option>
+                        <option value="verde">🟢 Confirmados</option>
+                        <option value="rojo">🔴 Pendientes</option>
+                      </select>
+                    </th>
+                    <th style={thFil}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {cargandoLibro ? (
-                    <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-slate-400 font-semibold">Cargando…</td></tr>
+                    <tr><td colSpan={esTodas ? 13 : 12} className="text-center py-10 text-white/40 font-semibold">Cargando…</td></tr>
                   ) : libro.length === 0 ? (
-                    <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-slate-400 font-semibold">Este libro aún no tiene movimientos.</td></tr>
+                    <tr><td colSpan={esTodas ? 13 : 12} className="text-center py-10 text-white/40 font-semibold">Este libro aún no tiene movimientos.</td></tr>
                   ) : libroFiltrado.length === 0 ? (
-                    <tr><td colSpan={esTodas ? 12 : 11} className="text-center py-10 text-slate-400 font-semibold">Ningún movimiento coincide con el filtro.</td></tr>
+                    <tr><td colSpan={esTodas ? 13 : 12} className="text-center py-10 text-white/40 font-semibold">Ningún movimiento coincide con el filtro.</td></tr>
                   ) : visiblesVista.map((m, i) => (
                     <tr key={m.id || i} id={'mov-' + (m.id || '')}
                       title={semaforo[m.id || '']?.motivo || filasProblema[m.id || ''] || undefined}
                       onMouseEnter={() => setHoverId(m.id || null)}
                       onMouseLeave={() => setHoverId(h => (h === m.id ? null : h))}
                       style={{ background: hoverId === m.id ? '#cfe3ff' : resaltarId === m.id ? '#bbf7d0' : filasProblema[m.id || ''] ? '#fee2e2' : dirtyIds.has(m.id || '') ? '#fef9c3' : (i % 2 ? '#f8fafc' : '#fff'), transition: 'background 0.12s', outline: hoverId === m.id ? '2px solid #3b82f6' : resaltarId === m.id ? '2px solid #16a34a' : filasProblema[m.id || ''] ? '1px solid #ef4444' : undefined }}>
-                      <td style={{ ...tdC, padding: '1px' }}>
-                        <div className="flex items-center justify-center gap-0.5">
-                          <button onClick={() => abrirEditor(m)} title="Editar / dividir" className="text-slate-500 hover:text-[#16a34a] p-0.5 rounded hover:bg-green-50 transition">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          {(() => {
-                            const yaPub = esNoAplica(m) || confirmadas.has(String(m.codigo ?? '').trim() + '|' + String(m.detalle ?? '').trim());
-                            return (
-                              <button onClick={() => { if (!esNoAplica(m)) actualizarPagoFila(m); }}
-                                title={esIngresoFinanciero(m) ? 'Interés / rendimiento del banco — no es de ningún deportista, no va a estado de cuenta' : esInstitucional(m) ? 'Confirmado ✓ — INSTITUCIONAL (no va a estado de cuenta)' : yaPub ? 'Confirmado ✓ — ya está en el estado de cuenta (clic para volver a publicar)' : 'Sin confirmar — clic para actualizar este pago en el estado de cuenta'}
-                                className={`p-0.5 rounded transition ${yaPub ? 'text-[#16a34a] hover:text-[#0f7a3c] hover:bg-green-50' : 'text-[#dc2626] hover:text-[#b91c1c] hover:bg-red-50'}`}>
-                                <CheckCircle className="w-3.5 h-3.5" />
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      </td>
                       <td style={{ ...tdC, color: '#94a3b8', fontWeight: 700, background: '#f8fafc', fontVariantNumeric: 'tabular-nums' }}>{numFila[m.id || ''] ?? ''}</td>
                       {esTodas && <td style={{ ...tdC, fontWeight: 700, color: '#475569' }}>{String(m.banco || '').replace('Bancolombia ', '')}</td>}
                       <td style={tdC}>{m.fecha}</td>
@@ -2334,7 +2378,7 @@ export default function ContabilidadPage() {
                           if (nombreDep && depId) {
                             return (
                               <button onClick={() => setEstadoCuentaUrl(`/alumnos/${depId}/estado-cuenta?edit=1`)}
-                                className="text-left text-[#16a34a] hover:text-green-900 hover:underline font-semibold w-full truncate"
+                                className="text-left text-[#5BE39B] hover:text-green-900 hover:underline font-semibold w-full truncate"
                                 title={`Ver estado de cuenta de ${nombreDep} (se abre en ventana, sin salir del libro)`}>
                                 {nombreDep}
                               </button>
@@ -2439,19 +2483,51 @@ export default function ContabilidadPage() {
                           );
                         })()}
                       </td>
+                      {/* ── CONFIRMAR ─────────────────────────────────────
+                          El chulo: manda el pago al estado de cuenta del
+                          deportista. Verde = ya confirmado · Rojo = pendiente.
+                          Es lo que se hace en casi todos los renglones, por eso
+                          va de primera. — dirección, 01/09/2026 */}
+                      <td style={{ ...tdC, padding: '1px' }}>
+                        {(() => {
+                          const yaPub = esNoAplica(m) || confirmadas.has(String(m.codigo ?? '').trim() + '|' + String(m.detalle ?? '').trim());
+                          return (
+                            <button onClick={() => { if (!esNoAplica(m)) actualizarPagoFila(m); }}
+                              title={esIngresoFinanciero(m) ? 'Interés / rendimiento del banco — no es de ningún deportista, no va a estado de cuenta' : esInstitucional(m) ? 'Confirmado ✓ — INSTITUCIONAL (no va a estado de cuenta)' : yaPub ? 'Confirmado ✓ — ya está en el estado de cuenta (clic para volver a publicar)' : 'Sin confirmar — clic para actualizar este pago en el estado de cuenta'}
+                              className={`mx-auto block p-0.5 rounded transition ${yaPub ? 'text-[#5BE39B] hover:text-[#5BE39B] hover:bg-[rgba(0,176,80,.14)]' : 'text-[#F08A87] hover:text-[#F08A87] hover:bg-[rgba(192,80,77,.14)]'}`}>
+                              <CheckCircle className="w-3.5 h-3.5" />
+                            </button>
+                          );
+                        })()}
+                      </td>
+                      {/* ── EDITAR ────────────────────────────────────────
+                          El lápiz: abre el movimiento para corregirlo o
+                          dividirlo. Es la excepción, no lo de todos los días.
+                          VA NEGRO: estaba en blanco al 40% —color heredado de
+                          las pantallas oscuras— y este cuadro es BLANCO, así
+                          que quedaba casi invisible. — dirección, 01/09/2026 */}
+                      <td style={{ ...tdC, padding: '1px' }}>
+                        <button onClick={() => abrirEditor(m)} title="Editar / dividir"
+                          className="mx-auto block text-[#111827] hover:text-[#16a34a] p-0.5 rounded hover:bg-[rgba(22,163,74,.14)] transition">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 {libroFiltrado.length > 0 && (
                   <tfoot>
                     <tr>
-                      <td style={tfootTd}></td>
+                      {/* Una casilla menos al principio y una más al final:
+                          CONFIRMAR se pasó al final del cuadro. — 01/09/2026 */}
                       <td style={tfootTd}></td>
                       {esTodas && <td style={tfootTd}></td>}
                       <td style={tfootTd} colSpan={2}>TOTALES ({libroFiltrado.length.toLocaleString('es-CO')})</td>
                       <td style={{ ...tfootTd, textAlign: 'right', color: '#dc2626' }}>{fmt(totDebito)}</td>
                       <td style={{ ...tfootTd, textAlign: 'right', color: '#16a34a' }}>{fmt(totCredito)}</td>
                       <td style={tfootTd} colSpan={5}></td>
+                      <td style={tfootTd}></td>
+                      <td style={tfootTd}></td>
                     </tr>
                   </tfoot>
                 )}
@@ -2532,8 +2608,8 @@ export default function ContabilidadPage() {
                         <td style={{ ...td, padding: 3 }}>
                           <select value={r.concepto || ''} onChange={e => editarSplit(i, 'concepto', e.target.value)} style={inp}>
                             <option value="">—</option>
-                            {conceptos.map(c => <option key={c.id} value={c.nombre} style={{ color: '#111827', backgroundColor: 'white' }}>{c.nombre}</option>)}
-                            {r.concepto && !conceptos.some(c => c.nombre === r.concepto) && <option value={r.concepto} style={{ color: '#111827', backgroundColor: 'white' }}>{r.concepto}</option>}
+                            {conceptos.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                            {r.concepto && !conceptos.some(c => c.nombre === r.concepto) && <option value={r.concepto}>{r.concepto}</option>}
                           </select>
                         </td>
                         <td style={{ ...td, padding: 3 }}><input value={r.codigo || ''} onChange={e => editarSplit(i, 'codigo', e.target.value)} style={{ ...inp, minWidth: 70, fontWeight: 700 }} /></td>
@@ -2636,7 +2712,7 @@ export default function ContabilidadPage() {
                   <label className={lbl}>Concepto</label>
                   <select value={nuevaFila.concepto} onChange={e => editarNuevaFila('concepto', e.target.value)} style={inp}>
                     <option value="">—</option>
-                    {conceptos.map(c => <option key={c.id} value={c.nombre} style={{ color: '#111827', backgroundColor: 'white' }}>{c.nombre}</option>)}
+                    {conceptos.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
                     {nuevaFila.concepto && !conceptos.some(c => c.nombre === nuevaFila.concepto) && <option value={nuevaFila.concepto}>{nuevaFila.concepto}</option>}
                   </select>
                 </div>
@@ -2678,17 +2754,6 @@ export default function ContabilidadPage() {
 
 const td: React.CSSProperties = { border: '1px solid #eef2f7', padding: '6px 8px', textAlign: 'center', whiteSpace: 'nowrap' };
 // Celda compacta para el Libro con tableLayout fijo: recorta con "…" y no desborda
-/* ── OJO CON LOS COLORES DE ESTE LIBRO ──────────────────────────────────────
-   El libro se dejó CLARO a propósito: se lee como una hoja de Excel, con miles
-   de renglones y cifras. El resto de la plataforma es gris oscuro.
-
-   Cuando se pasó todo a oscuro (27/08/2026) aquí se colaron letras y botones
-   en tonos claros —blanco y verde pálido— que sobre el libro blanco quedaron
-   invisibles: el lápiz de EDITAR desapareció por completo.
-
-   REGLA: lo que va DENTRO del libro se pinta con tonos OSCUROS (slate-500,
-   #16a34a, #dc2626). Los tonos claros son para las barras y paneles grises de
-   alrededor. — corregido 27/08/2026 */
 const tdC: React.CSSProperties = { border: '1px solid #eef2f7', padding: '4px 6px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 // Celda y control de la fila de filtros (queda pegada bajo el encabezado)
 const thFil: React.CSSProperties = { position: 'sticky', top: 28, zIndex: 2, background: '#ecfdf5', border: '1px solid #fff', padding: '3px 4px' };
@@ -2723,10 +2788,10 @@ function FilaRevision({ r, i, deportistas, conceptos, onAsignar, onEditar }: {
       <td style={{ ...td }}>
         <select value={r.concepto} onChange={e => onEditar(i, 'concepto', e.target.value)}
           className="w-36 border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold text-white bg-[#3C4759]">
-          <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>—</option>
-          {conceptos.map(c => <option key={c.id} value={c.nombre} style={{ color: '#111827', backgroundColor: 'white' }}>{c.nombre}</option>)}
+          <option value="">—</option>
+          {conceptos.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
           {r.concepto && !conceptos.some(c => c.nombre === r.concepto) && (
-            <option value={r.concepto} style={{ color: '#111827', backgroundColor: 'white' }}>{r.concepto}</option>
+            <option value={r.concepto}>{r.concepto}</option>
           )}
         </select>
       </td>
@@ -3035,10 +3100,10 @@ function FilaDesconocida({ g, deportistas, conceptos, onAsignar, busy }: {
       <td style={{ ...td }}>
         <select value={concepto} onChange={e => setConcepto(e.target.value)}
           className="w-36 border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold text-white bg-[#3C4759]">
-          <option value="APORTE FORMACIÓN" style={{ color: '#111827', backgroundColor: 'white' }}>APORTE FORMACIÓN</option>
-          {conceptos.map(c => <option key={c.id} value={c.nombre} style={{ color: '#111827', backgroundColor: 'white' }}>{c.nombre}</option>)}
+          <option value="APORTE FORMACIÓN">APORTE FORMACIÓN</option>
+          {conceptos.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
           {concepto && concepto !== 'APORTE FORMACIÓN' && !conceptos.some(c => c.nombre === concepto) && (
-            <option value={concepto} style={{ color: '#111827', backgroundColor: 'white' }}>{concepto}</option>
+            <option value={concepto}>{concepto}</option>
           )}
         </select>
       </td>
@@ -3153,8 +3218,8 @@ function CuentasEditor({ conceptos, onCambio, flash }: {
                 <td style={{ ...td }}>
                   <select value={c.tipo} onChange={e => editarLocal(c.id, 'tipo', e.target.value)}
                     className="border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold text-white bg-[#3C4759]">
-                    {TIPOS.map(t => <option key={t} value={t} style={{ color: '#111827', backgroundColor: 'white' }}>{t}</option>)}
-                    {c.tipo && !TIPOS.includes(c.tipo) && <option value={c.tipo} style={{ color: '#111827', backgroundColor: 'white' }}>{c.tipo}</option>}
+                    {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                    {c.tipo && !TIPOS.includes(c.tipo) && <option value={c.tipo}>{c.tipo}</option>}
                   </select>
                 </td>
                 <td style={{ ...td }}>

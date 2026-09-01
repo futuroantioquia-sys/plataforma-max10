@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle, XCircle, Eye, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Eye, Clock, AlertCircle, BookOpen } from 'lucide-react';
 import { getSoportesPendientes, getSoporteDatos, confirmarSoportePago, eliminarSoportePago, getDeportistas } from '@/lib/db';
 import type { SoportePago, Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
@@ -191,7 +191,7 @@ export default function PagosPendientesPage() {
         <div className="relative flex flex-col items-center border-l border-white/30 pl-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/MAX%2010.png" alt="MAX10" className="h-7 object-contain" />
-          <p className="text-white/75 text-[9px] leading-none mt-0.5 tracking-wide">CONECTA · GESTIONA · GANA</p>
+          <p className="text-white text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
         </div>
       </header>
 
@@ -329,6 +329,28 @@ export default function PagosPendientesPage() {
                           style={{ background: CAMPO, border: `1px solid ${BORDE}`, minHeight: 34 }}
                           className="flex items-center gap-1 px-2.5 rounded-lg hover:opacity-85 text-white font-semibold text-[11px] transition whitespace-nowrap">
                           <Eye className="w-3.5 h-3.5"/> Cuenta
+                        </button>
+                        {/* ── IR AL LIBRO CONTABLE, YA FILTRADO ─────────────
+                            (dirección, 01/09/2026) El papá manda la foto del
+                            pago; antes de darle OK hay que comprobar que esa
+                            plata SÍ llegó al banco. Eso se mira en el Libro
+                            Contable, y hasta hoy tocaba salirse, entrar allá,
+                            escoger la pestaña, escribir el código de memoria y
+                            devolverse. Este botón hace todo eso de un clic:
+                            abre el Libro en TODAS las cuentas, con el código de
+                            ESTE deportista puesto en el filtro. Se abre en una
+                            ESTE deportista puesto en el filtro. Y allá arriba
+                            sale una barra VOLVER A PAGOS PENDIENTES para
+                            devolverse de una a darle OK. */}
+                        <button
+                          onClick={() => router.push(`/contabilidad?codigo=${encodeURIComponent(s.depCodigo || '')}`)}
+                          disabled={!String(s.depCodigo || '').trim()}
+                          title={String(s.depCodigo || '').trim()
+                            ? `Ver en el Libro Contable los movimientos del código ${s.depCodigo}`
+                            : 'Este deportista no tiene código: no se puede buscar en el libro'}
+                          style={{ background: CAMPO, border: `1px solid ${BORDE}`, minHeight: 34 }}
+                          className="flex items-center gap-1 px-2.5 rounded-lg hover:opacity-85 text-white font-semibold text-[11px] transition whitespace-nowrap disabled:opacity-35">
+                          <BookOpen className="w-3.5 h-3.5"/> Libro
                         </button>
                       </div>
                     </td>
