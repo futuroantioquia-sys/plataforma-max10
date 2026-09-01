@@ -69,13 +69,69 @@ const nextConfig = {
       'lh3.googleusercontent.com',
     ],
   },
+  /* ── QUÉ SE GUARDA EN COPIA Y QUÉ NO ──────────────────────────────────────
+     (dirección, 01/09/2026 — ESTE ERA EL HUECO DE LOS 31 GB)
+
+     QUÉ PASABA: aquí abajo había UNA sola regla, `no-store`, puesta sobre
+     TODAS las direcciones. `no-store` quiere decir "no guardes copia de esto
+     en ninguna parte, nunca". Y aplicaba a todo: a las pantallas, sí, pero
+     también al programa de la plataforma, a los dibujos, al escudo, a las
+     letras. Absolutamente todo se volvía a bajar del servidor en cada clic
+     de cada persona.
+
+     Se veía en los números de Vercel: el servidor mandó 31 GB y a la gente
+     le llegaron 25. El servidor entregaba MÁS de lo que la gente recibía —
+     eso solo pasa cuando ni siquiera la red de Vercel guarda copia.
+
+     LA CURA — tres reglas en vez de una, según qué sea la cosa:
+
+       1. EL PROGRAMA DE LA PLATAFORMA (/_next/static)
+          Se guarda un año. Suena arriesgado y no lo es: Next.js le pone a
+          cada archivo un nombre distinto cada vez que publicamos. Un archivo
+          viejo y uno nuevo NUNCA se llaman igual, así que no hay forma de
+          quedarse con el viejo. Esta es la regla que trae Next de fábrica y
+          que la regla anterior estaba tapando.
+
+       2. LOS DIBUJOS (escudos, mascota, fondos, íconos)
+          Se guardan un día. Si algún día usted cambia un dibujo por otro con
+          el mismo nombre, la gente lo ve al día siguiente. Es lo único que se
+          pierde, y a cambio esa imagen de 1,3 MB deja de bajarse en cada
+          visita.
+
+       3. LAS PANTALLAS
+          Siguen SIEMPRE frescas. Cambiamos `no-store` por `no-cache`, que se
+          parecen pero no son lo mismo:
+             no-store  = no guardes nada, bájalo todo otra vez, siempre.
+             no-cache  = guárdalo, pero pregunta antes de usarlo.
+          Con `no-cache` el navegador pregunta "¿cambió?" y si no cambió el
+          servidor contesta "no" con dos letras en vez de mandar la pantalla
+          entera. Nadie ve nunca información vieja, y se deja de gastar.
+
+     LAS CABECERAS DE SEGURIDAD VAN EN LAS TRES. Eso no se toca. */
   async headers() {
     return [
       {
+        // 1 · El programa: nombres únicos por publicación, se puede guardar sin miedo.
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+          ...CABECERAS_SEGURIDAD,
+        ],
+      },
+      {
+        // 2 · Dibujos y letras: un día guardados, y una semana más mientras
+        //     se busca la versión nueva por detrás (stale-while-revalidate).
+        source: '/:todo*.:ext(png|jpg|jpeg|gif|webp|avif|svg|ico|woff|woff2|ttf|otf)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' },
+          ...CABECERAS_SEGURIDAD,
+        ],
+      },
+      {
+        // 3 · Todo lo demás —las pantallas— siempre fresco, pero preguntando.
         source: '/:path*',
         headers: [
-          // Forzar que el navegador siempre pida la versión más nueva
-          { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+          { key: 'Cache-Control', value: 'no-cache, must-revalidate' },
           ...CABECERAS_SEGURIDAD,
         ],
       },
