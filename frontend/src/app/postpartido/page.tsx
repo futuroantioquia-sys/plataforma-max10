@@ -2127,7 +2127,40 @@ export default function CrearPospartidoPage() {
     setGolesEllos(p.goles_ellos ?? '');
     setAutogoles(parseInt(String((p as any).autogoles ?? '0'), 10) || 0);
     setDefinitivo((p as any).definitivo === true);
-    if (Array.isArray(p.filas) && p.filas.length) setFilas(p.filas as FilaPlanilla[]);
+    /* ── LOS QUE LLEGARON DESPUÉS ─────────────────────────────────────────
+       (dirección, 02/09/2026 — «los cargamos al equipo desde admón, pero para
+        el partido del 29 y del 30 aún no les aparecen»)
+
+       QUÉ PASABA. La planilla se guarda con la lista de deportistas TAL COMO
+       estaba el día que se creó. Al volver a abrirla, se volcaba esa lista
+       guardada y punto. Si después se le anexaba un niño al torneo, ese niño
+       no existía para los partidos ya creados — y no había forma de meterlo
+       sino borrando la planilla y perdiendo los minutos ya escritos.
+
+       LA CURA. Se vuelca lo guardado —intacto, con sus minutos, sus faltas y
+       sus tarjetas— y ENSEGUIDA se le agregan al final los del torneo que no
+       estén todavía, en blanco. No se toca ni se reordena a nadie: solo se
+       suma lo que falta. */
+    if (Array.isArray(p.filas) && p.filas.length) {
+      const guardadas = p.filas as FilaPlanilla[];
+      const yaEstan = new Set<string>();
+      guardadas.forEach(f => {
+        const id = String((f as any).depId ?? '').trim();
+        if (id) yaEstan.add('id:' + id);
+        const nom = limpiar(f.deportista ?? '').toUpperCase();
+        if (nom) yaEstan.add('nom:' + nom);
+      });
+      const faltantes = convocables.filter(d =>
+        !yaEstan.has('id:' + String(d.id)) &&
+        !yaEstan.has('nom:' + limpiar(d._nombre).toUpperCase()));
+      const nuevas = faltantes.map((d, i) => ({
+        ...filaNueva(guardadas.length + i),
+        depId: d.id,
+        posicion: posicionDe(d),
+        deportista: limpiar(d._nombre).toUpperCase(),
+      }));
+      setFilas([...guardadas, ...nuevas]);
+    }
   }
 
   /* Cada cambio queda anotado en el aparato, sin internet de por medio.
