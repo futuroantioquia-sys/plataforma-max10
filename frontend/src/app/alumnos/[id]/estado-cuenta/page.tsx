@@ -238,6 +238,9 @@ function EstadoCuentaInner() {
   const [editMens,      setEditMens]      = useState(false);   // editando la mensualidad del encabezado
   const [mensInput,     setMensInput]     = useState('');
   const [guardandoMens, setGuardandoMens] = useState(false);
+  /* El cuadro de la mensualidad va en dos pasos: primero se escribe el valor,
+     y solo después se confirma. Nada de que un Enter deje el cambio hecho. */
+  const [mensPaso,      setMensPaso]      = useState<'escribir' | 'confirmar'>('escribir');
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [pagoModalIdx,  setPagoModalIdx]  = useState<number | null>(null);
   const fotoInputRef    = useRef<HTMLInputElement>(null);
@@ -817,15 +820,19 @@ function EstadoCuentaInner() {
   const tarifa = (cuotaManual && /\d/.test(cuotaManual)) ? ensurePeso(cuotaManual) : calcTarifa(catVal, sedeVal);
 
   /* ─── Guardar la mensualidad editada a mano (aplica en toda la plataforma) ─── */
-  async function confirmarMensualidad() {
+  /** Guarda la mensualidad acordada con la familia. Con `quitar` en true se
+   *  borra el ajuste y el deportista vuelve a la tarifa que le toca por su
+   *  programa — antes no había forma de devolverse, y un ajuste puesto por
+   *  error se quedaba puesto para siempre. (dirección, 02/09/2026) */
+  async function confirmarMensualidad(quitar = false) {
     if (!dep) return;
-    const limpio = String(mensInput).replace(/[^0-9]/g, '');
-    if (!limpio) { setEditMens(false); return; }
+    const limpio = quitar ? '' : String(mensInput).replace(/[^0-9]/g, '');
+    if (!quitar && !limpio) { setEditMens(false); return; }
     setGuardandoMens(true);
     const nuevas = { ...dep._columnas, 'CUOTA_MANUAL': limpio };
     const ok = await updateColumnasDeportista(dep.id, nuevas);
     setGuardandoMens(false);
-    if (ok) { setDep({ ...dep, _columnas: nuevas }); setEditMens(false); }
+    if (ok) { setDep({ ...dep, _columnas: nuevas }); setEditMens(false); setMensPaso('escribir'); }
     else window.alert('No se pudo guardar la mensualidad. Intenta de nuevo.');
   }
 
@@ -1201,32 +1208,38 @@ function EstadoCuentaInner() {
                   <span className="bg-[#00B050] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[94px] text-center flex-shrink-0 tracking-wide">
                     MENSUALIDAD
                   </span>
-                  {editMens && puedeEditar ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        value={mensInput}
-                        onChange={e => setMensInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') confirmarMensualidad(); if (e.key === 'Escape') setEditMens(false); }}
-                        autoFocus
-                        placeholder="138000"
-                        className="w-[90px] text-[11px] font-bold text-white bg-[#2B3547] border border-[#4A5568] rounded px-2 py-[3px] focus:outline-none"
-                      />
-                      <button onClick={confirmarMensualidad} disabled={guardandoMens}
-                        className="bg-[#00B050] text-white text-[10px] font-black px-2 py-[3px] rounded hover:opacity-85 transition disabled:opacity-60">
-                        {guardandoMens ? '…' : 'Confirmar'}
+                  {/* ── CAMBIAR LA MENSUALIDAD: BOTÓN, NO CASILLITA ──────────
+                      (dirección, 02/09/2026)
+
+                      «Es muy serio el tema para editar en ese espacio tan
+                       pequeño.»
+
+                      Tiene toda la razón. Aquí se cambiaba lo que se le cobra a
+                      una familia TODO el año, escribiendo en una casilla de
+                      noventa píxeles, y con Enter quedaba hecho. Un dedo mal
+                      puesto y el niño quedaba con otra mensualidad sin que
+                      nadie se diera cuenta.
+
+                      Ahora es un botón que abre un cuadro aparte, con el valor
+                      actual a la vista, el nuevo en grande, y DOS pasos: se
+                      escribe, y después se confirma. */}
+                  <span className="text-white text-[11px] font-semibold flex items-center gap-2">
+                    {String(tarifa).toUpperCase()}
+                    {cuotaManual && /\d/.test(cuotaManual) && <span className="text-[8px] text-amber-300 font-bold">(ajustada)</span>}
+                    {puedeEditar && (
+                      <button
+                        onClick={() => {
+                          setMensInput(String(cuotaManual || '').replace(/[^0-9]/g, '') || String(calcTarifa(catVal, sedeVal)).replace(/[^0-9]/g, ''));
+                          setMensPaso('escribir');
+                          setEditMens(true);
+                        }}
+                        title="Cambiar la mensualidad de este deportista"
+                        className="flex items-center gap-1 rounded-lg px-2 py-[3px] text-[9.5px] font-black transition hover:opacity-85"
+                        style={{ background: '#2B3547', border: '1px solid #4A5568', color: '#fff' }}>
+                        ✎ CAMBIAR
                       </button>
-                      <button onClick={() => setEditMens(false)} className="text-white/70 hover:text-white text-[12px] px-1">✕</button>
-                    </div>
-                  ) : (
-                    <span className="text-white text-[11px] font-semibold flex items-center gap-2">
-                      {String(tarifa).toUpperCase()}
-                      {cuotaManual && /\d/.test(cuotaManual) && <span className="text-[8px] text-amber-300 font-bold">(ajustada)</span>}
-                      {puedeEditar && (
-                        <button onClick={() => { setMensInput(String(cuotaManual || '').replace(/[^0-9]/g, '') || String(calcTarifa(catVal, sedeVal)).replace(/[^0-9]/g, '')); setEditMens(true); }}
-                          className="text-white/60 hover:text-white underline text-[9px] font-bold">editar</button>
-                      )}
-                    </span>
-                  )}
+                    )}
+                  </span>
                 </div>
               </div>
             </div>
@@ -2202,6 +2215,107 @@ function EstadoCuentaInner() {
           </div>
         </div>
       )}
+
+      {/* ── CUADRO: CAMBIAR LA MENSUALIDAD ───────────────────────────────────
+          Dos pasos a propósito. Escribir el valor no cambia nada; solo cuando
+          se oprime CONFIRMAR, y después de leer en grande cuánto va a quedar,
+          se guarda. (dirección, 02/09/2026) */}
+      {editMens && puedeEditar && (() => {
+        const limpio   = String(mensInput).replace(/[^0-9]/g, '');
+        const nuevoNum = Number(limpio) || 0;
+        const actualNum = Number(String(tarifa).replace(/[^0-9]/g, '')) || 0;
+        const conPuntos = (n: number) => '$' + n.toLocaleString('es-CO');
+        const tarifaPrograma = String(calcTarifa(catVal, sedeVal)).replace(/[^0-9]/g, '');
+        const hayAjuste = !!(cuotaManual && /\d/.test(cuotaManual));
+        const sirve = nuevoNum > 0 && nuevoNum !== actualNum;
+        return (
+          <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
+               onClick={() => { setEditMens(false); setMensPaso('escribir'); }}>
+            <div className="rounded-3xl overflow-hidden w-full max-w-sm shadow-2xl"
+                 style={{ background: '#3C4759', border: '1px solid #4A5568' }}
+                 onClick={e => e.stopPropagation()}>
+
+              <div className="px-5 py-3.5" style={{ background: AMBAR }}>
+                <p className="font-black text-[13px]" style={{ color: '#111827' }}>CAMBIAR LA MENSUALIDAD</p>
+                <p className="font-bold text-[11.5px]" style={{ color: '#111827', opacity: .75 }}>{nombre}</p>
+              </div>
+
+              {mensPaso === 'escribir' ? (
+                <div className="px-5 py-5">
+                  <p className="text-[10px] font-black tracking-widest mb-1" style={{ color: '#7C879A' }}>HOY PAGA</p>
+                  <p className="text-white font-black text-[22px] leading-none mb-4">{conPuntos(actualNum)}</p>
+
+                  <label className="block text-[10px] font-black tracking-widest mb-1.5" style={{ color: '#7C879A' }}>
+                    NUEVO VALOR
+                  </label>
+                  <input
+                    value={mensInput}
+                    onChange={e => setMensInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    inputMode="numeric"
+                    autoFocus
+                    placeholder="138000"
+                    className="w-full rounded-xl px-4 py-3 text-[19px] font-black text-white focus:outline-none focus:ring-2 focus:ring-[#00B050]"
+                    style={{ background: '#2B3547', border: '1px solid #4A5568' }}
+                  />
+                  <p className="text-[12.5px] font-bold mt-2" style={{ color: nuevoNum ? '#5BE39B' : '#7C879A' }}>
+                    {nuevoNum ? `Va a quedar en ${conPuntos(nuevoNum)}` : 'Escriba solo el número, sin puntos ni pesos.'}
+                  </p>
+
+                  <div className="flex gap-2.5 mt-5">
+                    <button onClick={() => { setEditMens(false); setMensPaso('escribir'); }}
+                      className="flex-1 rounded-xl py-3 text-[12.5px] font-black text-white/70 hover:bg-[#333F50] transition"
+                      style={{ border: '1px solid #4A5568' }}>
+                      Cancelar
+                    </button>
+                    <button onClick={() => setMensPaso('confirmar')} disabled={!sirve}
+                      className="flex-1 rounded-xl py-3 text-[12.5px] font-black text-white transition disabled:opacity-35"
+                      style={{ background: '#00B050' }}>
+                      Continuar →
+                    </button>
+                  </div>
+
+                  {/* La salida de emergencia: volver a lo que le toca por programa. */}
+                  {hayAjuste && tarifaPrograma && (
+                    <button onClick={() => confirmarMensualidad(true)} disabled={guardandoMens}
+                      className="w-full mt-4 pt-3.5 text-[11.5px] font-bold underline underline-offset-2 transition hover:opacity-80"
+                      style={{ color: '#E0A33A', borderTop: '1px solid #4A5568' }}>
+                      Quitar el ajuste y volver a la tarifa del programa ({conPuntos(Number(tarifaPrograma))})
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="px-5 py-5">
+                  <p className="text-white font-bold text-[13.5px] leading-relaxed mb-4">
+                    La mensualidad de <span className="font-black">{nombre}</span> pasa de{' '}
+                    <span className="font-black">{conPuntos(actualNum)}</span> a:
+                  </p>
+                  <p className="font-black text-[34px] leading-none text-center py-3 rounded-xl"
+                     style={{ color: '#5BE39B', background: '#2B3547', border: '1px solid #4A5568' }}>
+                    {conPuntos(nuevoNum)}
+                  </p>
+                  <p className="text-[12px] font-semibold mt-3.5 leading-relaxed" style={{ color: '#E0A33A' }}>
+                    Esto cambia lo que se le cobra en <b>toda la plataforma</b>: el estado de
+                    cuenta, los cobros y el descuento de pronto pago.
+                  </p>
+
+                  <div className="flex gap-2.5 mt-5">
+                    <button onClick={() => setMensPaso('escribir')} disabled={guardandoMens}
+                      className="flex-1 rounded-xl py-3 text-[12.5px] font-black text-white/70 hover:bg-[#333F50] transition disabled:opacity-50"
+                      style={{ border: '1px solid #4A5568' }}>
+                      ← Volver
+                    </button>
+                    <button onClick={() => confirmarMensualidad()} disabled={guardandoMens}
+                      className="flex-1 rounded-xl py-3 text-[12.5px] font-black text-white transition disabled:opacity-60"
+                      style={{ background: '#00B050' }}>
+                      {guardandoMens ? 'GUARDANDO…' : '✓ SÍ, CAMBIARLA'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── MODAL REGISTRAR PAGO ─────────────────────────────────────────────
           BLANCO SOBRE BLANCO (dirección, 01/09/2026 — «no permite editar como

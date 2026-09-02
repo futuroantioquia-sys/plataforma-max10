@@ -1578,6 +1578,17 @@ export default function CrearPospartidoPage() {
      ejemplo SIN INICIAR + A MEDIAS, que es "lo que falta". Lista vacía = todos. */
   const [filtroEstados, setFiltroEstados]       = useState<string[]>([]);
   const [filtroProfeBanco, setFiltroProfeBanco] = useState('');
+  /* POR TORNEO (dirección, 02/09/2026). En el banco caben los partidos de
+     todos los torneos a la vez —39 en la pantalla de hoy—, y hasta ahora se
+     podía filtrar por estado, por formador y por fecha, pero NO por el torneo,
+     que es justamente como la dirección los revisa: "vamos a revisar Asobdim".
+     Guarda el NOMBRE del torneo (ASOBDIM, LIGA, CONCEJO…), y al escogerlo
+     entran todas sus filas: todas las categorías y todos los programas. */
+  const [filtroTorneoBanco, setFiltroTorneoBanco] = useState('');
+  /* POR CÓMO QUEDÓ (dirección, 02/09/2026). Victorias, empates y derrotas. Se
+     pueden prender varios, igual que los estados. Un partido SIN marcador no
+     cae en ninguno: todavía no se sabe cómo quedó. */
+  const [filtroResultado, setFiltroResultado]     = useState<string[]>([]);
   const [bancoDesde, setBancoDesde]             = useState('');
   const [bancoHasta, setBancoHasta]             = useState('');
   useEffect(() => {
@@ -2360,6 +2371,20 @@ export default function CrearPospartidoPage() {
 
   useEffect(() => { refrescarBanco(); }, [refrescarBanco]);
 
+  /** SOLO EL NOMBRE DEL TORNEO — la columna TORNEO de Torneos y Competencias.
+   *  (dirección, 02/09/2026)
+   *
+   *  El desplegable del filtro salía con la fila entera —"ASOBDIM SELECCIÓN
+   *  SUB 10", "ASOBDIM PROGRESIÓN SUB 8"…— y eso son decenas de renglones para
+   *  escoger. La dirección no piensa por fila: piensa por TORNEO. "Vamos a
+   *  revisar Asobdim". Así que la lista se arma solo con ASOBDIM, LIGA,
+   *  CONCEJO, COPA ABC… y al escoger uno entran TODAS sus filas. */
+  const soloNombreTorneo = useCallback((num: string): string => {
+    const n = parseInt(num, 10);
+    if (!cuadro || !Number.isFinite(n) || n < 1 || n > cuadro.length) return '';
+    return limpiar(cuadro[n - 1].torneo).toUpperCase().trim();
+  }, [cuadro]);
+
   /** El nombre del torneo número N, tal como se escribe en el banco. */
   const nombreDeTorneoNum = useCallback((num: string): string => {
     const n = parseInt(num, 10);
@@ -2845,12 +2870,22 @@ export default function CrearPospartidoPage() {
     const pelarNom = (x: any) => String(x ?? '')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, ' ').trim().toUpperCase();
+    /* LO QUE ME TOCA VER, antes de filtrar. De aquí salen también los números
+       que llevan los botones: al profe se le cuentan SUS partidos, no los de
+       toda la academia. (dirección, 02/09/2026) */
+    const bancoMio = (banco ?? []).filter(f => !esProfe || meAparece(f));
+
     /* Los formadores que aparecen en el banco, para el filtro. Se toman del
        cuadro de Torneos y Competencias —el dueño del equipo—, NO del D.T que
        se haya escrito en la programación. — dirección, 29/08/2026 */
     const profesDelBanco = [...new Set((banco ?? [])
       .map(f => formadorDeTorneoNum(f.torneo_num))
       .map(pelarNom).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    /* Los TORNEOS —solo el nombre— que de verdad tienen partidos en el banco.
+       No se lista el cuadro entero: un torneo sin ni un partido solo estorba. */
+    const torneosDelBanco = [...new Set(bancoMio
+      .map(f => soloNombreTorneo(f.torneo_num)).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
     /* AL FORMADOR SOLO SUS PARTIDOS (dirección, 29/08/2026). Él no escoge
        torneo ni fecha: abre lo que la dirección le creó desde Programación de
        Competencia, y lo llena. Nada más. */
@@ -2863,11 +2898,16 @@ export default function CrearPospartidoPage() {
        formador que aparece en TORNEOS Y COMPETENCIAS. Si ese día lo reemplazó
        un compañero, el que fue le pasa los datos y el formador oficial es
        quien llena el pospartido en su perfil. */
-    const todos = [...(banco ?? [])]
-      .filter(f => !esProfe || meAparece(f))
+    const todos = [...bancoMio]
       .filter(f => !filtroEstados.length || filtroEstados.includes(estadoDe(f)))
+      .filter(f => {
+        if (!filtroResultado.length) return true;
+        const r = comoQuedo(f);
+        return !!r && filtroResultado.includes(r.texto);
+      })
       .filter(f => !filtroProfeBanco
                 || pelarNom(formadorDeTorneoNum(f.torneo_num)) === filtroProfeBanco)
+      .filter(f => !filtroTorneoBanco || soloNombreTorneo(f.torneo_num) === filtroTorneoBanco)
       .filter(f => {
         if (!bancoDesde && !bancoHasta) return true;
         const d = String(f.fecha ?? '');
@@ -3091,9 +3131,12 @@ export default function CrearPospartidoPage() {
                 {/* LOS TRES ESTADOS, DE BOTONES (dirección, 29/08/2026): se
                     pueden prender dos o los tres. Prendiendo SIN INICIAR y
                     A MEDIAS queda "todo lo que falta" de una. */}
-                {!esProfe && (['SIN INICIAR', 'A MEDIAS', 'TERMINADO'] as const).map(e => {
+                {/* AL PROFE TAMBIÉN (dirección, 02/09/2026): «él deduce que están
+                    terminados y puede que no; es mejor que los vea». Prendiendo
+                    SIN INICIAR y A MEDIAS le queda todo lo que le falta. */}
+                {(['SIN INICIAR', 'A MEDIAS', 'TERMINADO'] as const).map(e => {
                   const prendido = filtroEstados.includes(e);
-                  const cuantos = (banco ?? []).filter(x => estadoDe(x) === e).length;
+                  const cuantos = bancoMio.filter(x => estadoDe(x) === e).length;
                   const suColor = e === 'TERMINADO' ? '#5BE39B' : e === 'A MEDIAS' ? AMBAR : GRIS;
                   return (
                     <button
@@ -3107,6 +3150,29 @@ export default function CrearPospartidoPage() {
                       <span className="rounded-full shrink-0"
                             style={{ width: 8, height: 8, background: suColor }} />
                       {e} · {cuantos}
+                    </button>
+                  );
+                })}
+
+                {/* CÓMO QUEDÓ — victorias, empates, derrotas. (02/09/2026) */}
+                {([
+                  { k: 'VICTORIA', lbl: 'VICTORIAS', col: '#5BE39B' },
+                  { k: 'EMPATE',   lbl: 'EMPATES',   col: AMBAR },
+                  { k: 'DERROTA',  lbl: 'DERROTAS',  col: ROJO },
+                ] as const).map(({ k, lbl, col }) => {
+                  const prendido = filtroResultado.includes(k);
+                  const cuantos = bancoMio.filter(x => comoQuedo(x)?.texto === k).length;
+                  return (
+                    <button
+                      key={k}
+                      onClick={() => setFiltroResultado(prev =>
+                        prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])}
+                      title={`Ver solo las ${lbl.toLowerCase()}. Se pueden prender varios. Los partidos sin marcador no entran en ninguno.`}
+                      className="shrink-0 rounded-lg px-2 h-[30px] flex items-center gap-1.5
+                        text-white text-[11px] font-black"
+                      style={{ background: prendido ? AMBAR : 'rgba(255,255,255,.18)' }}>
+                      <span className="rounded-full shrink-0" style={{ width: 8, height: 8, background: col }} />
+                      {lbl} · {cuantos}
                     </button>
                   );
                 })}
@@ -3128,7 +3194,25 @@ export default function CrearPospartidoPage() {
                   </select>
                 )}
 
-                {!esProfe && (
+                {/* POR TORNEO — el que faltaba. (dirección, 02/09/2026) */}
+                {torneosDelBanco.length > 1 && (
+                  <select
+                    value={filtroTorneoBanco}
+                    onChange={e => setFiltroTorneoBanco(e.target.value)}
+                    title="Ver solo los partidos de un torneo"
+                    style={{
+                      background: filtroTorneoBanco ? AMBAR : 'rgba(255,255,255,.18)',
+                      border: 'none', height: 30, maxWidth: 210,
+                    }}
+                    className="shrink-0 rounded-lg px-2 text-white text-[11px] font-black outline-none cursor-pointer">
+                    <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS TORNEOS</option>
+                    {torneosDelBanco.map(t => (
+                      <option key={t} value={t} style={{ color: '#111827', backgroundColor: 'white' }}>{t}</option>
+                    ))}
+                  </select>
+                )}
+
+                {(
                   <>
                     <input
                       type="date"
@@ -3155,9 +3239,9 @@ export default function CrearPospartidoPage() {
                   </>
                 )}
 
-                {!esProfe && (filtroEstados.length > 0 || !!filtroProfeBanco || !!bancoDesde || !!bancoHasta) && (
+                {(filtroEstados.length > 0 || filtroResultado.length > 0 || !!filtroProfeBanco || !!filtroTorneoBanco || !!bancoDesde || !!bancoHasta) && (
                   <button
-                    onClick={() => { setFiltroEstados([]); setFiltroProfeBanco(''); setBancoDesde(''); setBancoHasta(''); }}
+                    onClick={() => { setFiltroEstados([]); setFiltroResultado([]); setFiltroProfeBanco(''); setFiltroTorneoBanco(''); setBancoDesde(''); setBancoHasta(''); }}
                     title="Quitar los filtros"
                     className="shrink-0 rounded-lg px-2.5 h-[30px] flex items-center gap-1 text-white text-[11px] font-black"
                     style={{ background: 'rgba(255,255,255,.18)' }}>

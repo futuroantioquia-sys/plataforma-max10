@@ -869,7 +869,10 @@ export default function TorneosPage() {
         )}
       </header>
 
-      <main className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 1250 }}>
+      {/* PANTALLA ANCHA (dirección, 02/09/2026): las once columnas suman más
+          de 1.400, y con el tope viejo de 1.250 tocaba correr el cuadro de
+          lado para ver el final. En un monitor grande ahora cabe todo. */}
+      <main className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 1560 }}>
 
         {/* ── Aviso de error ── */}
         {error && (
@@ -1103,7 +1106,7 @@ export default function TorneosPage() {
             <div className="rounded-xl overflow-auto"
               style={{ border: `1px solid ${BORDE}`, maxHeight: 'calc(100vh - 230px)' }}>
               <table className="text-[12px]"
-                style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 1060 }}>
+                style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 1460 }}>
                 <thead>
                   <tr>
                     {[
@@ -1116,7 +1119,12 @@ export default function TorneosPage() {
                       { h: 'CARGAR PROG', w: 78 },
                       { h: '# TOR', w: 62 },
                       { h: 'TORNEO', w: 200 },
-                      { h: 'PROGRAMA', w: 175 },
+                      /* PROGRAMA, ANCHA DE VERDAD (dirección, 02/09/2026).
+                         Con 175 los programas se partían en dos renglones y el
+                         cuadro quedaba desparejo. Un torneo puede llevar los
+                         tres —"FORMACIÓN, PROGRESIÓN, SELECCIÓN"— y eso son
+                         treinta y dos letras: con 300 caben en una sola línea. */
+                      { h: 'PROGRAMA', w: 300 },
                       { h: 'CATEGORÍA', w: 110 },
                       { h: 'NOMBRE', w: 150 },
                       { h: 'FORMADOR', w: 165 },
