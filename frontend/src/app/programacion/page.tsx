@@ -38,11 +38,15 @@ import { getCuadro, limpiar, type FilaTorneo } from '@/lib/torneos';
 import { esSuperAdmin, esAccesoTotal, esDeportivo } from '@/lib/permisos';
 import {
   getProgramacion, agregarPartido, guardarPartido, borrarPartido,
-  diaBonito, horaBonita, FALTA_TABLA_PROG,
-  type FilaProgramacion,
+  diaBonito, horaBonita, FALTA_TABLA_PROG, masMinutos, MINUTOS_ANTES,
+  getCanchasTorneo, saveCanchasTorneo, CANCHAS_VACIAS,
+  type FilaProgramacion, type CanchasTorneo,
 } from '@/lib/programacion';
 import { getDeportistas } from '@/lib/db';
-import { getPlanilla, guardarPlanilla, etiquetaFecha } from '@/lib/pospartido';
+import {
+  getPlanilla, guardarPlanilla, etiquetaFecha, borrarPlanilla, borrarBorradorLocal,
+  type PlanillaGuardada,
+} from '@/lib/pospartido';
 import type { Deportista } from '@/lib/db';
 
 /* ── Colores oficiales ───────────────────────────────────────────────────── */
@@ -76,8 +80,12 @@ const NUM_FECHAS: string[] = Array.from({ length: 30 }, (_, i) => `${i + 1}A`);
    —era la más ancha—, y las demás se recortaron un poquito cada una.
    El orden es: TORNEO # · # FECHA · TORNEO · HORA · ESCENARIO · RIVAL · D.T · A.T
    (la # FECHA se pasó junto al número del torneo — dirección, 29/08/2026) */
-const COLUMNAS = '56px 66px minmax(210px,1.3fr) 168px minmax(150px,1fr) minmax(140px,1fr) 104px 104px';
-const ANCHO_MINIMO = 1070;
+/* SE AGREGÓ "HORA PARTIDO" (dirección, 02/09/2026). La de llegada es la
+   citación; la de partido es cuando pita el árbitro. Van juntas y una llena a
+   la otra sola, con 45 minutos de por medio. Para que quepa, TORNEO y los dos
+   relojes se apretaron un poco. */
+const COLUMNAS = '52px 60px minmax(180px,1.15fr) 152px 152px minmax(142px,1fr) minmax(132px,1fr) 98px 98px';
+const ANCHO_MINIMO = 1215;
 
 /* ── LA MEMORIA DE RIVALES Y ESCENARIOS ─────────────────────────────────────
    Los nombres de los equipos y de las canchas se repiten todo el año. En vez
@@ -87,6 +95,23 @@ const ANCHO_MINIMO = 1070;
    obliga. — dirección, 29/08/2026 */
 const LLAVE_RIVALES    = 'programacion-rivales';
 const LLAVE_ESCENARIOS = 'programacion-escenarios';
+
+/* ── LO QUE LA DIRECCIÓN MANDÓ A BORRAR ────────────────────────────────────
+   (dirección, 02/09/2026 — «hay unos escenarios que se habían escrito mal»)
+
+   La listica se llenó de basura: COL · COLI · EL A · EL AT · EL ATA · EL ATAN…
+   No fueron errores de digitación: la plataforma guardaba el nombre EN CADA
+   LETRA que se escribía, así que de "EL ATANASIO" quedaron guardados los ocho
+   pedazos del camino.
+
+   Se arregló por tres lados:
+     1. Ahora se guarda AL SALIR de la casilla, no letra por letra.
+     2. Las migas viejas se limpian solas: si algo es el comienzo de otro
+        nombre más largo Y nunca se usó en un partido de verdad, se bota.
+     3. Y queda la ✕ para borrar a mano lo que se quiera, que es lo que la
+        dirección pidió. Lo borrado se anota aquí para que no vuelva. */
+const LLAVE_RIVALES_NO    = 'programacion-rivales-borrados';
+const LLAVE_ESCENARIOS_NO = 'programacion-escenarios-borrados';
 
 function leerMemoria(llave: string): string[] {
   try {
@@ -104,6 +129,17 @@ function recordar(llave: string, valor: string) {
     if (lista.includes(v)) return;
     localStorage.setItem(llave, JSON.stringify([...lista, v].slice(-400)));
   } catch { /* sin espacio: no pasa nada */ }
+}
+
+/** Anota que este nombre no se quiere ver más en la listica. */
+function olvidar(llaveNo: string, valor: string) {
+  const v = String(valor ?? '').trim().toUpperCase();
+  if (!v) return;
+  try {
+    const lista = leerMemoria(llaveNo);
+    if (lista.includes(v)) return;
+    localStorage.setItem(llaveNo, JSON.stringify([...lista, v].slice(-800)));
+  } catch { /* nada */ }
 }
 
 /* ── EL COLOR DE CADA PROGRAMA ──────────────────────────────────────────────
@@ -168,6 +204,64 @@ function tituloDias(desde: string, hasta: string, dias?: string[]): string {
   return anio1 === anio2
     ? `DEL ${sinAnio(largo1)} AL ${largo2}`
     : `DEL ${largo1} AL ${largo2}`;
+}
+
+/* ── EL BANCO DE FINES DE SEMANA ──────────────────────────────────────────
+   (dirección, 02/09/2026)
+
+   La programación siempre abre en el día de hoy, y un miércoles no hay nada
+   que ver. Lo que la dirección necesita a mano son los FINES DE SEMANA que ya
+   se jugaron: «sábado 29 y domingo 30», «sábado 5 y domingo 6».
+
+   CÓMO SE ARMA CADA BLOQUE. El sábado manda: el domingo se le pega al sábado
+   de la víspera, y el LUNES también, pero solo cuando ese fin de semana tuvo
+   partidos — que es el caso del lunes festivo, cuando programan puente. Un
+   partido entre semana suelto no se le cuelga a nadie: hace su propio bloque,
+   para que no se pierda.
+
+   Los nombres van cortos a propósito («SÁB 29 · DOM 30 AGO»): en un botón, el
+   nombre largo no cabe y toca leerlo dos veces. */
+const BANCO_DIA = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+const BANCO_MES = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN',
+                   'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+
+/** "2026-08-29" → "SÁB 29" o "SÁB 29 AGO". */
+function diaCorto(fecha: string, conMes: boolean): string {
+  const m = String(fecha ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(d.getTime())) return '';
+  return `${BANCO_DIA[d.getDay()]} ${d.getDate()}${conMes ? ` ${BANCO_MES[d.getMonth()]}` : ''}`;
+}
+
+/** El nombre corto de un bloque: "SÁB 29 · DOM 30 AGO". */
+function nombreBloque(dias: string[]): string {
+  if (!dias.length) return '';
+  if (dias.length === 1) return diaCorto(dias[0], true);
+  const mismoMes = dias.every(f => f.slice(0, 7) === dias[0].slice(0, 7));
+  if (dias.length <= 3) {
+    if (!mismoMes) return dias.map(f => diaCorto(f, true)).join(' · ');
+    const mes = diaCorto(dias[0], true).split(' ')[2] ?? '';
+    return `${dias.map(f => diaCorto(f, false)).join(' · ')} ${mes}`.trim();
+  }
+  return `${diaCorto(dias[0], true)} — ${diaCorto(dias[dias.length - 1], true)}`;
+}
+
+/** Suma (o resta) días a una fecha AAAA-MM-DD. */
+function correrDias(fecha: string, n: number): string {
+  const m = String(fecha ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return fecha;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  d.setDate(d.getDate() + n);
+  const dos = (x: number) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}
+
+/** Qué día de la semana es esa fecha. 0 = domingo … 6 = sábado. */
+function diaDeLaSemana(fecha: string): number {
+  const m = String(fecha ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return -1;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay();
 }
 
 /** El día de hoy, escrito como lo guarda la base: 2026-08-29. */
@@ -278,6 +372,39 @@ function profeDelTorneo(texto: any, todos: string[]): string {
   const contenido = todos.find(p => pelar(p).includes(t));
   if (contenido) return contenido;
   return String(texto ?? '').trim();
+}
+
+/* ── ¿ESA PLANILLA TIENE TRABAJO ADENTRO? ─────────────────────────────────
+   (dirección, 02/09/2026 — «si quito el partido, que también se quite del
+    post partido»)
+
+   Se quita, sí. Pero una planilla vacía y una planilla con el trabajo del
+   formador no son la misma cosa: la primera se bota sin preguntar, la segunda
+   se pregunta aparte y con nombre propio. Perder las calificaciones de un
+   domingo no se arregla con nada.
+
+   Que la planilla EXISTA no quiere decir que tenga trabajo: al abrirla, el
+   pospartido arma solo la lista de deportistas, así que ya trae renglones sin
+   que nadie haya calificado a nadie. Por eso se mira lo que de verdad escribe
+   el formador: si la dio por cerrada, el marcador, el resumen, o cualquier
+   casilla llena en los renglones —fuera del nombre y la posición, que los
+   pone la plataforma—. */
+const CASILLAS_DE_LA_PLATAFORMA = new Set(
+  ['id', 'orden', 'depid', 'deportista', 'posicion', 'convocado', 'numero', 'dorsal'],
+);
+
+function planillaConTrabajo(p: PlanillaGuardada): boolean {
+  if (p.definitivo) return true;
+  if (String(p.goles_nos ?? '').trim() || String(p.goles_ellos ?? '').trim()) return true;
+  if (String(p.resumen ?? '').trim()) return true;
+  return (p.filas ?? []).some((fila: any) =>
+    Object.entries(fila ?? {}).some(([k, v]) => {
+      if (CASILLAS_DE_LA_PLATAFORMA.has(String(k).toLowerCase())) return false;
+      if (typeof v === 'number')  return v > 0;
+      if (typeof v === 'boolean') return v === true;
+      if (Array.isArray(v))       return v.length > 0;
+      return String(v ?? '').trim() !== '';
+    }));
 }
 
 /** UN BALÓN DE FÚTBOL, dibujado aquí mismo para no depender de ninguna
@@ -428,6 +555,113 @@ function RelojLlegada({ valor, onChange }: {
    sigue siendo el nombre completo.
    El formador del equipo va de PRIMERO en la lista, pero sin ningún letrero
    al lado: la dirección lo pidió limpio. — 29/08/2026 */
+/* ── LA CASILLA CON LISTICA Y ✕ ────────────────────────────────────────────
+   (dirección, 02/09/2026)
+
+   Antes esto era un `datalist` del navegador: la lista salía, sí, pero era del
+   navegador y ahí no se puede poner un botón para borrar. Y la dirección
+   necesita botar los nombres mal escritos.
+
+   Así que la listica se pinta aquí mismo: cada renglón tiene el nombre —para
+   escogerlo— y una ✕ para botarlo de las sugerencias. Botarlo NO cambia
+   ningún partido: solo deja de aparecer en la listica.
+
+   VA EN `position: fixed`, no pegada a la casilla: el cuadro de los partidos
+   se puede correr de lado, y una listica pegada quedaba cortada por ese borde.
+   Se mide dónde está la casilla y se pinta encima de todo. Por eso también se
+   cierra si la pantalla se mueve: para que no quede flotando en el aire. */
+function CasillaMemoria({ valor, onChange, onSalir, opciones, onBorrar, placeholder, titulo }: {
+  valor: string;
+  onChange: (v: string) => void;
+  onSalir?: () => void;
+  opciones: string[];
+  onBorrar: (v: string) => void;
+  placeholder: string;
+  titulo?: string;
+}) {
+  const [abierta, setAbierta] = useState(false);
+  const [donde, setDonde] = useState<{ top: number; left: number; ancho: number } | null>(null);
+  const casilla = useRef<HTMLInputElement>(null);
+
+  const medir = () => {
+    const r = casilla.current?.getBoundingClientRect();
+    if (!r) return;
+    setDonde({ top: r.bottom + 4, left: r.left, ancho: Math.max(r.width, 190) });
+  };
+
+  const abrir = () => { medir(); setAbierta(true); };
+
+  useEffect(() => {
+    if (!abierta) return;
+    const cerrar = () => setAbierta(false);
+    const conEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierta(false); };
+    window.addEventListener('scroll', cerrar, true);
+    window.addEventListener('resize', cerrar);
+    document.addEventListener('keydown', conEsc);
+    return () => {
+      window.removeEventListener('scroll', cerrar, true);
+      window.removeEventListener('resize', cerrar);
+      document.removeEventListener('keydown', conEsc);
+    };
+  }, [abierta]);
+
+  /* Se filtra por lo que se lleve escrito, sin importar tildes ni mayúsculas. */
+  const filtradas = useMemo(() => {
+    const q = pelar(valor);
+    const base = q ? opciones.filter(o => pelar(o).includes(q)) : opciones;
+    return base.slice(0, 80);
+  }, [opciones, valor]);
+
+  return (
+    <>
+      <input
+        ref={casilla}
+        value={valor}
+        autoComplete="off"
+        title={titulo}
+        onChange={e => { onChange(e.target.value.toUpperCase()); medir(); setAbierta(true); }}
+        onFocus={abrir}
+        onBlur={() => { setAbierta(false); onSalir?.(); }}
+        placeholder={placeholder}
+        style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30 }}
+        className="w-full rounded-lg px-2 text-white text-[12px] font-bold outline-none placeholder:text-white/20" />
+
+      {abierta && donde && filtradas.length > 0 && (
+        <div
+          className="rounded-xl overflow-hidden shadow-2xl"
+          style={{
+            position: 'fixed', top: donde.top, left: donde.left, width: donde.ancho,
+            zIndex: 60, background: PANEL, border: `1px solid ${BORDE}`,
+            maxHeight: 260, overflowY: 'auto',
+          }}>
+          {filtradas.map(o => (
+            <div key={o} className="flex items-stretch" style={{ borderBottom: `1px solid ${BORDE}55` }}>
+              {/* onMouseDown y no onClick: el clic normal llega DESPUÉS de que
+                  la casilla pierde el foco, y para entonces la listica ya se
+                  cerró y el clic cae en el vacío. */}
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); onChange(o); setAbierta(false); }}
+                className="flex-1 min-w-0 text-left px-2.5 py-1.5 text-white text-[11.5px] font-bold
+                           hover:brightness-125 truncate">
+                {o}
+              </button>
+              <button
+                type="button"
+                title={`Borrar "${o}" de las sugerencias. No cambia ningún partido.`}
+                onMouseDown={e => { e.preventDefault(); onBorrar(o); }}
+                className="shrink-0 px-2 flex items-center hover:brightness-150"
+                style={{ borderLeft: `1px solid ${BORDE}55` }}>
+                <X className="w-3 h-3" style={{ color: ROJO }} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function CasillaProfe({ valor, onChange, delEquipo, todos }: {
   valor: string;
   onChange: (v: string) => void;
@@ -564,23 +798,53 @@ export default function ProgramacionCompetenciaPage() {
      — dirección, 29/08/2026 */
   const [filtroProfe, setFiltroProfe]   = useState('');
 
+  /* El banco de fines de semana ya jugados. — dirección, 02/09/2026 */
+  const [abriBanco, setAbriBanco] = useState(false);
+
   /* LO QUE YA SE HA ESCRITO, para el buscador de RIVAL y de ESCENARIO.
      Junta dos cosas: lo que está escrito en la programación —así se vea otro
      día— y lo que quedó anotado en este computador. — dirección, 29/08/2026 */
+  /* La cancha de siempre de cada torneo. Se guarda en la nube para que la vea
+     toda la plataforma, no solo este computador. — dirección, 02/09/2026 */
+  const [canchas, setCanchas] = useState<CanchasTorneo>(CANCHAS_VACIAS);
+  useEffect(() => { getCanchasTorneo().then(setCanchas).catch(() => {}); }, []);
+
   const [memoriaRivales,    setMemoriaRivales]    = useState<string[]>([]);
   const [memoriaEscenarios, setMemoriaEscenarios] = useState<string[]>([]);
+  const [refrescoMemoria, setRefrescoMemoria] = useState(0);
   useEffect(() => {
-    const juntar = (llave: string, sacar: (f: FilaProgramacion) => string) => {
-      const set = new Set<string>(leerMemoria(llave));
+    const juntar = (llave: string, llaveNo: string, sacar: (f: FilaProgramacion) => string) => {
+      /* Lo que de verdad se usó en un partido. Eso nunca se bota por miga. */
+      const enUso = new Set<string>();
       for (const f of filas ?? []) {
         const v = String(sacar(f) ?? '').trim().toUpperCase();
-        if (v.length >= 3) set.add(v);
+        if (v.length >= 3) enUso.add(v);
       }
-      return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+
+      const set = new Set<string>(leerMemoria(llave));
+      enUso.forEach(v => set.add(v));
+
+      /* Lo que la dirección mandó a borrar con la ✕. */
+      const olvidados = new Set(leerMemoria(llaveNo).map(x => x.trim().toUpperCase()));
+
+      const todas = [...set].filter(v => !olvidados.has(v));
+
+      /* LAS MIGAS. "EL ATANASI" es el comienzo de "EL ATANASIO" y nunca se usó
+         en un partido: es un pedazo del camino, se bota. "LA CANCHA" también
+         es el comienzo de otros nombres, pero SÍ se usó, así que se respeta. */
+      return todas
+        .filter(v => enUso.has(v) || !todas.some(o => o !== v && o.startsWith(v)))
+        .sort((a, b) => a.localeCompare(b, 'es'));
     };
-    setMemoriaRivales(juntar(LLAVE_RIVALES, f => f.rival));
-    setMemoriaEscenarios(juntar(LLAVE_ESCENARIOS, f => f.escenario));
-  }, [filas]);
+    setMemoriaRivales(juntar(LLAVE_RIVALES, LLAVE_RIVALES_NO, f => f.rival));
+    setMemoriaEscenarios(juntar(LLAVE_ESCENARIOS, LLAVE_ESCENARIOS_NO, f => f.escenario));
+  }, [filas, refrescoMemoria]);
+
+  /** La ✕ de la listica: se anota y desaparece de una. */
+  function olvidarSugerencia(cual: 'rival' | 'escenario', valor: string) {
+    olvidar(cual === 'rival' ? LLAVE_RIVALES_NO : LLAVE_ESCENARIOS_NO, valor);
+    setRefrescoMemoria(n => n + 1);
+  }
 
   /* ── Traer todo ── */
   const recargar = useCallback(async () => {
@@ -712,14 +976,222 @@ export default function ProgramacionCompetenciaPage() {
         return true;
       })
       /* Primero los que se acomodaron a mano, en ese mismo orden; detrás, los
-         que no se han tocado, por día de juego. */
+         que no se han tocado, por día y DEL MÁS TEMPRANO AL MÁS TARDE.
+         (Antes solo se ordenaban por día y dentro del día quedaban en el orden
+          en que se fueron creando. — dirección, 02/09/2026) */
       .sort((a, b) => {
         const pa = puesto.get(a.id) ?? 100000;
         const pb = puesto.get(b.id) ?? 100000;
         if (pa !== pb) return pa - pb;
-        return (a.fecha || '9999').localeCompare(b.fecha || '9999');
+        const fa = a.fecha || '9999-99-99';
+        const fb = b.fecha || '9999-99-99';
+        if (fa !== fb) return fa.localeCompare(fb);
+        const ha = minutosDeLaHora(a.hora_partido) !== 99999
+          ? minutosDeLaHora(a.hora_partido) : minutosDeLaHora(a.hora);
+        const hb = minutosDeLaHora(b.hora_partido) !== 99999
+          ? minutosDeLaHora(b.hora_partido) : minutosDeLaHora(b.hora);
+        return ha - hb;
       });
   }, [lista, filtroDia, filtroHasta, filtroTorneos, filtroProgramas, filtroProfe, torneoDe, ordenMano]);
+
+  /* ── LAS DOS HORAS, AMARRADAS ─────────────────────────────────────────────
+     (dirección, 02/09/2026)
+
+     La academia cita 45 minutos antes de que pite el árbitro. Así que las dos
+     horas son la misma cuenta, y escribir las dos a mano es perder tiempo y
+     equivocarse: se pone UNA y la otra se llena sola.
+
+         · Se escribe LA DEL PARTIDO  →  la de llegada queda 45 minutos antes.
+         · Se escribe LA DE LLEGADA   →  la del partido queda 45 minutos después.
+
+     Se pueden desamarrar: si después se corrige una sola, esa queda como se
+     dejó. Lo que se guarda son las dos, siempre. */
+  function ponerHora(f: FilaProgramacion, cual: 'hora' | 'hora_partido', valor: string) {
+    const otra: 'hora' | 'hora_partido' = cual === 'hora' ? 'hora_partido' : 'hora';
+    const salto = cual === 'hora' ? MINUTOS_ANTES : -MINUTOS_ANTES;
+    const pareja = valor ? masMinutos(valor, salto) : '';
+
+    const cambios: Partial<FilaProgramacion> = { [cual]: valor } as Partial<FilaProgramacion>;
+    /* Solo se toca la otra si esta trae algo. Borrando una no se borra la
+       otra: puede que la dirección esté corrigiendo, no vaciando. */
+    if (valor && pareja) (cambios as any)[otra] = pareja;
+
+    setFilas(prev => (prev ?? []).map(x => (x.id === f.id ? { ...x, ...cambios } : x)));
+    void guardarPartido(f.id, cambios);
+  }
+
+  /* ── LO QUE YA SE SABE DEL TORNEO SE LLENA SOLO ───────────────────────────
+     (dirección, 02/09/2026)
+
+     El torneo ya trae dos cosas escritas en otro lado:
+
+       · SU PROFE — está en el cuadro de Torneos y Competencias.
+       · SU CANCHA — la que se guardó la primera vez, si se dijo que sí.
+
+     PRIMER INTENTO, Y POR QUÉ NO SIRVIÓ. Esto se hacía en el momento exacto de
+     teclear el número, dentro del onChange de la casilla. Falló por dos lados:
+
+       1. Los renglones que YA tenían el número escrito nunca se llenaban: para
+          que se disparara había que borrar el número y volverlo a escribir.
+       2. Escribiendo "50" se teclea primero el "5", y en ese instante el
+          renglón ya es un torneo válido —el 5— y se metía el profe del 5.
+
+     CÓMO QUEDÓ. Se revisa el cuadro entero un momento DESPUÉS de que la mano
+     se queda quieta (1,2 segundos). Así el "5" de paso no cuenta, y los
+     renglones viejos también se llenan sin tocarles nada.
+
+     NUNCA SE PISA LO ESCRITO: solo se llena la casilla que está EN BLANCO. Si
+     la dirección ya puso otro D.T u otra cancha, no se le toca. Y cada renglón
+     se llena UNA sola vez: si después se borra el D.T a propósito, se queda
+     borrado. */
+  const yaSeLleno = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!cuadro || !filas) return;
+
+    const reloj = setTimeout(() => {
+      for (const f of filas) {
+        const num = String(f.torneo_num ?? '').trim();
+        if (!num) continue;
+
+        const marca = `${f.id}|${num}`;
+        if (yaSeLleno.current.has(marca)) continue;
+
+        const t = torneoDe(num);
+        if (!t) continue;
+
+        const cambios: Partial<FilaProgramacion> = {};
+
+        if (!String(f.dt ?? '').trim()) {
+          const suyo = profeDelTorneo(t.formador, profesClub);
+          if (suyo) cambios.dt = suyo;
+        }
+
+        const fija = canchas.fija[num];
+        if (fija && !String(f.escenario ?? '').trim()) cambios.escenario = fija;
+
+        if (!Object.keys(cambios).length) continue;
+
+        yaSeLleno.current.add(marca);
+        setFilas(prev => (prev ?? []).map(x => (x.id === f.id ? { ...x, ...cambios } : x)));
+        void guardarPartido(f.id, cambios);
+      }
+    }, 1200);
+
+    return () => clearTimeout(reloj);
+  }, [filas, cuadro, profesClub, canchas, torneoDe]);
+
+  /* ── ¿ESTA ES LA CANCHA DE SIEMPRE? ───────────────────────────────────────
+     Se pregunta al SALIR de la casilla, no mientras se escribe: preguntando
+     letra por letra sería insoportable. Y se pregunta UNA SOLA VEZ por torneo:
+     si se dice que no, ese torneo queda anotado y no se vuelve a preguntar. */
+  async function tocarEscenario(f: FilaProgramacion) {
+    const cancha = String(f.escenario ?? '').trim().toUpperCase();
+    const num    = String(f.torneo_num ?? '').trim();
+    if (cancha.length < 3 || !num) return;
+    if (canchas.fija[num] || canchas.noPreguntar.includes(num)) return;
+    if (!torneoDe(num)) return;
+
+    const comoSeLlama = nombreTorneo(num) || `el torneo ${num}`;
+    const si = window.confirm(
+      `¿${cancha} es la cancha de siempre de ${comoSeLlama}?\n\n` +
+      'Si dice que sí, cada vez que escriba ese número de torneo la cancha sale puesta.\n' +
+      'Igual la puede borrar y escribir otra cuando toque jugar por fuera.\n\n' +
+      'Esto se pregunta una sola vez por torneo.',
+    );
+
+    const nuevo: CanchasTorneo = si
+      ? { ...canchas, fija: { ...canchas.fija, [num]: cancha } }
+      : { ...canchas, noPreguntar: [...canchas.noPreguntar, num] };
+
+    setCanchas(nuevo);
+    void saveCanchasTorneo(nuevo);
+  }
+
+  /** La hora en que arranca el partido, en minutos. Si el renglón es viejo y
+   *  no la trae, se deduce de la citación. */
+  const minutosDelPartido = useCallback((f: FilaProgramacion): number => {
+    const propia = minutosDeLaHora(f.hora_partido);
+    if (propia !== 99999) return propia;
+    const llegada = minutosDeLaHora(f.hora);
+    return llegada === 99999 ? 99999 : llegada + MINUTOS_ANTES;
+  }, []);
+
+  /* ── EL CHOQUE DE HORARIOS ────────────────────────────────────────────────
+     (dirección, 02/09/2026)
+
+     Un partido dura entre una hora y hora y media. Si a un mismo hombre se le
+     programan dos partidos con MENOS DE DOS HORAS entre pitazo y pitazo, no
+     alcanza: o deja el primero antes de tiempo, o llega tarde al segundo.
+
+     Se miran D.T Y A.T, no solo el D.T: el asistente también es una sola
+     persona. Y se comparan las HORAS DE PARTIDO, no las de llegada.
+
+     Los DOS partidos se pintan de rojo, no solo el segundo: el problema está
+     entre ellos y es la dirección la que decide cuál mueve. */
+  const HUECO_MINIMO = 120;
+
+  const choques = useMemo(() => {
+    type Cita = { id: string; min: number };
+    const agenda = new Map<string, Cita[]>();      // "PERSONA|fecha" → sus partidos
+    const comoSeLlama = new Map<string, string>(); // pelado → como está escrito
+
+    visibles.forEach(f => {
+      const min = minutosDelPartido(f);
+      if (min === 99999 || !f.fecha) return;
+      [f.dt, f.at].forEach(quien => {
+        const p = pelar(quien);
+        if (!p) return;
+        comoSeLlama.set(p, String(quien ?? '').trim().toUpperCase());
+        const k = `${p}|${f.fecha}`;
+        if (!agenda.has(k)) agenda.set(k, []);
+        agenda.get(k)!.push({ id: f.id, min });
+      });
+    });
+
+    const salida = new Map<string, { quien: string; hueco: number }>();
+    agenda.forEach((citas, k) => {
+      if (citas.length < 2) return;
+      const quien = comoSeLlama.get(k.split('|')[0]) ?? '';
+      const orden = [...citas].sort((a, b) => a.min - b.min);
+      for (let i = 1; i < orden.length; i++) {
+        const hueco = orden[i].min - orden[i - 1].min;
+        if (hueco >= HUECO_MINIMO) continue;
+        [orden[i], orden[i - 1]].forEach(c => {
+          const ya = salida.get(c.id);
+          /* Si un renglón choca por dos lados, se muestra el más apretado. */
+          if (!ya || hueco < ya.hueco) salida.set(c.id, { quien, hueco });
+        });
+      }
+    });
+    return salida;
+  }, [visibles, minutosDelPartido]);
+
+  /** "1h 15m" · "45m" — para decirlo en el aviso. */
+  function huecoBonito(min: number): string {
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h <= 0) return `${m} minutos`;
+    return m ? `${h}h ${m}m` : `${h} horas`;
+  }
+
+  /* ── LOS DOS PISOS ────────────────────────────────────────────────────────
+     (dirección, 02/09/2026)
+
+     ARRIBA los partidos que ya tienen la información completa —hora,
+     escenario, rival y D.T—, del más temprano al más tarde. Es la programación
+     como se va a vivir el sábado.
+
+     ABAJO los que se acabaron de agregar y están a medio llenar. Apenas se les
+     completa el último dato, suben solos y se acomodan en su hora.
+
+     La manija de arrastrar sigue funcionando igual: si la dirección acomoda un
+     renglón a mano, ese orden manda sobre la hora. */
+  const estaCompleto = useCallback((f: FilaProgramacion) =>
+    (!!f.hora || !!f.hora_partido) && !!f.escenario.trim() && !!f.rival.trim() && !!f.dt.trim(),
+  []);
+
+  const listos  = useMemo(() => visibles.filter(estaCompleto),   [visibles, estaCompleto]);
+  const aMedias = useMemo(() => visibles.filter(f => !estaCompleto(f)), [visibles, estaCompleto]);
 
   /** Suelta el renglón que se venía arrastrando encima de otro. */
   function soltarFila(destino: FilaProgramacion) {
@@ -790,15 +1262,73 @@ export default function ProgramacionCompetenciaPage() {
   const hayFiltro = !!filtroDia || !!filtroHasta || filtroTorneos.length > 0
     || filtroProgramas.length > 0 || !!filtroProfe;
 
+  /* ── LOS FINES DE SEMANA QUE YA SE JUGARON ────────────────────────────────
+     Se arman con TODOS los partidos que hay en la base, no con los que están
+     en pantalla: el banco es para volver atrás, y si se armara con lo filtrado
+     se quedaría vacío justo cuando más se necesita. — dirección, 02/09/2026 */
+  const bloquesBanco = useMemo(() => {
+    const todas = (filas ?? []).map(f => String(f.fecha ?? '')).filter(Boolean);
+    const hayPartidoEl = new Set(todas);
+
+    /** A qué sábado se le cuelga esta fecha. */
+    const anclaDe = (f: string): string => {
+      const dw = diaDeLaSemana(f);
+      if (dw === 6) return f;                       // sábado
+      if (dw === 0) return correrDias(f, -1);       // domingo → su sábado
+      if (dw === 1) {                               // lunes: solo si es puente
+        const sab = correrDias(f, -2);
+        const dom = correrDias(f, -1);
+        if (hayPartidoEl.has(sab) || hayPartidoEl.has(dom)) return sab;
+      }
+      return f;                                     // entre semana: bloque propio
+    };
+
+    const mapa = new Map<string, string[]>();
+    todas.forEach(f => {
+      const a = anclaDe(f);
+      if (!mapa.has(a)) mapa.set(a, []);
+      mapa.get(a)!.push(f);
+    });
+
+    const hoy = hoyISO();
+    return [...mapa.entries()]
+      .map(([ancla, fechas]) => {
+        const dias = [...new Set(fechas)].sort();
+        return {
+          ancla,
+          desde:    dias[0],
+          hasta:    dias[dias.length - 1],
+          dias,
+          partidos: fechas.length,
+          nombre:   nombreBloque(dias),
+        };
+      })
+      .filter(b => b.desde <= hoy)                  // los que ya empezaron
+      .sort((a, b) => b.desde.localeCompare(a.desde));
+  }, [filas]);
+
+  const bloqueActivo = bloquesBanco.find(
+    b => b.desde === filtroDia && b.hasta === (filtroHasta || filtroDia),
+  );
+
+  function verBloque(b: { desde: string; hasta: string }) {
+    setFiltroDia(b.desde);
+    setFiltroHasta(b.hasta > b.desde ? b.hasta : '');
+    setAbriBanco(false);
+  }
+
   /* ── Cambiar una casilla ── */
   function cambiar(id: string, campo: keyof FilaProgramacion, valor: string) {
     setFilas(prev => (prev ?? []).map(f => (f.id === id ? { ...f, [campo]: valor } : f)));
     void guardarPartido(id, { [campo]: valor } as Partial<FilaProgramacion>);
     /* SE VA APRENDIENDO LO QUE SE ESCRIBE (dirección, 29/08/2026): cada rival
        y cada escenario que se escriba queda anotado, y la próxima vez sale
-       solo en la listica. Se guarda en este computador. */
-    if (campo === 'rival') recordar(LLAVE_RIVALES, valor);
-    if (campo === 'escenario') recordar(LLAVE_ESCENARIOS, valor);
+       solo en la listica. Se guarda en este computador.
+
+       YA NO SE ANOTA AQUÍ (dirección, 02/09/2026). Esta función corre en CADA
+       LETRA, así que de "EL ATANASIO" quedaban guardados los ocho pedazos del
+       camino —EL A, EL AT, EL ATA…— y la listica se volvió un basurero. Ahora
+       se anota AL SALIR de la casilla, en `onSalir` de CasillaMemoria. */
   }
 
   /* ── Agregar un renglón ── */
@@ -821,14 +1351,72 @@ export default function ProgramacionCompetenciaPage() {
 
   /* ── Quitar un renglón ── */
   async function quitarRenglon(f: FilaProgramacion) {
-    const quien = [nombreTorneo(f.torneo_num) || `torneo ${f.torneo_num || '—'}`,
-                   f.rival ? `vs ${f.rival}` : ''].filter(Boolean).join(' ');
-    if (!window.confirm(`¿Quitar de la programación ${quien}?\n\nEsto NO borra el microciclo si ya se creó.`)) return;
+    /* EL AVISO DECÍA DOS COSAS MAL (dirección, 02/09/2026):
+       · A un renglón recién creado, sin nada escrito, lo llamaba «torneo —».
+       · Y hablaba del MICROCICLO, que es otro módulo — la planeación de la
+         semana de entrenamiento. Lo que este botón toca es el POST PARTIDO:
+         la planilla que se manda con el balón verde.
+       Ahora, si el renglón está vacío se dice así de simple, y de la planilla
+       se habla solo cuando de verdad existe una. */
+    const nombre = nombreTorneo(f.torneo_num);
+    const vacio  = !nombre && !f.rival && !f.escenario && !f.hora && !f.dt;
+
+    const pregunta = vacio
+      ? '¿Quitar este renglón vacío de la programación?'
+      : `¿Quitar de la programación ${[nombre || `el torneo ${f.torneo_num}`,
+          f.rival ? `vs ${f.rival}` : ''].filter(Boolean).join(' ')}?`;
+
+    /* ── Y TAMBIÉN SE VA DEL POST PARTIDO (dirección, 02/09/2026) ──────────
+       Antes el aviso decía que la planilla NO se borraba, y quedaba un partido
+       fantasma en el Banco: sin renglón en la programación, pero ahí. */
+    let planilla: PlanillaGuardada | null | undefined = null;
+    if (f.torneo_num && f.jornada) {
+      try { planilla = await getPlanilla(f.torneo_num, f.jornada); } catch { planilla = null; }
+    }
+    const conTrabajo = !!planilla && planillaConTrabajo(planilla);
+
+    const nota = !planilla
+      ? (vacio ? '' : '\n\nSolo se quita de este cuadro; de este partido no hay post partido.')
+      : conTrabajo
+        ? `\n\nOJO: este partido YA TIENE POST PARTIDO${planilla.definitivo ? ', y el formador lo dio por terminado' : ''}, con trabajo escrito adentro.\nSi acepta, se quita el renglón y enseguida le pregunto qué hago con esa planilla.`
+        : '\n\nTambién se borra su planilla del Post Partido, que está en blanco.';
+
+    if (!window.confirm(pregunta + nota)) return;
+
     setTrabajando(f.id);
     const ok = await borrarPartido(f.id);
+    if (!ok) {
+      setTrabajando('');
+      setError('No se pudo quitar el renglón. Intenta otra vez.');
+      return;
+    }
+    setFilas(prev => (prev ?? []).filter(x => x.id !== f.id));
+
+    if (planilla) {
+      /* La planilla vacía se va sin más. La trabajada se pregunta aparte: es
+         la única pregunta de esta pantalla que puede borrar el trabajo de un
+         formador, y merece su propio aviso. */
+      let botarPlanilla = true;
+      if (conTrabajo) {
+        botarPlanilla = window.confirm(
+          `¿Borrar TAMBIÉN el post partido de ${nombre || `el torneo ${f.torneo_num}`}` +
+          ` · ${etiquetaFecha(f.jornada)}?\n\n` +
+          'Esa planilla tiene trabajo del formador: calificaciones, marcador o resumen.\n' +
+          'SI LA BORRA, ESO NO SE PUEDE RECUPERAR.\n\n' +
+          'Aceptar = borrarla.   Cancelar = dejarla en el Banco Post Partido.',
+        );
+      }
+      if (botarPlanilla) {
+        try {
+          await borrarPlanilla(f.torneo_num, f.jornada);
+          borrarBorradorLocal(f.torneo_num, f.jornada);
+        } catch {
+          setError('El renglón se quitó, pero no se pudo borrar la planilla del post partido.');
+        }
+      }
+    }
+
     setTrabajando('');
-    if (ok) setFilas(prev => (prev ?? []).filter(x => x.id !== f.id));
-    else setError('No se pudo quitar el renglón. Intenta otra vez.');
   }
 
   /* ── EL BOTÓN: bajar la info al POSPARTIDO ─────────────────────────────────
@@ -1627,6 +2215,55 @@ export default function ProgramacionCompetenciaPage() {
               {filtroDia ? 'TODOS LOS DÍAS' : 'HOY'}
             </button>
 
+            {/* ── BANCO ─────────────────────────────────────────────────────
+                Los fines de semana que ya se jugaron, listos para volver a
+                verlos de un clic. El más reciente arriba. Un lunes festivo con
+                partidos entra en el bloque de su fin de semana.
+                — dirección, 02/09/2026 */}
+            <div className="relative">
+              <button
+                onClick={() => setAbriBanco(v => !v)}
+                disabled={bloquesBanco.length === 0}
+                title="Los fines de semana que ya se jugaron"
+                className="rounded-lg px-2.5 flex items-center gap-1.5 text-[11.5px] font-black disabled:opacity-45"
+                style={pintaFiltro(!!bloqueActivo)}>
+                {bloqueActivo ? bloqueActivo.nombre : 'BANCO'}
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+
+              {abriBanco && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setAbriBanco(false)} />
+                  <div className="absolute left-0 mt-1 z-50 rounded-xl overflow-hidden shadow-2xl"
+                       style={{ background: PANEL, border: `1px solid ${BORDE}`,
+                                minWidth: 250, maxHeight: 340, overflowY: 'auto' }}>
+                    <p className="px-3 py-2 text-white/45 text-[10px] font-black tracking-wider"
+                       style={{ borderBottom: `1px solid ${BORDE}` }}>
+                      FINES DE SEMANA JUGADOS
+                    </p>
+                    {bloquesBanco.map(b => {
+                      const puesto = bloqueActivo?.ancla === b.ancla;
+                      return (
+                        <button
+                          key={b.ancla}
+                          onClick={() => verBloque(b)}
+                          title={`${b.partidos} ${b.partidos === 1 ? 'partido' : 'partidos'}`}
+                          className="w-full text-left px-3 py-2 flex items-center gap-2
+                                     text-white text-[11.5px] font-bold hover:brightness-125"
+                          style={{ background: puesto ? 'rgba(0,176,80,.22)' : 'transparent' }}>
+                          <span className="flex-1 min-w-0 truncate">{b.nombre}</span>
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black"
+                                style={{ background: CAMPO, color: '#C6D2DE' }}>
+                            {b.partidos}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
               onClick={ordenarPorTorneo}
               disabled={visibles.length < 2}
@@ -1711,14 +2348,10 @@ export default function ProgramacionCompetenciaPage() {
           </h3>
         </div>
 
-        {/* LAS DOS LISTICAS DEL BUSCADOR. No se ven: son las que el navegador
-            abre debajo de la casilla cuando se escribe. */}
-        <datalist id="memoria-escenarios">
-          {memoriaEscenarios.map(v => <option key={v} value={v} />)}
-        </datalist>
-        <datalist id="memoria-rivales">
-          {memoriaRivales.map(v => <option key={v} value={v} />)}
-        </datalist>
+        {/* Aquí estaban las dos listicas del navegador (`datalist`). Se
+            quitaron el 02/09/2026: eran del navegador y no dejaban poner la ✕
+            para botar un nombre mal escrito. Ahora la listica la pinta
+            CasillaMemoria, aquí mismo, con su botón de borrar. */}
 
         <div className="pt-3">
           {cargando ? (
@@ -1750,8 +2383,8 @@ export default function ProgramacionCompetenciaPage() {
                   <span style={{ width: 38 }} className="shrink-0" />
                   <div className="flex-1 grid gap-2 px-3 py-1.5"
                        style={{ gridTemplateColumns: COLUMNAS, border: '1px solid transparent' }}>
-                    {['TORNEO #', '# FECHA', 'TORNEO', 'HORA DE LLEGADA', 'ESCENARIO',
-                      'RIVAL', 'D.T', 'A.T'].map(t => (
+                    {['TORNEO #', '# FECHA', 'TORNEO', 'HORA DE LLEGADA', 'HORA DEL PARTIDO',
+                      'ESCENARIO', 'RIVAL', 'D.T', 'A.T'].map(t => (
                       <div key={t}
                         title={t}
                         className="rounded-lg px-2 flex items-center justify-center
@@ -1786,15 +2419,40 @@ export default function ProgramacionCompetenciaPage() {
                   <span style={{ width: 38 }} className="shrink-0" />
                 </div>
 
-                {/* Los renglones */}
+                {/* Los renglones, en dos pisos: arriba los listos, abajo los
+                    que faltan por llenar. — dirección, 02/09/2026 */}
                 <div className="flex flex-col gap-1.5">
-                  {visibles.map(f => {
+                  {[
+                    { clave: 'listos',  filas: listos,  titulo: 'LISTOS PARA JUGAR', color: VERDE,
+                      ayuda: 'Del más temprano al más tarde' },
+                    { clave: 'medias',  filas: aMedias, titulo: 'FALTA LLENARLOS',   color: AMBAR,
+                      ayuda: 'Suben solos apenas queden completos' },
+                  ].map(piso => (
+                    <div key={piso.clave} className="flex flex-col gap-1.5">
+
+                      {/* El rótulo solo aparece si los dos pisos tienen algo:
+                          si todo está listo, no hay por qué dividir nada. */}
+                      {listos.length > 0 && aMedias.length > 0 && piso.filas.length > 0 && (
+                        <div className="flex items-center gap-3 pt-1.5">
+                          <span className="text-[10px] font-black uppercase tracking-[.18em] shrink-0"
+                                style={{ color: piso.color }}>
+                            {piso.titulo} · {piso.filas.length}
+                          </span>
+                          <span className="flex-1 h-px" style={{ background: BORDE }} />
+                          <span className="text-[10px] font-bold shrink-0" style={{ color: '#7C879A' }}>
+                            {piso.ayuda}
+                          </span>
+                        </div>
+                      )}
+
+                      {piso.filas.map(f => {
                     const t = torneoDe(f.torneo_num);
                     const yaEsta = !!f.microciclo_id;
                     const ocupado = trabajando === f.id;
+                    const choque = choques.get(f.id);
                     return (
                       <div key={f.id}
-                        className="flex items-center gap-2"
+                        className="flex flex-col gap-1"
                         onDragOver={e => {
                           if (!filaArrastrada.current) return;
                           e.preventDefault();
@@ -1805,8 +2463,12 @@ export default function ProgramacionCompetenciaPage() {
                         onDragEnd={() => { filaArrastrada.current = ''; setFilaEncima(''); setFilaMoviendo(''); }}
                         style={{ opacity: filaMoviendo === f.id ? 0.55 : 1 }}>
 
+                        <div className="flex items-center gap-2">
+
                         {/* ORDENAR — la manija. SOLO de aquí se agarra el
-                            renglón para acomodarlo. — dirección, 29/08/2026 */}
+                            renglón para acomodarlo. Sigue igual que siempre:
+                            el orden que se ponga a mano manda sobre la hora.
+                            — dirección, 29/08/2026 y 02/09/2026 */}
                         <div
                           draggable
                           onDragStart={e => {
@@ -1827,13 +2489,21 @@ export default function ProgramacionCompetenciaPage() {
                         {/* LOS DATOS, dentro del recuadro */}
                         <div className="flex-1 grid gap-2 items-center rounded-xl px-3 py-1.5"
                              style={{
-                               gridTemplateColumns: COLUMNAS, background: CAMPO,
-                               border: `1px solid ${filaEncima === f.id ? AMBAR : BORDE}`,
+                               gridTemplateColumns: COLUMNAS,
+                               /* EN ROJO CUANDO HAY CHOQUE (dirección, 02/09/2026) */
+                               background: choque ? 'rgba(192,80,77,.18)' : CAMPO,
+                               border: `1px solid ${
+                                 filaEncima === f.id ? AMBAR : choque ? ROJO : BORDE}`,
+                               borderLeft: choque ? `4px solid ${ROJO}` : undefined,
                              }}>
 
                           <input
                             value={f.torneo_num}
                             inputMode="numeric"
+                            /* Al escribir el número, un momento después entran
+                               solos el profe a cargo y la cancha de siempre,
+                               si esas casillas están en blanco. Eso lo hace el
+                               efecto de más arriba. — dirección, 02/09/2026 */
                             onChange={e => cambiar(f.id, 'torneo_num', e.target.value.replace(/[^\d]/g, ''))}
                             /* La letra transparente es solo el gato: la casilla
                                es angosta y el título verde de arriba ya dice
@@ -1879,7 +2549,13 @@ export default function ProgramacionCompetenciaPage() {
 
                           {/* La casilla del DÍA se quitó de aquí: el cuadro es de
                               un solo día. Se cambia de día arriba, en el título. */}
-                          <RelojLlegada valor={f.hora} onChange={v => cambiar(f.id, 'hora', v)} />
+                          {/* LAS DOS HORAS. Poniendo una, la otra se llena
+                              sola con 45 minutos de por medio.
+                              — dirección, 02/09/2026 */}
+                          <RelojLlegada valor={f.hora}
+                            onChange={v => ponerHora(f, 'hora', v)} />
+                          <RelojLlegada valor={f.hora_partido}
+                            onChange={v => ponerHora(f, 'hora_partido', v)} />
 
                           {/* ESCENARIO va ANTES que RIVAL, por orden de la
                               dirección (29/08/2026). */}
@@ -1887,23 +2563,37 @@ export default function ProgramacionCompetenciaPage() {
                               primeras letras se abre la listica con las canchas
                               y los equipos que ya se han usado. Se puede escoger
                               uno o seguir escribiendo algo nuevo. */}
-                          <input
-                            value={f.escenario}
-                            list="memoria-escenarios"
-                            autoComplete="off"
-                            onChange={e => cambiar(f.id, 'escenario', e.target.value.toUpperCase())}
+                          <CasillaMemoria
+                            valor={f.escenario}
+                            onChange={v => cambiar(f.id, 'escenario', v)}
+                            /* Al salir de la casilla se guarda el nombre en la
+                               listica y se pregunta —una sola vez por torneo—
+                               si esa es la cancha de siempre. Guardar aquí y
+                               no en cada letra es lo que acabó con las migas.
+                               — dirección, 02/09/2026 */
+                            onSalir={() => {
+                              recordar(LLAVE_ESCENARIOS, f.escenario);
+                              setRefrescoMemoria(n => n + 1);
+                              void tocarEscenario(f);
+                            }}
+                            opciones={memoriaEscenarios}
+                            onBorrar={v => olvidarSugerencia('escenario', v)}
                             placeholder="ESCENARIO"
-                            style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30 }}
-                            className="w-full rounded-lg px-2 text-white text-[12px] font-bold outline-none placeholder:text-white/20" />
+                            titulo={canchas.fija[String(f.torneo_num ?? '').trim()]
+                              ? `La cancha de siempre de este torneo es ${canchas.fija[String(f.torneo_num).trim()]}. Se puede cambiar.`
+                              : 'Escriba las primeras letras y salen las canchas ya usadas'} />
 
-                          <input
-                            value={f.rival}
-                            list="memoria-rivales"
-                            autoComplete="off"
-                            onChange={e => cambiar(f.id, 'rival', e.target.value.toUpperCase())}
+                          <CasillaMemoria
+                            valor={f.rival}
+                            onChange={v => cambiar(f.id, 'rival', v)}
+                            onSalir={() => {
+                              recordar(LLAVE_RIVALES, f.rival);
+                              setRefrescoMemoria(n => n + 1);
+                            }}
+                            opciones={memoriaRivales}
+                            onBorrar={v => olvidarSugerencia('rival', v)}
                             placeholder="RIVAL"
-                            style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 30 }}
-                            className="w-full rounded-lg px-2 text-white text-[12px] font-bold outline-none placeholder:text-white/20" />
+                            titulo="Escriba las primeras letras y salen los equipos ya usados" />
 
                           {/* El de PRIMERO es siempre el profe responsable de ese
                               torneo; debajo, todos los demás del club. La misma
@@ -1944,9 +2634,23 @@ export default function ProgramacionCompetenciaPage() {
                           style={{ width: 38, height: 38, background: 'transparent', border: `1px solid ${ROJO}` }}>
                           <Trash2 className="w-3.5 h-3.5" style={{ color: ROJO }} />
                         </button>
+                        </div>
+
+                        {/* POR QUÉ ESTÁ EN ROJO. Se dice con nombre propio y
+                            con el hueco exacto, para no tener que buscarlo.
+                            — dirección, 02/09/2026 */}
+                        {choque && (
+                          <p className="text-[11px] font-black leading-snug pl-[46px] pr-[84px]"
+                             style={{ color: '#F0A6A3' }}>
+                            ⚠ {choque.quien} tiene otro partido a {huecoBonito(choque.hueco)} de
+                            este. Con menos de 2 horas entre pitazo y pitazo no alcanza a llegar.
+                          </p>
+                        )}
                       </div>
                     );
-                  })}
+                      })}
+                    </div>
+                  ))}
                 </div>
 
               </div>

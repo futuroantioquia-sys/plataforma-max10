@@ -208,6 +208,26 @@ function microcicloDeFecha(f: Date): number {
   return Math.min(MC_ULTIMO, Math.max(MC_ANCLA_NUMERO, MC_ANCLA_NUMERO + semanas));
 }
 
+/* ── DESDE CUÁNDO SE LE COBRAN LOS MICROCICLOS AL FORMADOR ────────────────
+   (dirección, 02/09/2026 — «los microciclos desde agosto hasta la fecha»)
+
+   Una semana puede fallar de DOS maneras muy distintas, y solo una se veía:
+
+     · SIN CERRAR  — el microciclo existe, se llenó a medias y nadie oprimió
+                     «Dar por terminado». Sale en NARANJA.
+     · SIN ABRIR   — nunca se creó. No existe en la base, así que no se podía
+                     mostrar como pendiente: no había qué mostrar. Es el hueco
+                     que encontró la dirección. Sale en ROJO.
+
+   La segunda se calcula: se recorren las semanas de agosto para acá, se
+   descartan las que el proyecto no entrena según su calendario, y lo que
+   quede sin microciclo es una semana saltada. */
+const MC_DESDE = (() => {
+  const d = new Date(MC_ANIO, 7, 1);              // 1 de agosto
+  while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
+  return 1 + Math.round((d.getTime() - MC_ANCLA_LUNES.getTime()) / (7 * 86400000));
+})();
+
 /** "1 – 7 jun" para el desplegable. */
 function rangoCorto(lunes: Date): string {
   const dom = new Date(lunes); dom.setDate(dom.getDate() + 6);
@@ -294,6 +314,9 @@ export default function MicrocicloPage() {
   const [formadorFicha, setFormadorFicha] = useState('');
   const [lista, setLista]         = useState<Microciclo[]>([]);
   const [abiertoId, setAbiertoId] = useState<string | null>(null);
+  /* La dirección puede destapar aquí las semanas ya cerradas. Por defecto no
+     se ven: su sitio es Mi Consolidado. — 02/09/2026 */
+  const [verCerrados, setVerCerrados] = useState(false);
 
   // Calendario de entrenamiento del proyecto
   const [diasBase, setDiasBase]     = useState<number[]>([]);          // 0=dom … 6=sáb
@@ -440,18 +463,21 @@ export default function MicrocicloPage() {
     [lista, mcSel]
   );
 
-  async function nuevoMicrociclo() {
+  /** Abre la semana `n`. Sirve para el botón de arriba y para las semanas
+      saltadas que se listan en rojo. — 02/09/2026 */
+  async function crearSemana(n: number) {
     if (!proyecto) return;
-    if (yaExiste) { setAbiertoId(yaExiste.id); return; }
+    const ya = lista.find(m => m.fecha_inicio === claveFecha(lunesDeMicrociclo(n)));
+    if (ya) { setAbiertoId(ya.id); return; }
 
     setCreando(true);
     const id = await crearMicrociclo({
       proyecto,
       profesor:      formador,
-      numero:        mcSel,
-      fecha_inicio:  claveFecha(lunesDeMicrociclo(mcSel)),
+      numero:        n,
+      fecha_inicio:  claveFecha(lunesDeMicrociclo(n)),
       creado_por:    esProfe ? (formador || 'FORMADOR') : 'ADMON',
-      fechasEntreno: sesionesSel.map(claveFecha),
+      fechasEntreno: sesionesDe(n).map(claveFecha),
     });
     setCreando(false);
     if (!id) {
@@ -637,7 +663,7 @@ export default function MicrocicloPage() {
 
             {(esAdmin || esProfe) && (
               <button
-                onClick={nuevoMicrociclo}
+                onClick={() => crearSemana(mcSel)}
                 disabled={creando}
                 className={cn(
                   'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition flex-shrink-0',
@@ -663,36 +689,202 @@ export default function MicrocicloPage() {
                 : 'Selecciona primero el programa y luego el proyecto.'}
             </p>
           </div>
-        ) : lista.length === 0 ? (
-          <div className="rounded-2xl border p-10 text-center" style={{ background: PANEL, borderColor: BORDE }}>
-            <CalendarDays className="w-8 h-8 text-white mx-auto mb-2" />
-            <p className="text-sm text-white">
-              Todavía no hay microciclos para <b>{proyecto}</b>.
-              {(esAdmin || esProfe)
-                ? ' Escoja la semana arriba y oprima Crear microciclo.'
-                : ' Todavía no se ha abierto la semana.'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {lista.map(mc => (
-              <TarjetaMicrociclo
-                key={mc.id}
-                cabecera={mc}
-                abierto={abiertoId === mc.id}
-                onToggle={() => setAbiertoId(abiertoId === mc.id ? null : mc.id)}
-                onBorrar={() => borrar(mc.id)}
-                esAdmin={esAdmin}
-                esProfe={esProfe}
-                programa={programa}
-                /* Los días que el proyecto entrena HOY, según Gestión de
-                   Asistencia. Sirve para avisar si el microciclo se quedó con
-                   los de antes. — dirección, 02/09/2026 */
-                diasDeHoy={sesionesDe(mc.numero).map(f => f.getDay())}
-              />
-            ))}
-          </div>
-        )}
+        ) : (() => {
+
+          /* ── QUÉ SE VE AQUÍ Y QUÉ SE VA AL CONSOLIDADO ─────────────────
+             (dirección, 02/09/2026)
+
+             La regla que definió la dirección cabe en una frase:
+                 CERRADO se va al Consolidado · SIN CERRAR se queda aquí.
+
+             De ahí salen tres grupos:
+               · ESTA SEMANA        — el microciclo de hoy, arriba y abierto.
+               · LE QUEDARON PENDIENTES — semanas que ya pasaron y el formador
+                 nunca cerró. Salen en NARANJA y no se van hasta que las
+                 termine. Es lo que la dirección quería ver de un vistazo.
+               · YA PLANEADAS       — semanas futuras que alguien adelantó.
+
+             Los cerrados no se pintan: se leen en Mi Consolidado. Abajo queda
+             el enlace, y la dirección tiene un «ver aquí» por si necesita
+             revisar alguno sin salir de esta pantalla. */
+
+          const mcHoy     = microcicloDeFecha(new Date());
+          const abiertos  = lista.filter(m => m.estado !== 'cerrado');
+          const cerrados  = lista.filter(m => m.estado === 'cerrado');
+
+          /* SEMANAS SALTADAS. Las que ya pasaron, el proyecto sí entrenaba, y
+             el microciclo nunca se creó. No pueden salir como «pendientes»
+             porque no existen: se calculan aquí y se ofrecen para abrirlas.
+             — dirección, 02/09/2026 */
+          const yaCreadas   = new Set(lista.map(m => Number(m.numero)));
+          const sinAbrir: number[] = [];
+          if (diasBase.length > 0) {
+            for (let n = Math.max(MC_DESDE, MC_ANCLA_NUMERO); n < mcHoy; n++) {
+              if (yaCreadas.has(n)) continue;
+              if (sesionesDe(n).length === 0) continue;   // esa semana no se entrenaba
+              sinAbrir.push(n);
+            }
+          }
+          sinAbrir.reverse();                              // la más reciente primero
+
+          const deHoy      = abiertos.filter(m => m.numero === mcHoy);
+          const pendientes = abiertos.filter(m => m.numero <  mcHoy)
+                                     .sort((a, b) => b.numero - a.numero);
+          const futuros    = abiertos.filter(m => m.numero >  mcHoy);
+
+          const pintar = (mc: Microciclo, tono: 'hoy' | 'pendiente' | 'futuro' | 'cerrado') => (
+            <TarjetaMicrociclo
+              key={mc.id}
+              cabecera={mc}
+              abierto={abiertoId === mc.id}
+              onToggle={() => setAbiertoId(abiertoId === mc.id ? null : mc.id)}
+              onBorrar={() => borrar(mc.id)}
+              esAdmin={esAdmin}
+              esProfe={esProfe}
+              programa={programa}
+              tono={tono}
+              /* Los días que el proyecto entrena HOY, según Gestión de
+                 Asistencia. Sirve para avisar si el microciclo se quedó con
+                 los de antes. — dirección, 02/09/2026 */
+              diasDeHoy={sesionesDe(mc.numero).map(f => f.getDay())}
+            />
+          );
+
+          const Rotulo = ({ texto, color }: { texto: string; color: string }) => (
+            <div className="flex items-center gap-3 pt-1">
+              <span className="text-[10px] font-black uppercase tracking-[.18em] flex-shrink-0"
+                    style={{ color }}>{texto}</span>
+              <span className="flex-1 h-px" style={{ background: BORDE }} />
+            </div>
+          );
+
+          return (
+            <div className="space-y-3">
+
+              {deHoy.length > 0 && (
+                <>
+                  <Rotulo texto="Esta semana" color={VERDE} />
+                  {deHoy.map(mc => pintar(mc, 'hoy'))}
+                </>
+              )}
+
+              {pendientes.length > 0 && (
+                <>
+                  <Rotulo
+                    texto={`Le quedaron pendientes · ${pendientes.length}`}
+                    color="#E0A33A"
+                  />
+                  {pendientes.map(mc => pintar(mc, 'pendiente'))}
+                </>
+              )}
+
+              {/* ── SEMANAS QUE NUNCA SE ABRIERON ──────────────────────────
+                  En rojo, y con el botón para abrirlas de una vez. Es la
+                  única falla que la plataforma no podía mostrar antes: un
+                  microciclo que no existe no se puede marcar de ningún
+                  color. — dirección, 02/09/2026 */}
+              {sinAbrir.length > 0 && (
+                <>
+                  <Rotulo texto={`Nunca se abrieron · ${sinAbrir.length}`} color="#C0504D" />
+                  <div className="rounded-2xl border overflow-hidden"
+                       style={{ background: PANEL, borderColor: '#C0504D', borderLeftWidth: 5 }}>
+                    <p className="px-4 pt-3 pb-1 text-[12px] font-semibold leading-snug text-white/85">
+                      Estas semanas ya pasaron, el proyecto sí entrenaba y{' '}
+                      <b style={{ color: '#F0A6A3' }}>el microciclo nunca se creó</b>.
+                      No salen como pendientes porque no existen todavía.
+                    </p>
+                    <div className="p-3 pt-2 space-y-2">
+                      {sinAbrir.map(n => {
+                        const ses = sesionesDe(n);
+                        return (
+                          <div key={n}
+                               className="flex items-center gap-3 rounded-xl px-3 py-2"
+                               style={{ background: '#2B3547', border: `1px solid ${BORDE}` }}>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[13px] font-black text-white">
+                                Microciclo {n}
+                                <span className="font-semibold ml-2">{rangoCorto(lunesDeMicrociclo(n))}</span>
+                              </p>
+                              <p className="text-[11px] font-semibold" style={{ color: '#7C879A' }}>
+                                {ses.length} {ses.length === 1 ? 'día de entreno' : 'días de entreno'} · sin abrir
+                              </p>
+                            </div>
+                            {(esAdmin || esProfe) && (
+                              <button
+                                onClick={() => crearSemana(n)}
+                                disabled={creando}
+                                className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 rounded-lg
+                                           text-[10px] font-black uppercase tracking-wide
+                                           text-white disabled:opacity-60 hover:opacity-85"
+                                style={{ background: '#C0504D' }}
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                {creando ? 'Abriendo…' : `Abrir semana ${n}`}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {futuros.length > 0 && (
+                <>
+                  <Rotulo texto="Ya planeadas" color="#7C879A" />
+                  {futuros.map(mc => pintar(mc, 'futuro'))}
+                </>
+              )}
+
+              {abiertos.length === 0 && sinAbrir.length === 0 && (
+                lista.length === 0 ? (
+                  <div className="rounded-2xl border p-10 text-center"
+                       style={{ background: PANEL, borderColor: BORDE }}>
+                    <CalendarDays className="w-8 h-8 text-white mx-auto mb-2" />
+                    <p className="text-sm text-white">
+                      Todavía no hay microciclos para <b>{proyecto}</b>.
+                      {(esAdmin || esProfe)
+                        ? ' Escoja la semana arriba y oprima Crear microciclo.'
+                        : ' Todavía no se ha abierto la semana.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border p-8 text-center"
+                       style={{ background: PANEL, borderColor: VERDE }}>
+                    <Lock className="w-7 h-7 mx-auto mb-2" style={{ color: VERDE }} />
+                    <p className="text-sm text-white font-bold">
+                      Todo al día: no hay ninguna semana pendiente en <b>{proyecto}</b>.
+                    </p>
+                    <p className="text-[12px] text-white/70 mt-1">
+                      Las semanas terminadas se leen en Mi Consolidado.
+                    </p>
+                  </div>
+                )
+              )}
+
+              {cerrados.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
+                  <a href="/consolidado"
+                     className="text-[12px] font-bold hover:underline"
+                     style={{ color: '#5BE39B' }}>
+                    {cerrados.length === 1
+                      ? 'Hay 1 semana terminada — está en Mi Consolidado →'
+                      : `Hay ${cerrados.length} semanas terminadas — están en Mi Consolidado →`}
+                  </a>
+                  <button
+                    onClick={() => setVerCerrados(!verCerrados)}
+                    className="text-[11px] font-bold text-[#7C879A] hover:text-white"
+                  >
+                    {verCerrados ? '(ocultarlas aquí)' : '(verlas aquí)'}
+                  </button>
+                </div>
+              )}
+
+              {verCerrados && cerrados.map(mc => pintar(mc, 'cerrado'))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -701,16 +893,18 @@ export default function MicrocicloPage() {
 // ═══════════════════════════════════════════════════════════════
 function TarjetaMicrociclo({
   cabecera, abierto, onToggle, onBorrar, esAdmin, esProfe = false, programa = '', diasDeHoy = [],
+  tono = 'hoy',
 }: {
   cabecera: Microciclo; abierto: boolean; onToggle: () => void;
   onBorrar: () => void; esAdmin: boolean; esProfe?: boolean; programa?: string;
   diasDeHoy?: number[];
+  /** Cómo se pinta: la semana de hoy, una atrasada, una futura o una cerrada. */
+  tono?: 'hoy' | 'pendiente' | 'futuro' | 'cerrado';
 }) {
   const [detalle, setDetalle]   = useState<Microciclo | null>(null);
   const [asist, setAsist]       = useState<Record<string, ResumenAsistenciaDia>>({});
   const [cargando, setCargando] = useState(false);
   /** Por defecto solo se muestran los días en que el proyecto entrena. */
-  const [verTodos, setVerTodos] = useState(false);
 
   /** Vista preliminar: solo lectura, y solo si la semana está completa. */
   const [previa, setPrevia]     = useState(false);
@@ -827,16 +1021,30 @@ function TarjetaMicrociclo({
     return Math.round(dias.reduce((s, d) => s + d.porcentaje, 0) / dias.length);
   }, [asist]);
 
+  /* Una semana que ya pasó y nadie cerró: se pinta en naranja para que el
+     formador la vea de una vez. — dirección, 02/09/2026
+     Si el formador la cierra sin salir de la pantalla, deja de estar en
+     naranja al instante: por eso se mira también el estado de aquí. */
+  const pendiente = tono === 'pendiente' && !cerrado;
+  const atraso    = Math.max(0, microcicloDeFecha(new Date()) - cabecera.numero);
+
   return (
-    <div className="rounded-2xl border shadow-sm overflow-hidden" style={{ background: PANEL, borderColor: BORDE }}>
+    <div className="rounded-2xl border shadow-sm overflow-hidden"
+         style={{
+           background:     PANEL,
+           borderColor:    pendiente ? '#E0A33A' : tono === 'hoy' ? VERDE : BORDE,
+           borderLeftWidth: pendiente || tono === 'hoy' ? 5 : 1,
+         }}>
       <div className="w-full px-4 py-3.5 flex items-center gap-3">
         <button
           onClick={onToggle}
           className="flex items-center gap-3 text-left flex-1 min-w-0 hover:opacity-75 transition"
         >
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-               style={{ background: 'rgba(0,176,80,.16)', color: VERDE }}>
-            <CalendarDays className="w-5 h-5" />
+               style={pendiente
+                 ? { background: 'rgba(224,163,58,.18)', color: '#E0A33A' }
+                 : { background: 'rgba(0,176,80,.16)',   color: VERDE }}>
+            {pendiente ? <AlertCircle className="w-5 h-5" /> : <CalendarDays className="w-5 h-5" />}
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-black text-sm text-white leading-tight">
@@ -845,11 +1053,24 @@ function TarjetaMicrociclo({
                 {fechaLarga(cabecera.fecha_inicio)} — {fechaLarga(cabecera.fecha_fin)}
               </span>
             </p>
-            {cabecera.profesor && (
+            {pendiente ? (
+              <p className="text-[11px] font-bold truncate mt-0.5" style={{ color: '#E0A33A' }}>
+                {atraso <= 1 ? 'La semana pasada' : `Hace ${atraso} semanas`} · quedó sin cerrar
+                {cabecera.profesor ? ` · ${cabecera.profesor}` : ''}
+              </p>
+            ) : cabecera.profesor && (
               <p className="text-[11px] text-white truncate mt-0.5">{cabecera.profesor}</p>
             )}
           </div>
         </button>
+
+        {pendiente && (
+          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-lg flex-shrink-0"
+                style={{ background: '#E0A33A', color: '#111827' }}
+                title="Esta semana nunca se dio por terminada">
+            Pendiente
+          </span>
+        )}
 
         {cerrado && (
           <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider
@@ -866,22 +1087,38 @@ function TarjetaMicrociclo({
           </span>
         )}
 
-        {/* VISTA PRELIMINAR — solo lectura, junto al % de asistencia */}
-        <button
-          onClick={abrirPrevia}
-          disabled={revisando}
-          title="Ver toda la labor de la semana sin poder editarla"
-          className={cn(
-            'flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 rounded-lg border transition',
-            'text-[10px] font-black uppercase tracking-wide',
-            revisando
-              ? 'bg-[#4A5568] text-white border-[#4A5568]'
-              : 'bg-[#00B050] text-white border-[#00B050] hover:bg-[#00913F]'
-          )}
-        >
-          <Eye className="w-3.5 h-3.5" />
-          {revisando ? 'Revisando…' : 'Vista preliminar'}
-        </button>
+        {/* En una semana PENDIENTE no va vista preliminar: está a medio llenar,
+            no hay nada que imprimir todavía. Lo único que hay que hacer con
+            ella es abrirla y terminarla. — dirección, 02/09/2026 */}
+        {pendiente ? (
+          <button
+            onClick={onToggle}
+            title="Abrir esta semana y terminar de llenarla"
+            className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 rounded-lg border transition
+                       text-[10px] font-black uppercase tracking-wide hover:opacity-85"
+            style={{ background: '#E0A33A', color: '#111827', borderColor: '#E0A33A' }}
+          >
+            <PencilRuler className="w-3.5 h-3.5" />
+            Abrir y terminar
+          </button>
+        ) : (
+          /* VISTA PRELIMINAR — solo lectura, junto al % de asistencia */
+          <button
+            onClick={abrirPrevia}
+            disabled={revisando}
+            title="Ver toda la labor de la semana sin poder editarla"
+            className={cn(
+              'flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 rounded-lg border transition',
+              'text-[10px] font-black uppercase tracking-wide',
+              revisando
+                ? 'bg-[#4A5568] text-white border-[#4A5568]'
+                : 'bg-[#00B050] text-white border-[#00B050] hover:bg-[#00913F]'
+            )}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            {revisando ? 'Revisando…' : 'Vista preliminar'}
+          </button>
+        )}
 
         <button onClick={onToggle} className="flex-shrink-0 text-white hover:text-white">
           {abierto ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -1018,11 +1255,19 @@ function TarjetaMicrociclo({
             );
           })()}
 
+          {/* SOLO LOS DÍAS DE ENTRENO (dirección, 02/09/2026).
+              Antes salían los tres días de entreno y debajo un renglón
+              «▼ Ver la semana completa (4 días sin sesión)». El proyecto
+              entrena tres veces por semana: los otros cuatro días no son
+              asunto del formador y solo estorbaban. Ese renglón se quitó.
+
+              El único caso en que se muestran todos es cuando el microciclo
+              se quedó SIN NINGÚN día de entreno —calendario mal puesto—;
+              ahí es mejor ver algo que ver una tarjeta vacía. */}
           {!cargando && detalle && (() => {
             const todos     = detalle.dias ?? [];
             const conSesion = todos.filter(d => d.tipo_dia !== 'descanso');
-            const ocultos   = todos.length - conSesion.length;
-            const visibles  = verTodos || conSesion.length === 0 ? todos : conSesion;
+            const visibles  = conSesion.length ? conSesion : todos;
 
             return (
               <>
@@ -1036,19 +1281,6 @@ function TarjetaMicrociclo({
                     cerrado={cerrado}
                   />
                 ))}
-
-                {ocultos > 0 && (
-                  <button
-                    onClick={() => setVerTodos(!verTodos)}
-                    className="w-full text-[11px] font-bold text-white hover:text-[#00B050]
-                               py-2 rounded-xl border border-dashed border-[#4A5568]
-                               hover:border-[#00B050] transition"
-                  >
-                    {verTodos
-                      ? '▲ Mostrar solo los días de entreno'
-                      : `▼ Ver la semana completa (${ocultos} ${ocultos === 1 ? 'día' : 'días'} sin sesión)`}
-                  </button>
-                )}
 
                 {/* Dar por terminado: se bloquea para todos */}
                 {!cerrado && (

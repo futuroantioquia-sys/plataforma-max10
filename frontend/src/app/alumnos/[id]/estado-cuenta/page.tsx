@@ -268,7 +268,27 @@ function EstadoCuentaInner() {
      El resto de cobros —uniformes, salidas— se queda en OTROS PAGOS. Se
      reparten aquí para que ningún renglón salga en las dos. — 27/08/2026 */
   const esCobroDeTorneo = (op: OtroPago) => /torneo/i.test(String(op.tipo ?? ''));
-  const torneosCargados = useMemo(() => otrosPagos.filter(esCobroDeTorneo), [otrosPagos]);
+
+  /* ── AL QUE SE LE QUITA EL TORNEO SE LE QUITA EL COBRO ────────────────────
+     (dirección, 02/09/2026 — el caso de Nicolás Cedillo con la Copa ABC)
+
+     Cuando la dirección marca a un deportista como NO PAGA en un torneo, le
+     está quitando ese torneo: no va, y no se le cobra. Hasta hoy el renglón
+     se seguía viendo en el estado de cuenta con su valor —"así se sabe de
+     cuánto lo eximieron"—, y para el papá eso se lee como una deuda que
+     alguien le perdonó, o peor, como un cobro que sigue vivo.
+
+     Ahora ese renglón NO SE MUESTRA. El cobro queda en la base y la dirección
+     lo sigue viendo en la matriz del pospartido, en gris, marcado NO PAGA;
+     pero en el estado de cuenta del deportista desaparece, que es donde
+     estorbaba. */
+  const esTorneoQuitado = (op: OtroPago) =>
+    String(op.estado ?? '').toUpperCase().replace(/\s+/g, '') === 'NOPAGA';
+
+  const torneosCargados = useMemo(
+    () => otrosPagos.filter(op => esCobroDeTorneo(op) && !esTorneoQuitado(op)),
+    [otrosPagos],
+  );
 
   /* ── REGISTRAR EL PAGO DE UN TORNEO, A MANO ──────────────────────────────
      El mismo cuadro de Registrar Pago de las mensualidades, pedido por la

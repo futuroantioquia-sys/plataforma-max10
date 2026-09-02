@@ -4380,7 +4380,12 @@ export default function CrearPospartidoPage() {
             {[
               { texto: 'PENDIENTE', ayuda: 'Lo debe',                    color: AMBAR, estado: 'PEND' },
               { texto: 'PAGÓ',      ayuda: 'Ya pagó este torneo',        color: VERDE, estado: 'PAGÓ' },
-              { texto: 'NO PAGA',   ayuda: 'Exonerado de este torneo',   color: GRIS,  estado: ESTADO_NO_PAGA },
+              /* NO PAGA = se le quita el torneo. Desde el 02/09/2026 el cobro
+                 DESAPARECE del estado de cuenta del deportista: el papá ya no
+                 lo ve. Aquí sí se sigue viendo, en gris, para que la dirección
+                 sepa que ya lo decidió. — dirección, 02/09/2026 */
+              { texto: 'NO PAGA',   ayuda: 'Se le quita el torneo · no le aparece el cobro',
+                color: GRIS,  estado: ESTADO_NO_PAGA },
             ].map(o => (
               <button key={o.estado} type="button"
                 onClick={() => ponerEstado(menuCobro.depId, menuCobro.cobro, o.estado)}

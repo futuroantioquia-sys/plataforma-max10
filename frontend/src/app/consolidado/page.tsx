@@ -37,8 +37,8 @@ import {
   ArrowLeft, RefreshCw, Users, CalendarCheck, ClipboardList,
   CalendarDays, AlertTriangle, ChevronRight, Loader2, Search, X,
 } from 'lucide-react';
-import { getDeportistasPorProyecto, getProfes, getEvaluacionesResumen, getMicrociclos, getResumenAsistencia } from '@/lib/db';
-import type { Deportista, Profe, EvaluacionResumen, Microciclo, ResumenAsistenciaDia } from '@/lib/db';
+import { getDeportistasPorProyecto, getProfes, getEvaluacionesResumen, getMicrociclos, getResumenAsistencia, getFichasProyecto } from '@/lib/db';
+import type { Deportista, Profe, EvaluacionResumen, Microciclo, ResumenAsistenciaDia, InfoProyecto } from '@/lib/db';
 import { esProfesor, esSuperAdmin, esAccesoTotal } from '@/lib/permisos';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
 
@@ -169,8 +169,15 @@ interface FilaGrupo {
   diasConRegistro: number;
   diasSinLlenar:   number;
   promedio:        number;   // 0-100
-  /* Microciclos */
+  /* Microciclos.
+     CERRADAS son las que el formador dio por terminadas: esas son las que se
+     archivan aquí. PENDIENTES son las que se le quedaron sin cerrar y siguen
+     en su pantalla, en naranja. — dirección, 02/09/2026 */
   semanas:      number;
+  semanasCerradas:   number;
+  semanasPendientes: number;
+  /** Semanas que ya pasaron y ni siquiera se abrió el microciclo (lunes ISO). */
+  semanasSinAbrir:   string[];
   ultimaSemana: string;
   semanaAlDia:  boolean;
   /* Informes */
@@ -205,6 +212,9 @@ export default function ConsolidadoPage() {
   const [profes, setProfes] = useState<Profe[]>([]);
   const [evals, setEvals]   = useState<EvaluacionResumen[]>([]);
   const [micros, setMicros] = useState<Microciclo[]>([]);
+  /* Los días que entrena cada proyecto. Sirven para saber si una semana sin
+     microciclo es un descuido o es que ese grupo no entrena. — 02/09/2026 */
+  const [fichas, setFichas] = useState<Record<string, InfoProyecto>>({});
   const [cargando, setCargando] = useState(true);        // los formadores (rápido)
   const [cargandoDeps, setCargandoDeps] = useState(true);  // las fichas (pesado)
   const [error, setError]   = useState('');
@@ -263,6 +273,7 @@ export default function ConsolidadoPage() {
     /* Y estos dos por detrás, sin detener nada. */
     getEvaluacionesResumen().then(setEvals).catch(() => {});
     getMicrociclos().then(setMicros).catch(() => {});
+    getFichasProyecto().then(setFichas).catch(() => {});
   }, []);
 
   useEffect(() => { cargarTodo(); }, [cargarTodo]);
@@ -480,6 +491,27 @@ export default function ConsolidadoPage() {
 
   const lunesDeEstaSemana = useMemo(() => lunesDe(new Date()), []);
 
+  /* ── LAS SEMANAS QUE DEBERÍAN EXISTIR ─────────────────────────────────────
+     (dirección, 02/09/2026 — «¿cómo saber si un profe se saltó un microciclo,
+      si no le sale como pendiente?»)
+
+     Un microciclo que nunca se creó no está en la base, así que no se puede
+     marcar de ningún color: hay que ECHARLO DE MENOS. Aquí se arma la lista
+     de lunes que van de agosto hasta la semana pasada; luego, por grupo, se
+     mira cuáles de esos lunes no tienen microciclo. */
+  const lunesEsperados = useMemo(() => {
+    const out: string[] = [];
+    const d = new Date(anioVista, 7, 1);                 // 1 de agosto
+    while (d.getDay() !== 1) d.setDate(d.getDate() + 1); // primer lunes
+    for (let i = 0; i < 60; i++) {
+      const iso = lunesDe(d);
+      if (iso >= lunesDeEstaSemana) break;               // la de hoy no se cobra
+      out.push(iso);
+      d.setDate(d.getDate() + 7);
+    }
+    return out;
+  }, [anioVista, lunesDeEstaSemana]);
+
   /* ── EL CUADRO: una fila por grupo ─────────────────────────────────────── */
   const filas = useMemo<FilaGrupo[]>(() => {
     return proyectosVisibles.map(proy => {
@@ -497,10 +529,23 @@ export default function ConsolidadoPage() {
         ? Math.round(conReg.reduce((s, d) => s + (d.porcentaje || 0), 0) / conReg.length)
         : 0;
 
-      /* Microciclos */
+      /* Microciclos.
+         El archivo son las CERRADAS. Las que quedaron sin cerrar se cuentan
+         aparte para que la dirección vea de un vistazo cuántas le deben, pero
+         no se archivan: siguen en la pantalla del formador. — 02/09/2026 */
       const mcs = microsPorProyecto.get(proy) ?? [];
-      const ultima = mcs[0]?.fecha_inicio ? String(mcs[0].fecha_inicio).slice(0, 10) : '';
+      const mcsCerrados   = mcs.filter(mc => mc.estado === 'cerrado');
+      const mcsPendientes = mcs.filter(mc =>
+        mc.estado !== 'cerrado' && String(mc.fecha_inicio).slice(0, 10) < lunesDeEstaSemana);
+      const ultima = mcsCerrados[0]?.fecha_inicio ? String(mcsCerrados[0].fecha_inicio).slice(0, 10) : '';
       const alDia = mcs.some(mc => String(mc.fecha_inicio).slice(0, 10) === lunesDeEstaSemana);
+
+      /* Semanas SALTADAS: ni siquiera se abrió el microciclo. Solo se cuentan
+         si el grupo tiene días de entreno en su ficha; si no los tiene, no se
+         sabe si entrena y no se le cobra nada. — 02/09/2026 */
+      const entrena  = (fichas[proy]?.dias ?? []).length > 0;
+      const susLunes = new Set(mcs.map(mc => String(mc.fecha_inicio).slice(0, 10)));
+      const sinAbrir = entrena ? lunesEsperados.filter(l => !susLunes.has(l)) : [];
 
       /* Informes */
       let conInf1 = 0, conInf2 = 0, sinNada = 0;
@@ -520,12 +565,16 @@ export default function ConsolidadoPage() {
         diasSinLlenar: sinLlenar,
         promedio,
         semanas: mcs.length,
+        semanasCerradas:   mcsCerrados.length,
+        semanasPendientes: mcsPendientes.length,
+        semanasSinAbrir:   sinAbrir,
         ultimaSemana: ultima,
         semanaAlDia: alDia,
         conInf1, conInf2, sinNada,
       };
     });
-  }, [proyectosVisibles, deps, asis, microsPorProyecto, infoPorCodigo, profePorProyecto, lunesDeEstaSemana]);
+  }, [proyectosVisibles, deps, asis, microsPorProyecto, infoPorCodigo, profePorProyecto,
+      lunesDeEstaSemana, fichas, lunesEsperados]);
 
   /* ── Los deportistas de un grupo, con sus faltas y sus informes ─────────── */
   const detalleDe = useCallback((proy: string) => {
@@ -753,6 +802,8 @@ export default function ConsolidadoPage() {
             style={{ color: '#E6EAF0', background: CAMPO, border: `1px solid ${BORDE}` }}>
             El microciclo es la planeación de la <b>semana del grupo</b>, no de cada niño.
             Por eso aquí el detalle va por semana y no por deportista.
+            {' '}Aquí se archivan las semanas <b>terminadas</b>; las que quedaron sin cerrar
+            siguen en la pantalla del formador, marcadas en naranja.
           </p>
         )}
 
@@ -820,11 +871,27 @@ export default function ConsolidadoPage() {
 
                     {pestana === 'microciclos' && (
                       <div className="flex-1 flex flex-wrap items-center justify-end gap-2">
-                        <span className="font-black text-[19px] text-white">{f.semanas}</span>
+                        <span className="font-black text-[19px] text-white">{f.semanasCerradas}</span>
                         <span className="text-[11px] font-semibold" style={{ color: GRIS }}>
-                          {f.semanas === 1 ? 'semana cargada' : 'semanas cargadas'}
+                          {f.semanasCerradas === 1 ? 'semana terminada' : 'semanas terminadas'}
                           {f.ultimaSemana ? ` · última ${f.ultimaSemana}` : ''}
                         </span>
+                        {/* Semanas que ni se abrieron: la falla más grave, en rojo. */}
+                        {f.semanasSinAbrir.length > 0 && (
+                          <span className="text-[10.5px] font-black rounded px-2 py-1"
+                            style={{ background: ROJO, color: '#fff' }}
+                            title="Semanas que ya pasaron y el microciclo nunca se creó">
+                            {f.semanasSinAbrir.length} SIN ABRIR
+                          </span>
+                        )}
+                        {/* Cuántas se le quedaron sin cerrar al formador. — 02/09/2026 */}
+                        {f.semanasPendientes > 0 && (
+                          <span className="text-[10.5px] font-black rounded px-2 py-1"
+                            style={{ background: AMBAR, color: CAMPO }}
+                            title="Semanas que ya pasaron y el formador nunca dio por terminadas">
+                            {f.semanasPendientes} {f.semanasPendientes === 1 ? 'PENDIENTE' : 'PENDIENTES'}
+                          </span>
+                        )}
                         <span className="text-[10.5px] font-black rounded px-2 py-1"
                           style={{ background: f.semanaAlDia ? VERDE : AMBAR, color: f.semanaAlDia ? '#fff' : CAMPO }}>
                           {f.semanaAlDia ? 'ESTA SEMANA LISTA' : 'FALTA ESTA SEMANA'}
@@ -856,7 +923,8 @@ export default function ConsolidadoPage() {
                   {desplegado && (
                     <div className="px-4 pb-4" style={{ background: CAMPO }}>
                       {pestana === 'microciclos' ? (
-                        <DetalleMicrociclos lista={microsPorProyecto.get(f.proyecto) ?? []} lunesHoy={lunesDeEstaSemana} />
+                        <DetalleMicrociclos lista={microsPorProyecto.get(f.proyecto) ?? []}
+                          lunesHoy={lunesDeEstaSemana} sinAbrir={f.semanasSinAbrir} />
                       ) : (
                         <DetalleDeportistas filas={detalleDe(f.proyecto)} pestana={pestana}
                           meses={mesesTemporada(anioVista)} cargando={cargandoDeps} />
@@ -971,41 +1039,103 @@ function DetalleDeportistas({ filas, pestana, meses, cargando }: {
   );
 }
 
-/* ── Detalle: las semanas del grupo ────────────────────────────────────── */
-function DetalleMicrociclos({ lista, lunesHoy }: { lista: Microciclo[]; lunesHoy: string }) {
-  if (!lista.length) {
-    return <p className="text-white/45 text-[12.5px] font-semibold py-4 text-center">Este grupo todavía no tiene ningún microciclo cargado.</p>;
-  }
-  return (
-    <div className="rounded-lg overflow-hidden mt-1" style={{ border: `1px solid ${BORDE}` }}>
-      <div className="flex items-center gap-3 px-3 py-2 text-[10px] font-black tracking-wider"
-        style={{ background: VERDE, color: '#fff' }}>
-        <span style={{ width: 56 }}>SEMANA</span>
-        <span style={{ width: 106 }}>DESDE</span>
-        <span style={{ width: 106 }}>HASTA</span>
-        <span className="flex-1">OBJETIVO</span>
-        <span style={{ width: 78, textAlign: 'center' }}>DÍAS</span>
-      </div>
-      {lista.slice(0, 16).map((mc, i) => {
-        const esta = String(mc.fecha_inicio).slice(0, 10) === lunesHoy;
-        return (
-          <div key={mc.id} className="flex items-center gap-3 px-3 py-2 text-[12px]"
-            style={{ background: esta ? 'rgba(0,176,80,.16)' : i % 2 ? PANEL : '#36404F', borderTop: `1px solid ${BORDE}55` }}>
-            <span className="font-black" style={{ width: 56, color: esta ? VERDECL : '#fff' }}>#{mc.numero || '—'}</span>
-            <span style={{ width: 106, color: GRIS }}>{String(mc.fecha_inicio ?? '').slice(0, 10) || '—'}</span>
-            <span style={{ width: 106, color: GRIS }}>{String(mc.fecha_fin ?? '').slice(0, 10) || '—'}</span>
-            <span className="flex-1 text-white/85 truncate">{mc.objetivo_general || <span style={{ color: GRIS }}>sin objetivo escrito</span>}</span>
-            <span className="font-black" style={{ width: 78, textAlign: 'center', color: (mc.dias?.length ?? 0) ? VERDECL : GRIS }}>
-              {mc.dias?.length ?? '—'}
-            </span>
-          </div>
-        );
-      })}
-      {lista.length > 16 && (
-        <p className="text-center text-[11px] py-2" style={{ color: GRIS, background: PANEL }}>
-          … y {lista.length - 16} semanas más atrás
+/* ── Detalle: las semanas del grupo ──────────────────────────────────────
+   AQUÍ SOLO ENTRA LO TERMINADO (dirección, 02/09/2026).
+
+   La regla que puso la dirección: «si ya se cerró, debe aparecer en el
+   consolidado; si quedó sin cerrar, debe aparecer en el microciclo hasta que
+   lo termine». Así que este archivo solo lista las semanas CERRADAS.
+
+   Las que están sin cerrar no se esconden: se dicen abajo, con nombre y
+   número, para que la dirección sepa qué le están debiendo y a quién
+   cobrárselo — pero se leen y se corrigen en la pantalla del formador. */
+function DetalleMicrociclos(
+  { lista, lunesHoy, sinAbrir = [] }:
+  { lista: Microciclo[]; lunesHoy: string; sinAbrir?: string[] }
+) {
+  const cerradas = lista.filter(mc => mc.estado === 'cerrado');
+  const abiertas = lista.filter(mc => mc.estado !== 'cerrado');
+  const pendientes = abiertas.filter(mc => String(mc.fecha_inicio).slice(0, 10) < lunesHoy)
+                             .sort((a, b) => (b.numero || 0) - (a.numero || 0));
+
+  /* Las que nunca se abrieron. Se muestran por FECHA porque no tienen número:
+     no existen como microciclo. — dirección, 02/09/2026 */
+  const avisoSinAbrir = sinAbrir.length > 0 && (
+    <p className="text-[11.5px] font-semibold rounded-lg px-3 py-2 mt-2"
+      style={{ color: '#F0A6A3', background: 'rgba(192,80,77,.15)', border: `1px solid ${ROJO}` }}>
+      <b>
+        {sinAbrir.length === 1
+          ? 'Hay 1 semana que nunca se abrió'
+          : `Hay ${sinAbrir.length} semanas que nunca se abrieron`}
+        :
+      </b>{' '}
+      {[...sinAbrir].reverse().slice(0, 10).join(' · ')}
+      {sinAbrir.length > 10 ? ' …' : ''}. Ni siquiera se creó el microciclo, por eso no
+      aparecen arriba. El formador las abre desde su pantalla de Microciclo.
+    </p>
+  );
+
+  const avisoPendientes = pendientes.length > 0 && (
+    <p className="text-[11.5px] font-semibold rounded-lg px-3 py-2 mt-2"
+      style={{ color: '#F0C070', background: 'rgba(224,163,58,.12)', border: `1px solid ${AMBAR}` }}>
+      <b>
+        {pendientes.length === 1
+          ? 'Hay 1 semana sin terminar'
+          : `Hay ${pendientes.length} semanas sin terminar`}
+        :
+      </b>{' '}
+      {pendientes.slice(0, 8).map(mc => `#${mc.numero || '—'}`).join(' · ')}
+      {pendientes.length > 8 ? ' …' : ''}. Siguen en la pantalla del formador, en naranja,
+      hasta que las cierre.
+    </p>
+  );
+
+  if (!cerradas.length) {
+    return (
+      <>
+        <p className="text-white/45 text-[12.5px] font-semibold py-4 text-center">
+          Este grupo todavía no tiene ninguna semana terminada.
         </p>
-      )}
-    </div>
+        {avisoPendientes}
+        {avisoSinAbrir}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="rounded-lg overflow-hidden mt-1" style={{ border: `1px solid ${BORDE}` }}>
+        <div className="flex items-center gap-3 px-3 py-2 text-[10px] font-black tracking-wider"
+          style={{ background: VERDE, color: '#fff' }}>
+          <span style={{ width: 56 }}>SEMANA</span>
+          <span style={{ width: 106 }}>DESDE</span>
+          <span style={{ width: 106 }}>HASTA</span>
+          <span className="flex-1">OBJETIVO</span>
+          <span style={{ width: 78, textAlign: 'center' }}>DÍAS</span>
+        </div>
+        {cerradas.slice(0, 16).map((mc, i) => {
+          const esta = String(mc.fecha_inicio).slice(0, 10) === lunesHoy;
+          return (
+            <div key={mc.id} className="flex items-center gap-3 px-3 py-2 text-[12px]"
+              style={{ background: esta ? 'rgba(0,176,80,.16)' : i % 2 ? PANEL : '#36404F', borderTop: `1px solid ${BORDE}55` }}>
+              <span className="font-black" style={{ width: 56, color: esta ? VERDECL : '#fff' }}>#{mc.numero || '—'}</span>
+              <span style={{ width: 106, color: GRIS }}>{String(mc.fecha_inicio ?? '').slice(0, 10) || '—'}</span>
+              <span style={{ width: 106, color: GRIS }}>{String(mc.fecha_fin ?? '').slice(0, 10) || '—'}</span>
+              <span className="flex-1 text-white/85 truncate">{mc.objetivo_general || <span style={{ color: GRIS }}>sin objetivo escrito</span>}</span>
+              <span className="font-black" style={{ width: 78, textAlign: 'center', color: (mc.dias?.length ?? 0) ? VERDECL : GRIS }}>
+                {mc.dias?.length ?? '—'}
+              </span>
+            </div>
+          );
+        })}
+        {cerradas.length > 16 && (
+          <p className="text-center text-[11px] py-2" style={{ color: GRIS, background: PANEL }}>
+            … y {cerradas.length - 16} semanas más atrás
+          </p>
+        )}
+      </div>
+      {avisoPendientes}
+      {avisoSinAbrir}
+    </>
   );
 }
