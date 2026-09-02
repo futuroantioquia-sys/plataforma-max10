@@ -720,6 +720,38 @@ function EstadoCuentaInner() {
   const codVal    = getCol(dep, /^c[oó]d/i);
   const codRaw    = getCodigoRaw(dep);
   const becado    = esBecado(codRaw);
+
+  /* ─── A QUÉ CUENTA LE TOCA CONSIGNAR A ESTE DEPORTISTA ────────────────────
+     (dirección, 02/09/2026)
+
+     Hasta hoy esto se calculaba ADENTRO del cuadro de PAGAR. La dirección
+     pidió que la cuenta también salga en el aviso del descuento, arriba —que
+     es lo primero que lee el papá— y dos cuentas calculadas en dos sitios
+     distintos es la receta para que un día digan cosas diferentes. Así que se
+     calcula UNA sola vez, aquí, y de aquí beben los dos.
+
+     LA REGLA, que no la decide el botón sino el PROYECTO: consignan a MAX 10
+     SPORT los seis proyectos de SUB 13, SUB 14 y SUB 15 —tanto Selección como
+     Desarrollo—. Todos los demás, a Futuro Antioquia. */
+  const cuentaPago = (() => {
+    const sinAcento = (s: string) => String(s ?? '').toUpperCase().trim()
+      .replace(/[ÁÀÂÃÄ]/g, 'A').replace(/[ÉÈÊË]/g, 'E').replace(/[ÍÌÎÏ]/g, 'I')
+      .replace(/[ÓÒÔÕÖ]/g, 'O').replace(/[ÚÙÛÜ]/g, 'U').replace(/Ñ/g, 'N');
+    const progNorm = sinAcento(catVal);
+    const proyNorm = sinAcento(proyecto);
+    const esSelDesarr = /SELECC|DESARROLLO/.test(progNorm);
+    const esSub131415 = /SUB[\s\-]*(13|14|15)/.test(proyNorm);
+    const nombreCompleto = progNorm + ' ' + proyNorm;
+    const PROYECTOS_MAX10 = ['DESARROLLO SUB 15', 'DESARROLLO SUB 14', 'DESARROLLO SUB 13',
+                             'SELECCION SUB 15', 'SELECCION SUB 14', 'SELECCION SUB 13'];
+    const esMax10 = (esSelDesarr && esSub131415) || PROYECTOS_MAX10.some(p => nombreCompleto.includes(p));
+    return {
+      esMax10,
+      numero:  esMax10 ? '27700006723' : '10182764613',
+      titular: esMax10 ? 'MAX 10 SPORT' : 'FUTURO ANTIOQUIA',
+      nit:     esMax10 ? null           : '811036997',
+    };
+  })();
   const sedeVal   = getCol(dep, /^sede/i);
 
   /* ─── Canales de comunicación del calidoso ─── */
@@ -1289,10 +1321,27 @@ function EstadoCuentaInner() {
             resaltado en amarillo: es la cifra que se quiere que se le grabe.
             Las cantidades salen de la tarifa de este deportista, no están
             escritas a mano. — dirección, 31/08/2026 */}
-        {avisoProntoPago && (
-          <div className="rounded-xl px-4 py-3 mt-3"
-               style={{ background: '#3C4759', border: `1px solid ${AMBAR}` }}>
-            <p className="text-white font-bold text-[13px] leading-relaxed">
+        {/* ── LA CUENTA SE LE MUESTRA A TODOS ───────────────────────────────
+            (dirección, 02/09/2026 — «súper bien el aviso de la cuenta, pero no
+             le aparece a todos»)
+
+            QUÉ PASABA. La cuenta iba pegada al aviso del descuento, y ese aviso
+            se esconde a propósito en tres casos: al becado, al que no tiene
+            tarifa, y al que YA PAGÓ el mes —a ese no tiene sentido recordarle
+            un descuento que ya cogió—. Emmanuel ya tenía septiembre pagado, así
+            que no le salía el aviso… y con él se le iba también la cuenta.
+
+            Pero son dos cosas distintas. El descuento es un recordatorio que a
+            veces sobra; la CUENTA hay que tenerla siempre a la mano —para el
+            mes entrante, para un torneo, para lo que sea—. Así que el recuadro
+            se muestra siempre, y lo único que aparece y desaparece adentro es
+            el párrafo del descuento. */}
+        <div className="rounded-xl px-4 py-3 mt-3"
+             style={{ background: '#3C4759', border: `1px solid ${AMBAR}` }}>
+
+          {avisoProntoPago && (
+            <p className="text-white font-bold text-[13px] leading-relaxed mb-2.5 pb-2.5"
+               style={{ borderBottom: `1px solid ${AMBAR}55` }}>
               Si pagas hasta el <span className="font-black">5 de {avisoProntoPago.mes}</span> te ganas
               el <span className="font-black">10% de descuento</span> en la mensualidad: no pagas{' '}
               <span className="font-black">{avisoProntoPago.completo}</span>, sino{' '}
@@ -1300,8 +1349,18 @@ function EstadoCuentaInner() {
                 {avisoProntoPago.condesc}
               </span>.
             </p>
-          </div>
-        )}
+          )}
+
+          <p className="text-white/85 font-bold text-[12.5px] leading-relaxed">
+            Recuerda pagar a la <span className="font-black">Cuenta de Ahorros Bancolombia</span>{' '}
+            <span className="font-black" style={{ color: AMBAR }}>{cuentaPago.numero}</span>,
+            a nombre de <span className="font-black">{cuentaPago.titular}</span>
+            {cuentaPago.nit ? <> · NIT {cuentaPago.nit}</> : null}.
+          </p>
+          <p className="text-white/50 font-semibold text-[11px] mt-1">
+            Y no olvides subir el soporte del pago.
+          </p>
+        </div>
 
         {/* ── TABLA ── */}
         <div className="rounded-2xl shadow-md border border-[#4A5568] overflow-hidden">
@@ -1979,22 +2038,15 @@ function EstadoCuentaInner() {
       {/* ── MODAL PAGAR (vista calidoso) ── */}
       {showPagoModal && (() => {
         const filaModal = pagoModalIdx !== null ? pagosVista[pagoModalIdx] : null;
-        // Quita tildes para comparación robusta
-        const sinAcento = (s: string) => s.toUpperCase().trim()
-          .replace(/[ÁÀÂÃÄ]/g,'A').replace(/[ÉÈÊË]/g,'E').replace(/[ÍÌÎÏ]/g,'I')
-          .replace(/[ÓÒÔÕÖ]/g,'O').replace(/[ÚÙÛÜ]/g,'U').replace(/Ñ/g,'N');
-        // Los datos reales: PROGRAMA="Selección" y PROY="SUB 15B" (por separado)
-        const progNorm = sinAcento(catVal ?? '');   // columna PROGRAMA
-        const proyNorm = sinAcento(proyecto ?? ''); // columna PROY
-        const esSelDesarr = /SELECC|DESARROLLO/.test(progNorm);
-        const esSub131415 = /SUB[\s\-]*(13|14|15)/.test(proyNorm);
-        // También soporta nombres completos como "SELECCIÓN SUB 15" en un solo campo
-        const nombreCompleto = progNorm + ' ' + proyNorm;
-        const PROYECTOS_MAX10 = ['DESARROLLO SUB 15','DESARROLLO SUB 14','DESARROLLO SUB 13','SELECCION SUB 15','SELECCION SUB 14','SELECCION SUB 13'];
-        const esMax10 = (esSelDesarr && esSub131415) || PROYECTOS_MAX10.some(p => nombreCompleto.includes(p));
-        const cuentaNum   = esMax10 ? '36000004823' : '10182764613';
-        const cuentaTitul = esMax10 ? 'MAX 10 SPORT'  : 'FUTURO ANTIOQUIA';
-        const cuentaNit   = esMax10 ? null             : '811036997';
+        /* La cuenta ya viene calculada arriba, en `cuentaPago`, y es la misma
+           que se muestra en el aviso del descuento. UN solo cálculo: así el
+           aviso y este cuadro no pueden decir cosas distintas nunca.
+           (La cuenta de MAX 10 cambió el 01/09/2026: era 36000004823.
+            OJO: también vive en Botones de Cobro, que es la que sale en los
+            mensajes de WhatsApp. Si vuelve a cambiar, son LOS DOS lados.) */
+        const cuentaNum   = cuentaPago.numero;
+        const cuentaTitul = cuentaPago.titular;
+        const cuentaNit   = cuentaPago.nit;
         return (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
              onClick={() => { setShowPagoModal(false); setPagoModalIdx(null); }}>

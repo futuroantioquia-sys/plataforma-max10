@@ -296,9 +296,12 @@ export const CONFIG_DEFAULT: CobroConfig = {
     titular: 'Futuro Antioquia',
     nit:     'Nit 811036997',
   },
+  /* Cuenta de MAX 10 cambiada el 01/09/2026 por pedido de la dirección.
+     Antes: 36000004823. Esto es solo el valor de fábrica: lo que de verdad
+     sale en los mensajes es lo que esté guardado en Botones de Cobro. */
   cuentaMax10: {
     banco:   'Ahorros Bancolombia',
-    numero:  '36000004823',
+    numero:  '27700006723',
     titular: 'MAX 10 SPORT',
     nit:     '',
   },
