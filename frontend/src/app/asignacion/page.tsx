@@ -28,11 +28,11 @@ function colAfil(d: Deportista)    { return getCol(d, /tipo.*afil|^afil/i); }
 function colorCodigo(afil: string): string {
   const v = afil.toLowerCase();
   if (v.includes('nuevo'))     return '#f97316';
-  if (v.includes('antigu'))    return '#16a34a';
+  if (v.includes('antigu'))    return '#00B050';
   if (v.includes('reingreso')) return '#2563eb';
   if (v.includes('mb instit')) return '#374151';
   if (v.includes('b instit'))  return '#7c3aed';
-  return '#16a34a'; // default verde
+  return '#00B050'; // default verde
 }
 function colSede(d: Deportista)     { return getCol(d, /^sede/i); }
 // JORNADA de ENTRENAMIENTO (nunca la de estudio)
@@ -104,22 +104,25 @@ function getGruposInfo(todos: Deportista[]): Grupo[] {
 /** Tarjeta de un grupo sugerido. */
 function GrupoCard({ g, tag, activo, onClick }: { g: Grupo; tag: 'ok' | 'alt' | 'alt2'; activo: boolean; onClick: () => void }) {
   const tagInfo = tag === 'ok'
-    ? { txt: 'Jornada exacta', cls: 'bg-[#16a34a] text-white' }
+    ? { txt: 'Jornada exacta', cls: 'bg-[#00B050] text-white' }
     : tag === 'alt'
-      ? { txt: 'Otra jornada',  cls: 'bg-amber-100 text-[#E0A33A]' }
-      : { txt: 'Otra sede',     cls: 'bg-blue-100 text-[#8FBEF0]' };
+      /* Antes: fondo pastel con letra del mismo tono — no se leía nada. */
+      ? { txt: 'Otra jornada',  cls: 'bg-[#E0A33A] text-[#111827]' }
+      : { txt: 'Otra sede',     cls: 'bg-[#4E8FD6] text-white' };
   return (
     <button type="button" onClick={onClick}
       className={cn(
         'text-left border rounded-lg p-2 transition-all w-full',
         activo
-          ? 'border-[#16a34a] bg-[#f0fdf4] ring-2 ring-[#16a34a]'
-          : 'border-[#4A5568] hover:border-[#16a34a] hover:-translate-y-0.5 hover:shadow-md',
+          /* La tarjeta escogida iba en verde CLARITO con letra blanca: se
+             borraba entera. Ahora se marca con el borde y un fondo oscuro. */
+          ? 'border-[#00B050] bg-[rgba(0,176,80,.16)] ring-2 ring-[#00B050]'
+          : 'border-[#4A5568] bg-[#3C4759] hover:border-[#00B050] hover:-translate-y-0.5 hover:shadow-md',
         tag !== 'ok' && !activo ? 'opacity-70' : '',
       )}>
       <div className="flex items-center justify-between gap-2">
         <span className="font-black text-white text-sm">{g.proy}</span>
-        <span className="text-[9px] font-black text-[#5BE39B] bg-green-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">👤 {g.count}</span>
+        <span className="text-[9px] font-black text-white bg-[#00B050] px-1.5 py-0.5 rounded-full whitespace-nowrap">👤 {g.count}</span>
       </div>
       <div className="text-[10px] text-white/70 mt-0.5 leading-snug">
         <span className="font-bold text-white">{g.programa || '—'}</span>{g.sede ? ' · ' + g.sede : ''}
@@ -130,7 +133,7 @@ function GrupoCard({ g, tag, activo, onClick }: { g: Grupo; tag: 'ok' | 'alt' | 
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
           <span className="text-[8px] font-black text-white/40 uppercase tracking-wider">Años</span>
           {g.anios.map(a => (
-            <span key={a} className="text-[9px] font-black text-[#8FBEF0] bg-[rgba(78,143,214,.14)] border border-blue-100 px-1.5 py-0.5 rounded">{a}</span>
+            <span key={a} className="text-[9px] font-black text-[#8FBEF0] bg-[rgba(78,143,214,.14)] border border-[#4E8FD6] px-1.5 py-0.5 rounded">{a}</span>
           ))}
         </div>
       )}
@@ -152,8 +155,13 @@ function SeccionGrupos({ titulo, grupos, tag, onPick, sel }: { titulo: string; g
 }
 
 const G_COL   = ['CÓDIGO','NOMBRE','AÑO','MES','DÍA','SEDE ESCOGIDA','JORNADA','PROGRAMA ESCOGIDO'];
-const G_STYLE  = { background: '#16a34a', color: 'white', border: '1px solid white', padding: '8px 10px', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', whiteSpace: 'nowrap' as const, textAlign: 'center' as const };
-const R_STYLE  = { background: '#f1f5f9', color: '#374151', border: '1px solid white', padding: '7px 10px', fontSize: 12, whiteSpace: 'nowrap' as const };
+/* ── LOS COLORES DE LA CASA (dirección, 02/09/2026) ───────────────────────────
+   Esta pantalla se quedó con la ropa de cuando la plataforma era blanca: los
+   renglones en gris clarito con letra gris oscura, y las etiquetas de los
+   grupos sugeridos con fondos pastel y letra clara encima — invisibles. Se
+   pasa a los grises y el verde de la plataforma. */
+const G_STYLE  = { background: '#00B050', color: 'white', border: '1px solid white', padding: '8px 10px', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', whiteSpace: 'nowrap' as const, textAlign: 'center' as const };
+const R_STYLE  = { background: '#3C4759', color: '#fff', border: '1px solid white', padding: '7px 10px', fontSize: 12, whiteSpace: 'nowrap' as const };
 
 export default function AsignacionPage() {
   const router = useRouter();
@@ -383,7 +391,7 @@ export default function AsignacionPage() {
 
         {sinProyectoLista.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-20 h-20 bg-green-100 rounded-3xl flex items-center justify-center mb-5">
+            <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5" style={{ background: 'rgba(0,176,80,.18)', border: '1px solid #00B050' }}>
               <CheckCircle className="w-10 h-10 text-green-400" />
             </div>
             <h2 className="text-lg font-black text-white">¡Todo asignado!</h2>
@@ -435,7 +443,7 @@ export default function AsignacionPage() {
                             className={cn(
                               'transition-all',
                               soloLectura ? 'cursor-default' : 'cursor-pointer',
-                              isSel ? 'outline outline-2 outline-[#16a34a]' : (!soloLectura ? 'hover:brightness-95' : '')
+                              isSel ? 'outline outline-2 outline-[#00B050]' : (!soloLectura ? 'hover:brightness-95' : '')
                             )}>
                             <td style={{ ...R_STYLE, background: colorCodigo(colAfil(dep)), color: 'white', fontWeight: 900, textAlign: 'center' }}>
                               {colCodigo(dep) || '—'}
@@ -450,7 +458,7 @@ export default function AsignacionPage() {
                             <td style={{ ...R_STYLE, textAlign: 'center' }}>{colJornada(dep) || '—'}</td>
                             <td style={{ ...R_STYLE, textAlign: 'center' }}>
                               {colPrograma(dep)
-                                ? <span className="bg-[#16a34a] text-white text-[9px] font-black px-2 py-0.5 rounded-full">{colPrograma(dep)}</span>
+                                ? <span className="bg-[#00B050] text-white text-[9px] font-black px-2 py-0.5 rounded-full">{colPrograma(dep)}</span>
                                 : <span className="text-white/40">—</span>}
                             </td>
                           </tr>
@@ -464,10 +472,10 @@ export default function AsignacionPage() {
               {/* ── Panel flotante: grupos sugeridos (programa · sede · jornada) ── */}
               {selected && sugeridos && (
                 <div className="rounded-2xl border border-[rgba(0,176,80,.45)] bg-[#3C4759] shadow-lg overflow-hidden animate-fade-up">
-                  <div className="px-4 py-3 flex items-center gap-2 flex-wrap" style={{ background: 'linear-gradient(90deg,#065f46,#16a34a)' }}>
+                  <div className="px-4 py-3 flex items-center gap-2 flex-wrap" style={{ background: 'linear-gradient(to right, #333F50, #0EA142)' }}>
                     <span>🎯</span>
                     <span className="text-white font-black text-sm">Grupos sugeridos</span>
-                    {sugeridos.prog && <span className="text-[10px] font-black text-white px-2.5 py-0.5 rounded-full" style={{ background: '#16a34a' }}>Programa: {sugeridos.prog}</span>}
+                    {sugeridos.prog && <span className="text-[10px] font-black text-white px-2.5 py-0.5 rounded-full" style={{ background: '#00B050' }}>Programa: {sugeridos.prog}</span>}
                     {sugeridos.sede && <span className="text-[10px] font-black text-white px-2.5 py-0.5 rounded-full" style={{ background: '#1d4ed8' }}>Sede: {sugeridos.sede}</span>}
                     {sugeridos.anio && <span className="text-[10px] font-black text-white px-2.5 py-0.5 rounded-full" style={{ background: '#7c3aed' }}>Año: {sugeridos.anio} (±1)</span>}
                     {sugeridos.jor && <span className="text-[10px] font-black text-white px-2.5 py-0.5 rounded-full" style={{ background: '#4b5563' }}>Jornada: {sugeridos.jor}</span>}
@@ -503,18 +511,18 @@ export default function AsignacionPage() {
               ) : (
                 <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden sticky top-20">
                   {/* Cabecera */}
-                  <div className="bg-gradient-to-r from-[#064e1e] to-[#16a34a] px-5 py-4">
+                  <div className="px-5 py-4" style={{ background: 'linear-gradient(to right, #333F50, #0EA142)' }}>
                     <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest">Asignando a</p>
                     <p className="text-white font-black text-lg leading-tight">{selected._nombre}</p>
                   </div>
 
                   {/* Info del deportista */}
                   {(colSede(selected) || colJornada(selected) || colPrograma(selected)) && (
-                    <div className="px-5 py-3 bg-[#f0fdf4] border-b border-green-100 flex flex-wrap gap-2">
+                    <div className="px-5 py-3 flex flex-wrap gap-2" style={{ background: '#2B3547', borderBottom: '1px solid #4A5568' }}>
                       {colPrograma(selected) && (
                         <div className="flex flex-col items-start">
                           <span className="text-[9px] font-black text-[#5BE39B] uppercase tracking-widest">Programa escogido</span>
-                          <span className="bg-[#16a34a] text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{colPrograma(selected)}</span>
+                          <span className="bg-[#00B050] text-white text-xs font-black px-3 py-1 rounded-lg mt-0.5">{colPrograma(selected)}</span>
                         </div>
                       )}
                       {colSede(selected) && (
@@ -587,7 +595,7 @@ export default function AsignacionPage() {
                       </button>
                       {!soloLectura && (
                       <button onClick={guardar} disabled={guardando}
-                        className="flex-1 bg-[#16a34a] hover:bg-[#064e1e] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 text-sm">
+                        className="flex-1 bg-[#00B050] hover:bg-[#0EA142] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 text-sm">
                         {guardando
                           ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           : <CheckCircle className="w-4 h-4" />}
