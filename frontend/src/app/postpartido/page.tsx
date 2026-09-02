@@ -2980,6 +2980,39 @@ export default function CrearPospartidoPage() {
                   ? 'Cuando la dirección te programe un partido, aparece aquí y ya lo puedes llenar.'
                   : 'Los partidos se crean en PROGRAMACIÓN DE COMPETENCIA: se llena el renglón y se oprime el balón. De ahí caen aquí y al banco del formador.'}
               </p>
+
+              {/* ── LA PANTALLA SE EXPLICA SOLA ──────────────────────────────
+                  (dirección, 02/09/2026)
+
+                  Un "todavía no tienes partidos" seco no distingue entre dos
+                  cosas muy distintas: que de verdad no le hayan programado
+                  nada, o que SÍ tenga partidos pero su usuario no coincida con
+                  el nombre que figura como formador. Las dos se ven igual, y
+                  desde el chat toca adivinar — nos pasó con Juan Manuel.
+
+                  Aquí se dice, con nombre propio, con qué nombre entró, qué se
+                  buscó y cuántos partidos hay en total. Con ese pantallazo se
+                  sabe al instante cuál de las dos es. */}
+              {esProfe && (
+                <div className="mt-4 pt-3.5 mx-auto text-left" style={{ borderTop: `1px solid ${BORDE}`, maxWidth: 430 }}>
+                  <p className="text-[11.5px] font-bold leading-relaxed" style={{ color: GRIS }}>
+                    Entraste como{' '}
+                    <b style={{ color: '#5BE39B' }}>{nombreProfe || '(sin nombre)'}</b>.
+                    {' '}Se buscaron los partidos donde ese nombre sea el <b>D.T</b>, o el{' '}
+                    <b>formador del torneo</b> en Torneos y Competencias.
+                  </p>
+                  <p className="text-[11.5px] font-bold leading-relaxed mt-2" style={{ color: GRIS }}>
+                    En este momento hay{' '}
+                    <b style={{ color: '#fff' }}>{(banco ?? []).length}</b>{' '}
+                    {(banco ?? []).length === 1 ? 'partido cargado' : 'partidos cargados'} en la academia,
+                    y <b style={{ color: AMBAR }}>ninguno</b> quedó a tu nombre.
+                  </p>
+                  <p className="text-[11.5px] font-bold leading-relaxed mt-2" style={{ color: AMBAR }}>
+                    Si tú sabes que sí tienes partidos, es que tu usuario no está escrito igual
+                    allá. Mándale esta foto a la dirección y se corrige en un minuto.
+                  </p>
+                </div>
+              )}
               {!esProfe && (
                 <button onClick={() => router.push('/programacion')}
                   className="mt-4 rounded-xl px-4 py-2.5 text-white font-black text-[12px]"

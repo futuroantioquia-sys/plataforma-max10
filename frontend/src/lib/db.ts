@@ -3178,36 +3178,18 @@ export async function getVisitasPorDia(dias: number = 30): Promise<VisitaDia[]> 
   return [];
 }
 
-/** Totales rápidos: total de visitas y visitantes únicos (deportistas distintos que entraron).
- *
- *  REGLA DE LA CASA (dirección, 31/08/2026): la base NUNCA entrega todo de un
- *  solo viaje —corta en las primeras mil filas—. Los ÚNICOS se contaban
- *  trayendo la lista entera y midiendo su largo, y eso iba derecho a
- *  congelarse en 1.000 el día que se pasara de ahí: de 746 no falta tanto.
- *
- *  Ahora las dos cuentas se piden igual: no se traen las filas, se le pregunta
- *  a la base CUÁNTAS hay y ella responde el número exacto. Es más rápido y no
- *  tiene techo. */
+/** Totales rápidos: total de visitas y visitantes únicos (deportistas distintos que entraron). */
 export async function getResumenVisitas(): Promise<{ total: number; unicos: number }> {
-  /** Le pregunta a la base cuántas filas tiene esa tabla. Sin traerlas. */
-  const contar = async (tabla: string, campo: string): Promise<number> => {
-    try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/${tabla}?select=${campo}`,
-        { headers: { ...VISITAS_HDR, 'Prefer': 'count=exact', 'Range': '0-0' }, cache: 'no-store' },
-      );
-      if (!res.ok && res.status !== 206) return 0;
-      const cr = res.headers.get('content-range');   // "0-0/123"
-      if (cr && cr.includes('/')) return parseInt(cr.split('/')[1], 10) || 0;
-      return 0;
-    } catch { return 0; }
-  };
-
   try {
-    const [total, unicos] = await Promise.all([
-      contar('visitas', 'id'),
-      contar('codigos_con_acceso', 'codigo'),
+    const [rTotal, rUnicos] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/visitas?select=id`, { headers: { ...VISITAS_HDR, 'Prefer': 'count=exact', 'Range': '0-0' } }),
+      fetch(`${SUPABASE_URL}/rest/v1/codigos_con_acceso?select=codigo`, { headers: VISITAS_HDR }),
     ]);
+    let total = 0;
+    const cr = rTotal.headers.get('content-range'); // "0-0/123"
+    if (cr && cr.includes('/')) total = parseInt(cr.split('/')[1]) || 0;
+    let unicos = 0;
+    if (rUnicos.ok) { const d = await rUnicos.json(); if (Array.isArray(d)) unicos = d.length; }
     return { total, unicos };
   } catch { return { total: 0, unicos: 0 }; }
 }
@@ -3790,6 +3772,73 @@ export interface InfoProyecto {
   dias:     number[];   // 0 = domingo … 6 = sábado
   formador: string;
   sede:     string;
+}
+
+/* ── TODAS LAS FICHAS DE PROYECTO, DE UN SOLO VIAJE ──────────────────────────
+   (dirección, 02/09/2026)
+
+   POR QUÉ HACÍA FALTA. La pantalla de Información de Proyectos y Formadores
+   leía los días de entreno y la sede de la MEMORIA DEL NAVEGADOR. Eso significa
+   que lo que usted configuraba en su computador no existía en el de nadie más,
+   y si esa memoria se limpiaba, salía todo en blanco — aunque en la base
+   estuviera completo. De ahí el «recuperar los días que entrena cada proyecto».
+
+   `getInfoProyecto` ya leía la base, pero de a un proyecto por viaje. Con 87
+   proyectos eso son 87 viajes. Esto los trae TODOS de una. */
+export async function getFichasProyecto(): Promise<Record<string, InfoProyecto>> {
+  const out: Record<string, InfoProyecto> = {};
+  try {
+    let desde = 0; const paso = 1000;
+    for (let vuelta = 0; vuelta < 20; vuelta++) {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/jornadas_proyecto?select=proyecto,dias,nombre_formador,sede`,
+        { headers: { ...HDR_MC(), Range: `${desde}-${desde + paso - 1}`, 'Range-Unit': 'items' }, cache: 'no-store' },
+      );
+      if (!res.ok && res.status !== 206) break;
+      const data = await res.json();
+      if (!Array.isArray(data)) break;
+      data.forEach((r: any) => {
+        const p = String(r?.proyecto ?? '').trim();
+        if (!p) return;
+        out[p] = {
+          dias:     Array.isArray(r.dias) ? r.dias : [],
+          formador: String(r.nombre_formador ?? ''),
+          sede:     String(r.sede ?? ''),
+        };
+      });
+      if (data.length < paso) break;
+      desde += paso;
+    }
+  } catch (e: any) { console.error('[db] getFichasProyecto:', e?.message); }
+  return out;
+}
+
+/* ── Y GUARDARLA, QUE ES LO QUE NUNCA SE HACÍA ───────────────────────────────
+   El botón "Guardar cambios" de esa pantalla escribía los días SOLO en el
+   navegador. Ese era el hueco por donde se perdían. Esto los deja en la base,
+   donde los ve todo el mundo y no se borran al limpiar el navegador. */
+export async function saveFichaProyecto(
+  proyecto: string,
+  datos: { dias?: number[]; sede?: string; nombre_formador?: string },
+): Promise<boolean> {
+  const p = String(proyecto ?? '').trim();
+  if (!p) return false;
+  try {
+    const fila: any = { proyecto: p, updated_at: new Date().toISOString() };
+    if (datos.dias !== undefined)            fila.dias = datos.dias;
+    if (datos.sede !== undefined)            fila.sede = datos.sede;
+    if (datos.nombre_formador !== undefined) fila.nombre_formador = datos.nombre_formador;
+    const { error } = await supabase()
+      .from('jornadas_proyecto')
+      .upsert(fila, { onConflict: 'proyecto' });
+    if (error) { console.error('[db] saveFichaProyecto:', error.message); return false; }
+    /* La copia del navegador se deja al día también, para que /asistencia la
+       encuentre de una sin tener que volver a preguntar. */
+    if (Array.isArray(datos.dias)) {
+      try { localStorage.setItem(`futuro_dias_${p}`, JSON.stringify(datos.dias)); } catch {}
+    }
+    return true;
+  } catch (e: any) { console.error('[db] saveFichaProyecto:', e?.message); return false; }
 }
 
 /**

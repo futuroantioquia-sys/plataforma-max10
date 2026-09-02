@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, CheckCircle, Plus, Eye, EyeOff, Users, X, Trash2, ChevronRight } from 'lucide-react';
-import { getProfes, saveProfes, deleteProfe, getDeportistas } from '@/lib/db';
-import type { Profe } from '@/lib/db';
+import { getProfes, saveProfes, deleteProfe, getDeportistas, getFichasProyecto, saveFichaProyecto } from '@/lib/db';
+import type { Profe, Deportista } from '@/lib/db';
 import { useSoloLectura } from '@/lib/permisos';
 
 const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
@@ -12,7 +12,32 @@ const SEDES = ['Santa Mónica', 'La 80', 'Centro', 'Sabaneta', 'Bello Niquía', 
 const DIAS_SEMANA_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const DIAS_ORDEN_JS = [1, 2, 3, 4, 5, 6, 0];
 const ANIOS_NACIMIENTO = Array.from({ length: 14 }, (_, i) => 2011 + i); // 2011–2024
-const ORDEN_PROGRAMA = ['Estimulación', 'Formación', 'Progresión', 'Pre-Progresión', 'Selección', 'Desarrollo'];
+const ORDEN_PROGRAMA = ['Estimulación', 'Formación', 'Progresión', 'Selección', 'Desarrollo'];
+
+/* PRE-PROGRESIÓN SE SACÓ DE ESTE MÓDULO (dirección, 02/09/2026). No es un
+   programa vivo: su único renglón era un "Retirado" con cero deportistas, y el
+   botón sobraba en la barra. Si algún día vuelve a existir, se quita de esta
+   lista y reaparece solo, sin tocar nada más. */
+const PROGRAMAS_OCULTOS = ['pre-progresion', 'pre progresion', 'preprogresion'];
+
+const sinTildesProg = (x: any) => String(x ?? '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+const programaOculto = (p: string) => PROGRAMAS_OCULTOS.includes(sinTildesProg(p));
+
+/* Los anchos del cuadro. Viven aquí, en un solo sitio, para que TODOS los
+   programas los usen iguales. Para ensanchar una columna se cambia aquí. */
+const COLS_PROY = [
+  { h: 'PROYECTO',        w: 150 },
+  { h: '# DEP',           w: 80  },
+  { h: 'SEDE',            w: 170 },
+  { h: 'EDAD',            w: 200 },
+  { h: 'DÍAS ENTRENO',    w: 250 },
+  { h: 'NOMBRE FORMADOR', w: 240 },
+  { h: 'USUARIO',         w: 140 },
+  { h: 'CONTRASEÑA',      w: 150 },
+] as const;
+const ANCHO_TOTAL = COLS_PROY.reduce((s, c) => s + c.w, 0);
 
 function getCol(dep: any, rx: RegExp): string {
   const cols = dep._columnas ?? {};
@@ -92,6 +117,61 @@ interface ProyRow {
 // BLINDAJE (22/08/2026): se eliminó la lista con las cédulas de los formadores.
 // Estaba dentro del JavaScript que descarga cualquier visitante.
 
+/* ── LO QUE LAS PROPIAS FICHAS SABEN DEL PROYECTO ────────────────────────────
+   (dirección, 02/09/2026)
+
+   Tercer sitio donde viven los días y la sede: DENTRO de la ficha de cada
+   deportista. Esta misma pantalla los venía escribiendo ahí (columnas JORNADA
+   y SEDE) cada vez que se guardaba. O sea que aunque la base de proyectos esté
+   vacía, el dato existe — repartido entre los niños del grupo.
+
+   Se toma lo que diga la MAYORÍA del grupo: si once fichas dicen SABANETA y una
+   dice CENTRO, la sede del proyecto es SABANETA. Un dato suelto mal escrito no
+   arrastra al grupo entero. */
+function loQueDicenLasFichas(deps: Deportista[]): Record<string, { dias: number[]; sede: string }> {
+  const votosSede: Record<string, Record<string, number>> = {};
+  const votosDias: Record<string, Record<string, number>> = {};
+
+  deps.forEach(dep => {
+    const proy = getCol(dep, /^proy/i).trim();
+    if (!proy) return;
+
+    const sede = getCol(dep, /^sede/i).trim();
+    if (sede) {
+      if (!votosSede[proy]) votosSede[proy] = {};
+      votosSede[proy][sede] = (votosSede[proy][sede] ?? 0) + 1;
+    }
+
+    /* La columna JORNADA guarda los días como texto: "[1,3,5]". */
+    const cruda = getCol(dep, /^jornada/i).trim();
+    if (cruda.startsWith('[')) {
+      try {
+        const arr = JSON.parse(cruda);
+        if (Array.isArray(arr) && arr.length && arr.every(n => typeof n === 'number')) {
+          const llave = JSON.stringify([...arr].sort((a, b) => a - b));
+          if (!votosDias[proy]) votosDias[proy] = {};
+          votosDias[proy][llave] = (votosDias[proy][llave] ?? 0) + 1;
+        }
+      } catch { /* jornada escrita de otra forma: no se cuenta */ }
+    }
+  });
+
+  const masVotado = (o: Record<string, number> | undefined): string => {
+    if (!o) return '';
+    const e = Object.entries(o).sort((a, b) => b[1] - a[1])[0];
+    return e ? e[0] : '';
+  };
+
+  const out: Record<string, { dias: number[]; sede: string }> = {};
+  new Set([...Object.keys(votosSede), ...Object.keys(votosDias)]).forEach(proy => {
+    let dias: number[] = [];
+    const gan = masVotado(votosDias[proy]);
+    if (gan) { try { dias = JSON.parse(gan); } catch { dias = []; } }
+    out[proy] = { dias, sede: masVotado(votosSede[proy]) };
+  });
+  return out;
+}
+
 export default function UsuariosPage() {
   const router = useRouter();
 
@@ -102,6 +182,10 @@ export default function UsuariosPage() {
   const [profeEdits,  setProfeEdits]  = useState<Record<string, { usuario?: string; clave?: string; nombre?: string }>>({});
   const [profesDirty, setProfesDirty] = useState(false); // reasignaciones de proyecto pendientes
   const [filtroPrograma, setFiltroPrograma] = useState('');
+  /* POR FORMADOR (dirección, 02/09/2026): «anexa botón por profes para ubicar
+     sus proyectos». Con 87 proyectos repartidos en cinco programas, buscar los
+     de uno solo era leerlos todos. Guarda el USUARIO del profe, que es único. */
+  const [filtroFormador, setFiltroFormador] = useState('');
   const [guardando,   setGuardando]   = useState(false);
   const [guardado,    setGuardado]    = useState(false);
   const [errorGuard,  setErrorGuard]  = useState('');
@@ -161,12 +245,63 @@ export default function UsuariosPage() {
         });
       setProyRows(rows);
 
-      // Cargar meta de localStorage
+      /* ── DE DÓNDE SALEN LOS DÍAS Y LA SEDE ────────────────────────────
+         (dirección, 02/09/2026 — «recuperar los días que entrena cada
+          proyecto… debes llenar las sedes»)
+
+         Antes salían de un solo sitio: la memoria de ESTE navegador. Por eso
+         se veía todo vacío. Ahora se arma en cascada, y cada escalón le gana
+         al anterior:
+
+           1. Lo guardado en este navegador  (lo de siempre, de última)
+           2. Lo que dicen las FICHAS de los deportistas del grupo
+           3. La tabla de proyectos de la BASE  ← esta manda
+
+         Así, si la base tiene el dato, ese vale. Si no, se rescata de las
+         fichas. Y si tampoco, queda lo que hubiera en el navegador. */
+      const base: Record<string, ProyMeta> = {};
       try {
         const raw = localStorage.getItem(PROYECTOS_META_KEY);
-        if (raw) setMeta(JSON.parse(raw));
+        if (raw) Object.assign(base, JSON.parse(raw));
       } catch {}
+
+      const deFichas = loQueDicenLasFichas(deps);
+      rows.forEach(r => {
+        const k = `${r.programa}::${r.proyecto}`;
+        const f = deFichas[r.proyecto];
+        if (!f) return;
+        const actual = base[k] ?? { nombreFormador: '', sede: '', dias: [], edades: [] };
+        base[k] = {
+          ...actual,
+          sede: actual.sede || f.sede,
+          dias: (actual.dias && actual.dias.length) ? actual.dias : f.dias,
+        };
+      });
+
+      setMeta(base);          // se pinta ya, sin esperar a la base
       setCargando(false);
+
+      /* Y por detrás, la base — que es la que manda. Llega y corrige. */
+      getFichasProyecto().then(fichas => {
+        if (!Object.keys(fichas).length) return;
+        setMeta(prev => {
+          const out = { ...prev };
+          rows.forEach(r => {
+            const info = fichas[r.proyecto];
+            if (!info) return;
+            const k = `${r.programa}::${r.proyecto}`;
+            const actual = out[k] ?? { nombreFormador: '', sede: '', dias: [], edades: [] };
+            out[k] = {
+              ...actual,
+              sede: info.sede || actual.sede,
+              dias: (info.dias && info.dias.length) ? info.dias : actual.dias,
+              nombreFormador: actual.nombreFormador || info.formador,
+            };
+          });
+          try { localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(out)); } catch {}
+          return out;
+        });
+      }).catch(() => { /* sin base: se queda con lo rescatado de las fichas */ });
     }).catch((e: any) => {
       // Sin este catch, cualquier error dejaba la pantalla vacía sin decir nada.
       console.error('[usuarios] no se pudo armar la lista de proyectos:', e);
@@ -318,6 +453,40 @@ export default function UsuariosPage() {
     });
     localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(newMeta));
     setMeta(newMeta);
+
+    /* ── Y AHORA SÍ, A LA BASE ─────────────────────────────────────────────
+       (dirección, 02/09/2026)
+
+       Aquí estaba el hueco por el que se perdían los días: se guardaban en el
+       navegador y en las fichas, pero NUNCA en la tabla de proyectos. Al
+       cambiar de computador, o al limpiar el navegador, desaparecían.
+
+       Se escribe solo lo que USTED tocó en esta sesión —no las 87 filas—, y si
+       alguna no se puede guardar se dice con nombre propio en vez de fingir
+       que quedó. */
+    const tocados = Object.keys(metaEdits);
+    if (tocados.length) {
+      const fallaron: string[] = [];
+      for (const k of tocados) {
+        const proy = k.split('::').slice(1).join('::');
+        if (!proy) continue;
+        const m = newMeta[k];
+        const ok = await saveFichaProyecto(proy, {
+          dias: Array.isArray(m?.dias) ? m.dias : [],
+          sede: String(m?.sede ?? ''),
+          nombre_formador: String(m?.nombreFormador ?? ''),
+        });
+        if (!ok) fallaron.push(proy);
+      }
+      if (fallaron.length) {
+        setErrorGuard(
+          `Quedó guardado en este computador, pero NO en la base: ${fallaron.slice(0, 4).join(', ')}` +
+          (fallaron.length > 4 ? ` y ${fallaron.length - 4} más.` : '.'),
+        );
+        setTimeout(() => setErrorGuard(''), 12000);
+      }
+    }
+
     setMetaEdits({});
 
     // 2. Profes → Supabase
@@ -401,12 +570,31 @@ export default function UsuariosPage() {
 
   const programas = useMemo(() => {
     const set = new Set<string>();
-    proyRows.forEach(r => { if (r.programa !== '__SIN_PROGRAMA__') set.add(r.programa); });
+    proyRows.forEach(r => {
+      if (r.programa !== '__SIN_PROGRAMA__' && !programaOculto(r.programa)) set.add(r.programa);
+    });
     return [...set].sort((a, b) => ordenProg(a) - ordenProg(b));
   }, [proyRows]);
 
+  /* Los formadores que de verdad tienen proyectos, con cuántos lleva cada uno.
+     No se lista a los 25: al que no tiene ninguno no hay para qué buscarlo. */
+  const formadoresConProyecto = useMemo(() => {
+    const cuenta = new Map<string, number>();
+    proyRows.forEach(r => {
+      if (programaOculto(r.programa)) return;
+      const u = (r.profeUsuario || '').toUpperCase().trim();
+      if (!u) return;
+      cuenta.set(u, (cuenta.get(u) ?? 0) + 1);
+    });
+    return [...cuenta.entries()]
+      .map(([usuario, cuantos]) => ({ usuario, cuantos }))
+      .sort((a, b) => a.usuario.localeCompare(b.usuario, 'es'));
+  }, [proyRows]);
+
   const gruposDisplay = useMemo(() => {
-    const filtered = filtroPrograma ? proyRows.filter(r => r.programa === filtroPrograma) : proyRows;
+    let filtered = proyRows.filter(r => !programaOculto(r.programa));
+    if (filtroPrograma) filtered = filtered.filter(r => r.programa === filtroPrograma);
+    if (filtroFormador) filtered = filtered.filter(r => (r.profeUsuario || '').toUpperCase() === filtroFormador);
     const map: Record<string, ProyRow[]> = {};
     filtered.forEach(row => {
       const prog = row.programa === '__SIN_PROGRAMA__' ? 'Sin Programa' : row.programa;
@@ -414,10 +602,20 @@ export default function UsuariosPage() {
       map[prog].push(row);
     });
     return Object.entries(map).sort(([a], [b]) => ordenProg(a) - ordenProg(b));
-  }, [proyRows, filtroPrograma]);
+  }, [proyRows, filtroPrograma, filtroFormador]);
 
   const hayEdits = Object.keys(metaEdits).length > 0 || Object.keys(profeEdits).length > 0 || profesDirty;
-  const G  = '#16a34a';
+  /* ── LA PALETA OFICIAL DE LA PLATAFORMA (dirección, 02/09/2026) ──────────
+     Este módulo se había quedado con el verde viejo (#16a34a) y con grises
+     claros de cuando la plataforma era blanca. Queda con los mismos colores de
+     Contabilidad, Asistencia y Torneos, para que se vea todo de la misma casa. */
+  const G     = '#00B050';   // verde institucional
+  const PANEL = '#3C4759';   // tarjetas y renglones
+  const GRIS  = '#7C879A';   // lo que está sin llenar
+  const AMBAR = '#E0A33A';   // el número de deportistas
+  /* Las listas que se despliegan las pinta Windows, no la página: se les dice
+     fondo blanco y letra oscura para que no queden blanco sobre blanco. */
+  const OPC   = { color: '#111827', backgroundColor: 'white' } as const;
   const BW = '2px solid white';
   const inputCls = 'w-full bg-transparent outline-none text-white font-semibold text-[11px] px-1.5 py-1 rounded hover:bg-[#2B3547] focus:bg-[#2B3547] transition';
 
@@ -508,7 +706,7 @@ export default function UsuariosPage() {
               <button onClick={() => setAgregando(false)}
                 className="flex-1 py-2.5 rounded-xl border border-[#4A5568] text-sm font-bold text-white/70 hover:bg-[#333F50] transition">Cancelar</button>
               <button onClick={agregarProfe}
-                className="flex-1 py-2.5 rounded-xl bg-[#16a34a] text-white text-sm font-bold hover:bg-[#064e1e] transition">Agregar</button>
+                className="flex-1 py-2.5 rounded-xl bg-[#00B050] text-white text-sm font-bold hover:bg-[#0EA142] transition">Agregar</button>
             </div>
           </div>
         </div>
@@ -580,7 +778,7 @@ export default function UsuariosPage() {
               <button onClick={() => setVerFormadores(false)}
                 className="px-4 py-2 rounded-xl border border-[#4A5568] text-sm font-bold text-white/70 hover:bg-[#333F50] transition">Cerrar</button>
               <button onClick={() => { guardar(); setVerFormadores(false); }} disabled={guardando || !hayEdits}
-                className="px-4 py-2 rounded-xl bg-[#16a34a] text-white text-sm font-bold hover:bg-[#064e1e] disabled:opacity-40 transition flex items-center gap-1.5">
+                className="px-4 py-2 rounded-xl bg-[#00B050] text-white text-sm font-bold hover:bg-[#0EA142] disabled:opacity-40 transition flex items-center gap-1.5">
                 <Save className="w-4 h-4" /> Guardar cambios
               </button>
             </div>
@@ -596,16 +794,44 @@ export default function UsuariosPage() {
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => setFiltroPrograma('')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black border transition ${
-                !filtroPrograma ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'bg-[#3C4759] text-white/70 border-[#4A5568] hover:border-[#16a34a]'}`}>
+                !filtroPrograma ? 'bg-[#00B050] text-white border-[#00B050]' : 'bg-[#3C4759] text-white/70 border-[#4A5568] hover:border-[#00B050]'}`}>
               Todos
             </button>
             {programas.map(p => (
               <button key={p} onClick={() => setFiltroPrograma(p)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-black border transition ${
-                  filtroPrograma === p ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'bg-[#3C4759] text-white/70 border-[#4A5568] hover:border-[#16a34a]'}`}>
+                  filtroPrograma === p ? 'bg-[#00B050] text-white border-[#00B050]' : 'bg-[#3C4759] text-white/70 border-[#4A5568] hover:border-[#00B050]'}`}>
                 {p}
               </button>
             ))}
+
+            {/* ── POR FORMADOR ─────────────────────────────────────────────
+                (dirección, 02/09/2026) Con 87 proyectos, ubicar los de un
+                formador era leerlos todos. Se escoge aquí y el cuadro se queda
+                solo con los suyos. Se combina con el programa: "los de MARTIN,
+                de Desarrollo". */}
+            <select
+              value={filtroFormador}
+              onChange={e => setFiltroFormador(e.target.value)}
+              title="Ver solo los proyectos de un formador"
+              className={`px-3 py-1.5 rounded-xl text-xs font-black border transition cursor-pointer outline-none ${
+                filtroFormador ? 'bg-[#E0A33A] text-[#111827] border-[#E0A33A]' : 'bg-[#3C4759] text-white/70 border-[#4A5568] hover:border-[#00B050]'}`}>
+              <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>TODOS LOS FORMADORES</option>
+              {formadoresConProyecto.map(f => (
+                <option key={f.usuario} value={f.usuario} style={{ color: '#111827', backgroundColor: 'white' }}>
+                  {f.usuario} · {f.cuantos} {f.cuantos === 1 ? 'proyecto' : 'proyectos'}
+                </option>
+              ))}
+            </select>
+
+            {(filtroPrograma || filtroFormador) && (
+              <button onClick={() => { setFiltroPrograma(''); setFiltroFormador(''); }}
+                title="Quitar los filtros"
+                className="px-3 py-1.5 rounded-xl text-xs font-black border transition
+                  bg-[#3C4759] text-white/70 border-[#4A5568] hover:border-[#00B050]">
+                ✕ VER TODOS
+              </button>
+            )}
           </div>
 
           {/* Toggle Activos / Todos (por defecto: Activos) */}
@@ -613,9 +839,9 @@ export default function UsuariosPage() {
             <span className="text-[10px] font-black text-white/70 uppercase tracking-widest">Contar:</span>
             <div className="flex bg-[#3C4759] border border-[#4A5568] rounded-xl overflow-hidden">
               <button onClick={() => setModoConteo('act')}
-                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'act' ? 'bg-[#16a34a] text-white' : 'text-white/70 hover:bg-[#333F50]'}`}>Activos</button>
+                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'act' ? 'bg-[#00B050] text-white' : 'text-white/70 hover:bg-[#333F50]'}`}>Activos</button>
               <button onClick={() => setModoConteo('tot')}
-                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'tot' ? 'bg-[#064e1e] text-white' : 'text-white/70 hover:bg-[#333F50]'}`}>Todos</button>
+                className={`px-3 py-1.5 text-xs font-black transition ${modoConteo === 'tot' ? 'bg-[#0EA142] text-white' : 'text-white/70 hover:bg-[#333F50]'}`}>Todos</button>
             </div>
           </div>
         </div>
@@ -630,7 +856,7 @@ export default function UsuariosPage() {
                 <p className="text-[#F08A87] font-black text-sm">No se pudo cargar la lista de proyectos.</p>
                 <p className="text-white/70 text-xs max-w-md mx-auto break-words">{errorCarga}</p>
                 <button onClick={() => window.location.reload()}
-                  className="bg-[#16a34a] text-white font-black text-xs px-4 py-2 rounded-lg hover:bg-[#15803d] transition">
+                  className="bg-[#00B050] text-white font-black text-xs px-4 py-2 rounded-lg hover:bg-[#0EA142] transition">
                   Reintentar
                 </button>
               </div>
@@ -647,7 +873,7 @@ export default function UsuariosPage() {
           <div key={programa} className="rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
 
             {/* Cabecera programa (título fijo) */}
-            <div style={{ background: 'linear-gradient(90deg, #064e1e, #16a34a)' }}
+            <div style={{ background: 'linear-gradient(to right, #333F50, #0EA142)' }}
               className="w-full px-5 py-2.5 flex items-center gap-3">
               <span className="text-white font-black text-sm uppercase tracking-widest">{programa}</span>
               <span className="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">
@@ -660,20 +886,27 @@ export default function UsuariosPage() {
             </div>
 
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
-              <table className="w-full border-collapse" style={{ minWidth: 920 }}>
+              {/* ── LAS COLUMNAS, IGUALES EN TODOS LOS PROGRAMAS ────────────
+                  (dirección, 02/09/2026 — «las columnas de cada programa están
+                   diferentes, no alineadas»)
+
+                  Cada programa pinta su propio cuadro, y con `minWidth` cada
+                  uno repartía el ancho según lo que le tocara adentro: si en
+                  Desarrollo había un nombre largo, esa columna crecía solo ahí
+                  y los cuadros quedaban desparejos uno debajo del otro.
+
+                  Con `tableLayout: fixed` y este `colgroup`, los anchos los
+                  manda esta lista y NO el contenido. Todos los programas
+                  quedan cuadrados. De paso PROYECTO pasa de 64 a 150: con 64
+                  las etiquetas salían cortadas ("SUB 12E", "Retirad…"). */}
+              <table className="w-full border-collapse" style={{ minWidth: ANCHO_TOTAL, tableLayout: 'fixed' }}>
+                <colgroup>
+                  {COLS_PROY.map(c => <col key={c.h} style={{ width: c.w }} />)}
+                </colgroup>
                 <thead>
                   <tr>
-                    {[
-                      { h: 'PROYECTO',         w: 64  },
-                      { h: '# DEP',            w: 80  },
-                      { h: 'SEDE',             w: 120 },
-                      { h: 'EDAD',             w: 120 },
-                      { h: 'DÍAS ENTRENO',     w: 180 },
-                      { h: 'NOMBRE FORMADOR',  w: 140 },
-                      { h: 'USUARIO',          w: 100 },
-                      { h: 'CONTRASEÑA',       w: 110 },
-                    ].map(({ h, w }) => (
-                      <th key={h} style={{ border: BW, minWidth: w, background: G, position: 'sticky', top: 0, zIndex: 2 }}
+                    {COLS_PROY.map(({ h }) => (
+                      <th key={h} style={{ border: BW, background: G, position: 'sticky', top: 0, zIndex: 2 }}
                         className="px-3 py-2 text-left text-white font-black text-[10px] uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -681,7 +914,7 @@ export default function UsuariosPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filas.map(row => {
+                  {filas.map((row, iFila) => {
                     const sede          = getMetaVal(row, 'sede') as string;
                     const nombreFormador = getMetaVal(row, 'nombreFormador') as string;
                     const dias          = getDias(row);
@@ -690,14 +923,20 @@ export default function UsuariosPage() {
                     const visible       = !!claveVis[idVis];
 
                     return (
-                      <tr key={row.proyecto} style={{ background: '#f1f5f9', borderTop: BW }}>
+                      /* EL RENGLÓN ERA BLANCO (dirección, 02/09/2026). La
+                         pantalla se pasó a oscuro pero estas filas se quedaron
+                         con el gris claro de antes, y encima con letra blanca
+                         en unas casillas y negra en otras. Ahora van en los dos
+                         grises de la plataforma, uno sí y uno no, para poder
+                         seguir el renglón con el ojo. */
+                      <tr key={row.proyecto} style={{ background: iFila % 2 ? PANEL : '#36404F', borderTop: BW }}>
 
                         {/* PROYECTO — solo el código, recuadro verde con letra blanca */}
                         <td style={{ border: BW, padding: '4px 6px', textAlign: 'center' }}>
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                             width: 58, height: 34, padding: 0,
-                            background: '#16a34a', color: '#fff',
+                            background: G, color: '#fff',
                             fontWeight: 900, fontSize: '1.1rem', lineHeight: 1,
                             borderRadius: 9, boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
                             whiteSpace: 'nowrap',
@@ -711,7 +950,7 @@ export default function UsuariosPage() {
                           <span title="Deportistas en el grupo" style={{
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                             minWidth: 42, height: 34, padding: '0 10px',
-                            background: '#f97316', color: '#fff',
+                            background: AMBAR, color: '#111827',
                             fontWeight: 900, fontSize: '1.1rem', lineHeight: 1,
                             borderRadius: 9, boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
                           }}>
@@ -724,15 +963,15 @@ export default function UsuariosPage() {
                           <select
                             value={sede}
                             onChange={e => setMetaEdit(row, 'sede', e.target.value)}
-                            style={{ width: '100%', background: 'transparent', outline: 'none', fontWeight: 700, fontSize: '0.7rem', color: '#111827', cursor: 'pointer' }}>
-                            <option value="">— Sede —</option>
-                            {SEDES.map(s => <option key={s} value={s}>{s}</option>)}
+                            style={{ width: '100%', background: 'transparent', outline: 'none', fontWeight: 700, fontSize: '0.7rem', color: sede ? '#fff' : GRIS, cursor: 'pointer' }}>
+                            <option value="" style={OPC}>— Sede —</option>
+                            {SEDES.map(s => <option key={s} value={s} style={OPC}>{s}</option>)}
                           </select>
                         </td>
 
                         {/* EDAD — años de nacimiento de los deportistas del proyecto (automático) */}
                         <td style={{ border: BW, padding: '4px 6px' }}>
-                          <span style={{ fontWeight: 800, fontSize: '0.72rem', color: '#111827', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontWeight: 800, fontSize: '0.72rem', color: '#fff', whiteSpace: 'nowrap' }}>
                             {(aniosProy[row.proyecto] && aniosProy[row.proyecto].length) ? aniosProy[row.proyecto].join(' / ') : '—'}
                           </span>
                         </td>
@@ -745,7 +984,7 @@ export default function UsuariosPage() {
                               return (
                                 <button key={jsDay} onClick={() => toggleDia(row, jsDay)}
                                   className={`w-7 h-7 rounded text-[9px] font-black transition select-none ${
-                                    sel ? 'bg-[#16a34a] text-white shadow-sm' : 'bg-[#2B3547] text-white/70 hover:bg-[#4A5568]'
+                                    sel ? 'bg-[#00B050] text-white shadow-sm' : 'bg-[#2B3547] text-white/70 hover:bg-[#4A5568]'
                                   }`}>
                                   {DIAS_SEMANA_LABELS[i].slice(0, 2)}
                                 </button>
@@ -766,10 +1005,10 @@ export default function UsuariosPage() {
                           <select
                             value={row.profeId ?? ''}
                             onChange={e => asignarProfe(row, e.target.value)}
-                            style={{ width: '100%', background: 'transparent', outline: 'none', fontWeight: 700, fontSize: '0.7rem', color: row.profeId ? '#111827' : '#9ca3af', cursor: 'pointer' }}>
-                            <option value="">— Sin asignar —</option>
+                            style={{ width: '100%', background: 'transparent', outline: 'none', fontWeight: 700, fontSize: '0.7rem', color: row.profeId ? '#fff' : GRIS, cursor: 'pointer' }}>
+                            <option value="" style={OPC}>— Sin asignar —</option>
                             {[...profes].sort((a, b) => a.usuario.localeCompare(b.usuario)).map(p => (
-                              <option key={p.id} value={p.id}>{p.usuario}</option>
+                              <option key={p.id} value={p.id} style={OPC}>{p.usuario}</option>
                             ))}
                           </select>
                         </td>
@@ -817,7 +1056,7 @@ export default function UsuariosPage() {
           className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black text-sm shadow transition ${
             guardado ? 'bg-green-600 text-white'
             : errorGuard ? 'bg-red-500 text-white'
-            : 'bg-[#16a34a] text-white hover:bg-[#064e1e]'}`}>
+            : 'bg-[#00B050] text-white hover:bg-[#0EA142]'}`}>
           {guardando ? 'Guardando…' : guardado ? <><CheckCircle className="w-4 h-4" />¡Guardado!</> : <><Save className="w-4 h-4" />Guardar cambios</>}
         </button>
       </div>
