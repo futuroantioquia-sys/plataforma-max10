@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, abrirSoporte } from '@/lib/utils';
 import { getDeportistas, getDeportistaPorId, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares, addCalificacionEscolar, renameCalificacionEscolar, deleteCalificacionEscolar, enviarMensaje, getEvaluaciones } from '@/lib/db';
 import { partirNombre } from '@/lib/nombres';
 import type { Deportista, CalificacionEscolar, Evaluacion } from '@/lib/db';
@@ -948,6 +948,21 @@ export default function PerfilDeportista() {
           boxSizing: 'border-box',
           boxShadow: '0 4px 28px rgba(0,0,0,0.55)',
         }}>
+          {/* ── VER LO QUE UNO MISMO SUBIÓ ────────────────────────────────────
+              (dirección, 02/09/2026 — «¿el deportista no puede ver lo que
+               subió?»)
+
+              No podía. Cada documento mostraba el chulo, el nombre y la fecha,
+              y al lado un solo botón: ELIMINAR. O sea que la única forma de
+              comprobar si había subido el archivo correcto era borrarlo y
+              volverlo a subir — con el riesgo de quedarse sin ninguno.
+
+              Y era un descuido, no una decisión: aquí mismo, en la tarjeta de
+              las CALIFICACIONES ESCOLARES de más abajo, el botón VER existe
+              desde siempre. A los documentos se les olvidó.
+
+              Se les pone el mismo botón, con el abridor que ya usa la pantalla
+              de Pagos Pendientes: sirve igual para una foto que para un PDF. */}
           <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 9, fontWeight: 900, letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 0 14px' }}>
             📋 Documentación requerida
           </p>
@@ -974,6 +989,9 @@ export default function PerfilDeportista() {
                       <p style={{ color: '#fff', fontWeight: 900, fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</p>
                       <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '2px 0 0', fontWeight: 600 }}>{doc.date}</p>
                     </div>
+                    <button onClick={() => abrirSoporte(doc.data, doc.name || 'documento')} title="Abrir el documento para verlo" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '4px 8px', color: '#fff', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
+                      Ver
+                    </button>
                     <button onClick={() => eliminarDoc(tipo)} style={{ background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 8, padding: '4px 8px', color: '#f87171', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
                       Eliminar
                     </button>
@@ -1011,6 +1029,9 @@ export default function PerfilDeportista() {
                       <p style={{ color: '#fff', fontWeight: 900, fontSize: 11, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</p>
                       <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '2px 0 0', fontWeight: 600 }}>{doc.date}</p>
                     </div>
+                    <button onClick={() => abrirSoporte(doc.data, doc.name || 'documento')} title="Abrir el documento para verlo" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '4px 8px', color: '#fff', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
+                      Ver
+                    </button>
                     <button onClick={() => eliminarDoc('eps')} style={{ background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.4)', borderRadius: 8, padding: '4px 8px', color: '#f87171', fontSize: 9, fontWeight: 900, cursor: 'pointer', flexShrink: 0 }}>
                       Eliminar
                     </button>
