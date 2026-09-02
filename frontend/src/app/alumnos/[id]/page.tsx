@@ -511,14 +511,63 @@ export default function PerfilDeportista() {
     setVdInformes(lista);
     setShowElegirVD(true);
   }
+  /* ── EL CÓDIGO DEL EXCEL TIENE QUE SER EL DEL DEPORTISTA ──────────────────
+     (dirección, 02/09/2026)
+
+     LO QUE PASÓ. El profe Doria subió tres veces el informe de un deportista y
+     en la lista del proyecto no aparecía ninguno. Los informes se enlazan por
+     CÓDIGO: si el informe queda colgado de un código que no es el del niño,
+     para la lista no existe — aunque el formador lo vea perfecto en su
+     pantalla, porque su historial se carga con ese mismo código equivocado.
+
+     DE DÓNDE SALÍA. Esta línea decía:
+         const cod = codigoVal || mapped.codigo
+     o sea: tomaba el del deportista, y si no, el del Excel. Los tenía a los
+     dos en la mano y NUNCA los comparaba. Un Excel de otro niño entraba sin
+     que nadie dijera nada.
+
+     AHORA. Si los dos vienen y no son el mismo, no se sube y se dice cuál es
+     cuál. Si el Excel no trae código, se usa el del deportista —que es el
+     bueno, porque estamos parados en su ficha—. Y si no hay ninguno de los
+     dos, tampoco se deja: un informe sin código nace suelto. */
   async function cargarPrimerInforme(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (e.target) e.target.value = '';
     if (!file) return;
+
+    const limpiarCod = (x: any) => String(x ?? '').trim().toUpperCase();
+
     try {
       const mapped = await parseValoracionExcel(file);
+
+      const codFicha = limpiarCod(codigoVal);
+      const codExcel = limpiarCod((mapped as any).codigo);
+
+      if (codFicha && codExcel && codFicha !== codExcel) {
+        alert(
+          'ESTE EXCEL NO ES DE ESTE DEPORTISTA.\n\n' +
+          `Estás parado en la ficha de:\n   ${dep?._nombre ?? ''}  ·  código ${codFicha}\n\n` +
+          `Pero el Excel que escogiste trae el código:\n   ${codExcel}\n\n` +
+          'No se subió nada. Busca el Excel de este deportista, o corrige el ' +
+          'código dentro del archivo, y vuelve a intentarlo.\n\n' +
+          'Si se sube así, el informe queda colgado del código equivocado y no ' +
+          'le aparece a nadie en la lista del proyecto.',
+        );
+        return;
+      }
+
+      const cod = codFicha || codExcel;
+      if (!cod) {
+        alert(
+          'NO HAY CÓDIGO.\n\n' +
+          'Ni esta ficha ni el Excel traen el código del deportista, y sin código ' +
+          'el informe nace suelto: no se le puede pegar a nadie.\n\n' +
+          'Revisa el código del deportista en Total Afiliados y vuelve a intentarlo.',
+        );
+        return;
+      }
+
       sessionStorage.setItem('futuro_valoracion_importada', JSON.stringify(mapped));
-      const cod = String(codigoVal || mapped.codigo || '').trim();
       router.push(`/evaluaciones?cod=${encodeURIComponent(cod)}&importado=1`);
     } catch (err: any) {
       alert('No se pudo leer el Excel: ' + (err?.message || err));

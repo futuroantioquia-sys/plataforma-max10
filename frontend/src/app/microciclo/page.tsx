@@ -683,7 +683,12 @@ export default function MicrocicloPage() {
                 onToggle={() => setAbiertoId(abiertoId === mc.id ? null : mc.id)}
                 onBorrar={() => borrar(mc.id)}
                 esAdmin={esAdmin}
+                esProfe={esProfe}
                 programa={programa}
+                /* Los días que el proyecto entrena HOY, según Gestión de
+                   Asistencia. Sirve para avisar si el microciclo se quedó con
+                   los de antes. — dirección, 02/09/2026 */
+                diasDeHoy={sesionesDe(mc.numero).map(f => f.getDay())}
               />
             ))}
           </div>
@@ -695,10 +700,11 @@ export default function MicrocicloPage() {
 
 // ═══════════════════════════════════════════════════════════════
 function TarjetaMicrociclo({
-  cabecera, abierto, onToggle, onBorrar, esAdmin, programa = '',
+  cabecera, abierto, onToggle, onBorrar, esAdmin, esProfe = false, programa = '', diasDeHoy = [],
 }: {
   cabecera: Microciclo; abierto: boolean; onToggle: () => void;
-  onBorrar: () => void; esAdmin: boolean; programa?: string;
+  onBorrar: () => void; esAdmin: boolean; esProfe?: boolean; programa?: string;
+  diasDeHoy?: number[];
 }) {
   const [detalle, setDetalle]   = useState<Microciclo | null>(null);
   const [asist, setAsist]       = useState<Record<string, ResumenAsistenciaDia>>({});
@@ -939,6 +945,79 @@ function TarjetaMicrociclo({
             </div>
           )}
 
+          {/* ── ¿LOS DÍAS SE QUEDARON VIEJOS? ────────────────────────────────
+              (dirección, 02/09/2026 — «en los microciclos no se actualizan con
+               los días de entrenamiento que se seleccionan en Gestión de
+               Asistencia»)
+
+              QUÉ PASA. Un microciclo se crea con los días que el proyecto tenía
+              ESE día. Después se cambian en Gestión de Asistencia —de lunes,
+              miércoles y viernes a lunes, martes y viernes, por ejemplo— y el
+              microciclo ya creado sigue con los de antes. Por eso arriba dice
+              LUN · MAR · VIE y adentro sale MIÉRCOLES.
+
+              NO SE CAMBIA SOLO, A PROPÓSITO. Un día ya trabajado —con
+              escenario, hora, objetivo y fases— no se puede borrar por un
+              cambio de calendario. Así que se avisa, se dice exactamente qué
+              sobra y qué falta, y se deja un botón. Al oprimirlo solo se tocan
+              los días que están EN BLANCO; los que tienen trabajo se respetan y
+              se dicen por su nombre. */}
+          {!cargando && detalle && !cerrado && (() => {
+            const NOM = ['DOMINGO','LUNES','MARTES','MIÉRCOLES','JUEVES','VIERNES','SÁBADO'];
+            const dias = detalle.dias ?? [];
+            const hoy  = new Set(diasDeHoy);
+            const vacio = (d: any) =>
+              !String(d.escenario ?? '').trim() && !String(d.hora ?? '').trim() &&
+              !String(d.objetivo_dia ?? '').trim() && !String(d.contenidos ?? '').trim() &&
+              !String(d.fase_inicial ?? '').trim() && !String(d.fase_central ?? '').trim() &&
+              !(Array.isArray(d.componentes) && d.componentes.length);
+            const diaJs = (d: any) => Number(d.dia_semana) % 7;   // 7 = domingo → 0
+
+            const faltan = dias.filter(d => hoy.has(diaJs(d)) && d.tipo_dia === 'descanso');
+            const sobran = dias.filter(d => !hoy.has(diaJs(d)) && d.tipo_dia !== 'descanso');
+            if (!diasDeHoy.length || (!faltan.length && !sobran.length)) return null;
+
+            const sobranConTrabajo = sobran.filter(d => !vacio(d));
+            const sobranVacios     = sobran.filter(vacio);
+
+            async function ponerAlDia() {
+              if (!window.confirm(
+                'Se van a poner los días de este microciclo como están hoy en Gestión de Asistencia.\n\n' +
+                'Solo se tocan los días EN BLANCO. Los que ya tengan trabajo escrito NO se tocan.\n\n¿Seguir?'
+              )) return;
+              setCargando(true);
+              for (const d of faltan)        await guardarMicrocicloDia(d.id, { tipo_dia: 'entreno' });
+              for (const d of sobranVacios)  await guardarMicrocicloDia(d.id, { tipo_dia: 'descanso' });
+              const mc = await getMicrociclo(cabecera.id);
+              if (mc) setDetalle(mc);
+              setCargando(false);
+            }
+
+            return (
+              <div className="mx-3 mb-3 rounded-xl px-4 py-3"
+                   style={{ background: 'rgba(224,163,58,.12)', border: '1px solid #E0A33A' }}>
+                <p className="font-black text-[12.5px]" style={{ color: '#E0A33A' }}>
+                  Los días de este microciclo no son los que el proyecto entrena hoy
+                </p>
+                <p className="text-white/80 text-[12px] font-semibold mt-1 leading-relaxed">
+                  {faltan.length > 0 && <>Falta: <b>{faltan.map(d => NOM[diaJs(d)]).join(', ')}</b>. </>}
+                  {sobranVacios.length > 0 && <>Sobra (y está en blanco): <b>{sobranVacios.map(d => NOM[diaJs(d)]).join(', ')}</b>. </>}
+                  {sobranConTrabajo.length > 0 && (
+                    <>Sobra pero <b style={{ color: '#5BE39B' }}>ya tiene trabajo escrito</b>:{' '}
+                      <b>{sobranConTrabajo.map(d => NOM[diaJs(d)]).join(', ')}</b> — ese no se toca.</>
+                  )}
+                </p>
+                {(faltan.length > 0 || sobranVacios.length > 0) && (
+                  <button onClick={ponerAlDia}
+                    className="mt-2.5 rounded-lg px-3 py-2 text-[11.5px] font-black"
+                    style={{ background: '#E0A33A', color: '#111827' }}>
+                    PONER LOS DÍAS AL DÍA
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
           {!cargando && detalle && (() => {
             const todos     = detalle.dias ?? [];
             const conSesion = todos.filter(d => d.tipo_dia !== 'descanso');
@@ -985,7 +1064,11 @@ function TarjetaMicrociclo({
                   </button>
                 )}
 
-                {cerrado && esSuperAdmin() && (
+                {/* EDITAR = REABRIR (dirección, 02/09/2026). Un microciclo
+                    cerrado quedaba trancado para el formador: si se le fue un
+                    error, no tenía cómo entrar a corregirlo. Ahora lo puede
+                    reabrir él mismo. */}
+                {cerrado && (esSuperAdmin() || esAdmin || esProfe) && (
                   <button
                     onClick={reabrirMicrociclo}
                     disabled={cerrando}
@@ -995,7 +1078,11 @@ function TarjetaMicrociclo({
                   </button>
                 )}
 
-                {esAdmin && !cerrado && (
+                {/* ELIMINAR — también el formador (dirección, 02/09/2026).
+                    Antes solo la dirección, y solo si no estaba cerrado: un
+                    microciclo creado por equivocación se quedaba ahí para
+                    siempre. Sigue preguntando antes de borrar. */}
+                {(esAdmin || esProfe) && (
                   <button
                     onClick={onBorrar}
                     className="flex items-center gap-2 text-[11px] font-bold text-[#FF7A7A] hover:text-[#F0B9B9] px-2 py-1"
