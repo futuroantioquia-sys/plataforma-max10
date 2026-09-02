@@ -32,7 +32,48 @@ git commit -m "Cambios del %DATE% %TIME%"
 if errorlevel 1 echo    (No habia nada nuevo; se publica lo ultimo que exista)
 echo.
 
-echo --- 3. SUBIENDO A GITHUB ---------------------------------
+REM ============================================================
+REM  PASO NUEVO (02/09/2026)
+REM  ------------------------------------------------------------
+REM  El 02/09 la publicacion se rechazo con este mensaje:
+REM     "Updates were rejected because the remote contains work
+REM      that you do not have locally"
+REM
+REM  Traduccion: en GitHub habia cambios que este computador no
+REM  tenia. Git no deja escribir encima de algo que no conoce,
+REM  y hace bien: asi nadie borra el trabajo de otro sin darse
+REM  cuenta.
+REM
+REM  Este paso baja primero lo que haya alla y le pone lo de aqui
+REM  encima. Si los dos tocaron la MISMA linea del MISMO archivo,
+REM  git no puede decidir solo: entonces se deshace la mezcla,
+REM  se deja la carpeta como estaba y se avisa. Nunca queda a
+REM  medias.
+REM ============================================================
+echo --- 3. TRAYENDO LO QUE HAYA EN GITHUB ---------------------
+echo    (por si alguien mas publico algo)
+git pull --rebase origin main
+if errorlevel 1 (
+  echo.
+  echo    Se deshace la mezcla para no dejar nada a medias...
+  git rebase --abort
+  echo.
+  echo ============================================================
+  echo    *** HAY UN CHOQUE DE CAMBIOS ***
+  echo.
+  echo    Lo que esta en GitHub y lo que esta en este computador
+  echo    tocaron lo mismo, y git no puede decidir cual vale.
+  echo.
+  echo    NO SE PERDIO NADA. Su carpeta quedo como estaba.
+  echo    Tome una foto de esta ventana COMPLETA y mandemela.
+  echo ============================================================
+  echo.
+  pause
+  exit /b 1
+)
+echo.
+
+echo --- 4. SUBIENDO A GITHUB ---------------------------------
 echo    Si le pide usuario y contrasena, escribalos aqui mismo.
 echo    La contrasena NO se ve mientras la escribe: eso es normal.
 echo.
