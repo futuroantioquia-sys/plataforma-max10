@@ -3839,6 +3839,112 @@ export function horaFinEntreno(horaInicio: string, programa: string): string {
   return horaTextoDeMinutos(m + minutosDeEntreno(programa));
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   HORARIO DÍA POR DÍA — Progresión, Selección y Desarrollo
+   (dirección, 03/09/2026 — «con los grupos de progresión, selección y
+    desarrollo se hace más complejo ya que ellos entrenan por lo general en
+    sedes y horas diferentes»)
+
+   Los grupos chiquitos entrenan siempre en el mismo sitio y a la misma hora,
+   y con una sola casilla basta. Los tres programas de arriba no: el lunes en
+   el CDC a las 4:30 y el miércoles en el Bloque 19 a las 5:00. Por eso, en
+   Info Proyectos y Formadores, a esos proyectos la casilla HORARIO les abre
+   una pantalla con un renglón por día.
+
+   DÓNDE SE GUARDA. En `config_cobro`, que ya existe y es el cajón de
+   configuraciones de la plataforma (id + data en JSON). Se escogió eso y no
+   una columna nueva para NO tener que tocar la base: nada de correr un .bat,
+   y lo ve todo el mundo desde cualquier computador al instante.
+
+   CÓMO SE GUARDA:
+       { "SUB 12 A": { "1": { sede: "CDC", hora: "4:30 PM" },
+                       "3": { sede: "BLOQUE 19", hora: "5:00 PM" } } }
+   La llave del día es la del calendario: 0 = domingo … 6 = sábado.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** El CDC es el mismo sitio que Casa de Campeones: un solo renglón, dos
+ *  nombres, porque en la academia se dicen de las dos maneras.
+ *  Allá el entrenamiento es de UNA HORA, no de hora y media. */
+export const SEDES_ENTRENO: { nombre: string; minutos: number }[] = [
+  { nombre: 'CDC (CASA DE CAMPEONES)', minutos: 60 },
+  { nombre: 'BLOQUE 19',   minutos: 90 },
+  { nombre: 'EAFIT',       minutos: 90 },
+  { nombre: 'ELITE',       minutos: 90 },
+  { nombre: 'FUNDADORES',  minutos: 90 },
+  { nombre: 'LA 80',       minutos: 90 },
+  { nombre: 'NIQUÍA',      minutos: 90 },
+  { nombre: 'SABANETA',    minutos: 90 },
+  { nombre: 'SANTA MÓNICA',minutos: 90 },
+];
+
+/** Los tres programas que entrenan en sedes y horas distintas cada día. */
+export function usaHorarioPorDia(programa: string): boolean {
+  const p = String(programa ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return p.includes('PROGRESION') || p.includes('SELECCION') || p.includes('DESARROLLO');
+}
+
+/** Cuánto dura el entrenamiento EN ESA SEDE. En el CDC, una hora. */
+export function minutosEnSede(sede: string, programa: string): number {
+  const s = String(sede ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  /* Se reconoce escrito de las dos formas y también suelto: "CDC",
+     "CASA DE CAMPEONES", "CDC (CASA DE CAMPEONES)". */
+  if (/\bCDC\b/.test(s) || s.includes('CASA DE CAMPEONES')) return 60;
+  return minutosDeEntreno(programa);
+}
+
+export interface HorarioDia {
+  /** Dónde entrena ese día. Vacío = todavía no se ha puesto. */
+  sede: string;
+  /** Hora de entrada, "4:30 PM". La de salida se saca sola. */
+  hora: string;
+}
+
+/** proyecto → { "1": {sede,hora}, "3": {...} }. Día 0 = domingo. */
+export type HorariosPorDia = Record<string, Record<string, HorarioDia>>;
+
+const ID_HORARIOS_DIA = 'horarios_por_dia';
+
+export async function getHorariosPorDia(): Promise<HorariosPorDia> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/config_cobro?id=eq.${ID_HORARIOS_DIA}&select=data`,
+      { headers: HDR_MC(), cache: 'no-store' },
+    );
+    if (!res.ok) return {};
+    const d = await res.json();
+    const data = Array.isArray(d) ? d[0]?.data : null;
+    return (data && typeof data === 'object') ? (data as HorariosPorDia) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Guarda TODO el mapa. Se lee, se cambia el proyecto que toca y se manda
+ *  entero: son unas pocas líneas de texto y así no hay forma de perder lo de
+ *  otro proyecto por una escritura a medias. */
+export async function saveHorariosPorDia(v: HorariosPorDia): Promise<boolean> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/config_cobro`, {
+      method: 'POST',
+      headers: { ...HDR_MC(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ id: ID_HORARIOS_DIA, data: v, updated_at: new Date().toISOString() }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** "CDC (CASA DE CAMPEONES)" + "4:30 PM" → "4:30 PM – 5:30 PM". */
+export function textoHorarioDia(h: HorarioDia | undefined, programa: string): string {
+  if (!h || !h.hora) return '';
+  const ini = minutosDeHoraTexto(h.hora);
+  if (ini < 0) return '';
+  return `${horaTextoDeMinutos(ini)} – ${horaTextoDeMinutos(ini + minutosEnSede(h.sede, programa))}`;
+}
+
 /* ── TODAS LAS FICHAS DE PROYECTO, DE UN SOLO VIAJE ──────────────────────────
    (dirección, 02/09/2026)
 

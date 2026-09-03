@@ -1483,6 +1483,46 @@ export default function PerfilDeportista() {
                 <button onClick={() => setShowElegirVD(false)} className="bg-white/20 rounded-lg w-8 h-8 flex items-center justify-center text-white flex-shrink-0"><X className="w-4 h-4" /></button>
               </div>
               <div className="p-4 flex flex-col gap-2">
+
+                {/* ── COMPARATIVA ────────────────────────────────────────
+                    (dirección, 03/09/2026 — «que aparezca una opción para ver
+                     una comparativa de los informes que tenga realizados. Que
+                     muestre de manera dinámica si en algún aspecto subió o
+                     bajó o quedó igual»)
+
+                    Va de PRIMERA porque es lo que uno quiere ver cuando el
+                    deportista ya tiene historia: no un informe suelto, sino
+                    cómo viene. Debajo siguen los informes uno por uno, igual
+                    que antes.
+
+                    SOLO FORMADOR Y ADMINISTRACIÓN. Al calidoso no le sale
+                    —«aún no para calidosos»—; y aunque escribiera la
+                    dirección a mano, la pantalla lo devuelve. */}
+                {(esAdmin || esProfesor) && vdInformes.length >= 2 && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setShowElegirVD(false);
+                        const cod = String(codigoVal || '').trim();
+                        router.push(`/valoracion-comparativa${cod ? `?cod=${encodeURIComponent(cod)}` : ''}`);
+                      }}
+                      className="flex items-center justify-between gap-2 border-[1.5px] border-[#E0A33A] bg-[rgba(224,163,58,.16)] hover:bg-[rgba(224,163,58,.26)] active:bg-[rgba(224,163,58,.32)] transition rounded-xl px-4 py-3 text-left">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-black text-[#F0C070]">COMPARATIVA</p>
+                        {/* Solo la cantidad. El renglón explicaba de más y el
+                            botón se leía apretado. — dirección, 03/09/2026 */}
+                        <p className="text-[11px] text-white/55">
+                          {`${vdInformes.length} informes`}
+                        </p>
+                      </div>
+                      <span className="text-[#F0C070] text-lg flex-shrink-0">📈</span>
+                    </button>
+                    <p className="text-[10px] text-white/30 text-center -mt-0.5 mb-0.5">
+                      o abra un informe por separado
+                    </p>
+                  </>
+                )}
+
                 {vdInformes.map(ev => (
                   <button key={ev.id} onClick={() => irVistaDinamica(ev)}
                     className="flex items-center justify-between gap-2 border-[1.5px] border-[#00B050] bg-[rgba(0,176,80,.14)] hover:bg-[rgba(0,176,80,.24)] active:bg-[rgba(0,176,80,.3)] transition rounded-xl px-4 py-3 text-left">

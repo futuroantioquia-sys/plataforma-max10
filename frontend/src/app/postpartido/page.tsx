@@ -954,6 +954,10 @@ export default function CrearPospartidoPage() {
      el partido se escribe en la nueva y se quita de la vieja — si no, quedaría
      duplicado en el banco: el mismo partido en dos fechas. */
   const jornadaGuardada = useRef('');
+  /* Se prende cuando el cambio de # FECHA es un TRASLADO del partido que está
+     en pantalla, y no la apertura de otro. Lo lee el armador de la planilla
+     para no ir a la base y no borrar lo escrito. — dirección, 03/09/2026 */
+  const moviendoFecha = useRef(false);
   const [fecha, setFecha]         = useState('');
   const [llegar, setLlegar]       = useState('');
   const [rival, setRival]         = useState('');
@@ -1196,6 +1200,40 @@ export default function CrearPospartidoPage() {
          sería una crueldad borrarle lo escrito por escoger la fecha tarde. */
   useEffect(() => {
     const clave = `${numTorneo}|${jornada}|${convocables.length}`;
+
+    /* ── MOVER LA # FECHA NO ES ABRIR OTRO PARTIDO ─────────────────────────
+       (dirección, 03/09/2026 — «la información del partido estaba en la 1A,
+        si lo cambio para la 10A se borra toda la información»)
+
+       QUÉ PASABA. Cambiar la # FECHA hacía DOS cosas a la vez: movía el
+       partido y, de paso, mandaba a buscar el partido de la fecha nueva.
+       Como en la 10A no había nada, la pantalla se armaba de cero y se
+       llevaba por delante la hora, el rival, el escenario y los minutos que
+       ya estaban escritos.
+
+       LA CURA. Hay que distinguir dos cosas que se veían iguales:
+
+         · ABRIR OTRO PARTIDO — se entra por el banco o por la matriz. Ahí sí
+           hay que ir a la base y traer lo de esa fecha.
+         · MOVER ESTE PARTIDO — el formador tiene el partido en pantalla y
+           corrige la fecha porque estaba mal puesta. Es el MISMO partido: no
+           se va a buscar nada, la pantalla se queda tal cual y el traslado se
+           hace al oprimir GUARDAR, con su pregunta y quitándolo de la vieja.
+
+       El aviso amarillo «Estaba en FECHA 1. Al guardar se mueve» es el que le
+       dice al formador en cuál de los dos casos está parado. */
+    if (moviendoFecha.current) {
+      moviendoFecha.current = false;
+      ultimoArmado.current  = clave;
+      ultimoTorneo.current  = numTorneo;
+      ultimaJornada.current = jornada;
+      /* La llave pasa a la fecha nueva: desde ya lo que se guarde —el
+         respaldo del aparato y el GUARDAR— es de este partido en su fecha
+         nueva. Lo viejo se borra solo cuando el traslado se confirma. */
+      duenoPantalla.current = `${numTorneo}|${jornada}`;
+      return;
+    }
+
     if (ultimoArmado.current === clave) return;
     const cambioElTorneo = ultimoTorneo.current !== numTorneo;
     /* ¿De dónde venía? Si venía SIN fecha (de la matriz) y apenas ahora le
@@ -1230,6 +1268,7 @@ export default function CrearPospartidoPage() {
       setSinGuardar(false);
       setGuardadoEn('');
       setDefinitivo(false);
+      jornadaGuardada.current = '';       // la matriz no es un partido guardado
       setFilas(convocables.map((d, i) => ({
         ...filaNueva(i),
         depId: d.id,
@@ -1350,6 +1389,7 @@ export default function CrearPospartidoPage() {
         setDefinitivo(fuente.definitivo === true);
         setGuardadoEn(enBase?.actualizada_en ?? '');
         setSinGuardar(false);
+        jornadaGuardada.current = jornada;   // bajo esta fecha está en la base
         borrarBorradorLocal(numTorneo, jornada);   // el borrador cruzado se va
         setFilas(convocables.map((d, i) => ({
           ...filaNueva(i),
@@ -1388,6 +1428,7 @@ export default function CrearPospartidoPage() {
         setDefinitivo((guardada as any).definitivo === true);
         setGuardadoEn(enBase?.actualizada_en ?? '');
         setSinGuardar(false);
+        jornadaGuardada.current = jornada;   // bajo esta fecha está en la base
         setFilas(convocables.map((d, i) => ({
           ...filaNueva(i),
           depId: d.id,
@@ -1409,6 +1450,7 @@ export default function CrearPospartidoPage() {
       setSinGuardar(false);
       setGuardadoEn('');
       setDefinitivo(false);
+      jornadaGuardada.current = '';       // en esta fecha no hay nada guardado
       /* El encabezado y el marcador también se van: son de aquel partido. */
       setFecha(''); setLlegar(''); setRival(''); setEscenario(''); setResumen('');
       /* El D.T arranca con el formador que tiene el torneo asignado; si ese
@@ -4117,7 +4159,41 @@ export default function CrearPospartidoPage() {
               <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
                 # FECHA
               </label>
-              <select value={jornada} onChange={e => setJornada(e.target.value)}
+              <select
+                value={jornada}
+                onChange={e => {
+                  const nueva = e.target.value;
+                  /* ── ¿ESTO ES MOVER, O ES ABRIR OTRO? ────────────────────
+                     (dirección, 03/09/2026)
+
+                     Cambiar la # FECHA puede querer decir DOS cosas muy
+                     distintas, y la pantalla no tiene cómo adivinar cuál:
+
+                       · MOVER  — «este partido lo abrieron en la fecha
+                         equivocada». Es el mismo partido: se conserva todo lo
+                         escrito y al guardar se pasa a la fecha nueva.
+                       · ABRIR  — «quiero ver el partido de la fecha 10».
+                         Es otro partido: hay que ir a la base a traerlo.
+
+                     Antes se hacía siempre lo segundo, y por eso al corregir
+                     la fecha se perdía la hora, el rival, el escenario y los
+                     minutos. Ahora se pregunta, con las dos salidas escritas
+                     con todas las letras. Se pregunta SOLO cuando el partido
+                     ya está guardado bajo una fecha; si apenas se está
+                     llenando, no hay nada que mover. */
+                  if (nueva && jornadaGuardada.current && nueva !== jornada) {
+                    const mover = window.confirm(
+                      `Este partido está guardado en ${etiquetaFecha(jornadaGuardada.current)}.\n\n` +
+                      `ACEPTAR  →  MOVER este partido a ${etiquetaFecha(nueva)}.\n` +
+                      '   Se conserva TODO lo escrito (hora, rival, escenario, marcador\n' +
+                      '   y los minutos), y al oprimir GUARDAR queda en la fecha nueva.\n\n' +
+                      `CANCELAR  →  ABRIR el partido de ${etiquetaFecha(nueva)}.\n` +
+                      `   Este se queda tal como está en ${etiquetaFecha(jornadaGuardada.current)}.`,
+                    );
+                    if (mover) moviendoFecha.current = true;
+                  }
+                  setJornada(nueva);
+                }}
                 style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}
                 className="w-full rounded-lg px-2 text-white text-[12.5px] font-bold outline-none cursor-pointer">
                 {/* MATRIZ = todavía no se ha escogido fecha. Es la lista pelada

@@ -69,7 +69,7 @@ function proyectoDe(dep: Deportista | null): string {
 type Fund = { label: string; nivelCol: string; descCol?: string };
 type Cat  = { titulo: string; emoji: string; color: string; funds: Fund[] };
 
-const CATS: Cat[] = [
+const CATS_CAMPO: Cat[] = [
   { titulo: 'Físico', emoji: '💪', color: '#dc2626', funds: [
     { label: 'Fuerza — Potencia y Duelo',            nivelCol: 'fuerza_nivel',      descCol: 'fuerza_desc' },
     { label: 'Velocidad — Reacción y Desplazamiento', nivelCol: 'velocidad_nivel',   descCol: 'velocidad_desc' },
@@ -99,6 +99,68 @@ const CATS: Cat[] = [
     { label: 'Gestión de la Frustración', nivelCol: 'disciplina_nivel',   descCol: 'disciplina_desc' },
     { label: 'Comunicación Asertiva',    nivelCol: 'actitud_nivel',      descCol: 'actitud_desc' },
   ] },
+  { titulo: 'Trabajo en Equipo', emoji: '🤝', color: '#0891b2', funds: [
+    { label: 'Identidad y Estilo de Juego', nivelCol: 'identidad_nivel', descCol: 'identidad_desc' },
+    { label: 'Bloque y Cohesión Táctica', nivelCol: 'bloque_nivel',      descCol: 'bloque_desc' },
+    { label: 'Clima Interno y Comunicación', nivelCol: 'clima_nivel',    descCol: 'clima_desc' },
+    { label: 'Gestión de la Competición', nivelCol: 'gestion_comp_nivel', descCol: 'gestion_comp_desc' },
+  ] },
+  { titulo: 'Comportamiento', emoji: '⭐', color: '#16a34a', funds: [
+    { label: 'Responsabilidad',      nivelCol: 'responsabilidad' },
+    { label: 'Puntualidad',          nivelCol: 'puntualidad' },
+    { label: 'Disciplina',           nivelCol: 'disciplina_comp' },
+    { label: 'Respeto',              nivelCol: 'respeto' },
+    { label: 'Tolerancia',           nivelCol: 'tolerancia' },
+    { label: 'Compañerismo',         nivelCol: 'companerismo' },
+    { label: 'Liderazgo',            nivelCol: 'liderazgo' },
+    { label: 'Trabajo en Equipo',    nivelCol: 'trabajo_equipo_comp' },
+    { label: 'Sentido de Pertenencia', nivelCol: 'sentido_pertenencia' },
+  ] },
+];
+
+/* ── EL MISMO INFORME, PERO PARA PORTEROS ──────────────────────────────────
+   (dirección, 03/09/2026 — «cuando en la posición del jugador aparece que
+    portero, le debe aparecer este informe… el encabezado seguimos manejando
+    el mismo de nosotros y el formato de visualización dinámica sigue siendo
+    el de nosotros, solo cambiamos el nombre de los componentes y los datos»)
+
+   Ni una línea del encabezado, del diseño o de los colores cambia. Lo único
+   distinto son los NOMBRES de los componentes: al portero no se le mide el
+   dribling ni el cabeceo, se le mide el blocaje, la estirada, el achique y el
+   juego aéreo.
+
+   Y NO SE TOCÓ LA BASE: cada componente del portero se guarda en la misma
+   casilla que ya existía (el Blocaje va en `control_nivel`, la Estirada en
+   `conducta_nivel`, y así). El de campo tiene 34 componentes y el portero 22,
+   así que caben de sobra. */
+const CATS_PORTERO: Cat[] = [
+  { titulo: 'Físico', emoji: '💪', color: '#dc2626', funds: [
+    { label: 'Fuerza Explosiva — Potencia de Salto', nivelCol: 'fuerza_nivel',      descCol: 'fuerza_desc' },
+    { label: 'Velocidad de Reacción — Reflejos',     nivelCol: 'velocidad_nivel',   descCol: 'velocidad_desc' },
+    { label: 'Agilidad y Coordinación',              nivelCol: 'resistencia_nivel', descCol: 'resistencia_desc' },
+  ] },
+  { titulo: 'Técnica', emoji: '🧤', color: '#2563eb', funds: [
+    { label: 'Blocaje — Seguridad y Agarre',      nivelCol: 'control_nivel',  descCol: 'control_desc' },
+    { label: 'Desvío — Rechazo y Dirección',      nivelCol: 'pase_nivel',     descCol: 'pase_desc' },
+    { label: 'Estirada — Impulso y Alcance',      nivelCol: 'conducta_nivel', descCol: 'conducta_desc' },
+    { label: 'Juego de Pies — Distribución',      nivelCol: 'dribling_nivel', descCol: 'dribling_desc' },
+    { label: 'Caída y Reincorporación',           nivelCol: 'remata_nivel',   descCol: 'remata_desc' },
+  ] },
+  { titulo: 'Táctica', emoji: '🧠', color: '#7c3aed', funds: [
+    { label: 'Ubicación Posicional — Macro-colocación', nivelCol: 'posicion_nivel',     descCol: 'posicion_desc' },
+    { label: 'Ángulo y Bisectriz — Micro-colocación',   nivelCol: 'vision_nivel',       descCol: 'vision_desc' },
+    { label: 'Transición Ofensiva',                     nivelCol: 'defensa_nivel',      descCol: 'defensa_desc' },
+    { label: 'Control del Espacio Defensivo — Líbero',  nivelCol: 'amplitud_nivel',     descCol: 'amplitud_desc' },
+    { label: 'Gestión del Balón Parado',                nivelCol: 'transicion_nivel',   descCol: 'transicion_desc' },
+    { label: 'Juego Aéreo — Salidas',                   nivelCol: 'superioridad_nivel', descCol: 'superioridad_desc' },
+    { label: 'Fase de Achique — 1vs1',                  nivelCol: 'basculacion_nivel',  descCol: 'basculacion_desc' },
+  ] },
+  { titulo: 'Mental y Actitudinal', emoji: '❤️', color: '#0891b2', funds: [
+    { label: 'Trabajo en Equipo',            nivelCol: 'trabajo_nivel',    descCol: 'trabajo_desc' },
+    { label: 'Resiliencia — Gestión del Error', nivelCol: 'disciplina_nivel', descCol: 'disciplina_desc' },
+    { label: 'Liderazgo y Comunicación',     nivelCol: 'actitud_nivel',    descCol: 'actitud_desc' },
+  ] },
+  /* El desempeño colectivo y el comportamiento son IGUALES para los dos. */
   { titulo: 'Trabajo en Equipo', emoji: '🤝', color: '#0891b2', funds: [
     { label: 'Identidad y Estilo de Juego', nivelCol: 'identidad_nivel', descCol: 'identidad_desc' },
     { label: 'Bloque y Cohesión Táctica', nivelCol: 'bloque_nivel',      descCol: 'bloque_desc' },
@@ -359,6 +421,15 @@ function ValoracionDinamicaInner() {
 
   const val = (col: string) => String(row?.[col] ?? '');
 
+  /* ── ¿EL INFORME ES DE UN PORTERO? ─────────────────────────────────────
+     (dirección, 03/09/2026). Se mira la POSICIÓN que trae el propio informe.
+     Si dice portero —o arquero, golero, guardameta, que es como también se
+     dice—, se usan los nombres de componentes del formato de portería. Todo
+     lo demás de esta pantalla queda exactamente igual. */
+  const CATS: Cat[] = /portero|arquer|golero|guardameta/i.test(String(row?.posicion ?? ''))
+    ? CATS_PORTERO
+    : CATS_CAMPO;
+
   // Promedio general (0-100) sobre todos los fundamentos con dato
   const todosPct = CATS.flatMap(c => c.funds.map(f => nivelPct(nivelNum(val(f.nivelCol)))));
   const conDato = todosPct.filter(p => p > 0);
@@ -575,9 +646,18 @@ function ValoracionDinamicaInner() {
           <h1 className="text-white font-black text-lg leading-tight">Valoración Dinámica</h1>
           <p className="text-white/60 text-xs">La valoración deportiva con mejor diseño</p>
         </div>
+        {/* EL LOGO, NO EL NOMBRE ESCRITO (dirección, 03/09/2026 — «recuerda
+            poner el logo de MAX10 en vez de tener el texto»). Es el mismo
+            archivo que usa la imagen de Programación. Si por lo que sea no
+            carga, no queda un hueco: se ve el lema y ya. */}
         <div className="text-right leading-tight flex-shrink-0">
-          <p className="text-white font-black text-sm tracking-widest">MAX 10 SPORT</p>
-          <p className="text-white/75 text-[9px] font-semibold tracking-wide">CONECTA · GESTIONA · GANA</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/MAX%2010.png" alt="MAX 10 SPORT"
+               className="h-8 sm:h-10 w-auto ml-auto"
+               onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+          <p className="text-white/75 text-[8px] sm:text-[9px] font-semibold tracking-wide mt-0.5">
+            CONECTA · GESTIONA · GANA
+          </p>
         </div>
       </header>
 
@@ -667,44 +747,56 @@ function ValoracionDinamicaInner() {
             <div ref={pdfRef} className="space-y-4">
             {/* ── HERO — foto grande, nombre grande, programa y posición (estilo vista padres) ── */}
             <div className="rounded-3xl overflow-hidden shadow-xl border border-white/10" style={{ background: 'linear-gradient(150deg,#0b1220 0%,#0d2b1a 55%,#052a10 100%)' }}>
-              <div className="p-5 flex gap-5 items-center">
+              {/* ── TAMAÑOS AJUSTADOS AL CELULAR ──────────────────────────
+                  (dirección, 03/09/2026 — «ajusta mejor los tamaños de la
+                   letra para que en el celular se vea más ajustado con base
+                   a la foto»)
+
+                  En el teléfono el nombre salía en letra de 24 puntos y se
+                  partía en tres renglones, así que el bloque de texto quedaba
+                  mucho más alto que la foto y todo se veía desbalanceado.
+                  Ahora la letra del celular es más pequeña y los espacios más
+                  apretados, para que el texto y la foto queden a la par. En
+                  computador se ve igual que antes: solo se tocó el tamaño de
+                  pantalla chica. */}
+              <div className="p-4 sm:p-5 flex gap-3.5 sm:gap-5 items-center">
                 {/* Foto grande */}
                 <div className="flex-shrink-0">
-                  <div className="w-32 h-40 sm:w-40 sm:h-52 rounded-2xl overflow-hidden border-2 border-[#16a34a]/50 bg-white/10 flex items-center justify-center shadow-[0_0_28px_rgba(22,163,74,0.3)]">
+                  <div className="w-[104px] h-[134px] sm:w-40 sm:h-52 rounded-2xl overflow-hidden border-2 border-[#16a34a]/50 bg-white/10 flex items-center justify-center shadow-[0_0_28px_rgba(22,163,74,0.3)]">
                     {(row.foto || fotoCalidoso)
                       ? <img src={row.foto || fotoCalidoso} alt="" className="w-full h-full object-cover" style={{ objectPosition: 'top' }} />
-                      : <span className="text-white font-black text-4xl">{heroIniciales}</span>}
+                      : <span className="text-white font-black text-3xl sm:text-4xl">{heroIniciales}</span>}
                   </div>
                   {heroCodigo && (
-                    <div className="mt-2 text-center bg-[#16a34a] rounded-lg py-1 px-1">
-                      <span className="text-white text-[11px] font-black tracking-widest">{heroCodigo}</span>
+                    <div className="mt-1.5 sm:mt-2 text-center bg-[#16a34a] rounded-lg py-1 px-1">
+                      <span className="text-white text-[10px] sm:text-[11px] font-black tracking-widest">{heroCodigo}</span>
                     </div>
                   )}
                 </div>
                 {/* Info principal */}
                 <div className="flex-1 min-w-0">
                   {/* Nombre arriba, dos apellidos abajo */}
-                  <p className="text-white font-black text-2xl sm:text-3xl leading-tight break-words uppercase">{heroNombres}</p>
-                  {heroApellidos && <p className="text-white font-black text-2xl sm:text-3xl leading-tight break-words uppercase">{heroApellidos}</p>}
-                  <div className="mt-3 flex flex-col gap-2 items-start">
-                    <div className="flex flex-wrap gap-2">
-                      {heroPrograma && <span className="bg-[#16a34a] text-white text-[11px] font-black px-3 py-1 rounded-full">{heroPrograma}</span>}
-                      {heroProyecto && <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10">{heroProyecto}</span>}
+                  <p className="text-white font-black text-[19px] sm:text-3xl leading-[1.12] break-words uppercase">{heroNombres}</p>
+                  {heroApellidos && <p className="text-white font-black text-[19px] sm:text-3xl leading-[1.12] break-words uppercase">{heroApellidos}</p>}
+                  <div className="mt-2 sm:mt-3 flex flex-col gap-1.5 sm:gap-2 items-start">
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                      {heroPrograma && <span className="bg-[#16a34a] text-white text-[10px] sm:text-[11px] font-black px-2.5 sm:px-3 py-[3px] sm:py-1 rounded-full">{heroPrograma}</span>}
+                      {heroProyecto && <span className="bg-white/15 text-white text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-[3px] sm:py-1 rounded-full border border-white/10">{heroProyecto}</span>}
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {heroPosicion && <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase">{heroPosicion}</span>}
-                      {heroPerfil && <span className="bg-white/15 text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10 uppercase">Perfil {heroPerfil}</span>}
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                      {heroPosicion && <span className="bg-white/15 text-white text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-[3px] sm:py-1 rounded-full border border-white/10 uppercase">{heroPosicion}</span>}
+                      {heroPerfil && <span className="bg-white/15 text-white text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-[3px] sm:py-1 rounded-full border border-white/10 uppercase">Perfil {heroPerfil}</span>}
                     </div>
                   </div>
                   {/* Título + informe + periodo (sin calificación arriba — la nota va en el consolidado) */}
-                  <p className="text-white font-black text-xl leading-tight tracking-wide uppercase mt-4">Valoración Integral<br/>del Deportista</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    {heroInforme && <span className="bg-[#16a34a] text-white text-[11px] font-black px-3 py-1 rounded-full uppercase">Informe {heroInforme}</span>}
-                    {heroPeriodo && <span className="text-white/70 text-[11px] font-bold uppercase">{heroPeriodo}</span>}
+                  <p className="text-white font-black text-[14.5px] sm:text-xl leading-[1.15] tracking-wide uppercase mt-3 sm:mt-4">Valoración Integral<br/>del Deportista</p>
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1.5 sm:mt-2">
+                    {heroInforme && <span className="bg-[#16a34a] text-white text-[10px] sm:text-[11px] font-black px-2.5 sm:px-3 py-[3px] sm:py-1 rounded-full uppercase">Informe {heroInforme}</span>}
+                    {heroPeriodo && <span className="text-white/70 text-[9.5px] sm:text-[11px] font-bold uppercase">{heroPeriodo}</span>}
                   </div>
                   {heroFormador && (
-                    <p className="text-white/80 text-[12px] font-bold mt-2">
-                      <span className="text-white/50 font-black uppercase tracking-wide text-[10px]">Formador: </span>{heroFormador}
+                    <p className="text-white/80 text-[11px] sm:text-[12px] font-bold mt-1.5 sm:mt-2 leading-snug">
+                      <span className="text-white/50 font-black uppercase tracking-wide text-[9px] sm:text-[10px]">Formador: </span>{heroFormador}
                     </p>
                   )}
                 </div>

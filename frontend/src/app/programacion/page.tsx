@@ -1807,6 +1807,110 @@ export default function ProgramacionCompetenciaPage() {
     return t + '…';
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     EXPORTAR A EXCEL — LOS PARTIDOS POR DÍA
+     (dirección, 03/09/2026 — «necesito que desde programación en
+      administrador me permita exportar en excel los partidos por día»)
+
+     QUÉ SE LLEVA. Exactamente lo que se está viendo: los mismos filtros de
+     día, torneo, programa y cuerpo técnico. Lo que está en pantalla es lo que
+     sale en el archivo, ni un partido más.
+
+     UNA HOJA POR DÍA. Si en pantalla hay un puente —sábado, domingo y el
+     lunes festivo— el archivo sale con tres hojas, una por día, cada una con
+     su nombre: "SAB 5 SEP", "DOM 6 SEP", "LUN 7 SEP". Así se imprime o se
+     manda cada día por aparte sin tener que separar nada a mano.
+
+     EL ORDEN es el mismo del cuadro: primero los que están listos, del más
+     temprano al más tarde, y después los que están a medio llenar.
+
+     LA LIBRERÍA se baja del CDN en el momento, como ya se hace en el Libro
+     Contable y en Productos. No hay que instalar nada.
+     ═══════════════════════════════════════════════════════════════════════ */
+  const [bajandoExcel, setBajandoExcel] = useState(false);
+
+  async function exportarExcel() {
+    setError(''); setAviso('');
+    if (visibles.length === 0) {
+      setError('No hay partidos para exportar. Quita el filtro o agrega partidos.');
+      return;
+    }
+    setBajandoExcel(true);
+    try {
+      if (!(window as any).XLSX) {
+        await new Promise<void>((ok, mal) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+          s.onload = () => ok();
+          s.onerror = () => mal(new Error('No se pudo bajar la librería de Excel. Revisa la conexión.'));
+          document.head.appendChild(s);
+        });
+      }
+      const XLSX = (window as any).XLSX;
+
+      /** Un partido, con los mismos títulos de las columnas del cuadro. */
+      const aRenglon = (f: FilaProgramacion) => ({
+        'DÍA':             diaBonito(f.fecha) || '',
+        'FECHA':           f.fecha || '',
+        'TORNEO #':        f.torneo_num || '',
+        '# FECHA':         f.jornada || '',
+        'TORNEO':          nombreTorneo(f.torneo_num) || '',
+        'HORA DE LLEGADA': horaBonita(f.hora) || '',
+        'HORA DEL PARTIDO': horaBonita(f.hora_partido) || '',
+        'ESCENARIO':       f.escenario || '',
+        'RIVAL':           f.rival || '',
+        'D.T':             f.dt || '',
+        'A.T':             f.at || '',
+        'ESTADO':          estaCompleto(f) ? 'LISTO' : 'FALTA LLENARLO',
+      });
+
+      /* El mismo orden del cuadro: listos arriba, a medias abajo. */
+      const enOrden = [...listos, ...aMedias];
+
+      /* Se parte por día. Los que no tengan fecha van juntos al final. */
+      const porDia = new Map<string, FilaProgramacion[]>();
+      enOrden.forEach(f => {
+        const k = f.fecha || 'SIN FECHA';
+        if (!porDia.has(k)) porDia.set(k, []);
+        porDia.get(k)!.push(f);
+      });
+      const dias = [...porDia.keys()].sort();
+
+      const wb = XLSX.utils.book_new();
+      /** Excel no admite : \ / ? * [ ] en el nombre de una hoja, ni más de 31 letras. */
+      const limpiarHoja = (s: string) =>
+        s.replace(/[:\\/?*[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Hoja';
+
+      dias.forEach(d => {
+        const filas = (porDia.get(d) ?? []).map(aRenglon);
+        const ws = XLSX.utils.json_to_sheet(filas);
+        /* Anchos a ojo, para que no salga todo pegado y haya que estirarlo. */
+        (ws as any)['!cols'] = [
+          { wch: 12 }, { wch: 11 }, { wch: 9 }, { wch: 8 }, { wch: 34 },
+          { wch: 15 }, { wch: 16 }, { wch: 26 }, { wch: 26 }, { wch: 14 },
+          { wch: 14 }, { wch: 15 },
+        ];
+        const nombre = d === 'SIN FECHA' ? 'SIN FECHA' : (diaBonito(d) || d);
+        XLSX.utils.book_append_sheet(wb, ws, limpiarHoja(nombre));
+      });
+
+      /* El nombre del archivo dice de qué día es, para reconocerlo en la
+         carpeta de Descargas sin abrirlo. */
+      const etiqueta = dias.length === 1
+        ? (dias[0] === 'SIN FECHA' ? 'SIN-FECHA' : (diaBonito(dias[0]) || dias[0]))
+        : `${dias.length}-DIAS`;
+      XLSX.writeFile(wb, `PROGRAMACION_${etiqueta.replace(/\s+/g, '-')}.xlsx`);
+
+      setAviso(dias.length === 1
+        ? `Se bajó el Excel con ${enOrden.length} ${enOrden.length === 1 ? 'partido' : 'partidos'}. Está en tu carpeta de Descargas.`
+        : `Se bajó el Excel con ${enOrden.length} partidos en ${dias.length} hojas, una por día. Está en tu carpeta de Descargas.`);
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo armar el Excel.');
+    } finally {
+      setBajandoExcel(false);
+    }
+  }
+
   async function armarImagen() {
     setError(''); setAviso('');
     if (visibles.length === 0) {
@@ -2567,6 +2671,22 @@ export default function ProgramacionCompetenciaPage() {
                 : <IconoImagen className="w-3.5 h-3.5 text-white" />}
               <span className="text-white text-[11px] font-black">
                 {armandoImg ? 'ARMANDO…' : 'VER IMAGEN'}
+              </span>
+            </button>
+
+            {/* EXPORTAR A EXCEL — dirección, 03/09/2026.
+                Se lleva lo que se está viendo, con una hoja por día. */}
+            <button
+              onClick={exportarExcel}
+              disabled={cargando || bajandoExcel || visibles.length === 0}
+              title="Bajar en Excel los partidos que se están viendo — una hoja por día"
+              className="rounded-lg px-3 h-8 flex items-center gap-1.5 transition hover:brightness-125 disabled:opacity-50"
+              style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.6)' }}>
+              {bajandoExcel
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                : <Download className="w-3.5 h-3.5 text-white" />}
+              <span className="text-white text-[11px] font-black">
+                {bajandoExcel ? 'ARMANDO…' : 'EXCEL'}
               </span>
             </button>
 

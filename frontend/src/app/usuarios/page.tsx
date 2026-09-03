@@ -4,8 +4,11 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, CheckCircle, Plus, Eye, EyeOff, Users, X, Trash2, ChevronRight } from 'lucide-react';
 import { getProfes, saveProfes, deleteProfe, getDeportistas, getFichasProyecto, saveFichaProyecto,
-  horaFinEntreno, minutosDeEntreno } from '@/lib/db';
-import type { Profe, Deportista } from '@/lib/db';
+  horaFinEntreno, minutosDeEntreno,
+  SEDES_ENTRENO, usaHorarioPorDia, minutosEnSede,
+  getHorariosPorDia, saveHorariosPorDia,
+  minutosDeHoraTexto, horaTextoDeMinutos } from '@/lib/db';
+import type { Profe, Deportista, HorariosPorDia, HorarioDia } from '@/lib/db';
 import { useSoloLectura } from '@/lib/permisos';
 
 const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
@@ -60,7 +63,9 @@ const COLS_PROY = [
   { h: 'SEDE',            w: 170 },
   /* HORARIO (dirección, 02/09/2026): se escribe la hora de ENTRADA y la de
      salida sale sola —hora y media, o una hora en Estimulación—. */
-  { h: 'HORARIO',         w: 190 },
+  /* Se ensanchó de 190 a 240: en Progresión, Selección y Desarrollo aquí va
+     el resumen de la sede y la hora de CADA día. — 03/09/2026 */
+  { h: 'HORARIO',         w: 240 },
   { h: 'EDAD',            w: 200 },
   { h: 'DÍAS ENTRENO',    w: 250 },
   { h: 'NOMBRE FORMADOR', w: 240 },
@@ -91,6 +96,11 @@ function ordenProg(p: string) {
 function calcularConteos(deps: any[]) {
   const prog: Record<string, { act: number; tot: number }> = {};
   const proy: Record<string, { act: number; tot: number }> = {};
+  /* Y el conteo del GRUPO COMPLETO, sin mirar el programa de cada ficha.
+     Un grupo es uno solo aunque un par de sus deportistas estén marcados en
+     otro programa; el renglón debe decir cuántos son en total.
+     — dirección, 03/09/2026 */
+  const grupo: Record<string, { act: number; tot: number }> = {};
   deps.forEach(dep => {
     const progRaw  = getCol(dep, /^program/i).trim() || '__SIN_PROGRAMA__';
     const progDisp = progRaw === '__SIN_PROGRAMA__' ? 'Sin Programa' : progRaw;
@@ -102,9 +112,74 @@ function calcularConteos(deps: any[]) {
       const k = `${progRaw}::${p}`;
       if (!proy[k]) proy[k] = { act: 0, tot: 0 };
       proy[k].tot++; if (activo) proy[k].act++;
+      if (!grupo[p]) grupo[p] = { act: 0, tot: 0 };
+      grupo[p].tot++; if (activo) grupo[p].act++;
     }
   });
-  return { prog, proy };
+  return { prog, proy, grupo };
+}
+
+/* ── UN GRUPO PERTENECE A UN SOLO PROGRAMA ───────────────────────────────
+   (dirección, 03/09/2026 — «filtro desarrollo y me aparecen grupos de
+    formación que tienen algún deportista en selección o desarrollo. Estos
+    grupos así tengan algún deportista en otro programa es de formación»)
+
+   QUÉ PASABA. El cuadro se armaba mirando la ficha de cada deportista: por
+   cada pareja PROGRAMA + PROYECTO que existiera, un renglón. Entonces un
+   grupo de Formación con dos niños marcados en Desarrollo salía DOS veces:
+   una en Formación y otra en Desarrollo, con los días y la sede repetidos y
+   la mitad de los deportistas en cada una.
+
+   LA REGLA — y por qué NO es la mayoría (dirección, 03/09/2026):
+   «solo necesito que el proyecto 6, a pesar de tener deportistas en
+    desarrollo, no apareciera como un programa de desarrollo sino de
+    formación, ya que sus horarios son de formación».
+
+   El proyecto 6 tiene 10 deportistas en Desarrollo y 6 en Formación. Por
+   mayoría sería de Desarrollo, y está mal: es un grupo de Formación al que
+   varios niños le subieron de programa pero SIGUEN entrenando ahí, con el
+   horario de Formación. Eso pasa todo el tiempo — a un niño se le sube de
+   programa, no se le cambia de grupo.
+
+   Entonces el grupo es del programa MÁS BAJO de la escalera que tenga gente:
+   Estimulación, Formación, Progresión, Selección, Desarrollo. Los que están
+   marcados más arriba son deportistas prestados hacia arriba, no otro grupo.
+
+   Se miran los ACTIVOS; si el grupo no tiene ninguno —los "Retirado"— se
+   miran todos, que para algo hay que decidir.
+
+   OJO SI ALGÚN DÍA FALLA. Un grupo de verdad de Desarrollo con UN niño
+   marcado en Formación saldría en Formación. Hoy eso no pasa en ningún
+   grupo; si llega a pasar, se corrige la ficha de ese niño. */
+function programaDelGrupo(deps: any[]): Record<string, string> {
+  const votos: Record<string, Record<string, { act: number; tot: number }>> = {};
+  deps.forEach(dep => {
+    const prog = getCol(dep, /^program/i).trim();
+    const proy = getCol(dep, /^proy/i).trim();
+    if (!proy || !prog) return;
+    const activo = getCol(dep, /^estado/i).trim().toUpperCase() === 'ACTIVO';
+    if (!votos[proy]) votos[proy] = {};
+    if (!votos[proy][prog]) votos[proy][prog] = { act: 0, tot: 0 };
+    votos[proy][prog].tot++;
+    if (activo) votos[proy][prog].act++;
+  });
+
+  const out: Record<string, string> = {};
+  Object.keys(votos).forEach(proy => {
+    const lista = Object.entries(votos[proy]);
+    const hayActivos = lista.some(([, v]) => v.act > 0);
+    /* Solo cuentan los programas que de verdad tienen gente. */
+    const vivos = lista.filter(([, v]) => (hayActivos ? v.act : v.tot) > 0);
+    if (!vivos.length) return;
+    vivos.sort((a, b) => {
+      const oa = ordenProg(a[0]), ob = ordenProg(b[0]);
+      if (oa !== ob) return oa - ob;               // gana el más bajo
+      /* Dos nombres que no están en la escalera: gana el que tenga más. */
+      return (hayActivos ? b[1].act : b[1].tot) - (hayActivos ? a[1].act : a[1].tot);
+    });
+    out[proy] = vivos[0][0];
+  });
+  return out;
 }
 
 /** Años de nacimiento (distintos, ordenados) de los deportistas de cada proyecto.
@@ -217,6 +292,21 @@ export default function UsuariosPage() {
     try { setUltimaHora(localStorage.getItem(LLAVE_ULTIMA_HORA) || ''); } catch { /* nada */ }
   }, []);
 
+  /* ── HORARIO DÍA POR DÍA ────────────────────────────────────────────────
+     (dirección, 03/09/2026 — «con los grupos de progresión, selección y
+      desarrollo se hace más complejo ya que ellos entrenan por lo general en
+      sedes y horas diferentes»)
+
+     A esos tres programas la casilla HORARIO no les alcanza con una sola
+     hora: el lunes están en el CDC a las 4:30 y el miércoles en el Bloque 19
+     a las 5:00. Entonces a ellos la casilla les abre una pantalla con un
+     renglón por día de entreno, con su sede y su hora.
+
+     A los demás —Estimulación y Formación— no les cambia nada. */
+  const [horariosDia, setHorariosDia] = useState<HorariosPorDia>({});
+  const [modalHorario, setModalHorario] = useState<ProyRow | null>(null);
+  useEffect(() => { getHorariosPorDia().then(setHorariosDia).catch(() => {}); }, []);
+
   function ponerHorario(row: ProyRow, v: string) {
     setMetaEdit(row, 'horario', v);
     if (!v) return;
@@ -240,7 +330,12 @@ export default function UsuariosPage() {
   const soloLectura = useSoloLectura(); // contabilidad: solo puede ver, no editar
 
   // Conteos de deportistas por programa y por proyecto (activos y totales)
-  const [conteos, setConteos] = useState<{ prog: Record<string, { act: number; tot: number }>; proy: Record<string, { act: number; tot: number }> }>({ prog: {}, proy: {} });
+  const [conteos, setConteos] = useState<{
+    prog:  Record<string, { act: number; tot: number }>;
+    proy:  Record<string, { act: number; tot: number }>;
+    /** Todo el grupo junto, sin mirar el programa de cada ficha. */
+    grupo: Record<string, { act: number; tot: number }>;
+  }>({ prog: {}, proy: {}, grupo: {} });
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set()); // programas desplegados (vacío = todos plegados)
   const [modoConteo, setModoConteo] = useState<'act' | 'tot'>('act'); // 'act' = activos (por defecto), 'tot' = todos
   const [aniosProy, setAniosProy] = useState<Record<string, string[]>>({}); // años de nacimiento por proyecto
@@ -266,11 +361,18 @@ export default function UsuariosPage() {
       setConteos(calcularConteos(deps));
       setAniosProy(calcularAniosPorProyecto(deps));
 
+      /* Cada grupo, en su programa y en ninguno más. — 03/09/2026 */
+      const dueno = programaDelGrupo(deps);
+
       const rows: ProyRow[] = [];
       Object.entries(map)
         .sort(([a], [b]) => ordenProg(a) - ordenProg(b))
         .forEach(([programa, proySet]) => {
           [...proySet].sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })).forEach(proyecto => {
+            /* Si este grupo es de otro programa, aquí no se muestra: sale una
+               sola vez, en el suyo. Si ninguna ficha dice el programa, no hay
+               dueño y se deja como estaba. — dirección, 03/09/2026 */
+            if (dueno[proyecto] && dueno[proyecto] !== programa) return;
             // ANTES decía `inicial`, una lista de formadores escrita a mano que se
             // eliminó el 22/08/2026 por seguridad (traía las cédulas). Al quitarla
             // quedó esta línea apuntando a una variable que ya no existe: el módulo
@@ -423,6 +525,50 @@ export default function UsuariosPage() {
 
   function getEdades(row: ProyRow): number[] {
     return getMetaVal(row, 'edades') as number[];
+  }
+
+  /** Etiqueta corta del día: 1 → "LUN". */
+  function nombreDia(jsDay: number): string {
+    const i = DIAS_ORDEN_JS.indexOf(jsDay);
+    return (i >= 0 ? DIAS_SEMANA_LABELS[i] : '').toUpperCase();
+  }
+
+  /** Lo que hay puesto día por día, en el orden de la semana. */
+  function porDiaDe(row: ProyRow): { dia: number; sede: string; ini: string; fin: string }[] {
+    const guardado = horariosDia[row.proyecto] ?? {};
+    return getDias(row)
+      .slice()
+      .sort((a, b) => DIAS_ORDEN_JS.indexOf(a) - DIAS_ORDEN_JS.indexOf(b))
+      .map(d => {
+        const h = guardado[String(d)];
+        const sede = h?.sede ?? '';
+        const ini  = h?.hora ?? '';
+        const m    = minutosDeHoraTexto(ini);
+        return {
+          dia: d, sede, ini,
+          fin: (m >= 0 && sede) ? horaTextoDeMinutos(m + minutosEnSede(sede, row.programa)) : '',
+        };
+      });
+  }
+
+  /** Guarda el horario por día de UN proyecto, sin tocar el de los demás. */
+  async function guardarHorarioDia(row: ProyRow, valores: Record<string, HorarioDia>) {
+    /* Se lee el mapa completo de la base antes de escribir: si otro
+       computador puso el horario de otro proyecto mientras esta pantalla
+       estaba abierta, no se le borra. */
+    let base: HorariosPorDia = {};
+    try { base = await getHorariosPorDia(); } catch { base = horariosDia; }
+    const nuevo: HorariosPorDia = { ...base, [row.proyecto]: valores };
+    const ok = await saveHorariosPorDia(nuevo);
+    if (ok) setHorariosDia(nuevo);
+    /* La casilla HORARIO de siempre se queda con la hora del PRIMER día, para
+       que todo lo que lee una sola hora —la ficha del proyecto— siga
+       funcionando. Se aplica al oprimir GUARDAR arriba, como todo lo demás. */
+    const primera = getDias(row)
+      .slice().sort((a, b) => DIAS_ORDEN_JS.indexOf(a) - DIAS_ORDEN_JS.indexOf(b))
+      .map(d => valores[String(d)]?.hora).find(h => !!h);
+    if (primera) setMetaEdit(row, 'horario', primera);
+    return ok;
   }
 
   function toggleEdad(row: ProyRow, anio: number) {
@@ -1006,7 +1152,13 @@ export default function UsuariosPage() {
                             fontWeight: 900, fontSize: '1.1rem', lineHeight: 1,
                             borderRadius: 9, boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
                           }}>
-                            {conteos.proy[`${row.programa}::${row.proyecto}`]?.[modoConteo] ?? 0}
+                            {/* TODO el grupo, no solo los que tienen marcado
+                                este programa en su ficha. Antes un grupo de
+                                Formación con dos niños en Desarrollo mostraba
+                                la cuenta partida en dos renglones.
+                                — dirección, 03/09/2026 */}
+                            {conteos.grupo[row.proyecto]?.[modoConteo]
+                              ?? conteos.proy[`${row.programa}::${row.proyecto}`]?.[modoConteo] ?? 0}
                           </span>
                         </td>
 
@@ -1033,6 +1185,45 @@ export default function UsuariosPage() {
                             guardar dos veces la misma cuenta, y algún día una
                             de las dos quedaría mal. */}
                         <td style={{ border: BW, padding: '4px 6px' }}>
+                          {/* PROGRESIÓN · SELECCIÓN · DESARROLLO — entrenan en
+                              sedes y horas distintas cada día, así que aquí no
+                              va una hora sino un botón que abre la pantalla del
+                              horario por día. — dirección, 03/09/2026 */}
+                          {usaHorarioPorDia(row.programa) ? (() => {
+                            const lineas = porDiaDe(row);
+                            const puestos = lineas.filter(l => l.sede && l.ini).length;
+                            return (
+                              <button
+                                onClick={() => setModalHorario(row)}
+                                title="Poner la sede y la hora de cada día"
+                                style={{ width: '100%', textAlign: 'left', cursor: 'pointer',
+                                         background: CAMPO, border: `1px solid ${puestos ? BORDE : AMBAR}`,
+                                         borderRadius: 8, padding: '5px 7px' }}>
+                                {lineas.length === 0 ? (
+                                  <span style={{ fontSize: '0.66rem', fontWeight: 800, color: AMBAR }}>
+                                    Marca primero los días de entreno
+                                  </span>
+                                ) : (
+                                  <>
+                                    {lineas.map(l => (
+                                      <div key={l.dia} style={{ fontSize: '0.63rem', fontWeight: 800,
+                                                                lineHeight: 1.5, whiteSpace: 'nowrap',
+                                                                overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        <span style={{ color: GRIS, display: 'inline-block', width: 26 }}>
+                                          {nombreDia(l.dia)}
+                                        </span>
+                                        {l.sede && l.ini
+                                          ? <span style={{ color: '#fff' }}>
+                                              {l.sede} · <span style={{ color: '#5BE39B' }}>{l.ini} – {l.fin}</span>
+                                            </span>
+                                          : <span style={{ color: AMBAR }}>sin poner</span>}
+                                      </div>
+                                    ))}
+                                  </>
+                                )}
+                              </button>
+                            );
+                          })() : (
                           <div className="flex items-center gap-1.5">
                             <select
                               value={horaIni}
@@ -1063,6 +1254,7 @@ export default function UsuariosPage() {
                               </>
                             ) : null}
                           </div>
+                          )}
                         </td>
 
                         {/* EDAD — años de nacimiento de los deportistas del proyecto (automático) */}
@@ -1157,6 +1349,215 @@ export default function UsuariosPage() {
         </button>
       </div>
       )}
+
+      {/* Horario día por día — Progresión, Selección y Desarrollo */}
+      {modalHorario && (
+        <PantallaHorarioDia
+          proyecto={modalHorario.proyecto}
+          programa={modalHorario.programa}
+          dias={getDias(modalHorario)}
+          valores={horariosDia[modalHorario.proyecto] ?? {}}
+          onCerrar={() => setModalHorario(null)}
+          onGuardar={async v => {
+            const row = modalHorario;
+            const ok = await guardarHorarioDia(row, v);
+            if (ok) setModalHorario(null);
+            return ok;
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PANTALLA DE HORARIO DÍA POR DÍA
+   (dirección, 03/09/2026)
+
+   Un renglón por cada día que el proyecto entrena. En cada uno se escoge la
+   SEDE y la HORA DE ENTRADA; la de salida sale sola: hora y media, o UNA HORA
+   cuando la sede es el CDC (Casa de Campeones), que es el mismo sitio con dos
+   nombres.
+
+   Los días no se escogen aquí: son los que estén marcados en DÍAS ENTRENO. Si
+   ahí no hay ninguno, esta pantalla lo dice y no deja seguir — poner una hora
+   a un día que el grupo no entrena no significa nada.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function PantallaHorarioDia({
+  proyecto, programa, dias, valores, onCerrar, onGuardar,
+}: {
+  proyecto: string;
+  programa: string;
+  dias: number[];
+  valores: Record<string, HorarioDia>;
+  onCerrar: () => void;
+  onGuardar: (v: Record<string, HorarioDia>) => Promise<boolean>;
+}) {
+  const VERDE = '#00B050', VERDECL = '#5BE39B', PANEL = '#3C4759';
+  const CAMPO = '#2B3547', BORDE = '#4A5568', GRIS = '#7C879A';
+  const AMBAR = '#E0A33A', HONDO = '#2A3342';
+  const OPC = { color: '#111827', backgroundColor: 'white' } as const;
+
+  const [v, setV] = useState<Record<string, HorarioDia>>(() => ({ ...valores }));
+  const [guardando, setGuardando] = useState(false);
+
+  const enOrden = dias.slice().sort((a, b) => DIAS_ORDEN_JS.indexOf(a) - DIAS_ORDEN_JS.indexOf(b));
+  const nombreLargo = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+
+  function poner(dia: number, campo: keyof HorarioDia, valor: string) {
+    setV(prev => {
+      const antes = prev[String(dia)] ?? { sede: '', hora: '' };
+      return { ...prev, [String(dia)]: { ...antes, [campo]: valor } };
+    });
+  }
+
+  /** Casi siempre los días se repiten, así que se copia el primero. */
+  function copiarElPrimero() {
+    const p = v[String(enOrden[0])];
+    if (!p || (!p.sede && !p.hora)) return;
+    const n: Record<string, HorarioDia> = {};
+    enOrden.forEach(d => { n[String(d)] = { ...p }; });
+    setV(n);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 overflow-y-auto"
+         onClick={onCerrar}>
+      <div className="rounded-2xl shadow-2xl w-full max-w-[760px] my-6 overflow-hidden"
+           style={{ background: PANEL, border: `1px solid ${BORDE}` }}
+           onClick={e => e.stopPropagation()}>
+
+        <div className="px-5 py-4 flex items-center gap-3 flex-wrap" style={{ background: VERDE }}>
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-white font-black text-lg leading-tight">HORARIO POR DÍA</p>
+            <p className="text-white text-[11px] mt-0.5">{proyecto} · {programa}</p>
+          </div>
+          <span className="text-[9.5px] font-black uppercase tracking-widest text-white bg-white/25 px-2.5 py-1 rounded-lg">
+            {enOrden.length} {enOrden.length === 1 ? 'día' : 'días'} de entreno
+          </span>
+          <button onClick={onCerrar} className="text-white hover:opacity-75" title="Cerrar">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {enOrden.length === 0 ? (
+          <p className="px-5 py-8 text-center text-[13px] font-bold" style={{ color: AMBAR }}>
+            Este proyecto no tiene días de entreno marcados.<br />
+            <span className="font-semibold text-white/80 text-[12px]">
+              Márcalos primero en la columna DÍAS ENTRENO y vuelve aquí.
+            </span>
+          </p>
+        ) : (
+          <>
+            {enOrden.map((d, i) => {
+              const h    = v[String(d)] ?? { sede: '', hora: '' };
+              const mIni = minutosDeHoraTexto(h.hora);
+              const dur  = minutosEnSede(h.sede, programa);
+              const corta = !!h.sede && dur === 60;
+              const fin  = (mIni >= 0 && h.sede) ? horaTextoDeMinutos(mIni + dur) : '—';
+
+              return (
+                <div key={d} className="px-5 py-3"
+                     style={{ borderTop: i === 0 ? 'none' : `1px solid ${BORDE}` }}>
+                  <div className="grid gap-2.5 items-end"
+                       style={{ gridTemplateColumns: 'minmax(84px,88px) minmax(150px,1.3fr) 132px 116px 84px' }}>
+                    <p className="font-black text-[14px] text-white pb-2">{nombreLargo[d]}</p>
+
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest mb-1"
+                             style={{ color: GRIS }}>Sede</label>
+                      <select value={h.sede} onChange={e => poner(d, 'sede', e.target.value)}
+                        style={{ width: '100%', height: 38, background: CAMPO, border: `1px solid ${BORDE}`,
+                                 borderRadius: 10, color: h.sede ? '#fff' : GRIS, fontWeight: 700,
+                                 fontSize: '0.78rem', padding: '0 8px', outline: 'none', cursor: 'pointer' }}>
+                        <option value="" style={OPC}>— Escoger —</option>
+                        {SEDES_ENTRENO.map(s => (
+                          <option key={s.nombre} value={s.nombre} style={OPC}>{s.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest mb-1"
+                             style={{ color: GRIS }}>Inicia</label>
+                      <select value={h.hora} onChange={e => poner(d, 'hora', e.target.value)}
+                        style={{ width: '100%', height: 38, background: CAMPO, border: `1px solid ${BORDE}`,
+                                 borderRadius: 10, color: h.hora ? '#fff' : GRIS, fontWeight: 700,
+                                 fontSize: '0.78rem', padding: '0 8px', outline: 'none', cursor: 'pointer' }}>
+                        <option value="" style={OPC}>— Escoger —</option>
+                        {HORAS_ENTRENO.map(x => <option key={x} value={x} style={OPC}>{x}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest mb-1"
+                             style={{ color: GRIS }}>Termina</label>
+                      <div className="flex items-center px-2.5 font-black text-[12.5px]"
+                           style={{ height: 38, background: HONDO, border: `1px solid ${BORDE}`,
+                                    borderRadius: 10, color: VERDECL }}>
+                        {fin}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest mb-1"
+                             style={{ color: GRIS }}>Dura</label>
+                      <div className="flex items-center justify-center font-black text-[11px]"
+                           style={{ height: 38, borderRadius: 10,
+                                    background: corta ? 'rgba(224,163,58,.16)' : 'rgba(0,176,80,.16)',
+                                    border: `1px solid ${corta ? 'rgba(224,163,58,.55)' : 'rgba(0,176,80,.5)'}`,
+                                    color: corta ? AMBAR : VERDECL }}>
+                        {h.sede ? (corta ? '1 hora' : '1 h 30') : '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {corta && (
+                    <p className="text-[11px] font-bold mt-1.5" style={{ color: AMBAR }}>
+                      En el CDC (Casa de Campeones) el entrenamiento es de una hora.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+
+            <div className="px-5 py-2.5 flex items-center gap-2 flex-wrap text-[11px]"
+                 style={{ borderTop: `1px solid ${BORDE}`, color: GRIS }}>
+              Atajo:
+              <button onClick={copiarElPrimero}
+                className="px-3 py-1.5 rounded-lg font-black text-[10.5px] text-white/80 hover:text-white"
+                style={{ background: 'transparent', border: `1px solid ${BORDE}` }}>
+                Copiar el {nombreLargo[enOrden[0]].toLowerCase()} a todos los días
+              </button>
+              <button onClick={() => setV({})}
+                className="px-3 py-1.5 rounded-lg font-black text-[10.5px] text-white/80 hover:text-white"
+                style={{ background: 'transparent', border: `1px solid ${BORDE}` }}>
+                Dejar todo en blanco
+              </button>
+            </div>
+          </>
+        )}
+
+        <div className="px-5 py-3 flex flex-wrap items-center gap-2.5"
+             style={{ borderTop: `1px solid ${BORDE}`, background: HONDO }}>
+          <p className="flex-1 min-w-[220px] text-[11px] leading-relaxed text-white/70">
+            La hora de salida no se escoge: sale sola. El microciclo del formador
+            toma de aquí la sede y la hora <b>de cada día</b>.
+          </p>
+          <button onClick={onCerrar}
+            className="px-4 py-2.5 rounded-xl font-black text-[11.5px] uppercase tracking-wider text-white"
+            style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+            Cancelar
+          </button>
+          <button
+            onClick={async () => { setGuardando(true); await onGuardar(v); setGuardando(false); }}
+            disabled={guardando || enOrden.length === 0}
+            className="px-5 py-2.5 rounded-xl font-black text-[11.5px] uppercase tracking-wider text-white disabled:opacity-60"
+            style={{ background: VERDE }}>
+            {guardando ? 'Guardando…' : 'Guardar horario'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

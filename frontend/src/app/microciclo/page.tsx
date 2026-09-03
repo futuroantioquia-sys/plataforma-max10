@@ -20,13 +20,15 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   CalendarDays, Plus, Save, Trash2, Users, ChevronDown, ChevronUp,
   AlertCircle, PencilRuler, Database, MapPin, Clock, Eye, X, Download, Lock, Unlock,
-  Ban,
+  Ban, Eraser,
 } from 'lucide-react';
 import {
   getDeportistas, getMicrociclos, getMicrociclo, crearMicrociclo,
   guardarMicrocicloDia, guardarMicrociclo, eliminarMicrociclo,
   getResumenAsistencia, claveFecha, getInfoProyecto, getJornadaMes, getProfes,
   estadoTablasMicrociclo, ultimoErrorMicrociclo,
+  minutosDeHoraTexto, minutosDeEntreno,
+  getHorariosPorDia, minutosEnSede,
 } from '@/lib/db';
 import type {
   Deportista, Microciclo, MicrocicloDia, ResumenAsistenciaDia, CargaDia, Profe,
@@ -296,6 +298,44 @@ function partirFranja(valor: string): [string, string] {
   return [a.trim(), b.trim()];
 }
 
+/* ── EL HORARIO DEL PROYECTO SE TRASLADA SOLO ────────────────────────────
+   (dirección, 03/09/2026 — «como ya estamos colocando horas a los
+    entrenamientos, haz que a los grupos que ya tienen hora, al momento de
+    abrir el microciclo, traslade las horas ya puestas»)
+
+   En /usuarios cada proyecto tiene ya su HORARIO: la hora en que arranca el
+   entrenamiento. La de salida no se guarda porque se saca sola —hora y media,
+   y una hora en Estimulación—.
+
+   Aquí esa hora se convierte a la franja que usa el microciclo:
+       "4:30 PM"  +  Formación   →   "16:30-18:00"
+       "7:30 AM"  +  Estimulación →  "07:30-08:30"
+
+   Si el proyecto todavía no tiene horario puesto, esto devuelve vacío y el
+   formador la sigue poniendo a mano, como hasta ahora. */
+function hhmm24(m: number): string {
+  const t = ((Math.round(m) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+
+function franjaDeProyecto(hora: string, programa: string): string {
+  const ini = minutosDeHoraTexto(hora);
+  if (ini < 0) return '';
+  return `${hhmm24(ini)}-${hhmm24(ini + minutosDeEntreno(programa))}`;
+}
+
+/* ── LA SEDE, ESCRITA COMO LA ESCRIBE EL MICROCICLO ──────────────────────
+   En Info Proyectos la sede del CDC se llama "CDC (CASA DE CAMPEONES)",
+   porque en la academia se dice de las dos maneras. Aquí la lista de
+   escenarios dice solo "CDC". Se traduce para que caiga en la lista y no
+   salga como "Otro…". — dirección, 03/09/2026 */
+function escenarioDeSede(sede: string): string {
+  const s = String(sede ?? '').trim().toUpperCase();
+  if (!s) return '';
+  if (s.includes('CDC') || s.includes('CASA DE CAMPEONES')) return 'CDC';
+  return s;
+}
+
 /** Texto amable para la línea del día: "7:00 AM – 8:30 AM". */
 function textoFranja(valor: string): string {
   const [ini, fin] = partirFranja(valor);
@@ -330,6 +370,9 @@ export default function MicrocicloPage() {
 
   // Calendario de entrenamiento del proyecto
   const [diasBase, setDiasBase]     = useState<number[]>([]);          // 0=dom … 6=sáb
+  /** Hora en que arranca el entrenamiento, de la ficha del proyecto ("4:30 PM").
+   *  Vacía = a este grupo todavía no le han puesto horario. — 03/09/2026 */
+  const [horaProyecto, setHoraProyecto] = useState('');
   const [ajustesMes, setAjustesMes] = useState<Record<string, number[]>>({});
   const [mcSel, setMcSel]           = useState<number>(MC_ANCLA_NUMERO);
   const [creando, setCreando]       = useState(false);
@@ -420,10 +463,12 @@ export default function MicrocicloPage() {
   // Ficha del proyecto: días de entreno, formador y sede
   useEffect(() => {
     setDiasBase([]); setAjustesMes({}); setFormadorEdit(''); setFormadorFicha('');
+    setHoraProyecto('');
     if (!proyecto) return;
     getInfoProyecto(proyecto).then(info => {
       setDiasBase(info.dias);
       setFormadorFicha(info.formador);
+      setHoraProyecto(info.hora ?? '');
     }).catch(() => {});
     getJornadaMes(proyecto).then(setAjustesMes).catch(() => {});
   }, [proyecto]);
@@ -457,6 +502,40 @@ export default function MicrocicloPage() {
 
   const sesionesSel = useMemo(() => sesionesDe(mcSel), [sesionesDe, mcSel]);
   const esperadas   = useMemo(() => sesionesDelPrograma(programa), [programa]);
+
+  /** "16:30-18:00" — el horario del proyecto, listo para volcarlo en los días.
+   *  Vacío si al proyecto todavía no le han puesto hora. — 03/09/2026 */
+  const franjaProyecto = useMemo(
+    () => franjaDeProyecto(horaProyecto, programa),
+    [horaProyecto, programa],
+  );
+
+  /* ── HORARIO DÍA POR DÍA ────────────────────────────────────────────────
+     (dirección, 03/09/2026)
+
+     Progresión, Selección y Desarrollo entrenan en sedes y horas distintas
+     cada día. Eso se pone en Info Proyectos y Formadores, y aquí se lee para
+     que cada día del microciclo nazca con SU sede y SU hora — el lunes con
+     las del lunes y el viernes con las del viernes.
+
+     Si el proyecto no tiene horario por día, queda el de siempre (la hora
+     única de la ficha); y si tampoco tiene eso, el formador la pone a mano. */
+  const [horariosDia, setHorariosDia] = useState<Record<string, Record<string, { sede: string; hora: string }>>>({});
+  useEffect(() => { getHorariosPorDia().then(setHorariosDia).catch(() => {}); }, []);
+
+  /** Para ESTE proyecto: día de la semana (0=dom … 6=sáb) → franja y escenario. */
+  const horarioDelDia = useMemo(() => {
+    const src = horariosDia[proyecto] ?? {};
+    const out: Record<string, { franja: string; escenario: string }> = {};
+    Object.keys(src).forEach(k => {
+      const h = src[k];
+      const ini = minutosDeHoraTexto(h?.hora ?? '');
+      if (ini < 0) return;
+      const fin = ini + minutosEnSede(h?.sede ?? '', programa);
+      out[k] = { franja: `${hhmm24(ini)}-${hhmm24(fin)}`, escenario: escenarioDeSede(h?.sede ?? '') };
+    });
+    return out;
+  }, [horariosDia, proyecto, programa]);
 
   const desajuste = useMemo(() => {
     if (!esperadas || diasBase.length === 0) return null;
@@ -757,6 +836,11 @@ export default function MicrocicloPage() {
                  Asistencia. Sirve para avisar si el microciclo se quedó con
                  los de antes. — dirección, 02/09/2026 */
               diasDeHoy={sesionesDe(mc.numero).map(f => f.getDay())}
+              /* El horario del proyecto, para volcarlo en los días que estén
+                 sin hora. Vacío = este grupo aún no tiene horario puesto y el
+                 formador la sigue poniendo a mano. — 03/09/2026 */
+              franjaProyecto={franjaProyecto}
+              horarioDelDia={horarioDelDia}
             />
           );
 
@@ -903,11 +987,15 @@ export default function MicrocicloPage() {
 // ═══════════════════════════════════════════════════════════════
 function TarjetaMicrociclo({
   cabecera, abierto, onToggle, onBorrar, esAdmin, esProfe = false, programa = '', diasDeHoy = [],
-  tono = 'hoy',
+  tono = 'hoy', franjaProyecto = '', horarioDelDia = {},
 }: {
   cabecera: Microciclo; abierto: boolean; onToggle: () => void;
   onBorrar: () => void; esAdmin: boolean; esProfe?: boolean; programa?: string;
   diasDeHoy?: number[];
+  /** Horario del proyecto ya en formato de franja: "16:30-18:00". */
+  franjaProyecto?: string;
+  /** Día de la semana (0=dom … 6=sáb) → su franja y su escenario propios. */
+  horarioDelDia?: Record<string, { franja: string; escenario: string }>;
   /** Cómo se pinta: la semana de hoy, una atrasada, una futura o una cerrada. */
   tono?: 'hoy' | 'pendiente' | 'futuro' | 'cerrado';
 }) {
@@ -934,6 +1022,49 @@ function TarjetaMicrociclo({
         getMicrociclo(cabecera.id),
         getResumenAsistencia(cabecera.proyecto, cabecera.fecha_inicio, cabecera.fecha_fin),
       ]);
+
+      /* ── SE TRASLADA EL HORARIO DEL PROYECTO ───────────────────────────
+         (dirección, 03/09/2026)
+
+         Al abrir la semana, todo día de entreno que esté SIN HORA recibe la
+         del proyecto —la que se puso en la columna HORARIO de /usuarios—.
+
+         Tres reglas, para no meterse donde no lo llaman:
+           · Solo días de entreno. Los de descanso no llevan hora.
+           · Solo los que están en blanco. Una hora que el formador ya
+             escribió no se toca nunca, aunque sea distinta a la del
+             proyecto: ese día pudo entrenar a otra hora.
+           · Solo si el proyecto TIENE horario. Si no lo tiene, aquí no pasa
+             nada y el formador la sigue poniendo a mano.
+           · Nunca en una semana cerrada.
+
+         Se escribe en la base de una vez —no solo en la pantalla— para que
+         la casilla quede llena de verdad y no siga saliendo como faltante en
+         la vista preliminar ni al dar por terminada la semana. */
+      if (mc && mc.estado !== 'cerrado') {
+        for (const d of (mc.dias ?? [])) {
+          if (d.tipo_dia === 'descanso') continue;
+
+          /* Primero lo del día: Progresión, Selección y Desarrollo tienen
+             sede y hora propias para cada día. Si el proyecto no las tiene,
+             se cae a la hora única de la ficha. */
+          const propio = horarioDelDia[String(Number(d.dia_semana) % 7)];
+          const franja = propio?.franja || franjaProyecto;
+          const sede   = propio?.escenario || '';
+
+          const cambios: { hora?: string; escenario?: string } = {};
+          if (franja && !String(d.hora ?? '').trim())      cambios.hora = franja;
+          if (sede   && !String(d.escenario ?? '').trim()) cambios.escenario = sede;
+          if (!Object.keys(cambios).length) continue;
+
+          const puesto = await guardarMicrocicloDia(d.id, cambios);
+          if (puesto) {                          // se ve de una en la pantalla
+            if (cambios.hora)      d.hora = cambios.hora;
+            if (cambios.escenario) d.escenario = cambios.escenario;
+          }
+        }
+      }
+
       setDetalle(mc);
       setAsist(res);
       if (mc) setEstado(mc.estado);
@@ -944,7 +1075,8 @@ function TarjetaMicrociclo({
     } finally {
       setCargando(false);
     }
-  }, [cabecera.id, cabecera.proyecto, cabecera.fecha_inicio, cabecera.fecha_fin]);
+  }, [cabecera.id, cabecera.proyecto, cabecera.fecha_inicio, cabecera.fecha_fin,
+      franjaProyecto, horarioDelDia]);
 
   useEffect(() => {
     if (!abierto || detalle) return;
@@ -1018,6 +1150,66 @@ function TarjetaMicrociclo({
     setCerrando(false);
     if (ok) setEstado('cerrado');
     else alert('No se pudo cerrar el microciclo. Intente de nuevo.');
+  }
+
+  /* ── AL FORMADOR SE LE BORRA LO ESCRITO, NO LA SEMANA ──────────────────
+     (dirección, 03/09/2026 — «el profe si le da borrar, que borre la
+      información, pero el microciclo no se puede eliminar»)
+
+     Antes el botón del formador borraba el microciclo entero de la base, con
+     sus días, y no había cómo devolverlo: ni papelera, ni quién lo hizo.
+
+     Ahora al formador se le deja LIMPIAR: la semana se queda ahí con sus
+     días, y lo que se borra es lo escrito —escenario, hora, componentes,
+     objetivo, objetivos específicos, las tres fases y las observaciones—.
+     Vuelve a quedar en blanco para llenarla de nuevo.
+
+     Eliminar el microciclo de verdad queda solo para administración. Y una
+     semana TERMINADA no se limpia: primero hay que volver a abrirla, que es
+     una decisión aparte y con su propio botón. */
+  const [version, setVersion] = useState(0);   // sube al limpiar: repinta los días
+  const [limpiando, setLimpiando] = useState(false);
+
+  async function limpiarSemana() {
+    const mc = detalle;
+    if (!mc || cerrado) return;
+
+    const dias = (mc.dias ?? []).filter(d => d.tipo_dia !== 'descanso');
+    if (!dias.length) { alert('Esta semana no tiene días de entreno que limpiar.'); return; }
+
+    const escrito = (d: MicrocicloDia) =>
+      !!String(d.objetivo_dia ?? '').trim() || !!String(d.contenidos ?? '').trim() ||
+      !!String(d.fase_inicial ?? '').trim() || !!String(d.fase_central ?? '').trim() ||
+      !!String(d.fase_final ?? '').trim()   || !!String(d.observaciones ?? '').trim() ||
+      (Array.isArray(d.componentes) && d.componentes.length > 0);
+    const llenos = dias.filter(escrito).length;
+
+    if (!window.confirm(
+      `¿Borrar lo escrito del microciclo ${cabecera.numero}?\n\n`
+      + `Se borra de los ${dias.length} ${dias.length === 1 ? 'día' : 'días'}: `
+      + 'componentes, objetivo del día, objetivos específicos, las tres fases y las observaciones.\n'
+      + (llenos > 0
+          ? `Hoy ${llenos === 1 ? 'hay 1 día con trabajo escrito' : `hay ${llenos} días con trabajo escrito`}.\n`
+          : 'Ahora mismo está todo en blanco.\n')
+      + '\nEL MICROCICLO NO SE ELIMINA: la semana se queda y vuelve a quedar en blanco '
+      + 'para llenarla de nuevo.\n\nEsto no se puede deshacer.'
+    )) return;
+
+    setLimpiando(true);
+    for (const d of dias) {
+      await guardarMicrocicloDia(d.id, {
+        escenario: '', hora: '', componentes: [], carga: 'media' as CargaDia,
+        objetivo_dia: '', contenidos: '',
+        fase_inicial: '', fase_central: '', fase_final: '', observaciones: '',
+      });
+    }
+    /* Se vuelve a leer de la base. De paso, el horario del proyecto se vuelve
+       a volcar solo, que es justo lo que se quiere: la semana queda limpia
+       pero con su sede y su hora ya puestas. */
+    await cargar();
+    setVersion(v => v + 1);       // obliga a repintar los días en blanco
+    setLimpiando(false);
+    setAviso(null);
   }
 
   /** Solo el súper administrador puede volver a abrirlo, por si hubo un error. */
@@ -1289,12 +1481,19 @@ function TarjetaMicrociclo({
               <>
                 {visibles.map(d => (
                   <DiaCard
-                    key={d.id}
+                    /* La versión va en la llave para que al LIMPIAR la semana
+                       las casillas se repinten en blanco. Sin esto, React
+                       reusa el día y seguirían viéndose los textos viejos.
+                       — dirección, 03/09/2026 */
+                    key={`${d.id}|${version}`}
                     dia={d}
                     resumen={asist[d.fecha]}
                     marcar={aviso !== null}
                     orden={conSesion.indexOf(d) + 1}
                     cerrado={cerrado}
+                    franjaProyecto={
+                      horarioDelDia[String(Number(d.dia_semana) % 7)]?.franja || franjaProyecto
+                    }
                   />
                 ))}
 
@@ -1326,11 +1525,31 @@ function TarjetaMicrociclo({
                   </button>
                 )}
 
-                {/* ELIMINAR — también el formador (dirección, 02/09/2026).
-                    Antes solo la dirección, y solo si no estaba cerrado: un
-                    microciclo creado por equivocación se quedaba ahí para
-                    siempre. Sigue preguntando antes de borrar. */}
-                {(esAdmin || esProfe) && (
+                {/* ── AL FORMADOR: BORRAR LO ESCRITO ────────────────────
+                    (dirección, 03/09/2026 — «el profe si le da borrar, que
+                     borre la información, pero el microciclo no se puede
+                     eliminar»)
+
+                    El 02/09 se le había dado al formador el botón de eliminar
+                    completo, para que pudiera deshacer una semana creada por
+                    equivocación. Se pasó de la raya: con un clic y una
+                    pregunta se iba una semana entera de la base, sin papelera
+                    y sin quién responda. Ahora al formador se le limpia la
+                    semana; eliminarla es cosa de la dirección. */}
+                {esProfe && !esAdmin && !cerrado && (
+                  <button
+                    onClick={limpiarSemana}
+                    disabled={limpiando}
+                    className="flex items-center gap-2 text-[11px] font-bold text-[#F0C070] hover:text-[#F7DDA8] px-2 py-1 disabled:opacity-60"
+                    title="Deja la semana en blanco. El microciclo no se elimina."
+                  >
+                    <Eraser className="w-3.5 h-3.5" />
+                    {limpiando ? 'Borrando…' : 'Borrar lo escrito de esta semana'}
+                  </button>
+                )}
+
+                {/* ELIMINAR DE VERDAD — solo administración. */}
+                {esAdmin && (
                   <button
                     onClick={onBorrar}
                     className="flex items-center gap-2 text-[11px] font-bold text-[#FF7A7A] hover:text-[#F0B9B9] px-2 py-1"
@@ -1650,10 +1869,12 @@ function BloqueLectura({ titulo, texto }: { titulo: string; texto: string }) {
 
 // ── Un día del microciclo ────────────────────────────────────────
 function DiaCard({
-  dia, resumen, marcar = false, orden = 0, cerrado = false,
+  dia, resumen, marcar = false, orden = 0, cerrado = false, franjaProyecto = '',
 }: {
   dia: MicrocicloDia; resumen?: ResumenAsistenciaDia;
   marcar?: boolean; orden?: number; cerrado?: boolean;
+  /** Horario del proyecto ("16:30-18:00"), solo para avisar de dónde salió. */
+  franjaProyecto?: string;
 }) {
   const escenarioInicial = dia.escenario || '';
   const esDeLaLista = ESCENARIOS.includes(escenarioInicial.toUpperCase());
@@ -1891,6 +2112,14 @@ function DiaCard({
                 <div className="space-y-2">
                   <SelectorHora etiqueta="Inicio"  valor={horaIni} onChange={setHoraIni} bloqueado={cerrado} />
                   <SelectorHora etiqueta="Termina" valor={horaFin} onChange={setHoraFin} bloqueado={cerrado} />
+                  {/* De dónde salió esta hora, para que no aparezca sola sin
+                      explicación. Si el formador la cambia, el aviso se va.
+                      — dirección, 03/09/2026 */}
+                  {!!franjaProyecto && franja === franjaProyecto && !cerrado && (
+                    <p className="text-[10px] font-bold leading-tight" style={{ color: VERDE }}>
+                      Es el horario del proyecto. Si ese día entrenaron a otra hora, cámbiela.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed px-3 py-2 text-sm"

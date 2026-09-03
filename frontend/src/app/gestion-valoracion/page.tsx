@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, CheckCircle, RotateCcw } from 'lucide-react';
 import {
-  FUNDAMENTOS, NIVELES_LABELS, DESCRIPCIONES_DEFAULT,
-  getDescripcionesValoracion, saveDescripcionesValoracion,
-  getMetaValoracion, saveMetaValoracion,
+  NIVELES_LABELS,
   getCategoriasValoracion, saveCategoriasValoracion, COMPONENTES,
-  type Desc, type FundMetaEdit,
+  fundamentosDe, descripcionesDefaultDe,
+  getDescripcionesDe, saveDescripcionesDe,
+  getMetaDe, saveMetaDe,
+  type Desc, type FundMetaEdit, type FormatoValoracion,
 } from '@/lib/valoracion-textos';
 
 const NIVEL_COLOR = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a'];
@@ -23,11 +24,25 @@ export default function GestionValoracionPage() {
   const [guardando, setGuardando] = useState(false);
   const [guardado,  setGuardado]  = useState(false);
 
+  /* ── DOS FORMATOS SEPARADOS ────────────────────────────────────────────
+     (dirección, 03/09/2026 — «en gestión de valoración debe estar separado
+      el de jugador de campo y portería»)
+
+     Al portero no se le mide el dribling ni el cabeceo: se le mide el
+     blocaje, la estirada, el achique y el juego aéreo. Son dos listas de
+     componentes distintas y dos juegos de textos distintos, cada uno
+     guardado por su lado. Este botón cambia entre los dos.
+
+     Los NOMBRES DE LOS COMPONENTES (Físico, Técnico, Táctico…) son los
+     mismos para los dos, así que ese cuadro no se duplica. */
+  const [formato, setFormato] = useState<FormatoValoracion>('campo');
+
   useEffect(() => {
-    Promise.all([getDescripcionesValoracion(), getMetaValoracion(), getCategoriasValoracion()])
+    setCargando(true);
+    Promise.all([getDescripcionesDe(formato), getMetaDe(formato), getCategoriasValoracion()])
       .then(([t, m, c]) => { setTextos(t); setMeta(m); setCatNombres(c); setCargando(false); })
       .catch(() => setCargando(false));
-  }, []);
+  }, [formato]);
 
   const setTexto = (key: string, label: string, valor: string) => {
     setTextos(prev => ({ ...prev, [key]: { ...(prev[key] ?? {}), [label]: valor } }));
@@ -38,14 +53,14 @@ export default function GestionValoracionPage() {
 
   const restaurarFund = (key: string) => {
     if (!confirm('¿Restaurar los textos por defecto de este componente?')) return;
-    setTextos(prev => ({ ...prev, [key]: { ...(DESCRIPCIONES_DEFAULT[key] ?? {}) } }));
+    setTextos(prev => ({ ...prev, [key]: { ...(descripcionesDefaultDe(formato)[key] ?? {}) } }));
   };
 
   const guardar = async () => {
     setGuardando(true);
     const [okT, okM, okC] = await Promise.all([
-      saveDescripcionesValoracion(textos),
-      saveMetaValoracion(meta),
+      saveDescripcionesDe(formato, textos),
+      saveMetaDe(formato, meta),
       saveCategoriasValoracion(catNombres),
     ]);
     setGuardando(false);
@@ -53,9 +68,11 @@ export default function GestionValoracionPage() {
     else alert('No se pudo guardar. Revisa la conexión e intenta de nuevo.');
   };
 
+  // Los componentes del formato que se esté editando
+  const fundamentos = fundamentosDe(formato);
   // Agrupar fundamentos por categoría (manteniendo el orden)
   const categorias: string[] = [];
-  FUNDAMENTOS.forEach(f => { if (!categorias.includes(f.categoria)) categorias.push(f.categoria); });
+  fundamentos.forEach(f => { if (!categorias.includes(f.categoria)) categorias.push(f.categoria); });
 
   return (
     <div className="min-h-screen bg-[#333F50]">
@@ -76,6 +93,35 @@ export default function GestionValoracionPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-3 py-5 space-y-6">
+
+        {/* ── CUÁL DE LOS DOS FORMATOS SE ESTÁ EDITANDO ────────────────────
+            (dirección, 03/09/2026). Son dos informes distintos y se guardan
+            por separado: lo que se escriba aquí para el portero no toca nada
+            del jugador de campo. */}
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] p-3 flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-black uppercase tracking-widest text-white/50 mr-1">
+            Formato
+          </span>
+          {([
+            { v: 'campo'   as FormatoValoracion, t: '⚽ Jugador de campo' },
+            { v: 'portero' as FormatoValoracion, t: '🧤 Portero' },
+          ]).map(o => (
+            <button key={o.v}
+              onClick={() => setFormato(o.v)}
+              className="rounded-xl px-4 py-2 text-[12.5px] font-black transition border"
+              style={formato === o.v
+                ? { background: '#00B050', borderColor: '#00B050', color: '#fff' }
+                : { background: '#2B3547', borderColor: '#4A5568', color: '#C9D2DE' }}>
+              {o.t}
+            </button>
+          ))}
+          <span className="text-[11px] text-white/45 font-semibold ml-auto">
+            {formato === 'portero'
+              ? `${fundamentos.length} componentes · se usa cuando la POSICIÓN dice PORTERO`
+              : `${fundamentos.length} componentes · se usa para todas las demás posiciones`}
+          </span>
+        </div>
+
         <div className="bg-[rgba(78,143,214,.14)] border border-[rgba(78,143,214,.45)] rounded-xl p-3 text-[13px] text-blue-800">
           Aquí editas la <b>base de textos</b> de cada nivel. Al guardar, las <b>próximas valoraciones</b> que
           haga el formador usarán estos textos, y así también los verá el padre de familia.
@@ -105,7 +151,7 @@ export default function GestionValoracionPage() {
             <h2 className="text-lg font-black text-[#064e1e] flex items-center gap-2">
               <span>{CAT_EMOJI[cat] ?? '•'}</span> {cat}
             </h2>
-            {FUNDAMENTOS.filter(f => f.categoria === cat).map(f => (
+            {fundamentos.filter(f => f.categoria === cat).map(f => (
               <div key={f.key} className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-[#16a34a]">
                   <div className="min-w-0">

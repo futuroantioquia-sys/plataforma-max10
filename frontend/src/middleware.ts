@@ -7,7 +7,10 @@ const RUTAS_PUBLICAS = ['/login', '/afiliacion', '/api'];
 
 // Rutas permitidas para el rol profesor — asistencia + portal propio + vista alumnos + valoración dinámica
 // '/sesiones' salió el 22/08/2026: lo reemplaza el microciclo.
-const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/microciclo', '/postpartido', '/mis-proyectos', '/alumnos', '/valoracion-dinamica'];
+// '/valoracion-comparativa' entró el 03/09/2026: es la comparativa de informes
+// del deportista, y el formador es justamente quien más la necesita. Sin esta
+// línea el servidor lo devolvía a /asistencia y el botón "no hacía nada".
+const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/microciclo', '/postpartido', '/mis-proyectos', '/alumnos', '/valoracion-dinamica', '/valoracion-comparativa'];
 
 // Rutas permitidas para deportista (calidoso) — SOLO su perfil y secciones propias.
 // IMPORTANTE: NO incluye /evaluaciones ni /valoracion-dinamica → las valoraciones
@@ -55,7 +58,10 @@ export async function middleware(request: NextRequest) {
     // bloqueado hasta que se AUTORICE a los padres (PADRES_VEN_VALORACION).
     const esValoracion =
       /^\/alumnos\/[^/]+\/seguimiento/.test(pathname) ||
-      pathname === '/valoracion-dinamica' || pathname.startsWith('/valoracion-dinamica/');
+      pathname === '/valoracion-dinamica' || pathname.startsWith('/valoracion-dinamica/') ||
+      /* La comparativa es valoración también: al calidoso se le cierra en el
+         SERVIDOR, no solo escondiéndole el botón. — 03/09/2026 */
+      pathname === '/valoracion-comparativa' || pathname.startsWith('/valoracion-comparativa/');
     if (esValoracion) {
       if (!PADRES_VEN_VALORACION) {
         return NextResponse.redirect(new URL('/alumnos', request.url));

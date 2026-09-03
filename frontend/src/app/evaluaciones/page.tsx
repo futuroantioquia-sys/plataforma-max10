@@ -6,7 +6,8 @@ import { Download, Save, RefreshCw, Camera, CheckCircle, History } from 'lucide-
 import { getDeportistas, getEvaluaciones, saveEvaluacion, getProfes, getFoto } from '@/lib/db';
 import type { Deportista, Evaluacion, Profe } from '@/lib/db';
 import { createClient } from '@/lib/supabase/client';
-import { getDescripcionesValoracion, getMetaValoracion, type FundMetaEdit } from '@/lib/valoracion-textos';
+import { getDescripcionesDe, getMetaDe, formatoDePosicion, esPosicionPortero,
+  type FundMetaEdit } from '@/lib/valoracion-textos';
 import { rutaAnterior } from '@/components/RastreoRuta';
 
 const NIVELES = ['', 'Nivel 1 (Iniciación)', 'Nivel 2 (En Desarrollo)', 'Nivel 3 (Competente)', 'Nivel 4 (Avanzado)', 'Nivel 5 (Dominante)'];
@@ -784,9 +785,24 @@ function ValoracionPageInner() {
   useEffect(() => {
     getDeportistas().then(setDeportistas);
     getProfes().then(setProfes);
-    getDescripcionesValoracion().then(setTextosVal).catch(() => {});
-    getMetaValoracion().then(setMetaVal).catch(() => {});
   }, []);
+
+  /* ── EL FORMATO SE ESCOGE SOLO ─────────────────────────────────────────
+     (dirección, 03/09/2026 — «cuando en la posición del jugador aparece que
+      portero, le debe aparecer este informe»)
+
+     Los nombres de los componentes y los cinco textos de cada nivel salen
+     del formato que corresponda. Si la POSICIÓN dice portero —o arquero,
+     golero, guardameta—, se trae el de portería; si dice cualquier otra
+     cosa, el de siempre. Y si el formador cambia la posición a mitad de
+     camino, la pantalla se acomoda sola. */
+  const esPortero = esPosicionPortero(data.posicion);
+
+  useEffect(() => {
+    const formato = esPortero ? 'portero' : 'campo';
+    getDescripcionesDe(formato).then(setTextosVal).catch(() => {});
+    getMetaDe(formato).then(setMetaVal).catch(() => {});
+  }, [esPortero]);
 
   useEffect(() => {
     const cod = data.codigo.trim().toUpperCase();
@@ -975,9 +991,12 @@ function ValoracionPageInner() {
     if (!data.conductaNivel)   f.push('Conducción');
     if (!data.driblingNivel)   f.push('Dribling');
     if (!data.remataNivel)     f.push('Remate');
-    if (!data.cabeceoNivel)    f.push('Cabeceo');
-    if (!data.quiteNivel)      f.push('Quite del Balón');
-    if (!data.proteccionNivel) f.push('Protección del Balón');
+    /* Al portero no se le piden: no salen en su formato. — 03/09/2026 */
+    if (!esPosicionPortero(data.posicion)) {
+      if (!data.cabeceoNivel)    f.push('Cabeceo');
+      if (!data.quiteNivel)      f.push('Quite del Balón');
+      if (!data.proteccionNivel) f.push('Protección del Balón');
+    }
     if (!data.posicionNivel)    f.push('Ubicación Espacial');
     if (!data.visionNivel)      f.push('Velocidad de Procesamiento');
     if (!data.defensaNivel)     f.push('Lectura de Alturas');
@@ -1660,6 +1679,11 @@ function ValoracionPageInner() {
             nivel={data.remataNivel} onNivel={v => set('remataNivel', v)} showError={intentoDescarga}
             desc={data.remataDesc}   onDesc={v => set('remataDesc', v)}
             descripciones={textosVal.remata ?? DESC_REMATE} />
+          {/* CABECEO, QUITE Y PROTECCIÓN son de jugador de campo. Al portero
+              no se le miden: su bloque técnico son cinco —blocaje, desvío,
+              estirada, juego de pies y caída—. — dirección, 03/09/2026 */}
+          {!esPortero && (
+          <>
           <BloqueAspecto titulo={metaVal.cabeceo?.titulo ?? "CABECEO"} subtitulo={metaVal.cabeceo?.subtitulo ?? "Juego Aéreo"} definicion={metaVal.cabeceo?.definicion}
             nivel={data.cabeceoNivel} onNivel={v => set('cabeceoNivel', v)} showError={intentoDescarga}
             desc={data.cabeceoDesc}   onDesc={v => set('cabeceoDesc', v)}
@@ -1672,6 +1696,8 @@ function ValoracionPageInner() {
             nivel={data.proteccionNivel} onNivel={v => set('proteccionNivel', v)} showError={intentoDescarga}
             desc={data.proteccionDesc}   onDesc={v => set('proteccionDesc', v)}
             descripciones={textosVal.proteccion ?? DESC_PROTECCION} />
+          </>
+          )}
 
           {/* TÁCTICA */}
           <tbody>
