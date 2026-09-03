@@ -176,13 +176,28 @@ const COLS_LIBRO: { key: string; label: string; def: number }[] = [
      usa: se confirma justo donde uno termina de mirar. */
   { key: 'confirmar',  label: 'CONFIRMAR',   def: 80 },
   { key: 'editar',     label: 'EDITAR',      def: 62 },
-  /* AQUÍ ESTUVO LA COLUMNA "BORRAR" (02/09/2026, puesta y quitada el mismo
-     día por orden de la dirección). Se usó para limpiar unas filas subidas por
-     error y se retiró enseguida: una papelera en cada renglón del libro —y peor,
-     un cuadrito para señalar muchas y botarlas de una— es demasiado fácil de
-     oprimir sin querer en la pantalla donde vive la plata de la academia.
-     Para borrar sigue estando ELIMINAR FILAS, arriba, que obliga a escribir el
-     N° y a leer la lista antes de aceptar. */
+  /* ── LA COLUMNA "BORRAR" ─────────────────────────────────────────────────
+     Historia corta: se puso el 02/09/2026, la dirección la mandó quitar el
+     mismo día, y el 03/09/2026 la volvió a pedir («urgente colócame otra vez
+     en libro dinámico eliminar por cada fila al menos»).
+
+     Vuelve SOLO la papelera de a un renglón. Lo que NO vuelve es el cuadrito
+     para señalar muchas y botarlas de una: eso fue lo que la dirección llamó
+     «no recomendable», y con razón — un clic mal dado se llevaba veinte
+     movimientos.
+
+     Con sus tres seguros, los mismos de ELIMINAR FILAS de arriba:
+       1. Pregunta mostrando la fila entera: N°, fecha, banco, valor y
+          descripción, para saber qué se está botando.
+       2. Avisa en mayúsculas si esa fila YA está confirmada en un estado de
+          cuenta —borrarla del libro no le quita el pago al deportista—.
+       3. Guarda una copia en la papelera del navegador (200 últimas). */
+  { key: 'borrar',     label: 'BORRAR',      def: 62 },
+  /* SEÑALAR VARIAS (dirección, 03/09/2026 — «casillas para chulear poder
+     eliminar varios»). Va de última, al lado de la papelera: para que quede
+     lejos de las casillas que se tocan todos los días (concepto, código,
+     deportista, detalle) y no se marque sin querer al ir escribiendo. */
+  { key: 'sel',        label: '✓',           def: 44 },
 ];
 
 // Caché en memoria del libro: al volver del estado de cuenta NO se recarga de la nube
@@ -537,6 +552,18 @@ export default function ContabilidadPage() {
   // Estado de cuenta abierto EN VENTANA sobre el libro (el libro no se mueve)
   const [estadoCuentaUrl, setEstadoCuentaUrl] = useState<string | null>(null);
   // Anchos ajustables de las columnas del Libro (se guardan en el navegador)
+  /* ── LAS FILAS SEÑALADAS PARA BORRAR ────────────────────────────────────
+     (dirección, 03/09/2026). Se guardan por ID, no por número de renglón: si
+     se cambia el filtro o el orden, lo señalado sigue siendo lo mismo. */
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
+  function alternarMarca(id: string) {
+    setMarcadas(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+
   const [colW, setColW] = useState<Record<string, number>>(() => Object.fromEntries(COLS_LIBRO.map(c => [c.key, c.def])));
   useEffect(() => {
     try {
@@ -2307,6 +2334,33 @@ export default function ContabilidadPage() {
               <button onClick={exportarLibro} disabled={!libroFiltrado.length} className="flex items-center gap-1.5 text-sm font-black text-[#5BE39B] bg-[rgba(0,176,80,.14)] border border-[rgba(0,176,80,.45)] px-3 py-1.5 rounded-lg hover:bg-green-100 transition disabled:opacity-50">
                 <Download className="w-4 h-4" /> Exportar Excel
               </button>
+              {/* ── ELIMINAR LAS SEÑALADAS ────────────────────────────────
+                  (dirección, 03/09/2026 — «casillas para chulear poder
+                   eliminar varios»)
+                  Solo aparece cuando hay algo señalado, y dice cuántas son.
+                  Al oprimirlo sale la misma pregunta de siempre, con la lista
+                  entera de lo que se va a botar. */}
+              {marcadas.size > 0 && (
+                <>
+                  <button
+                    onClick={async () => {
+                      const filas = libro.filter(m => marcadas.has(m.id || ''));
+                      await borrarEstasFilas(filas);
+                      setMarcadas(new Set());
+                    }}
+                    disabled={borrandoFilas}
+                    title="Eliminar del libro las filas que están señaladas"
+                    className="flex items-center gap-1.5 text-sm font-black text-white bg-[#C0504D] border border-[#C0504D] px-3 py-1.5 rounded-lg hover:brightness-110 transition disabled:opacity-50">
+                    <Trash2 className="w-4 h-4" />
+                    {borrandoFilas ? 'Eliminando…' : `Eliminar ${marcadas.size} señalada${marcadas.size === 1 ? '' : 's'}`}
+                  </button>
+                  <button onClick={() => setMarcadas(new Set())}
+                    title="Soltar todas las señaladas"
+                    className="text-sm font-black text-white/70 bg-[#3C4759] border border-[#4A5568] px-3 py-1.5 rounded-lg hover:bg-[#2B3547] transition">
+                    Soltar
+                  </button>
+                </>
+              )}
               <button onClick={eliminarFilasPorNumero} disabled={borrandoFilas}
                 title="Eliminar filas basura del libro escribiendo su N° (la columna gris de la izquierda)"
                 className="flex items-center gap-1.5 text-sm font-black text-[#F08A87] bg-[rgba(192,80,77,.14)] border border-[rgba(192,80,77,.45)] px-3 py-1.5 rounded-lg hover:bg-[rgba(192,80,77,.20)] transition disabled:opacity-50">
@@ -2413,6 +2467,22 @@ export default function ContabilidadPage() {
                       </select>
                     </th>
                     <th style={thFil}></th>
+                    {/* Señala o suelta TODAS las filas que se están viendo. */}
+                    <th style={thFil}>
+                      <input type="checkbox"
+                        title="Señalar todas las filas que se ven ahora"
+                        checked={visibles.length > 0 && visibles.every(v => marcadas.has(v.id || ''))}
+                        onChange={e => {
+                          const ids = visibles.map(v => v.id || '').filter(Boolean);
+                          setMarcadas(prev => {
+                            const n = new Set(prev);
+                            if (e.target.checked) ids.forEach(i => n.add(i));
+                            else ids.forEach(i => n.delete(i));
+                            return n;
+                          });
+                        }}
+                        style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#C0504D' }} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2663,6 +2733,28 @@ export default function ContabilidadPage() {
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                       </td>
+                      {/* ── BORRAR ────────────────────────────────────────
+                          (dirección, 03/09/2026 — la volvió a pedir)
+                          De a UNA fila, con la misma pregunta de ELIMINAR
+                          FILAS: dice qué se va, avisa si estaba confirmada y
+                          deja copia en la papelera. */}
+                      <td style={{ ...tdC, padding: '1px' }}>
+                        <button
+                          onClick={() => borrarEstasFilas([m])}
+                          disabled={borrandoFilas}
+                          title={`Eliminar la fila N° ${numFila[m.id || ''] ?? ''} del libro`}
+                          className="mx-auto block text-[#B4241F] hover:text-white p-0.5 rounded hover:bg-[#C0504D] transition disabled:opacity-40">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                      {/* SEÑALAR — para borrar varias de una. — 03/09/2026 */}
+                      <td style={{ ...tdC, padding: '1px' }}>
+                        <input type="checkbox"
+                          checked={marcadas.has(m.id || '')}
+                          onChange={() => alternarMarca(m.id || '')}
+                          title="Señalar esta fila para eliminarla junto con otras"
+                          style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#C0504D' }} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -2677,6 +2769,9 @@ export default function ContabilidadPage() {
                       <td style={{ ...tfootTd, textAlign: 'right', color: '#dc2626' }}>{fmt(totDebito)}</td>
                       <td style={{ ...tfootTd, textAlign: 'right', color: '#16a34a' }}>{fmt(totCredito)}</td>
                       <td style={tfootTd} colSpan={5}></td>
+                      <td style={tfootTd}></td>
+                      <td style={tfootTd}></td>
+                      {/* Dos casillas más: volvieron BORRAR y la de señalar. — 03/09/2026 */}
                       <td style={tfootTd}></td>
                       <td style={tfootTd}></td>
                     </tr>

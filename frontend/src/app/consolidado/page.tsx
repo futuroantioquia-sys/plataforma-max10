@@ -37,7 +37,8 @@ import {
   ArrowLeft, RefreshCw, Users, CalendarCheck, ClipboardList,
   CalendarDays, AlertTriangle, ChevronRight, Loader2, Search, X,
 } from 'lucide-react';
-import { getDeportistasPorProyecto, getProfes, getEvaluacionesResumen, getMicrociclos, getResumenAsistencia, getFichasProyecto } from '@/lib/db';
+import { getDeportistasPorProyecto, getProfes, getEvaluacionesResumen, getMicrociclos, getMicrociclo, getResumenAsistencia, getFichasProyecto } from '@/lib/db';
+import { VistaPreliminar } from '@/components/VistaPreliminarMicrociclo';
 import type { Deportista, Profe, EvaluacionResumen, Microciclo, ResumenAsistenciaDia, InfoProyecto } from '@/lib/db';
 import { esProfesor, esSuperAdmin, esAccesoTotal } from '@/lib/permisos';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
@@ -668,6 +669,34 @@ export default function ConsolidadoPage() {
     [profes],
   );
 
+  /* ── VER EL MICROCICLO SIN SALIR DE AQUÍ ───────────────────────────────
+     (dirección, 03/09/2026 — «¿dónde puedo ver cada microciclo?»)
+
+     El cuadro decía cuántas semanas llevaba cada grupo, pero no había forma
+     de mirar QUÉ escribió el formador: para eso tocaba entrar a su módulo.
+     Ahora cada renglón de semana se toca y se abre la misma hoja de vista
+     preliminar que ve él, con su PDF. De solo lectura. */
+  const [hoja, setHoja]         = useState<Microciclo | null>(null);
+  const [hojaAsis, setHojaAsis] = useState<Record<string, ResumenAsistenciaDia>>({});
+  const [abriendoMc, setAbriendoMc] = useState('');
+
+  async function verMicrociclo(cab: Microciclo) {
+    if (!cab?.id || abriendoMc) return;
+    setAbriendoMc(cab.id);
+    try {
+      const [mc, asis] = await Promise.all([
+        getMicrociclo(cab.id),
+        getResumenAsistencia(cab.proyecto, String(cab.fecha_inicio).slice(0, 10),
+                             String(cab.fecha_fin).slice(0, 10)).catch(() => ({})),
+      ]);
+      if (!mc) return;
+      setHojaAsis(asis as Record<string, ResumenAsistenciaDia>);
+      setHoja(mc);
+    } finally {
+      setAbriendoMc('');
+    }
+  }
+
   /* ── Pintado ───────────────────────────────────────────────────────────── */
   const colorPct = (p: number) => (p >= 85 ? VERDECL : p >= 70 ? AMBAR : ROJO);
 
@@ -851,9 +880,27 @@ export default function ConsolidadoPage() {
                     {/* Los números cambian según la pestaña */}
                     {pestana === 'asistencia' && (
                       <div className="flex-1 flex flex-wrap items-center justify-end gap-2">
-                        <span className="font-black text-[19px]" style={{ color: colorPct(f.promedio) }}>
-                          {f.diasConRegistro ? `${f.promedio}%` : '—'}
-                        </span>
+                        {/* SE QUITÓ EL PORCENTAJE DEL RENGLÓN (dirección,
+                            03/09/2026 — «quita por lo pronto esos porcentajes,
+                            no sé de qué son»).
+
+                            QUÉ ERA. El promedio de asistencia del grupo en el
+                            mes: de los días que el formador SÍ llenó, cuánta
+                            gente asistió en promedio. 89% quería decir que de
+                            cada diez convocados fueron nueve. Los días
+                            cancelados no contaban.
+
+                            POR QUÉ SE VA. Iba suelto, sin nombre al lado, y
+                            pegado a "60 días llenados" —que es otra cosa
+                            distinta: cuántos días se llenó el formato—. Dos
+                            números seguidos que no se parecen en nada
+                            confunden más de lo que ayudan.
+
+                            Se quita solo de aquí. El cálculo sigue vivo y el
+                            promedio del mes se sigue viendo arriba, en la
+                            tarjeta que dice ASISTENCIA con todas sus letras.
+                            Si algún día se quiere devolver, se vuelve a poner
+                            este renglón y ya. */}
                         <span className="text-[11px] font-semibold" style={{ color: GRIS }}>
                           {f.diasConRegistro} {f.diasConRegistro === 1 ? 'día llenado' : 'días llenados'}
                         </span>
@@ -924,7 +971,8 @@ export default function ConsolidadoPage() {
                     <div className="px-4 pb-4" style={{ background: CAMPO }}>
                       {pestana === 'microciclos' ? (
                         <DetalleMicrociclos lista={microsPorProyecto.get(f.proyecto) ?? []}
-                          lunesHoy={lunesDeEstaSemana} sinAbrir={f.semanasSinAbrir} />
+                          lunesHoy={lunesDeEstaSemana} sinAbrir={f.semanasSinAbrir}
+                          onVer={verMicrociclo} abriendo={abriendoMc} />
                       ) : (
                         <DetalleDeportistas filas={detalleDe(f.proyecto)} pestana={pestana}
                           meses={mesesTemporada(anioVista)} cargando={cargandoDeps} />
@@ -944,6 +992,11 @@ export default function ConsolidadoPage() {
           Los días que el formador marcó como <b>cancelados</b>, o que no alcanzó a llenar, no se le cuentan al deportista.
         </p>
       </main>
+
+      {/* La hoja del formador, de solo lectura, con su botón de PDF. */}
+      {hoja && (
+        <VistaPreliminar mc={hoja} asist={hojaAsis} programa="" onCerrar={() => setHoja(null)} />
+      )}
     </div>
   );
 }
@@ -1050,13 +1103,28 @@ function DetalleDeportistas({ filas, pestana, meses, cargando }: {
    número, para que la dirección sepa qué le están debiendo y a quién
    cobrárselo — pero se leen y se corrigen en la pantalla del formador. */
 function DetalleMicrociclos(
-  { lista, lunesHoy, sinAbrir = [] }:
-  { lista: Microciclo[]; lunesHoy: string; sinAbrir?: string[] }
+  { lista, lunesHoy, sinAbrir = [], onVer, abriendo = '' }:
+  { lista: Microciclo[]; lunesHoy: string; sinAbrir?: string[];
+    onVer?: (mc: Microciclo) => void; abriendo?: string }
 ) {
   const cerradas = lista.filter(mc => mc.estado === 'cerrado');
   const abiertas = lista.filter(mc => mc.estado !== 'cerrado');
   const pendientes = abiertas.filter(mc => String(mc.fecha_inicio).slice(0, 10) < lunesHoy)
                              .sort((a, b) => (b.numero || 0) - (a.numero || 0));
+
+  /* ── TODAS LAS SEMANAS, NO SOLO LAS TERMINADAS ─────────────────────────
+     (dirección, 03/09/2026 — «¿dónde puedo ver cada microciclo?» · «la
+      admón pueda ver, incluso sin abrir, a medias o terminado»)
+
+     Antes en la tabla salían ÚNICAMENTE las semanas cerradas, y las demás
+     se resumían en dos avisos de texto. Así no había forma de mirar una
+     semana a medias, que es justo la que hay que revisar.
+
+     Ahora salen todas, de la más nueva a la más vieja, cada una con su
+     estado, y se abren de un clic. Las que nunca se crearon siguen abajo en
+     el aviso rojo: esas no existen, no hay nada que abrir. */
+  const todas = [...lista].sort((a, b) =>
+    String(b.fecha_inicio).localeCompare(String(a.fecha_inicio)));
 
   /* Las que nunca se abrieron. Se muestran por FECHA porque no tienen número:
      no existen como microciclo. — dirección, 02/09/2026 */
@@ -1090,13 +1158,12 @@ function DetalleMicrociclos(
     </p>
   );
 
-  if (!cerradas.length) {
+  if (!todas.length) {
     return (
       <>
         <p className="text-white/45 text-[12.5px] font-semibold py-4 text-center">
-          Este grupo todavía no tiene ninguna semana terminada.
+          A este grupo todavía no se le ha creado ninguna semana.
         </p>
-        {avisoPendientes}
         {avisoSinAbrir}
       </>
     );
@@ -1112,28 +1179,49 @@ function DetalleMicrociclos(
           <span style={{ width: 106 }}>HASTA</span>
           <span className="flex-1">OBJETIVO</span>
           <span style={{ width: 78, textAlign: 'center' }}>DÍAS</span>
+          <span style={{ width: 108, textAlign: 'center' }}>ESTADO</span>
         </div>
-        {cerradas.slice(0, 16).map((mc, i) => {
-          const esta = String(mc.fecha_inicio).slice(0, 10) === lunesHoy;
+        {todas.slice(0, 24).map((mc, i) => {
+          const ini      = String(mc.fecha_inicio ?? '').slice(0, 10);
+          const esta     = ini === lunesHoy;
+          const cerrado  = mc.estado === 'cerrado';
+          const yaPaso   = ini < lunesHoy;
+          /* TERMINADO = el formador la cerró. A MEDIAS = está creada y abierta,
+             y la semana ya pasó. EN CURSO = es la de esta semana. */
+          const rotulo   = cerrado ? 'TERMINADO' : yaPaso ? 'A MEDIAS' : 'EN CURSO';
+          const color    = cerrado ? VERDECL : yaPaso ? AMBAR : GRIS;
+          const cargando = abriendo === mc.id;
           return (
-            <div key={mc.id} className="flex items-center gap-3 px-3 py-2 text-[12px]"
+            <button key={mc.id}
+              onClick={() => onVer?.(mc)}
+              title="Ver la hoja del formador de esta semana"
+              className="w-full flex items-center gap-3 px-3 py-2 text-[12px] text-left transition hover:brightness-125"
               style={{ background: esta ? 'rgba(0,176,80,.16)' : i % 2 ? PANEL : '#36404F', borderTop: `1px solid ${BORDE}55` }}>
               <span className="font-black" style={{ width: 56, color: esta ? VERDECL : '#fff' }}>#{mc.numero || '—'}</span>
-              <span style={{ width: 106, color: GRIS }}>{String(mc.fecha_inicio ?? '').slice(0, 10) || '—'}</span>
+              <span style={{ width: 106, color: GRIS }}>{ini || '—'}</span>
               <span style={{ width: 106, color: GRIS }}>{String(mc.fecha_fin ?? '').slice(0, 10) || '—'}</span>
               <span className="flex-1 text-white/85 truncate">{mc.objetivo_general || <span style={{ color: GRIS }}>sin objetivo escrito</span>}</span>
               <span className="font-black" style={{ width: 78, textAlign: 'center', color: (mc.dias?.length ?? 0) ? VERDECL : GRIS }}>
                 {mc.dias?.length ?? '—'}
               </span>
-            </div>
+              <span style={{ width: 108, textAlign: 'center' }}>
+                <span className="inline-block rounded px-2 py-1 text-[9.5px] font-black"
+                  style={{ background: `${color}26`, border: `1px solid ${color}`, color }}>
+                  {cargando ? 'ABRIENDO…' : rotulo}
+                </span>
+              </span>
+            </button>
           );
         })}
-        {cerradas.length > 16 && (
+        {todas.length > 24 && (
           <p className="text-center text-[11px] py-2" style={{ color: GRIS, background: PANEL }}>
-            … y {cerradas.length - 16} semanas más atrás
+            … y {todas.length - 24} semanas más atrás
           </p>
         )}
       </div>
+      <p className="text-[11px] font-semibold mt-1.5 text-center" style={{ color: GRIS }}>
+        Toca cualquier semana y se abre la hoja del formador, tal como él la ve, con su PDF.
+      </p>
       {avisoPendientes}
       {avisoSinAbrir}
     </>

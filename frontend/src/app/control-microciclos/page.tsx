@@ -24,7 +24,10 @@ import {
   ArrowLeft, AlertTriangle, Loader2, ShieldCheck, X, Check,
 } from 'lucide-react';
 import { esSuperAdmin, esAccesoTotal, esDeportivo } from '@/lib/permisos';
-import { getProfes, getDeportistas } from '@/lib/db';
+import { getProfes, getDeportistas, getMicrociclo, getResumenAsistencia } from '@/lib/db';
+import type { Microciclo, ResumenAsistenciaDia } from '@/lib/db';
+import { VistaPreliminar } from '@/components/VistaPreliminarMicrociclo';
+import { cn } from '@/lib/utils';
 
 /* ── Colores oficiales ──────────────────────────────────────────────────── */
 const LIENZO = '#333F50';
@@ -60,7 +63,14 @@ type Semana = {
   hay: boolean;            // ¿hay microciclo montado?
   conObjetivos: boolean;   // ¿tiene objetivos escritos?
   estado: Estado;
+  /** El microciclo, para poder abrirlo en vista preliminar. — 03/09/2026 */
+  id: string;
+  cerrado: boolean;        // el formador lo dio por TERMINADO
+  lunes: string;           // "2026-08-24" — la llave de la semana
 };
+
+/** Lo que se sabe de un microciclo con solo mirar el cuadro. */
+type DatoSemana = { id: string; conObjetivos: boolean; cerrado: boolean };
 
 type Renglon = {
   proyecto: Proyecto;
@@ -119,9 +129,48 @@ export default function ControlMicrociclosPage() {
 
   const [proyectos, setProyectos]   = useState<Proyecto[] | null>(null);
   /* proyecto → lunes de cada semana que tiene microciclo, y si trae objetivos */
-  const [montados, setMontados] = useState<Record<string, Record<string, boolean>>>({});
+  /* proyecto → lunes → lo que se sabe de ese microciclo.
+     Antes solo se guardaba «tiene objetivos: sí/no». Ahora se guarda también
+     el ID y si quedó CERRADO, porque la dirección necesita abrirlo en vista
+     preliminar con un clic. — dirección, 03/09/2026 */
+  const [montados, setMontados] = useState<Record<string, Record<string, DatoSemana>>>({});
   const [cargando, setCargando]     = useState(true);
   const [error, setError]           = useState('');
+
+  /* ── LA HOJA QUE SE ABRE AL TOCAR UNA CASILLA ──────────────────────────
+     (dirección, 03/09/2026 — «necesito ver cada microciclo de cada profesor
+      en vista preliminar… necesito YA evaluarlos a cada profe»)
+
+     Antes este cuadro solo decía ✓ · ✗: se veía QUIÉN iba al día, pero no se
+     podía ver QUÉ escribió. Para revisarle el trabajo a un formador tocaba
+     meterse a su módulo y buscar el proyecto a mano.
+
+     Ahora cada casilla con microciclo se puede tocar y se abre la MISMA hoja
+     de vista preliminar del formador —con su PDF— sin salir de aquí. Es de
+     solo lectura: desde este cuadro no se edita nada. */
+  const [hoja, setHoja]         = useState<Microciclo | null>(null);
+  const [hojaAsis, setHojaAsis] = useState<Record<string, ResumenAsistenciaDia>>({});
+  const [abriendo, setAbriendo] = useState('');
+
+  async function abrirHoja(r: Renglon, s: Semana) {
+    if (!s.id || abriendo) return;
+    setAbriendo(s.id);
+    try {
+      const hastaISO = new Date(s.hasta);
+      const f = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const [mc, asis] = await Promise.all([
+        getMicrociclo(s.id),
+        getResumenAsistencia(r.proyecto.proyecto, s.lunes, f(hastaISO)).catch(() => ({})),
+      ]);
+      if (!mc) { setError('No se pudo abrir ese microciclo. Intenta de nuevo.'); return; }
+      setHojaAsis(asis as Record<string, ResumenAsistenciaDia>);
+      setHoja(mc);
+    } catch {
+      setError('No se pudo abrir ese microciclo. Intenta de nuevo.');
+    } finally {
+      setAbriendo('');
+    }
+  }
 
   const [filtroProfe, setFiltroProfe]       = useState('');
   const [filtroPrograma, setFiltroPrograma] = useState('');
@@ -210,11 +259,11 @@ export default function ControlMicrociclosPage() {
     const hastaISO = new Date(anio, mes + 1, 0);
     const f = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const base = `${SB_URL}/rest/v1/microciclos`
-      + `?select=proyecto,fecha_inicio,objetivo_general,objetivo_tecnico,objetivo_tactico,objetivo_fisico,objetivo_psico`
+      + `?select=id,proyecto,fecha_inicio,estado,objetivo_general,objetivo_tecnico,objetivo_tactico,objetivo_fisico,objetivo_psico`
       + `&fecha_inicio=gte.${f(desdeISO)}&fecha_inicio=lte.${f(hastaISO)}&order=fecha_inicio.asc`;
     const PASO = 1000;
     try {
-      const mapa: Record<string, Record<string, boolean>> = {};
+      const mapa: Record<string, Record<string, DatoSemana>> = {};
       let desde = 0;
       for (let vuelta = 0; vuelta < 40; vuelta++) {
         const res = await fetch(base, {
@@ -232,7 +281,12 @@ export default function ControlMicrociclosPage() {
                                 'objetivo_fisico', 'objetivo_psico']
             .some(k => String(r?.[k] ?? '').trim() !== '');
           (mapa[p] ??= {});
-          mapa[p][ini] = mapa[p][ini] || conObjetivos;
+          const antes = mapa[p][ini];
+          mapa[p][ini] = {
+            id: String(r?.id ?? '') || (antes?.id ?? ''),
+            conObjetivos: (antes?.conObjetivos ?? false) || conObjetivos,
+            cerrado: (antes?.cerrado ?? false) || String(r?.estado ?? '') === 'cerrado',
+          };
         }
         if (lote.length === 0) break;
         desde += lote.length;
@@ -280,12 +334,14 @@ export default function ControlMicrociclosPage() {
         /* Solo cuentan las semanas que ya arrancaron y que tocan este mes. */
         const tocaElMes = s.desde.getMonth() === mes || s.hasta.getMonth() === mes;
         const cuenta = tocaElMes && s.desde <= finDeHoy;
-        const hay = Object.prototype.hasOwnProperty.call(suyos, lunes);
-        const conObjetivos = hay && suyos[lunes] === true;
+        const info = suyos[lunes];
+        const hay = !!info;
+        const conObjetivos = !!info?.conObjetivos;
         const estado: Estado = !cuenta ? 'SIN INICIAR'
           : !hay ? 'SIN INICIAR'
           : conObjetivos ? 'TERMINADO' : 'A MEDIAS';
-        return { desde: s.desde, hasta: s.hasta, cuenta, hay, conObjetivos, estado };
+        return { desde: s.desde, hasta: s.hasta, cuenta, hay, conObjetivos, estado,
+                 id: info?.id ?? '', cerrado: !!info?.cerrado, lunes };
       });
 
       const esperados = semanas.filter(s => s.cuenta).length;
@@ -601,24 +657,32 @@ Quién tiene la planeación montada y quién no. Semana por semana.
                         {r.proyecto.sede || '—'}
                       </p>
 
-                      {r.semanas.map((s, i) => (
-                        <div key={i}
+                      {r.semanas.map((s, i) => {
+                        /* Si hay microciclo, la casilla se puede tocar y abre
+                           la hoja del formador. — dirección, 03/09/2026 */
+                        const seAbre = s.hay && !!s.id;
+                        return (
+                        <button key={i}
+                          onClick={() => seAbre && abrirHoja(r, s)}
+                          disabled={!seAbre}
                           title={!s.cuenta
                             ? 'Esa semana todavía no arranca'
                             : !s.hay ? 'No hay microciclo montado'
-                            : s.conObjetivos ? 'Montado y con objetivos escritos'
-                            : 'Montado, pero sin objetivos escritos'}
-                          className="rounded-lg flex items-center justify-center
-                            text-[10.5px] font-black"
+                            : `${s.cerrado ? 'TERMINADO por el formador' : 'A medias, sin cerrar'} · toca para ver la hoja`}
+                          className={cn('rounded-lg flex items-center justify-center text-[10.5px] font-black transition',
+                            seAbre && 'hover:brightness-150 cursor-pointer')}
                           style={{
                             height: 28,
                             background: !s.cuenta ? 'transparent' : `${colorDe(s.estado)}26`,
                             border: `1px solid ${!s.cuenta ? BORDE : colorDe(s.estado)}`,
                             color: !s.cuenta ? 'rgba(255,255,255,.25)' : colorDe(s.estado),
                           }}>
-                          {!s.cuenta ? '—' : !s.hay ? '✗' : s.conObjetivos ? '✓' : '·'}
-                        </div>
-                      ))}
+                          {abriendo === s.id
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : !s.cuenta ? '—' : !s.hay ? '✗' : s.conObjetivos ? '✓' : '·'}
+                        </button>
+                        );
+                      })}
 
                       <p className="text-center text-white font-black text-[12px]">
                         {r.hechos}/{r.esperados}
@@ -649,10 +713,24 @@ Quién tiene la planeación montada y quién no. Semana por semana.
           y con objetivos, <span className="text-white font-black">·</span> montado pero sin objetivos
           escritos, <span className="text-white font-black">✗</span> sin montar. Las semanas que todavía no
           arrancan no se cuentan. Los proyectos aparecen con el más atrasado de primero.
+          <br />
+          <span className="text-white font-black">Toca cualquier casilla con ✓ o ·</span> y se abre la hoja
+          del formador tal como él la ve, de solo lectura y con su botón de PDF. Así se le revisa el
+          trabajo sin entrar a su módulo.
         </p>
 
         <div aria-hidden style={{ height: 120 }} />
       </main>
+
+      {/* La hoja del formador, de solo lectura, con su botón de PDF. */}
+      {hoja && (
+        <VistaPreliminar
+          mc={hoja}
+          asist={hojaAsis}
+          programa={programaDe[hoja.proyecto] ?? ''}
+          onCerrar={() => setHoja(null)}
+        />
+      )}
     </div>
   );
 }
