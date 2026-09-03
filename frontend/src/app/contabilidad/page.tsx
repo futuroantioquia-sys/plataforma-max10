@@ -175,6 +175,13 @@ const COLS_LIBRO: { key: string; label: string; def: number }[] = [
      usa: se confirma justo donde uno termina de mirar. */
   { key: 'confirmar',  label: 'CONFIRMAR',   def: 80 },
   { key: 'editar',     label: 'EDITAR',      def: 62 },
+  /* BORRAR ESA FILA, DESDE LA FILA (dirección, 02/09/2026).
+     Ya existía "Eliminar filas" arriba, pero pide escribir el N° a mano —y con
+     doce mil movimientos, escribir un número equivocado borra el movimiento de
+     otro—. Este botón borra EXACTAMENTE la fila donde se oprime, y muestra el
+     mismo cuadro de siempre: qué se va a borrar, si ya estaba confirmada en un
+     estado de cuenta, y que queda copia en la papelera. */
+  { key: 'eliminar',   label: 'BORRAR',      def: 56 },
 ];
 
 // Caché en memoria del libro: al volver del estado de cuenta NO se recarga de la nube
@@ -1047,6 +1054,19 @@ export default function ContabilidadPage() {
       return;
     }
 
+    await borrarEstasFilas(filas, faltan);
+  }
+
+  /* ── EL BORRADO DE VERDAD, EN UN SOLO SITIO ───────────────────────────────
+     (dirección, 02/09/2026)
+
+     Lo usan los dos caminos: el botón de arriba —que pide los N° a mano— y la
+     papelera de cada fila. Así los dos muestran EXACTAMENTE el mismo cuadro de
+     aceptar, guardan la misma copia en la papelera y refrescan el libro igual.
+     Si mañana hay que cambiar el aviso, se cambia una vez. */
+  async function borrarEstasFilas(filas: MovCont[], faltan: number[] = []) {
+    if (!filas.length) return;
+
     const detalle = filas.map(m => {
       const n = numFila[m.id || ''];
       const val = Number(m.credito) > 0 ? '+' + pesosCO(Number(m.credito)) : '-' + pesosCO(Number(m.debito) || 0);
@@ -1097,6 +1117,12 @@ export default function ContabilidadPage() {
     flash(fallaron.length
       ? `✓ ${borrados.length} eliminada(s) · ⚠ no se pudo con: ${fallaron.join(', ')}`
       : `✓ ${borrados.length} fila(s) eliminada(s) del libro`);
+  }
+
+  /** La papelera de cada renglón: borra ESA fila, la que se está viendo. */
+  async function eliminarUnaFila(m: MovCont) {
+    if (borrandoFilas) return;
+    await borrarEstasFilas([m]);
   }
 
   function abrirNuevaFila() {
@@ -2340,11 +2366,11 @@ export default function ContabilidadPage() {
                 </thead>
                 <tbody>
                   {cargandoLibro ? (
-                    <tr><td colSpan={esTodas ? 13 : 12} className="text-center py-10 text-white/40 font-semibold">Cargando…</td></tr>
+                    <tr><td colSpan={colsVis.length} className="text-center py-10 text-white/40 font-semibold">Cargando…</td></tr>
                   ) : libro.length === 0 ? (
-                    <tr><td colSpan={esTodas ? 13 : 12} className="text-center py-10 text-white/40 font-semibold">Este libro aún no tiene movimientos.</td></tr>
+                    <tr><td colSpan={colsVis.length} className="text-center py-10 text-white/40 font-semibold">Este libro aún no tiene movimientos.</td></tr>
                   ) : libroFiltrado.length === 0 ? (
-                    <tr><td colSpan={esTodas ? 13 : 12} className="text-center py-10 text-white/40 font-semibold">Ningún movimiento coincide con el filtro.</td></tr>
+                    <tr><td colSpan={colsVis.length} className="text-center py-10 text-white/40 font-semibold">Ningún movimiento coincide con el filtro.</td></tr>
                   ) : visiblesVista.map((m, i) => (
                     <tr key={m.id || i} id={'mov-' + (m.id || '')}
                       title={semaforo[m.id || '']?.motivo || filasProblema[m.id || ''] || undefined}
@@ -2586,6 +2612,20 @@ export default function ContabilidadPage() {
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                       </td>
+                      {/* ── BORRAR ESTA FILA (dirección, 02/09/2026) ───────
+                          Sale el mismo cuadro de aceptar de siempre, con el
+                          detalle de lo que se va a borrar y el aviso si ya
+                          estaba confirmada en un estado de cuenta. */}
+                      <td style={{ ...tdC, padding: '1px' }}>
+                        <button
+                          onClick={() => void eliminarUnaFila(m)}
+                          disabled={borrandoFilas}
+                          title="Borrar esta fila del libro"
+                          className="mx-auto block text-[#b91c1c] hover:text-[#dc2626] p-0.5 rounded
+                                     hover:bg-[rgba(192,80,77,.14)] transition disabled:opacity-40">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -2601,6 +2641,9 @@ export default function ContabilidadPage() {
                       <td style={{ ...tfootTd, textAlign: 'right', color: '#16a34a' }}>{fmt(totCredito)}</td>
                       <td style={tfootTd} colSpan={5}></td>
                       <td style={tfootTd}></td>
+                      <td style={tfootTd}></td>
+                      {/* La casilla de BORRAR, para que el pie siga cuadrado
+                          con el encabezado. — 02/09/2026 */}
                       <td style={tfootTd}></td>
                     </tr>
                   </tfoot>

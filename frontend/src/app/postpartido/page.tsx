@@ -147,6 +147,21 @@ const ORDEN_DEFECTO: ClaveCol[] = [
   'asistencias', 'goles', 'ataja', 'calificacion',
 ];
 
+/** "2026-08-08" → "SAB 8 AGO 2026". La misma que usa la planilla abierta,
+ *  pero suelta, para poder armar el PDF de un partido del banco sin abrirlo.
+ *  — dirección, 02/09/2026 */
+function fechaCorta(iso: string): string {
+  const t = String(iso ?? '').trim();
+  if (!t) return '';
+  const m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return t.toUpperCase();
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(d.getTime())) return t.toUpperCase();
+  const dias  = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
+  const meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 const LLAVE_ORDEN  = 'pospartido-orden-columnas';
 const LLAVE_ANCHOS = 'pospartido-anchos-columnas';
 
@@ -2027,6 +2042,123 @@ export default function CrearPospartidoPage() {
     }
   }
 
+  /* ── EL PDF DE UN PARTIDO DEL BANCO, SIN ABRIRLO ─────────────────────────
+     (dirección, 02/09/2026 — «botón individual por renglón de descargar PDF,
+      solo para admón, no profe»)
+
+     Hasta hoy, para bajar el PDF de un partido de hace tres semanas tocaba
+     abrirlo, esperar a que cargara la planilla entera y oprimir PDF adentro.
+     Ahora se baja desde el mismo renglón del banco.
+
+     SOLO ADMINISTRACIÓN. El botón ni siquiera se pinta para el formador: él
+     sigue bajando el PDF del partido que tenga abierto, que es el suyo.
+
+     Se trae la planilla guardada y se arma el mismo documento de siempre. Dos
+     diferencias con el de adentro, y las dos a propósito:
+       · Las columnas van en su ORDEN DE FÁBRICA, no en el que cada quien haya
+         acomodado en su computador: este papel sale igual para todos.
+       · La calificación de cada niño sigue saliendo EN BLANCO, como en el otro
+         PDF. El promedio del equipo sí sale. */
+  const [pdfDelBanco, setPdfDelBanco] = useState('');
+
+  async function bajarPDFdelBanco(fb: FichaBanco) {
+    if (!esAdmon) {
+      setError('El PDF de las planillas del banco lo baja únicamente administración.');
+      return;
+    }
+    const llave = `${fb.torneo_num}|${fb.jornada}`;
+    setPdfDelBanco(llave);
+    setError('');
+    try {
+      const p = await getPlanilla(fb.torneo_num, fb.jornada);
+      if (!p) throw new Error('No se pudo traer esa planilla. Intenta otra vez.');
+
+      const n   = parseInt(fb.torneo_num, 10);
+      const tor = (cuadro && Number.isFinite(n) && n >= 1 && n <= cuadro.length)
+        ? cuadro[n - 1] : null;
+
+      const equipo = tor
+        ? [tor.torneo, tor.programa, tor.categoria].map(limpiar).filter(Boolean).join(' ')
+        : `TORNEO ${fb.torneo_num}`;
+      const nombreTor = tor
+        ? [tor.torneo, tor.programa, tor.categoria, tor.nombre].map(limpiar).filter(Boolean).join(' ')
+        : equipo;
+
+      const filasP = Array.isArray(p.filas) ? (p.filas as FilaPlanilla[]) : [];
+
+      /* El marcador se rearma igual que en pantalla: nuestros goles NO se
+         escriben, se suman de la columna GOL más los autogoles del rival. */
+      const golesNinos = filasP.reduce((s, f) => s + (parseInt(String(f.goles ?? ''), 10) || 0), 0);
+      const auto  = parseInt(String(p.autogoles ?? ''), 10) || 0;
+      const nos   = golesNinos + auto;
+      const ellos = parseInt(String(p.goles_ellos ?? ''), 10);
+      const hayM  = String(p.goles_ellos ?? '').trim() !== '' && Number.isFinite(ellos);
+      const res   = !hayM ? '' : nos > ellos ? 'VICTORIA' : nos < ellos ? 'DERROTA' : 'EMPATE';
+
+      /* El promedio no cuenta a los que no tienen nota: si contaran como cero,
+         media planilla sin calificar tumbaría el promedio del equipo. */
+      const notas = filasP
+        .map(f => parseFloat(String(f.calificacion ?? '').replace(',', '.')))
+        .filter(v => Number.isFinite(v));
+      const prom = notas.length
+        ? (notas.reduce((s, v) => s + v, 0) / notas.length).toFixed(1).replace('.', ',')
+        : '';
+
+      const dia = fechaCorta(p.fecha);
+      const renglon: string[] = [];
+      const j = [limpiar(p.jornada), dia].filter(Boolean).join(' ');
+      if (j) renglon.push(`FECHA ${j.toUpperCase()}`);
+      if (limpiar(p.llegar ?? ''))    renglon.push(`LLEGAR ${limpiar(p.llegar ?? '').toUpperCase()}`);
+      if (limpiar(p.rival ?? ''))     renglon.push(`RIVAL ${limpiar(p.rival ?? '').toUpperCase()}`);
+      if (limpiar(p.escenario ?? '')) renglon.push(`ESCENARIO ${limpiar(p.escenario ?? '').toUpperCase()}`);
+
+      await descargarPlanillaPDF({
+        numeroTorneo: fb.torneo_num,
+        torneo: nombreTor,
+        /* En el papel va quien DIRIGIÓ el partido, no quien figura en el
+           cuadro: pudo haber sido un reemplazo. */
+        formador: [
+          limpiar(p.dt ?? '') || limpiar(tor?.formador ?? ''),
+          limpiar(p.at ?? '') ? `A.T ${limpiar(p.at ?? '')}` : '',
+        ].filter(Boolean).join('  ·  '),
+        jornada: renglon.join(' / '),
+        columnas: ORDEN_DEFECTO.map(c => ({
+          clave: c, titulo: COLUMNAS[c].h, ancho: COLUMNAS[c].w,
+        })),
+        filas: filasP.map((f, i) => ({
+          num:          String(i + 1),
+          deportista:   String(f.deportista ?? ''),
+          convocado:    String(f.convocado ?? ''),
+          actua:        String(f.titular ?? ''),
+          posicion:     String(f.posicion ?? ''),
+          minutos:      String(f.minutos ?? ''),
+          faltas:       String(f.faltas ?? ''),
+          amarillas:    String(f.amarillas ?? ''),
+          rojas:        String(f.rojas ?? ''),
+          asistencias:  String(f.asistencias ?? ''),
+          goles:        String(f.goles ?? ''),
+          ataja:        String(f.ataja ?? ''),
+          calificacion: '',
+        })),
+        resultado:  res,
+        golesNos:   String(nos),
+        golesEllos: String(p.goles_ellos ?? ''),
+        rival:      String(p.rival ?? ''),
+        promedio:   prom,
+        resumen:    String(p.resumen ?? ''),
+        nombreArchivo: [
+          dia.replace(/\s+\d{4}$/, '').trim(),      // sin el año
+          equipo,
+          p.jornada ? etiquetaFecha(p.jornada) : '',
+        ].filter(Boolean).join(' '),
+      } as any);
+    } catch (e: any) {
+      setError(e?.message ?? 'No se pudo armar el PDF de ese partido.');
+    } finally {
+      setPdfDelBanco('');
+    }
+  }
+
   const [bajandoPdf, setBajandoPdf] = useState(false);
   async function bajarPDF() {
     /* EL PDF YA LO PUEDE BAJAR EL FORMADOR (dirección, 29/08/2026, en la
@@ -3444,6 +3576,25 @@ export default function CrearPospartidoPage() {
                         }}>
                         {esProfe ? 'GESTIONAR' : 'VER POST PARTIDO'}
                       </button>
+
+                      {/* PDF DE ESE RENGLÓN — solo administración (dirección,
+                          02/09/2026). Baja el papel del partido sin tener que
+                          abrirlo. El formador no lo ve: él baja el PDF del
+                          partido que tenga abierto. */}
+                      {esAdmon && !esProfe && (
+                      <button
+                        onClick={() => void bajarPDFdelBanco(f)}
+                        disabled={pdfDelBanco === `${f.torneo_num}|${f.jornada}`}
+                        title="Bajar este partido en PDF, sin abrirlo. La calificación de cada deportista sale en blanco."
+                        className="shrink-0 rounded-lg flex items-center justify-center gap-1.5 px-2.5
+                          transition hover:brightness-125 disabled:opacity-60"
+                        style={{ height: 34, background: 'transparent', border: `1px solid ${VERDE}` }}>
+                        {pdfDelBanco === `${f.torneo_num}|${f.jornada}`
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: VERDE }} />
+                          : <FileDown className="w-3.5 h-3.5" style={{ color: VERDE }} />}
+                        <span className="text-[10.5px] font-black" style={{ color: VERDE }}>PDF</span>
+                      </button>
+                      )}
 
                       {/* BORRAR: solo administración. El formador no borra partidos.
                           — dirección, 29/08/2026 */}

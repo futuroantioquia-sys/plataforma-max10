@@ -522,6 +522,12 @@ export default function GeneralPage() {
   const SIN_PROYECTO = '__SIN__';
   const [sedeFiltro,     setSedeFiltro]     = useState<string | null>(null);   // 25/08/2026
   const [anioFiltro,     setAnioFiltro]     = useState<string | null>(null);
+  /* ── VER SOLO ACTIVOS, EN PAUSA O RETIRADOS (dirección, 02/09/2026) ───────
+     Tres botones de color, no otro desplegable: es la pregunta que más se hace
+     en esta pantalla y tiene que contestarse de un clic. Verde · ámbar · rojo,
+     los mismos colores con los que la academia ya lee un estado. */
+  type FiltroEstado = 'activos' | 'pausa' | 'retirados';
+  const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // ── Importar Torneos ─────────────────────────────────────────
@@ -1260,7 +1266,7 @@ export default function GeneralPage() {
      sigue funcionando igual aunque su fila todavía no esté dibujada.
      — 25/08/2026 */
   const TANDA = 80;
-  const listaPlana = useMemo(() => ordenados.filter(d => {
+  const listaSinEstado = useMemo(() => ordenados.filter(d => {
     /* Buscando un TELÉFONO se ignoran los filtros de programa, sede, proyecto
        y año (26/08/2026). Un teléfono señala a UNA familia: si además hubiera
        que acertarle al programa y a la sede donde está, la búsqueda no serviría
@@ -1277,6 +1283,38 @@ export default function GeneralPage() {
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [ordenados, programaFiltro, proyectoFiltro, sedeFiltro, anioFiltro, edits, busquedaTelefono]);
+
+  /* ── LOS TRES BOTONES DE ESTADO ───────────────────────────────────────────
+     (dirección, 02/09/2026)
+
+     Los números se cuentan sobre lo que YA dejaron pasar los otros filtros: si
+     está parado en DESARROLLO · SUB 10A, los botones dicen cuántos activos, en
+     pausa y retirados hay EN ESE GRUPO, no en toda la academia. Por eso el
+     conteo va aquí, entre los dos filtrados, y no antes.
+
+     Quién es quién lo deciden las mismas funciones de siempre —esRetirado,
+     esPausado—, para que estos botones y el orden de la tabla nunca se
+     contradigan. Y "SOLICITA RETIRO" sigue contando como ACTIVO: el caso está
+     en estudio, el niño sigue entrenando y se le sigue cobrando. */
+  const conteoEstado = useMemo(() => {
+    let activos = 0, pausa = 0, retirados = 0;
+    for (const d of listaSinEstado) {
+      if (esRetirado(d))      retirados += 1;
+      else if (esPausado(d))  pausa     += 1;
+      else                    activos   += 1;
+    }
+    return { activos, pausa, retirados };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listaSinEstado, edits]);
+
+  const listaPlana = useMemo(() => {
+    if (!estadoFiltro || busquedaTelefono) return listaSinEstado;
+    return listaSinEstado.filter(d =>
+      estadoFiltro === 'retirados' ? esRetirado(d)
+      : estadoFiltro === 'pausa'   ? esPausado(d)
+      : (!esRetirado(d) && !esPausado(d)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listaSinEstado, estadoFiltro, busquedaTelefono, edits]);
 
   /* ═══════════════════════════════════════════════════════════════════════
      CARGARLE EL TORNEO A TODO EL GRUPO  (dirección, 27/08/2026)
@@ -1332,9 +1370,12 @@ export default function GeneralPage() {
       sedeFiltro ?? '',
       proyectoFiltro ?? '',
       anioFiltro ? `año ${anioFiltro}` : '',
+      estadoFiltro === 'activos' ? 'activos'
+        : estadoFiltro === 'pausa' ? 'en pausa'
+        : estadoFiltro === 'retirados' ? 'retirados' : '',
     ].map(x => String(x).trim()).filter(Boolean);
     return partes.length ? partes.join(' · ') : 'la lista que está en pantalla';
-  }, [programaFiltro, sedeFiltro, proyectoFiltro, anioFiltro]);
+  }, [programaFiltro, sedeFiltro, proyectoFiltro, anioFiltro, estadoFiltro]);
 
   function cargarTorneoAlGrupo(colElegida: string, num: string) {
     /* SE ESCRIBE ÚNICAMENTE EN LA COLUMNA QUE SE ESCOGIÓ (corrección del
@@ -1413,7 +1454,7 @@ export default function GeneralPage() {
   const finTablaRef = useRef<HTMLTableRowElement>(null);
 
   // Al buscar o filtrar se vuelve a empezar por arriba.
-  useEffect(() => { setVisibles(TANDA); }, [buscar, buscarCod, programaFiltro, proyectoFiltro, sedeFiltro, anioFiltro]);
+  useEffect(() => { setVisibles(TANDA); }, [buscar, buscarCod, programaFiltro, proyectoFiltro, sedeFiltro, anioFiltro, estadoFiltro]);
 
   // Cuando la última fila dibujada asoma en pantalla, se dibuja la tanda siguiente.
   useEffect(() => {
@@ -1925,6 +1966,56 @@ export default function GeneralPage() {
             </select>
           </div>
 
+          {/* ── ESTADO: TRES BOTONES DE COLOR ──────────────────────────────
+              (dirección, 02/09/2026)
+              Verde ACTIVOS · ámbar EN PAUSA · rojo RETIRADOS. Se oprime uno y
+              queda encendido; se vuelve a oprimir y se apaga —vuelven a salir
+              todos—. El número de cada botón es de lo que se está viendo con
+              los otros filtros puestos, no de toda la academia. */}
+          <div>
+            <label className="block text-[11px] font-black text-white/55 uppercase tracking-widest mb-1">
+              Estado
+            </label>
+            <div className="flex gap-2">
+              {([
+                { k: 'activos'   as const, t: 'ACTIVOS',   c: '#00B050', n: conteoEstado.activos,
+                  ayuda: 'Los que están entrenando. Incluye a los que solicitaron retiro: ese caso está en estudio y el niño sigue activo.' },
+                { k: 'pausa'     as const, t: 'EN PAUSA',  c: '#E0A33A', n: conteoEstado.pausa,
+                  ayuda: 'Los que están en pausa.' },
+                { k: 'retirados' as const, t: 'RETIRADOS', c: '#C0504D', n: conteoEstado.retirados,
+                  ayuda: 'Los que ya se retiraron.' },
+              ]).map(b => {
+                const puesto = estadoFiltro === b.k;
+                return (
+                  <button
+                    key={b.k}
+                    onClick={() => setEstadoFiltro(puesto ? null : b.k)}
+                    title={puesto ? `Quitar el filtro · ${b.ayuda}` : b.ayuda}
+                    /* SIEMPRE CON SU COLOR Y LETRA BLANCA (dirección,
+                       02/09/2026). Antes solo se pintaban al oprimirlos y
+                       apagados eran tres botones huecos: había que leerlos
+                       para saber cuál era cuál. Ahora el verde, el amarillo y
+                       el rojo se ven de lejos, prendidos o no; el que está
+                       puesto se reconoce por el aro blanco de afuera. */
+                    className="rounded-xl px-4 py-2.5 flex items-center gap-2.5 text-[14px] font-black
+                               text-white transition hover:brightness-110 whitespace-nowrap"
+                    style={{
+                      background: b.c,
+                      border: '2px solid ' + (puesto ? '#ffffff' : 'transparent'),
+                      boxShadow: puesto ? '0 0 0 3px rgba(255,255,255,.20)' : 'none',
+                      opacity: !estadoFiltro || puesto ? 1 : 0.55,
+                    }}>
+                    {b.t}
+                    <span className="rounded-lg px-2 py-0.5 text-[13px] font-black"
+                          style={{ background: 'rgba(0,0,0,.25)' }}>
+                      {b.n}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* ── CUÁNTOS QUEDARON ────────────────────────────────────────────
               Al filtrar hay que poder leer de una cuántos deportistas cumplen,
               sin tener que bajar hasta el final de la tabla. Pedido de la
@@ -1933,7 +2024,8 @@ export default function GeneralPage() {
             const n     = listaPlana.length;
             const total = deportistas.length;
             const hayFiltro = programaFiltro !== null || !!sedeFiltro || !!proyectoFiltro
-                           || !!anioFiltro || !!buscar.trim() || !!buscarCod.trim();
+                           || !!anioFiltro || !!estadoFiltro
+                           || !!buscar.trim() || !!buscarCod.trim();
             return (
               <div className="ml-auto self-end flex items-center gap-2 flex-shrink-0">
                 {/* Aviso de búsqueda por teléfono: deja claro que está buscando
