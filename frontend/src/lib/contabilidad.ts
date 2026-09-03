@@ -214,6 +214,42 @@ export async function getConceptos(): Promise<Concepto[]> {
     return (data || []).map((r: any) => ({ id: r.id, nombre: r.nombre || '', tipo: r.tipo || '', codcuenta: r.codcuenta || '', orden: r.orden ?? 100 }));
   } catch (e: any) { console.error('[cont] getConceptos', e?.message); return []; }
 }
+/* ── LO INSTITUCIONAL DEL CATÁLOGO DE PRODUCTOS ───────────────────────────
+   (dirección, 02/09/2026)
+
+   La camiseta, la sudadera, la maleta: lo que se crea en la pantalla de
+   PRODUCTOS marcado como institucional. De ahí sale la lista que el Libro
+   ofrece en la casilla DETALLE, después de diciembre.
+
+   La tabla `productos` guarda ese tipo como `implemento` —así nació— y así se
+   queda: cambiarle el nombre a la columna obligaría a tocar todos los cobros
+   ya registrados en `otros_pagos`. Lo que cambió es cómo se LEE.
+
+   Solo los ACTIVOS: al desactivar un producto deja de ofrecerse, pero los
+   movimientos que ya lo tengan escrito no se tocan. */
+export async function getInstitucionales(): Promise<string[]> {
+  try {
+    const { data, error } = await sb()
+      .from('productos')
+      .select('descripcion,tipo,activo')
+      .eq('tipo', 'implemento')
+      .eq('activo', true);
+    if (error) { console.warn('[cont] getInstitucionales', error.message); return []; }
+    const vistos = new Set<string>();
+    const out: string[] = [];
+    for (const r of (data || [])) {
+      const t = String((r as any).descripcion ?? '').trim().toUpperCase();
+      if (!t || vistos.has(t)) continue;
+      vistos.add(t);
+      out.push(t);
+    }
+    return out.sort((a, b) => a.localeCompare(b, 'es'));
+  } catch (e: any) {
+    console.error('[cont] getInstitucionales', e?.message);
+    return [];
+  }
+}
+
 export async function guardarConcepto(c: Concepto): Promise<{ ok: boolean; msg?: string }> {
   const row = { id: c.id || ('con_' + Math.random().toString(36).slice(2, 8)), nombre: String(c.nombre || '').trim().toUpperCase(), tipo: c.tipo || '', codcuenta: c.codcuenta || '', orden: c.orden ?? 999 };
   if (!row.nombre) return { ok: false, msg: 'El nombre es obligatorio' };

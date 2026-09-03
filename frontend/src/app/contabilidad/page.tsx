@@ -11,6 +11,7 @@ import {
   hashesExistentes, contarMapeo, sembrarDiccionario, contarMovimientos, importarHistorico,
   getConceptos, guardarConcepto, borrarConcepto, actualizarMovimiento, asignarCodigoBulk,
   getMapeoRows, borrarMapeo, getMesesPorCodigo, borrarMovimiento, CONCEPTOS_SIN_DETALLE, conceptoRenombrado,
+  getInstitucionales,
   getTerceros,
   type MapeoIdx, type MovCont, type Concepto, type Tercero,
 } from '@/lib/contabilidad';
@@ -175,13 +176,13 @@ const COLS_LIBRO: { key: string; label: string; def: number }[] = [
      usa: se confirma justo donde uno termina de mirar. */
   { key: 'confirmar',  label: 'CONFIRMAR',   def: 80 },
   { key: 'editar',     label: 'EDITAR',      def: 62 },
-  /* BORRAR ESA FILA, DESDE LA FILA (dirección, 02/09/2026).
-     Ya existía "Eliminar filas" arriba, pero pide escribir el N° a mano —y con
-     doce mil movimientos, escribir un número equivocado borra el movimiento de
-     otro—. Este botón borra EXACTAMENTE la fila donde se oprime, y muestra el
-     mismo cuadro de siempre: qué se va a borrar, si ya estaba confirmada en un
-     estado de cuenta, y que queda copia en la papelera. */
-  { key: 'eliminar',   label: 'BORRAR',      def: 56 },
+  /* AQUÍ ESTUVO LA COLUMNA "BORRAR" (02/09/2026, puesta y quitada el mismo
+     día por orden de la dirección). Se usó para limpiar unas filas subidas por
+     error y se retiró enseguida: una papelera en cada renglón del libro —y peor,
+     un cuadrito para señalar muchas y botarlas de una— es demasiado fácil de
+     oprimir sin querer en la pantalla donde vive la plata de la academia.
+     Para borrar sigue estando ELIMINAR FILAS, arriba, que obliga a escribir el
+     N° y a leer la lista antes de aceptar. */
 ];
 
 // Caché en memoria del libro: al volver del estado de cuenta NO se recarga de la nube
@@ -191,12 +192,34 @@ let libroCache: { key: string; data: MovCont[] } | null = null;
 const MESES_CICLO = ['FEBRERO 2026', 'MARZO 2026', 'ABRIL 2026', 'MAYO 2026', 'JUNIO 2026', 'JULIO 2026', 'AGOSTO 2026', 'SEPTIEMBRE 2026', 'OCTUBRE 2026', 'NOVIEMBRE 2026', 'DICIEMBRE 2026'];
 // Opciones para el desplegable de la columna DETALLE (meses + inscripción, etc.)
 const MESES_DET = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-const DETALLE_OPCIONES: string[] = (() => {
+/** Lo fijo de la lista: matrícula, inscripción y los doce meses del año. */
+const DETALLE_BASE: string[] = (() => {
   const arr = ['INSCRIPCIÓN', 'MATRÍCULA'];
   for (const y of [2026]) for (const m of MESES_DET) arr.push(`${m} ${y}`);
-  arr.push('OTRO');
   return arr;
 })();
+
+const DETALLE_OPCIONES: string[] = [...DETALLE_BASE, 'OTRO'];
+
+/* ── LO INSTITUCIONAL ENTRA SOLO EN LA LISTA ──────────────────────────────
+   (dirección, 02/09/2026 — «una vez los cree, que en la columna concepto
+    aparezca INSTITUCIONAL y en el detalle pueda seleccionarlos, ubícalos
+    después de diciembre»)
+
+   La camiseta, la sudadera, la maleta —todo lo que se crea en PRODUCTOS como
+   INSTITUCIONAL— aparece aquí solo, sin tocar el código. Van DESPUÉS DE
+   DICIEMBRE y antes de OTRO, que es donde la dirección los quiere: primero lo
+   de todos los meses, y al final lo que se vende de vez en cuando.
+
+   El nombre del concepto se escribe SIN TILDE porque así está en la tabla de
+   cuentas —INSTITUCIONAL—, y tiene que coincidir para que el desplegable de
+   CONCEPTO lo reconozca. */
+const CONCEPTO_INSTITUCIONAL = 'INSTITUCIONAL';
+
+/** Compara dos nombres sin importar tildes, espacios de más ni mayúsculas. */
+const mismoTexto = (a: any, b: any) =>
+  String(a ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase()
+  === String(b ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
 
 /* ── GASTOS DE REPRESENTACIÓN ─────────────────────────────────────────────
    Regla de la dirección (25/08/2026): en estas filas el DETALLE no es el mes
@@ -214,8 +237,10 @@ const GASTOS_REPR_DETALLE = [
  *  función solo se llama al dibujar la pantalla, nunca al cargar el archivo. */
 const esGastoRepresentacion = (c: any) => /gastos?\s+de\s+representacion/.test(sinTildes(String(c ?? '')));
 /** Lista que le toca a la casilla DETALLE según el concepto de la fila. */
-const opcionesDetalle = (concepto: any) =>
-  esGastoRepresentacion(concepto) ? GASTOS_REPR_DETALLE : DETALLE_OPCIONES;
+const opcionesDetalle = (concepto: any, institucional: string[] = []) =>
+  esGastoRepresentacion(concepto)
+    ? GASTOS_REPR_DETALLE
+    : [...DETALLE_BASE, ...institucional, 'OTRO'];
 
 /* ── PAGOS A TERCEROS (NÓMINA Y PROVEEDORES) ──────────────────────────────
    Regla de la dirección (25/08/2026): al escribir la CÉDULA o el NIT de un
@@ -377,6 +402,10 @@ export default function ContabilidadPage() {
   const [banco, setBanco] = useState(BANCOS[0]);
   const [vista, setVista] = useState<'subir' | 'libro' | 'cuentas' | 'desconocidas' | 'diccionario'>('subir');
   const [conceptos, setConceptos] = useState<Concepto[]>([]);
+  /* Lo INSTITUCIONAL creado en la pantalla de Productos: camiseta, sudadera,
+     maleta… Entra solo en la lista de DETALLE, después de diciembre.
+     — dirección, 02/09/2026 */
+  const [institucionales, setInstitucionales] = useState<string[]>([]);
   // Directorio de NÓMINA Y PROVEEDORES (documento → nombre y tipo)
   const [terceros, setTerceros] = useState<Tercero[]>([]);
 
@@ -545,6 +574,25 @@ export default function ContabilidadPage() {
     setLibro(prev => prev.map(x => {
       if (x.id !== m.id) return x;
       const next: MovCont = { ...x, [campo]: val };
+
+      /* ── AL ESCOGER ALGO INSTITUCIONAL, EL CONCEPTO SE PONE SOLO ──────────
+         (dirección, 02/09/2026)
+
+         Si en DETALLE se escoge la camiseta, la sudadera o cualquier cosa del
+         catálogo institucional, el CONCEPTO queda en INSTITUCIONAL sin que
+         haya que ir a buscarlo en la otra casilla. Es el único caso en que un
+         detalle manda sobre el concepto, y es el que la dirección pidió.
+
+         Solo se pone si la casilla del concepto está EN BLANCO o si ya decía
+         INSTITUCIONAL: si alguien le puso otro concepto a propósito, no se le
+         pisa. */
+      if (campo === 'detalle' && institucionales.some(p => mismoTexto(p, val))) {
+        const actual = String(next.concepto ?? '').trim();
+        if (!actual || mismoTexto(actual, CONCEPTO_INSTITUCIONAL)) {
+          next.concepto = CONCEPTO_INSTITUCIONAL;
+        }
+      }
+
       if (campo === 'codigo') {
         // Si el código es de un deportista, autollenar su nombre.
         // Si es la cédula de un empleado de nómina, autollenar su nombre (y concepto NÓMINA).
@@ -781,6 +829,10 @@ export default function ContabilidadPage() {
     contarMovimientos().then(setMovCount).catch(() => {});
     getConceptos().then(setConceptos).catch(() => {});
     getTerceros().then(setTerceros).catch(() => {});
+    /* Lo institucional se lee directo del catálogo de Productos. Si la lista
+       no llega —sin internet, tabla vacía—, la casilla DETALLE sigue
+       funcionando igual con los meses de siempre. — 02/09/2026 */
+    getInstitucionales().then(setInstitucionales).catch(() => {});
     // Marcar en verde (permanente) lo que ya está pagado en el estado de cuenta
     getPagadosKeys().then(keys => setPublicadas(prev => { const n = new Set(prev); keys.forEach(k => n.add(k)); return n; })).catch(() => {});
   }, []);
@@ -1067,7 +1119,11 @@ export default function ContabilidadPage() {
   async function borrarEstasFilas(filas: MovCont[], faltan: number[] = []) {
     if (!filas.length) return;
 
-    const detalle = filas.map(m => {
+    /* Señalando cincuenta filas, listarlas todas hace un aviso que no cabe en
+       la pantalla y no se puede leer. Se muestran las primeras y se dice
+       cuántas más van. — dirección, 02/09/2026 */
+    const TOPE_LISTA = 25;
+    const detalle = filas.slice(0, TOPE_LISTA).map(m => {
       const n = numFila[m.id || ''];
       const val = Number(m.credito) > 0 ? '+' + pesosCO(Number(m.credito)) : '-' + pesosCO(Number(m.debito) || 0);
       const conf = confirmadas.has(String(m.codigo ?? '').trim() + '|' + String(m.detalle ?? '').trim()) ? '  ⚠ YA CONFIRMADO' : '';
@@ -1081,6 +1137,7 @@ export default function ContabilidadPage() {
       'SE VAN A ELIMINAR ' + filas.length + ' FILA(S) DEL LIBRO\n' +
       'Esto NO se puede deshacer desde la pantalla.\n\n' +
       detalle + '\n' +
+      (filas.length > TOPE_LISTA ? `  … y ${filas.length - TOPE_LISTA} fila(s) más\n` : '') +
       (faltan.length ? `\nNo se encontraron: ${faltan.join(', ')}\n` : '') +
       (yaConfirmadas
         ? `\n⚠ ${yaConfirmadas} de estas filas YA están confirmadas en un estado de cuenta.\n` +
@@ -1117,12 +1174,6 @@ export default function ContabilidadPage() {
     flash(fallaron.length
       ? `✓ ${borrados.length} eliminada(s) · ⚠ no se pudo con: ${fallaron.join(', ')}`
       : `✓ ${borrados.length} fila(s) eliminada(s) del libro`);
-  }
-
-  /** La papelera de cada renglón: borra ESA fila, la que se está viendo. */
-  async function eliminarUnaFila(m: MovCont) {
-    if (borrandoFilas) return;
-    await borrarEstasFilas([m]);
   }
 
   function abrirNuevaFila() {
@@ -2293,7 +2344,7 @@ export default function ContabilidadPage() {
               {codigosUnicos.map(c => <option key={c} value={c} />)}
             </datalist>
             <datalist id="detalle-libro">
-              {DETALLE_OPCIONES.map(o => <option key={o} value={o} />)}
+              {opcionesDetalle('', institucionales).map(o => <option key={o} value={o} />)}
             </datalist>
             {/* Lista de conceptos para ESCRIBIR y que filtre mientras se teclea.
                 Antes era un <select>: al escribir "INTERES" saltaba a la primera
@@ -2612,20 +2663,6 @@ export default function ContabilidadPage() {
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                       </td>
-                      {/* ── BORRAR ESTA FILA (dirección, 02/09/2026) ───────
-                          Sale el mismo cuadro de aceptar de siempre, con el
-                          detalle de lo que se va a borrar y el aviso si ya
-                          estaba confirmada en un estado de cuenta. */}
-                      <td style={{ ...tdC, padding: '1px' }}>
-                        <button
-                          onClick={() => void eliminarUnaFila(m)}
-                          disabled={borrandoFilas}
-                          title="Borrar esta fila del libro"
-                          className="mx-auto block text-[#b91c1c] hover:text-[#dc2626] p-0.5 rounded
-                                     hover:bg-[rgba(192,80,77,.14)] transition disabled:opacity-40">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -2641,9 +2678,6 @@ export default function ContabilidadPage() {
                       <td style={{ ...tfootTd, textAlign: 'right', color: '#16a34a' }}>{fmt(totCredito)}</td>
                       <td style={tfootTd} colSpan={5}></td>
                       <td style={tfootTd}></td>
-                      <td style={tfootTd}></td>
-                      {/* La casilla de BORRAR, para que el pie siga cuadrado
-                          con el encabezado. — 02/09/2026 */}
                       <td style={tfootTd}></td>
                     </tr>
                   </tfoot>
@@ -2736,8 +2770,8 @@ export default function ContabilidadPage() {
                               de meses a "en qué se gastó" (salud, estudio, vivienda…). */}
                           <select value={r.detalle || ''} onChange={e => editarSplit(i, 'detalle', e.target.value)} style={{ ...inp, minWidth: 120 }}>
                             <option value="">{esGastoRepresentacion(r.concepto) ? '— ¿en qué se gastó? —' : '—'}</option>
-                            {opcionesDetalle(r.concepto).map(o => <option key={o} value={o}>{o}</option>)}
-                            {r.detalle && !opcionesDetalle(r.concepto).includes(r.detalle) && <option value={r.detalle}>{r.detalle}</option>}
+                            {opcionesDetalle(r.concepto, institucionales).map(o => <option key={o} value={o}>{o}</option>)}
+                            {r.detalle && !opcionesDetalle(r.concepto, institucionales).includes(r.detalle) && <option value={r.detalle}>{r.detalle}</option>}
                           </select>
                         </td>
                         <td style={{ ...td, padding: 3 }}><input value={r.debito || ''} onChange={e => editarSplit(i, 'debito', numVal(e.target.value))} style={{ ...inp, textAlign: 'right', color: '#dc2626' }} /></td>
@@ -2843,8 +2877,8 @@ export default function ContabilidadPage() {
                     <label className={lbl}>{esGastoRepresentacion(nuevaFila.concepto) ? 'Detalle (¿en qué se gastó?)' : 'Detalle (mes)'}</label>
                     <select value={nuevaFila.detalle} onChange={e => editarNuevaFila('detalle', e.target.value)} style={inp}>
                       <option value="">—</option>
-                      {opcionesDetalle(nuevaFila.concepto).map(o => <option key={o} value={o}>{o}</option>)}
-                      {nuevaFila.detalle && !opcionesDetalle(nuevaFila.concepto).includes(nuevaFila.detalle) && <option value={nuevaFila.detalle}>{nuevaFila.detalle}</option>}
+                      {opcionesDetalle(nuevaFila.concepto, institucionales).map(o => <option key={o} value={o}>{o}</option>)}
+                      {nuevaFila.detalle && !opcionesDetalle(nuevaFila.concepto, institucionales).includes(nuevaFila.detalle) && <option value={nuevaFila.detalle}>{nuevaFila.detalle}</option>}
                     </select>
                   </div>
                 </div>

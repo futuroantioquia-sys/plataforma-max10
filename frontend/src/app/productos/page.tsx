@@ -25,9 +25,18 @@ interface Producto {
   created_at:  string;
 }
 
+/* ── SE LLAMA INSTITUCIONAL, NO IMPLEMENTO (dirección, 02/09/2026) ─────────
+   En la casa se le dice INSTITUCIONAL a la camiseta, la sudadera, la maleta:
+   todo lo que lleva el escudo. "Implemento" era una palabra de la plataforma,
+   no de la academia.
+
+   POR DENTRO LA BASE SIGUE DICIENDO `implemento`. Cambiarle el nombre a la
+   columna obligaría a tocar todos los cobros ya guardados en `otros_pagos`, y
+   por una palabra no vale la pena arriesgar la plata que ya está registrada.
+   Lo que cambia es lo que se LEE. */
 const TIPO_LABEL: Record<string, string> = {
   torneo:     'Torneo',
-  implemento: 'Implemento',
+  implemento: 'Institucional',
 };
 
 const TIPO_COLOR: Record<string, string> = {
@@ -37,6 +46,31 @@ const TIPO_COLOR: Record<string, string> = {
 
 function formatPeso(v: number) {
   return '$' + v.toLocaleString('es-CO');
+}
+
+/* ── LOS PESOS SE ESCRIBEN COMO EN COLOMBIA ───────────────────────────────
+   (dirección, 02/09/2026 — «en implementos le trabajó mal el tema de nombre
+    y valor»)
+
+   LA FALLA. La casilla del valor era `type="number"` y se leía con
+   `parseFloat`. Escribiendo 45.000 —como se escribe aquí— el punto se tomaba
+   como coma decimal: el producto quedaba guardado en CUARENTA Y CINCO PESOS.
+   Sin aviso, sin error: simplemente quedaba mal.
+
+   AHORA. Se toman solo los dígitos, se botan puntos, comas y el signo $. Y
+   mientras se escribe, la casilla va mostrando 45.000 con sus puntos, para
+   que se vea lo que va quedando. Los pesos aquí no llevan centavos. */
+function pesosDeTexto(t: any): number {
+  const solo = String(t ?? '').replace(/\D/g, '');
+  if (!solo) return 0;
+  const n = parseInt(solo, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** 45000 → "45.000" · vacío si es cero, para que la casilla no arranque en 0. */
+function conPuntos(t: any): string {
+  const n = pesosDeTexto(t);
+  return n ? n.toLocaleString('es-CO') : '';
 }
 
 export default function ProductosPage() {
@@ -108,7 +142,7 @@ export default function ProductosPage() {
       (conteoTor.pagados > 0
         ? `OJO: ${conteoTor.pagados} ya figuran PAGADOS y también se borran.\n`
         : '') +
-      `\nNo se tocan los implementos ni las mensualidades.\nEsto no se puede deshacer.`
+      `\nNo se toca lo institucional ni las mensualidades.\nEsto no se puede deshacer.`
     )) return;
 
     setLimpiando(true);
@@ -169,8 +203,9 @@ export default function ProductosPage() {
 
   async function guardar() {
     if (!desc.trim()) { setError('Escribe una descripción'); return; }
-    const num = parseFloat(valor.replace(/[^0-9.]/g, ''));
-    if (isNaN(num) || num <= 0) { setError('Ingresa un valor válido'); return; }
+    /* Solo los dígitos: "45.000" son cuarenta y cinco mil pesos. — 02/09/2026 */
+    const num = pesosDeTexto(valor);
+    if (num <= 0) { setError('Escribe cuánto vale. Ejemplo: 45.000'); return; }
 
     setGuardando(true); setError(''); setExito('');
     try {
@@ -429,7 +464,7 @@ export default function ProductosPage() {
         </button>
         <div>
           <h1 className="font-black text-base tracking-wide">PRODUCTOS</h1>
-          <p className="text-white/70 text-[11px]">Catálogo de torneos e implementos</p>
+          <p className="text-white/70 text-[11px]">Catálogo de torneos e institucional</p>
         </div>
       </div>
 
@@ -438,7 +473,7 @@ export default function ProductosPage() {
         {/* ── LIMPIAR LOS TORNEOS YA CARGADOS ─────────────────────────────
             Borra los cobros de torneo que están en el Estado de Cuenta de los
             deportistas (la sección "Otros pagos"). No toca el catálogo de
-            abajo, ni los implementos, ni las mensualidades. — 26/08/2026 */}
+            abajo, ni lo institucional, ni las mensualidades. — 26/08/2026 */}
         <div className="bg-[#3C4759] rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
           <div className="px-5 py-3 border-b border-[#4A5568]" style={{ background: '#fff7ed' }}>
             <h2 className="font-black text-sm uppercase tracking-wide" style={{ color: '#9a3412' }}>
@@ -452,7 +487,7 @@ export default function ProductosPage() {
               a cargarlos desde cero.
               <br />
               <span className="text-white/70">
-                No toca el catálogo de aquí abajo, ni los implementos, ni las mensualidades.
+                No toca el catálogo de aquí abajo, ni lo institucional, ni las mensualidades.
               </span>
             </p>
 
@@ -543,7 +578,7 @@ export default function ProductosPage() {
                           : 'bg-purple-600 border-purple-600 text-white'
                         : 'bg-[#3C4759] border-[#4A5568] text-white/70 hover:border-[#4A5568]'
                     )}>
-                    {t === 'torneo' ? '🏆 Torneo' : '👟 Implemento'}
+                    {t === 'torneo' ? '🏆 Torneo' : '👕 Institucional'}
                   </button>
                 ))}
               </div>
@@ -554,11 +589,15 @@ export default function ProductosPage() {
               <label className="block text-xs font-black text-white/70 uppercase tracking-wide mb-2">
                 Descripción
               </label>
+              {/* LETRA BLANCA SOBRE FONDO BLANCO (dirección, 02/09/2026): la
+                  casilla no traía color de fondo, así que se veía blanca y la
+                  letra —blanca también— quedaba invisible. Se escribía a
+                  ciegas. Se le pone el fondo oscuro del resto de la app. */}
               <input
                 value={desc}
                 onChange={e => setDesc(e.target.value)}
-                placeholder="Ej: Copa Ciudad 2026, Medias de fútbol..."
-                className="w-full border border-[#4A5568] rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
+                placeholder="Ej: Camiseta de presentación, Sudadera, Maleta…"
+                className="w-full bg-[#2B3547] border border-[#4A5568] rounded-xl px-4 py-3 text-sm font-semibold text-white placeholder:text-white/35 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
               />
             </div>
 
@@ -569,13 +608,16 @@ export default function ProductosPage() {
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-bold text-sm">$</span>
+                {/* NI `type=number` NI `parseFloat` (dirección, 02/09/2026):
+                    con los dos, escribir 45.000 guardaba 45 pesos. Ahora es
+                    una casilla de texto que solo admite números y se va
+                    puntuando sola: 45.000. */}
                 <input
-                  value={valor}
-                  onChange={e => setValor(e.target.value)}
-                  placeholder="0"
-                  type="number"
-                  min={0}
-                  className="w-full border border-[#4A5568] rounded-xl pl-8 pr-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
+                  value={conPuntos(valor)}
+                  onChange={e => setValor(String(pesosDeTexto(e.target.value) || ''))}
+                  placeholder="45.000"
+                  inputMode="numeric"
+                  className="w-full bg-[#2B3547] border border-[#4A5568] rounded-xl pl-8 pr-4 py-3 text-sm font-semibold text-white placeholder:text-white/35 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
                 />
               </div>
             </div>
@@ -734,7 +776,7 @@ export default function ProductosPage() {
                     <option value="">-- Elige un producto --</option>
                     {productos.map(p => (
                       <option key={p.id} value={p.id}>
-                        [{p.tipo === 'torneo' ? 'Torneo' : 'Implemento'}] {p.descripcion} — {formatPeso(p.valor)}
+                        [{p.tipo === 'torneo' ? 'Torneo' : 'Institucional'}] {p.descripcion} — {formatPeso(p.valor)}
                       </option>
                     ))}
                   </select>
