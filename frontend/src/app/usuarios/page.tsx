@@ -3,16 +3,43 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, CheckCircle, Plus, Eye, EyeOff, Users, X, Trash2, ChevronRight } from 'lucide-react';
-import { getProfes, saveProfes, deleteProfe, getDeportistas, getFichasProyecto, saveFichaProyecto } from '@/lib/db';
+import { getProfes, saveProfes, deleteProfe, getDeportistas, getFichasProyecto, saveFichaProyecto,
+  horaFinEntreno, minutosDeEntreno } from '@/lib/db';
 import type { Profe, Deportista } from '@/lib/db';
 import { useSoloLectura } from '@/lib/permisos';
 
 const PROYECTOS_META_KEY = 'futuro_proyectos_meta';
+/* La última hora que se puso, para ofrecerla de primera. Casi todos los
+   proyectos de una misma sede entran a la misma hora, así que el atajo ahorra
+   media docena de clics por renglón. — dirección, 02/09/2026 */
+const LLAVE_ULTIMA_HORA = 'futuro-ultima-hora-entreno';
 const SEDES = ['Santa Mónica', 'La 80', 'Centro', 'Sabaneta', 'Bello Niquía', 'Rionegro', 'Institucional'];
 const DIAS_SEMANA_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const DIAS_ORDEN_JS = [1, 2, 3, 4, 5, 6, 0];
 const ANIOS_NACIMIENTO = Array.from({ length: 14 }, (_, i) => 2011 + i); // 2011–2024
 const ORDEN_PROGRAMA = ['Estimulación', 'Formación', 'Progresión', 'Selección', 'Desarrollo'];
+
+/* ── LAS HORAS EN QUE SE PUEDE ARRANCAR UN ENTRENAMIENTO ──────────────────
+   (dirección, 02/09/2026)
+
+   De 7:30 de la mañana a 8 de la noche, de media en media hora. Antes
+   arrancaba a las 6, y la dirección la subió: nadie entrena a esa hora y
+   quedaban tres renglones de sobra que había que pasar cada vez.
+
+   Es una lista y no una casilla libre a propósito: escribiendo a mano entran
+   "4:30pm", "16:30", "4 30 PM" y "430", y después nada cuadra a la hora de
+   sumar. */
+const HORAS_ENTRENO: string[] = (() => {
+  const out: string[] = [];
+  for (let m = 7 * 60 + 30; m <= 20 * 60; m += 30) {
+    const h24 = Math.floor(m / 60);
+    const mm  = String(m % 60).padStart(2, '0');
+    const ap  = h24 >= 12 ? 'PM' : 'AM';
+    const h   = h24 % 12 === 0 ? 12 : h24 % 12;
+    out.push(`${h}:${mm} ${ap}`);
+  }
+  return out;
+})();
 
 /* PRE-PROGRESIÓN SE SACÓ DE ESTE MÓDULO (dirección, 02/09/2026). No es un
    programa vivo: su único renglón era un "Retirado" con cero deportistas, y el
@@ -31,6 +58,9 @@ const COLS_PROY = [
   { h: 'PROYECTO',        w: 150 },
   { h: '# DEP',           w: 80  },
   { h: 'SEDE',            w: 170 },
+  /* HORARIO (dirección, 02/09/2026): se escribe la hora de ENTRADA y la de
+     salida sale sola —hora y media, o una hora en Estimulación—. */
+  { h: 'HORARIO',         w: 190 },
   { h: 'EDAD',            w: 200 },
   { h: 'DÍAS ENTRENO',    w: 250 },
   { h: 'NOMBRE FORMADOR', w: 240 },
@@ -179,6 +209,20 @@ export default function UsuariosPage() {
   const [proyRows,    setProyRows]    = useState<ProyRow[]>([]);
   const [meta,        setMeta]        = useState<Record<string, ProyMeta>>({});
   const [metaEdits,   setMetaEdits]   = useState<Record<string, Partial<ProyMeta>>>({});
+  /* La última hora escogida, para ofrecerla de primera en el desplegable.
+     Se guarda en ESTE computador: es una comodidad de quien está llenando el
+     cuadro, no un dato de la academia. — dirección, 02/09/2026 */
+  const [ultimaHora, setUltimaHora] = useState('');
+  useEffect(() => {
+    try { setUltimaHora(localStorage.getItem(LLAVE_ULTIMA_HORA) || ''); } catch { /* nada */ }
+  }, []);
+
+  function ponerHorario(row: ProyRow, v: string) {
+    setMetaEdit(row, 'horario', v);
+    if (!v) return;
+    setUltimaHora(v);
+    try { localStorage.setItem(LLAVE_ULTIMA_HORA, v); } catch { /* nada */ }
+  }
   const [profeEdits,  setProfeEdits]  = useState<Record<string, { usuario?: string; clave?: string; nombre?: string }>>({});
   const [profesDirty, setProfesDirty] = useState(false); // reasignaciones de proyecto pendientes
   const [filtroPrograma, setFiltroPrograma] = useState('');
@@ -296,6 +340,8 @@ export default function UsuariosPage() {
               sede: info.sede || actual.sede,
               dias: (info.dias && info.dias.length) ? info.dias : actual.dias,
               nombreFormador: actual.nombreFormador || info.formador,
+              /* La hora de entrada, si la base ya la tiene. — 02/09/2026 */
+              horario: info.hora || actual.horario || '',
             };
           });
           try { localStorage.setItem(PROYECTOS_META_KEY, JSON.stringify(out)); } catch {}
@@ -475,6 +521,7 @@ export default function UsuariosPage() {
           dias: Array.isArray(m?.dias) ? m.dias : [],
           sede: String(m?.sede ?? ''),
           nombre_formador: String(m?.nombreFormador ?? ''),
+          hora: String(m?.horario ?? ''),
         });
         if (!ok) fallaron.push(proy);
       }
@@ -613,6 +660,8 @@ export default function UsuariosPage() {
   const PANEL = '#3C4759';   // tarjetas y renglones
   const GRIS  = '#7C879A';   // lo que está sin llenar
   const AMBAR = '#E0A33A';   // el número de deportistas
+  const CAMPO = '#2B3547';   // el fondo de las casillas
+  const BORDE = '#4A5568';   // el borde de las casillas
   /* Las listas que se despliegan las pinta Windows, no la página: se les dice
      fondo blanco y letra oscura para que no queden blanco sobre blanco. */
   const OPC   = { color: '#111827', backgroundColor: 'white' } as const;
@@ -916,6 +965,9 @@ export default function UsuariosPage() {
                 <tbody>
                   {filas.map((row, iFila) => {
                     const sede          = getMetaVal(row, 'sede') as string;
+                    /* La hora de entrada y la de salida, que se calcula. */
+                    const horaIni       = String(getMetaVal(row, 'horario') ?? '');
+                    const horaFin       = horaFinEntreno(horaIni, row.programa);
                     const nombreFormador = getMetaVal(row, 'nombreFormador') as string;
                     const dias          = getDias(row);
                     const edades        = getEdades(row);
@@ -967,6 +1019,50 @@ export default function UsuariosPage() {
                             <option value="" style={OPC}>— Sede —</option>
                             {SEDES.map(s => <option key={s} value={s} style={OPC}>{s}</option>)}
                           </select>
+                        </td>
+
+                        {/* ── HORARIO DE ENTRENAMIENTO ──────────────────────
+                            (dirección, 02/09/2026)
+
+                            Se escoge la hora de ENTRADA. La de salida no se
+                            escribe: la pone la plataforma sumando lo que dura
+                            el entrenamiento de ese programa —hora y media, y
+                            una hora en Estimulación—.
+
+                            Se guarda solo la de entrada. Guardar las dos sería
+                            guardar dos veces la misma cuenta, y algún día una
+                            de las dos quedaría mal. */}
+                        <td style={{ border: BW, padding: '4px 6px' }}>
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={horaIni}
+                              onChange={e => ponerHorario(row, e.target.value)}
+                              title={`Hora en que arranca el entrenamiento. ${row.programa} entrena ${minutosDeEntreno(row.programa) === 60 ? '1 hora' : '1 hora y media'}.`}
+                              style={{ background: CAMPO, border: `1px solid ${BORDE}`, borderRadius: 7,
+                                       padding: '3px 5px', outline: 'none', fontWeight: 800,
+                                       fontSize: '0.7rem', color: horaIni ? '#fff' : GRIS, cursor: 'pointer' }}>
+                              <option value="" style={OPC}>— poner —</option>
+                              {/* EL ÚLTIMO QUE SE USÓ, DE PRIMERO (dirección,
+                                  02/09/2026). Los proyectos de una misma sede
+                                  suelen entrar a la misma hora. */}
+                              {!!ultimaHora && (
+                                <optgroup label="EL ÚLTIMO QUE USASTE" style={OPC}>
+                                  <option value={ultimaHora} style={OPC}>{ultimaHora}</option>
+                                </optgroup>
+                              )}
+                              <optgroup label={ultimaHora ? 'LAS DEMÁS' : 'HORA DE ENTRADA'} style={OPC}>
+                                {HORAS_ENTRENO.filter(h => h !== ultimaHora)
+                                  .map(h => <option key={h} value={h} style={OPC}>{h}</option>)}
+                              </optgroup>
+                            </select>
+                            {horaFin ? (
+                              <>
+                                <span style={{ color: GRIS, fontWeight: 900, fontSize: '0.7rem' }}>a</span>
+                                <span style={{ fontWeight: 900, fontSize: '0.7rem', color: '#5BE39B',
+                                               whiteSpace: 'nowrap' }}>{horaFin}</span>
+                              </>
+                            ) : null}
+                          </div>
                         </td>
 
                         {/* EDAD — años de nacimiento de los deportistas del proyecto (automático) */}

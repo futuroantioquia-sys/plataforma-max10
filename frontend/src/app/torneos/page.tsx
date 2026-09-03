@@ -47,6 +47,7 @@ const PANEL  = '#3C4759';
 const CAMPO  = '#2B3547';
 const BORDE  = '#4A5568';
 const VERDE  = '#00B050';
+const VERDECL = '#5BE39B';   // el verde claro, para los letreros chiquitos
 const ROJO   = '#C0504D';
 const AMBAR  = '#E0A33A';
 const GRIS   = '#7C879A';
@@ -86,8 +87,12 @@ const RX_COMPETENCIAS = [
   /torneo.?2|^c\s*2$/i,
   /torneo.?3|^c\s*3$/i,
   /torneo.?4|^c\s*4$/i,
+  /* QUINTA COMPETENCIA (dirección, 02/09/2026): en Total Afiliados se agregó
+     C5 porque hay deportistas que juegan cinco torneos al año. Si esta lista
+     no la mira, un torneo puesto en C5 no le armaría el equipo a nadie. */
+  /torneo.?5|^c\s*5$/i,
 ];
-const CLAVES_VIRTUALES = ['__TORNEO1__', '__TORNEO2__', '__TORNEO3__', '__TORNEO4__'];
+const CLAVES_VIRTUALES = ['__TORNEO1__', '__TORNEO2__', '__TORNEO3__', '__TORNEO4__', '__TORNEO5__'];
 
 /** Los números de torneo que tiene puestos el deportista en su ficha. */
 function torneosDelDeportista(dep: Deportista): number[] {
@@ -130,13 +135,63 @@ function subDe(v: any): string {
 
    Se guarda EXACTAMENTE como se escribe aquí, en mayúsculas y con tilde, que
    es como están en la lista oficial. */
-function CasillaProgramas({ valor, onChange, bloqueada }: {
+/* ── EL PRIMERO ES EL DUEÑO DEL TORNEO ────────────────────────────────────
+   (dirección, 02/09/2026)
+
+   «Si bien hay torneos que tienen 2 o 3 programas, estos torneos pertenecen a
+    un solo programa. Haz que solo aparezca el programa en el cual hay mayor
+    cantidad de deportistas… al lado izquierdo del programa, una barra para
+    subir o bajar la jerarquía.»
+
+   QUÉ CAMBIÓ. La casilla sigue guardando varios programas separados por coma,
+   pero AHORA EL ORDEN MANDA: el primero es el programa del torneo, y es el
+   único que se ve —en esta columna y en el filtro de Programación—. Los demás
+   quedan debajo, marcados, y siguen sirviendo para que a un deportista de ese
+   otro programa se le pueda asignar el torneo. Nadie pierde acceso: esa fue la
+   opción A que escogió la dirección.
+
+   Antes el orden se reescribía solo, alfabético según la lista oficial. Eso se
+   quitó: si la dirección sube un programa con la flechita, ese orden es el que
+   vale y no se le vuelve a tocar.
+
+   EL NÚMERO DE LA DERECHA es cuántos deportistas de ese programa tienen este
+   torneo asignado hoy. No decide nada por sí solo —decide quien mira—, pero
+   ahí se ve de una si el de arriba es el que debe ser. */
+function CasillaProgramas({ valor, onChange, bloqueada, conteos }: {
   valor: string;
   onChange: (v: string) => void;
   bloqueada?: boolean;
+  /** Programa (sin tildes, en mayúscula) → cuántos deportistas suyos lo juegan. */
+  conteos?: Record<string, number>;
 }) {
   const [abierta, setAbierta] = useState(false);
   const caja = useRef<HTMLDivElement | null>(null);
+  /* DÓNDE PINTAR LA LISTICA (dirección, 02/09/2026)
+
+     «la lista desplegable no se ve cuando se abre».
+
+     Y era cierto: se pintaba PEGADA a la casilla (position absolute), y el
+     cuadro de los torneos vive dentro de un recuadro con `overflow-auto` —o
+     sea, con tijeras en los bordes—. Todo lo que se saliera quedaba cortado.
+     Con un solo torneo en pantalla, la listica caía justo en el borde de abajo
+     y se la comía completa.
+
+     Ahora se mide dónde quedó la casilla y la listica se pinta FIJA sobre la
+     pantalla, por encima de todo: ya no hay recuadro que la corte. Si no cabe
+     hacia abajo, se abre hacia arriba. Y se cierra si la pantalla se mueve. */
+  const boton = useRef<HTMLButtonElement | null>(null);
+  const [donde, setDonde] = useState<{ top: number; left: number } | null>(null);
+  const ALTO_LISTICA = 300;   // lo que mide con los seis programas
+
+  function medir() {
+    const r = boton.current?.getBoundingClientRect();
+    if (!r) return;
+    const cabeAbajo = window.innerHeight - r.bottom > ALTO_LISTICA;
+    setDonde({
+      top:  cabeAbajo ? r.bottom + 6 : Math.max(8, r.top - ALTO_LISTICA - 6),
+      left: Math.min(Math.max(8, r.left + r.width / 2 - 160), Math.max(8, window.innerWidth - 328)),
+    });
+  }
 
   const puestos = String(valor ?? '')
     .split(',').map(p => p.trim()).filter(Boolean);
@@ -145,27 +200,37 @@ function CasillaProgramas({ valor, onChange, bloqueada }: {
     a.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim() ===
     b.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
 
+  const pelado = (p: string) =>
+    p.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+
+  const cuantos = (p: string) => conteos?.[pelado(p)] ?? 0;
+
   /* Lo que ya estaba escrito y no está en la lista oficial NO se pierde: se
      muestra igual y se puede desmarcar. */
-  const lista = [
-    ...PROGRAMAS,
-    ...puestos.filter(p => !PROGRAMAS.some(o => igual(o, p))),
-  ];
+  const sinMarcar = PROGRAMAS.filter(o => !puestos.some(p => igual(p, o)));
+
+  /* El orden de la listica: primero los marcados EN SU ORDEN GUARDADO —el de
+     arriba es el dueño—, y debajo los que no están marcados. */
+  const lista = [...puestos, ...sinMarcar];
 
   function marcar(prog: string) {
     const esta = puestos.some(p => igual(p, prog));
+    /* Al marcar uno nuevo entra DE ÚLTIMO: nunca le quita el puesto al dueño
+       sin que la dirección lo decida con la flechita. */
     const next = esta
       ? puestos.filter(p => !igual(p, prog))
       : [...puestos, prog];
-    /* Se guardan en el orden oficial, no en el orden en que se fueron
-       marcando: así dos torneos con los mismos programas se escriben igual. */
-    next.sort((a, b) => rankProgramaLocal(a) - rankProgramaLocal(b));
     onChange(next.join(', '));
   }
 
-  function rankProgramaLocal(p: string): number {
-    const i = PROGRAMAS.findIndex(o => igual(o, p));
-    return i >= 0 ? i : PROGRAMAS.length;
+  /** Sube o baja un programa en la jerarquía. Solo se mueven los marcados. */
+  function mover(prog: string, paso: -1 | 1) {
+    const i = puestos.findIndex(p => igual(p, prog));
+    const j = i + paso;
+    if (i < 0 || j < 0 || j >= puestos.length) return;
+    const next = [...puestos];
+    const guarda = next[i]; next[i] = next[j]; next[j] = guarda;
+    onChange(next.join(', '));
   }
 
   useEffect(() => {
@@ -174,11 +239,18 @@ function CasillaProgramas({ valor, onChange, bloqueada }: {
       if (caja.current && !caja.current.contains(e.target as Node)) setAbierta(false);
     };
     const conEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierta(false); };
+    const cerrar = () => setAbierta(false);
     document.addEventListener('mousedown', fuera);
     document.addEventListener('keydown', conEsc);
+    /* Al correr el cuadro de lado o de arriba abajo, la listica quedaría
+       despegada de su casilla. Mejor cerrarla. — 02/09/2026 */
+    window.addEventListener('scroll', cerrar, true);
+    window.addEventListener('resize', cerrar);
     return () => {
       document.removeEventListener('mousedown', fuera);
       document.removeEventListener('keydown', conEsc);
+      window.removeEventListener('scroll', cerrar, true);
+      window.removeEventListener('resize', cerrar);
     };
   }, [abierta]);
 
@@ -193,52 +265,107 @@ function CasillaProgramas({ valor, onChange, bloqueada }: {
   return (
     <div ref={caja} className="relative">
       <button
+        ref={boton}
         type="button"
-        onClick={() => setAbierta(a => !a)}
-        title="Escoge el programa. Puedes marcar más de uno."
+        onClick={() => { if (!abierta) medir(); setAbierta(a => !a); }}
+        title="Escoge el programa. El de arriba es el del torneo."
         className="w-full px-1.5 py-[3px] rounded text-center text-white font-semibold text-[12.5px]
           leading-tight transition"
         style={{
           background: abierta ? CAMPO : 'transparent',
           border: `1px solid ${abierta ? VERDE : 'transparent'}`,
         }}>
-        {puestos.length
-          ? puestos.join(', ')
-          : <span className="text-white/25">— Escoger —</span>}
+        {/* SOLO EL DUEÑO (dirección, 02/09/2026). Antes salían los tres
+            nombres y no se sabía cuál era el del torneo. Si hay más marcados,
+            se dice con un +N chiquito al lado. */}
+        {puestos.length ? (
+          <>
+            {puestos[0]}
+            {puestos.length > 1 && (
+              <span className="text-white/40 font-black ml-1">+{puestos.length - 1}</span>
+            )}
+          </>
+        ) : <span className="text-white/25">— Escoger —</span>}
       </button>
 
-      {abierta && (
-        <div className="absolute z-50 mt-1 rounded-xl overflow-hidden left-1/2 -translate-x-1/2"
-          style={{ background: PANEL, border: `1px solid ${BORDE}`, minWidth: 200,
-                   boxShadow: '0 18px 40px rgba(0,0,0,.45)' }}>
-          <p className="px-3 py-2 text-[9.5px] font-black text-white/45 uppercase tracking-widest"
+      {/* MÁS GRANDE (dirección, 02/09/2026): «es complejo ver los programas a
+          seleccionar». Cabía justo y con las flechitas quedó apretado. Se
+          ensanchó a 320, se le dio aire a cada renglón y la letra creció. */}
+      {abierta && donde && (
+        <div className="rounded-xl overflow-hidden"
+          style={{ position: 'fixed', zIndex: 90, width: 320,
+                   top: donde.top, left: donde.left,
+                   background: PANEL, border: `1px solid ${BORDE}`,
+                   boxShadow: '0 22px 48px rgba(0,0,0,.55)' }}>
+          <p className="px-3.5 py-2.5 text-[10.5px] font-black text-white/55 uppercase tracking-widest"
             style={{ borderBottom: `1px solid ${BORDE}` }}>
-            Marca uno o varios
+            El de arriba es el programa del torneo
           </p>
-          {lista.map(prog => {
+          {lista.map((prog, iLista) => {
             const marcado = puestos.some(p => igual(p, prog));
+            const puesto  = puestos.findIndex(p => igual(p, prog));
+            const esDuenio = puesto === 0;
+            const n = cuantos(prog);
             return (
-              <button key={prog} type="button"
-                onClick={() => marcar(prog)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition">
-                <span className="w-3.5 h-3.5 rounded shrink-0 flex items-center justify-center"
-                  style={{
-                    background: marcado ? VERDE : 'transparent',
-                    border: `1px solid ${marcado ? VERDE : BORDE}`,
-                  }}>
-                  {marcado && <Check className="w-2.5 h-2.5 text-white" />}
+              <div key={prog}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5"
+                style={{
+                  background: esDuenio ? 'rgba(0,176,80,.13)' : 'transparent',
+                  borderTop: iLista && !marcado && puestos.some(p => igual(p, lista[iLista - 1]))
+                    ? `1px solid ${BORDE}` : undefined,
+                }}>
+
+                {/* LAS FLECHITAS: solo mandan sobre los marcados. Al que no
+                    está marcado no hay para dónde moverlo. — 02/09/2026 */}
+                <span className="flex flex-col gap-[2px] shrink-0">
+                  <button type="button"
+                    disabled={!marcado || puesto <= 0}
+                    onClick={() => mover(prog, -1)}
+                    title="Subirlo en la jerarquía"
+                    className="leading-none disabled:opacity-25 hover:brightness-150"
+                    style={{ width: 24, height: 16, fontSize: 11, background: CAMPO,
+                             border: `1px solid ${BORDE}`, borderRadius: 4, color: '#C6D2DE' }}>▲</button>
+                  <button type="button"
+                    disabled={!marcado || puesto < 0 || puesto >= puestos.length - 1}
+                    onClick={() => mover(prog, 1)}
+                    title="Bajarlo en la jerarquía"
+                    className="leading-none disabled:opacity-25 hover:brightness-150"
+                    style={{ width: 24, height: 16, fontSize: 11, background: CAMPO,
+                             border: `1px solid ${BORDE}`, borderRadius: 4, color: '#C6D2DE' }}>▼</button>
                 </span>
-                <span className={`text-white text-[12px] ${marcado ? 'font-black' : 'font-semibold'}`}>
-                  {prog}
-                </span>
-              </button>
+
+                <button type="button" onClick={() => marcar(prog)}
+                  className="flex-1 min-w-0 flex items-center gap-3 text-left hover:brightness-125 transition">
+                  <span className="w-[18px] h-[18px] rounded shrink-0 flex items-center justify-center"
+                    style={{
+                      background: marcado ? VERDE : 'transparent',
+                      border: `1px solid ${marcado ? VERDE : BORDE}`,
+                    }}>
+                    {marcado && <Check className="w-3.5 h-3.5 text-white" />}
+                  </span>
+                  <span className={`text-white text-[13.5px] leading-tight ${marcado ? 'font-black' : 'font-semibold'}`}>
+                    {prog}
+                    {esDuenio && (
+                      <span className="block text-[9px] font-black tracking-widest mt-[1px]"
+                        style={{ color: VERDECL }}>EL DEL TORNEO</span>
+                    )}
+                  </span>
+                </button>
+
+                {/* Cuántos deportistas de ese programa juegan este torneo. */}
+                {n > 0 && (
+                  <span className="shrink-0 text-[12px] font-black tabular-nums px-2 py-0.5 rounded"
+                    style={{ color: esDuenio ? '#fff' : '#C6D2DE',
+                             background: esDuenio ? VERDE : CAMPO }}>{n}</span>
+                )}
+              </div>
             );
           })}
           {puestos.length > 0 && (
             <button type="button"
               onClick={() => { onChange(''); setAbierta(false); }}
               style={{ borderTop: `1px solid ${BORDE}` }}
-              className="w-full text-left px-3 py-2 text-[11px] font-bold text-white/50 hover:text-white transition">
+              className="w-full text-left px-3.5 py-2.5 text-[12px] font-bold text-white/55 hover:text-white transition">
               Quitar todos
             </button>
           )}
@@ -585,6 +712,76 @@ export default function TorneosPage() {
     if (cambiada) programarGuardado([cambiada]);
   }
 
+  /* ── PONER DE PRIMERO EL PROGRAMA DE MÁS DEPORTISTAS ────────────────────
+     (dirección, 02/09/2026)
+
+     El orden de la columna PROGRAMA lo pone la dirección con las flechitas, y
+     nunca se toca solo: un dato que se reescribe por su cuenta es un dato en
+     el que no se puede confiar.
+
+     Pero el cuadro venía de antes, cuando el orden no significaba nada, y hay
+     torneos donde el primero NO es el programa de la mayoría —el CONCEJO SUB 11
+     dice FORMACIÓN y tiene 18 de PROGRESIÓN y 1 de formación—. Este botón
+     acomoda esos de un golpe: mira el conteo de deportistas y sube al que más
+     tenga. Muestra primero cuáles va a cambiar y pide confirmación.
+
+     Solo reordena. NO marca ni desmarca ningún programa: los que estaban
+     marcados siguen marcados, solo cambian de puesto. */
+  const [ordenandoProg, setOrdenandoProg] = useState(false);
+
+  function acomodarProgramas() {
+    const pel = (t: any) => String(t ?? '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+
+    const cambios: { f: FilaTorneo; antes: string; ahora: string; n: number }[] = [];
+
+    filas.forEach((f, i) => {
+      const puestos = String(f.programa ?? '').split(',').map(p => p.trim()).filter(Boolean);
+      if (puestos.length < 2) return;                 // con uno solo no hay qué ordenar
+      const conteo = conteoProgramaPorTorneo.get(i + 1) ?? {};
+      /* Se ordena por cuántos deportistas tiene cada uno, de mayor a menor.
+         Empatados o sin deportistas: se quedan como estaban. */
+      const orden = [...puestos].sort((a, b) => (conteo[pel(b)] ?? 0) - (conteo[pel(a)] ?? 0));
+      const ahora = orden.join(', ');
+      if (ahora !== puestos.join(', ')) {
+        cambios.push({ f, antes: puestos.join(', '), ahora, n: i + 1 });
+      }
+    });
+
+    if (!cambios.length) {
+      window.alert(
+        'No hay nada que acomodar.\n\n' +
+        'En todos los torneos con varios programas, el que está de primero ya es ' +
+        'el que tiene más deportistas.',
+      );
+      return;
+    }
+
+    const TOPE = 20;
+    const detalle = cambios.slice(0, TOPE).map(c => {
+      const nom = [c.f.torneo, c.f.categoria, c.f.nombre].map(x => String(x ?? '').trim()).filter(Boolean).join(' ');
+      return `  N° ${c.n}  ${nom}\n        ${c.antes}\n     →  ${c.ahora}`;
+    }).join('\n\n');
+
+    if (!window.confirm(
+      `SE VA A ACOMODAR EL ORDEN DE ${cambios.length} TORNEO(S)\n\n` +
+      'Se sube de primero el programa que tiene más deportistas. No se marca ni ' +
+      'se desmarca nada: solo cambia el orden.\n\n' +
+      detalle + '\n' +
+      (cambios.length > TOPE ? `\n  … y ${cambios.length - TOPE} más\n` : '') +
+      '\n¿Acomodar?',
+    )) return;
+
+    setOrdenandoProg(true);
+    const next = filas.map(f => {
+      const c = cambios.find(x => x.f.id === f.id);
+      return c ? { ...f, programa: c.ahora } : f;
+    });
+    setFilas(next);
+    programarGuardado(next.filter(f => cambios.some(c => c.f.id === f.id)));
+    setOrdenandoProg(false);
+  }
+
   /* ── Agregar un torneo al final ───────────────────────────────────────── */
   function agregar() {
     const nueva: FilaTorneo = {
@@ -702,7 +899,12 @@ export default function TorneosPage() {
     };
     return {
       torneo:    junta('torneo'),
-      programa:  junta('programa', PROGRAMAS),
+      /* SOLO PROGRAMAS DE VERDAD (dirección, 02/09/2026): antes esta lista
+         traía las combinaciones escritas en la columna —"FORMACIÓN, SELECCIÓN,
+         DESARROLLO"— como si fueran un programa más. Ahora se ofrecen los seis
+         oficiales y nada más; el filtro de abajo sigue mostrando el torneo si
+         ese programa está en CUALQUIER puesto de su columna. */
+      programa:  [...PROGRAMAS],
       categoria: junta('categoria', CATEGORIAS),
       nombre:    junta('nombre'),
       formador:  junta('formador'),
@@ -717,7 +919,11 @@ export default function TorneosPage() {
       .map((f, i) => ({ f, n: i + 1 }))
       .filter(({ f }) => !filtroFormador || igual(f.formador, filtroFormador))
       .filter(({ f }) => !filtroTorneoCuadro || igual(f.torneo, filtroTorneoCuadro))
-      .filter(({ f }) => !filtroPrograma || igual(f.programa, filtroPrograma))
+      /* El torneo pasa si ese programa está en cualquiera de sus puestos, no
+         solo si es el dueño: filtrando DESARROLLO se quieren ver todos los
+         torneos donde juega desarrollo. — 02/09/2026 */
+      .filter(({ f }) => !filtroPrograma || String(f.programa ?? '')
+        .split(',').some(p => igual(p.trim(), filtroPrograma)))
       .filter(({ f }) => !q ||
         `${f.torneo} ${f.programa} ${f.categoria} ${f.nombre} ${f.formador}`
           .toUpperCase().includes(q));
@@ -755,6 +961,33 @@ export default function TorneosPage() {
       if (Number.isFinite(ca) && Number.isFinite(cb) && ca !== cb) return ca - cb;
       return norm((a as any)._nombre).localeCompare(norm((b as any)._nombre), 'es');
     }));
+    return m;
+  }, [deportistas]);
+
+  /* ── CUÁNTOS DEPORTISTAS DE CADA PROGRAMA JUEGAN CADA TORNEO ─────────────
+     (dirección, 02/09/2026)
+
+     Es el dato que dice cuál es DE VERDAD el programa del torneo. Se cuenta
+     sobre las fichas: por cada deportista que tiene el torneo escrito en C1..C5,
+     se suma uno a su programa.
+
+     NO SE CUENTAN LOS RETIRADOS. Un torneo cuyo equipo se retiró no puede
+     seguir contando como si estuviera lleno. "SOLICITA RETIRO" sí cuenta: ese
+     caso está en estudio y el niño sigue entrenando —la misma regla de Total
+     Afiliados y del pospartido—. */
+  const conteoProgramaPorTorneo = useMemo(() => {
+    const m = new Map<number, Record<string, number>>();
+    (deportistas ?? []).forEach(d => {
+      const est = casillaDe(d, /^estado$/i);
+      if (est && !/solicit/i.test(est) && /retir/i.test(est)) return;
+      const prog = norm(casillaDe(d, /^programa$/i));
+      if (!prog) return;
+      torneosDelDeportista(d).forEach(n => {
+        const y = m.get(n) ?? {};
+        y[prog] = (y[prog] ?? 0) + 1;
+        m.set(n, y);
+      });
+    });
     return m;
   }, [deportistas]);
 
@@ -1075,9 +1308,26 @@ export default function TorneosPage() {
                 </button>
               )}
 
+              {/* ACOMODAR EL ORDEN DE LOS PROGRAMAS (dirección, 02/09/2026).
+                  Sube de primero el programa con más deportistas en los torneos
+                  que traen varios. Se corre una vez y ya. */}
+              {!soloLectura && (
+                <button
+                  onClick={acomodarProgramas}
+                  disabled={ordenandoProg || !deportistas}
+                  title={deportistas
+                    ? 'Sube de primero el programa que tiene más deportistas, en los torneos con varios programas'
+                    : 'Espere a que carguen las fichas de los deportistas'}
+                  className="ml-auto rounded-lg px-2.5 text-[11px] font-black disabled:opacity-45"
+                  style={{ height: 34, background: 'transparent', color: '#5BE39B',
+                           border: `1px solid ${VERDE}` }}>
+                  ⇅ ACOMODAR PROGRAMAS
+                </button>
+              )}
+
               <button
                 onClick={() => router.push('/programacion')}
-                className="ml-auto rounded-lg px-2.5 text-white/70 text-[11px] font-black"
+                className={`${soloLectura ? 'ml-auto ' : ''}rounded-lg px-2.5 text-white/70 text-[11px] font-black`}
                 style={{ height: 34, background: CAMPO, border: `1px solid ${BORDE}` }}>
                 IR A PROGRAMACIÓN
               </button>
@@ -1194,6 +1444,7 @@ export default function TorneosPage() {
                       </td>
                       <td className="px-1 py-[5px]" style={{ borderRight: BLANCO, borderBottom: BLANCO }}>
                         <CasillaProgramas valor={f.programa} bloqueada={soloLectura}
+                          conteos={conteoProgramaPorTorneo.get(n)}
                           onChange={v => editar(f.id, 'programa', v)} />
                       </td>
                       <td className="px-1 py-[5px]" style={{ borderRight: BLANCO, borderBottom: BLANCO }}>

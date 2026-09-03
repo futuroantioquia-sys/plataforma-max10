@@ -20,6 +20,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   CalendarDays, Plus, Save, Trash2, Users, ChevronDown, ChevronUp,
   AlertCircle, PencilRuler, Database, MapPin, Clock, Eye, X, Download, Lock, Unlock,
+  Ban,
 } from 'lucide-react';
 import {
   getDeportistas, getMicrociclos, getMicrociclo, crearMicrociclo,
@@ -127,9 +128,18 @@ const CAMPOS_DIA: { k: keyof MicrocicloDia; t: string }[] = [
   { k: 'fase_final',   t: 'Fase final'        },
 ];
 
-/** Campos que le faltan a un día. Lista vacía = día gestionado. */
-function faltantesDelDia(d: MicrocicloDia): string[] {
+/** Campos que le faltan a un día. Lista vacía = día gestionado.
+ *
+ *  ENTRENAMIENTO CANCELADO — dirección, 03/09/2026:
+ *  «cuando se cancela un entrenamiento, de igual manera pide información
+ *   para llenar el microciclo. Si no hay entrenamiento, este no se debe
+ *   llenar».
+ *  Si en el formato de asistencia el día quedó marcado CAN, ese día no
+ *  hubo entreno: no se le pide escenario, ni hora, ni componentes, ni
+ *  fases; tampoco traba la vista preliminar ni el cierre de la semana. */
+function faltantesDelDia(d: MicrocicloDia, cancelado = false): string[] {
   if (d.tipo_dia === 'descanso') return [];
+  if (cancelado) return [];
   return CAMPOS_DIA
     .filter(c => {
       const v = d[c.k];
@@ -927,7 +937,10 @@ function TarjetaMicrociclo({
       setDetalle(mc);
       setAsist(res);
       if (mc) setEstado(mc.estado);
-      return mc;
+      // Se devuelven LOS DOS: quien revisa la semana necesita saber, del
+      // mismo tirón, qué días quedaron cancelados en asistencia. El estado
+      // de React todavía no está actualizado cuando termina esta función.
+      return { mc, asis: res };
     } finally {
       setCargando(false);
     }
@@ -943,7 +956,7 @@ function TarjetaMicrociclo({
     setRevisando(true);
     // Siempre se vuelve a leer de la base: la vista preliminar muestra lo
     // que está GUARDADO, no lo que se acabó de escribir sin guardar.
-    const mc = await cargar();
+    const { mc, asis } = await cargar();
     setRevisando(false);
 
     if (!mc) {
@@ -960,7 +973,7 @@ function TarjetaMicrociclo({
     const pendientes = dias
       .map(d => ({
         dia: `${DIAS[d.dia_semana - 1]} ${fechaLarga(d.fecha)}`,
-        faltan: faltantesDelDia(d),
+        faltan: faltantesDelDia(d, Boolean(asis[d.fecha]?.cancelado)),
       }))
       .filter(x => x.faltan.length > 0);
 
@@ -972,7 +985,7 @@ function TarjetaMicrociclo({
   async function cerrarMicrociclo() {
     setAviso(null);
     setCerrando(true);
-    const mc = await cargar();
+    const { mc, asis } = await cargar();
     if (!mc) {
       setCerrando(false);
       setAviso([{ dia: 'Microciclo', faltan: ['No se pudo leer la semana. Oprima F5 y vuelva a intentar.'] }]);
@@ -981,7 +994,10 @@ function TarjetaMicrociclo({
 
     const dias = (mc.dias ?? []).filter(d => d.tipo_dia !== 'descanso');
     const pendientes = dias
-      .map(d => ({ dia: `${DIAS[d.dia_semana - 1]} ${fechaLarga(d.fecha)}`, faltan: faltantesDelDia(d) }))
+      .map(d => ({
+        dia: `${DIAS[d.dia_semana - 1]} ${fechaLarga(d.fecha)}`,
+        faltan: faltantesDelDia(d, Boolean(asis[d.fecha]?.cancelado)),
+      }))
       .filter(x => x.faltan.length > 0);
 
     if (!dias.length || pendientes.length) {
@@ -1506,6 +1522,36 @@ function DiaLectura({
   dia, resumen, orden,
 }: { dia: MicrocicloDia; resumen?: ResumenAsistenciaDia; orden: number }) {
   const p = resumen && !resumen.cancelado && resumen.convocados > 0 ? resumen.porcentaje : null;
+  /** Día cancelado en asistencia: en la hoja no se imprimen ocho cuadros
+   *  con rayas, se dice de frente que no hubo entrenamiento.
+   *  — dirección, 03/09/2026 */
+  const cancelado = Boolean(resumen?.cancelado);
+
+  if (cancelado) {
+    return (
+      <div className="dia-hoja bloque-hoja rounded-2xl border overflow-hidden"
+           style={{ background: PANEL, borderColor: BORDE }}>
+        <div className="titulo-dia px-4 py-3 border-b" style={{ background: HONDO, borderColor: BORDE }}>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className={TITULO_DIA} style={{ color: VERDE }}>DÍA {orden}</span>
+            <span className={cn(TITULO_DIA, 'text-white')}>{DIAS[dia.dia_semana - 1]}</span>
+            <span className="text-[11px] text-white">{fechaLarga(dia.fecha)}</span>
+          </div>
+        </div>
+        <div className="px-4 py-4 flex items-center gap-2">
+          <Ban className="w-4 h-4 flex-shrink-0" style={{ color: '#E0A33A' }} />
+          <p className="text-[12.5px] font-black" style={{ color: '#E0A33A' }}>
+            ENTRENAMIENTO CANCELADO — no hubo sesión este día
+          </p>
+        </div>
+        {dia.observaciones?.trim() && (
+          <div className="px-4 pb-4">
+            <BloqueLectura titulo="Observaciones" texto={dia.observaciones} />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="dia-hoja rounded-2xl border overflow-hidden" style={{ background: PANEL, borderColor: BORDE }}>
@@ -1639,9 +1685,17 @@ function DiaCard({
   const escenarioFinal = escenario === OTRO ? escenarioOtro.trim().toUpperCase() : escenario;
   const franja = conHorario ? `${a24(horaIni)}-${a24(horaFin)}` : '';
 
+  /** ENTRENAMIENTO CANCELADO — dirección, 03/09/2026.
+   *  El formador marcó CAN en el formato de asistencia: ese día no hubo
+   *  entreno. Entonces el microciclo NO le pide nada — ni escenario, ni
+   *  hora, ni fases —, no pinta nada de rojo y no traba el cierre de la
+   *  semana. Las casillas siguen ahí por si quiere dejar una nota, pero
+   *  ya no son obligatorias. */
+  const cancelado = Boolean(resumen?.cancelado);
+
   /** Mientras esté el aviso de la vista preliminar, lo que falte va en rojo.
    *  Se apaga solo: apenas el formador llena la casilla, deja de estar roja. */
-  const senalar   = !cerrado && (marcar || intento);
+  const senalar   = !cerrado && !cancelado && (marcar || intento);
   const faltaEsc  = senalar && !escenarioFinal;
   const faltaHora = senalar && !franja;
   const faltaComp = senalar && componentes.length === 0;
@@ -1738,6 +1792,14 @@ function DiaCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+          {cancelado && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide
+                             px-2 py-0.5 rounded-full flex-shrink-0"
+                  style={{ background: '#E0A33A', color: '#111827' }}
+                  title="Este día se canceló en el formato de asistencia">
+              <Ban className="w-3 h-3" /> Sin entrenamiento
+            </span>
+          )}
           {escenarioFinal && (
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-[#2B3547] px-2 py-0.5 rounded-full">
               <MapPin className="w-3 h-3" /> {escenarioFinal}
@@ -1753,7 +1815,7 @@ function DiaCard({
               {c.t}
             </span>
           ))}
-          {!escenarioFinal && !franja && componentes.length === 0 && (
+          {!cancelado && !escenarioFinal && !franja && componentes.length === 0 && (
             <span className="text-[11px] font-bold" style={{ color: marcar ? ROJO : GRIS_TXT }}>
               Sin escenario ni hora
             </span>
@@ -1766,6 +1828,26 @@ function DiaCard({
 
       {abierto && (
         <div className="border-t p-4 space-y-3" style={{ borderColor: BORDE, background: PANEL }}>
+
+          {/* ENTRENAMIENTO CANCELADO — dirección, 03/09/2026 */}
+          {cancelado && !cerrado && (
+            <div className="rounded-xl px-4 py-3 flex items-start gap-2"
+                 style={{ background: 'rgba(224,163,58,.12)', border: '1px solid #E0A33A' }}>
+              <Ban className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#E0A33A' }} />
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-black" style={{ color: '#E0A33A' }}>
+                  Este día no hubo entrenamiento
+                </p>
+                <p className="text-[11.5px] text-white mt-0.5 leading-snug">
+                  Quedó <b>cancelado</b> en el formato de asistencia, así que
+                  <b> no hay que llenar nada</b> de este día. No se pide escenario,
+                  ni horario, ni fases, y la semana se puede dar por terminada así.
+                  Si quiere dejar constancia de por qué se canceló, escríbalo en
+                  <b> Observaciones</b>.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ESCENARIO Y HORA */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

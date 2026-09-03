@@ -147,6 +147,26 @@ const ORDEN_DEFECTO: ClaveCol[] = [
   'asistencias', 'goles', 'ataja', 'calificacion',
 ];
 
+/* ── ¿ESA PLANILLA TIENE TRABAJO ADENTRO? ─────────────────────────────────
+   Sirve para no pisar un partido al mover otro de # FECHA. Que la planilla
+   EXISTA no basta: al abrirla, el pospartido arma solo la lista de
+   deportistas, así que ya trae renglones sin que nadie haya calificado. Se
+   mira lo que de verdad escribe el formador. — dirección, 03/09/2026 */
+function planillaConTrabajo(p: PlanillaGuardada): boolean {
+  if (p.definitivo) return true;
+  if (String(p.goles_nos ?? '').trim() || String(p.goles_ellos ?? '').trim()) return true;
+  if (String((p as any).resumen ?? '').trim()) return true;
+  const PLATAFORMA = new Set(['id', 'orden', 'depid', 'deportista', 'posicion', 'convocado']);
+  return (p.filas ?? []).some((fila: any) =>
+    Object.entries(fila ?? {}).some(([k, v]) => {
+      if (PLATAFORMA.has(String(k).toLowerCase())) return false;
+      if (typeof v === 'number')  return v > 0;
+      if (typeof v === 'boolean') return v === true;
+      if (Array.isArray(v))       return v.length > 0;
+      return String(v ?? '').trim() !== '';
+    }));
+}
+
 /** "2026-08-08" → "SAB 8 AGO 2026". La misma que usa la planilla abierta,
  *  pero suelta, para poder armar el PDF de un partido del banco sin abrirlo.
  *  — dirección, 02/09/2026 */
@@ -313,8 +333,12 @@ const RX_COMPETENCIAS = [
   /torneo.?2|^c\s*2$/i,
   /torneo.?3|^c\s*3$/i,
   /torneo.?4|^c\s*4$/i,
+  /* QUINTA COMPETENCIA (dirección, 02/09/2026): en Total Afiliados se agregó
+     C5 porque hay deportistas que juegan cinco torneos al año. Si esta lista
+     no la mira, un torneo puesto en C5 no le armaría el equipo a nadie. */
+  /torneo.?5|^c\s*5$/i,
 ];
-const CLAVES_VIRTUALES = ['__TORNEO1__', '__TORNEO2__', '__TORNEO3__', '__TORNEO4__'];
+const CLAVES_VIRTUALES = ['__TORNEO1__', '__TORNEO2__', '__TORNEO3__', '__TORNEO4__', '__TORNEO5__'];
 
 /** El número de torneo que tiene puesto en cada casilla. "3 · LIGA…" → 3 */
 function torneosDelDeportista(dep: Deportista): number[] {
@@ -919,6 +943,17 @@ export default function CrearPospartidoPage() {
      torneo viejo, o para entender por qué falta alguien— y para eso está el
      botón. Arranca siempre en ACTIVOS. */
   const [jornada, setJornada]     = useState('');
+  /* ── BAJO QUÉ FECHA ESTÁ GUARDADO ESTE PARTIDO EN LA BASE ────────────────
+     (dirección, 03/09/2026)
+
+     La planilla no se guarda por un número propio: se guarda por el TORNEO y
+     la # FECHA juntos. Así que cambiar la fecha no es corregir una casilla, es
+     MOVER el partido de sitio.
+
+     Aquí se recuerda con qué fecha se abrió. Si al guardar la fecha es otra,
+     el partido se escribe en la nueva y se quita de la vieja — si no, quedaría
+     duplicado en el banco: el mismo partido en dos fechas. */
+  const jornadaGuardada = useRef('');
   const [fecha, setFecha]         = useState('');
   const [llegar, setLlegar]       = useState('');
   const [rival, setRival]         = useState('');
@@ -2248,6 +2283,7 @@ export default function CrearPospartidoPage() {
   /** Vuelca en pantalla una planilla guardada. */
   function ponerPlanilla(p: PlanillaGuardada) {
     setJornada(p.jornada ?? '');
+    jornadaGuardada.current = String(p.jornada ?? '');
     setFecha(p.fecha ?? '');
     setLlegar(p.llegar ?? '');
     setRival(p.rival ?? '');
@@ -2418,12 +2454,51 @@ export default function CrearPospartidoPage() {
       'Si necesita corregir algo después, se oprime EDITAR y se vuelve a abrir.',
     )) return;
 
+    /* ── ¿LE CAMBIARON LA # FECHA? ENTONCES SE MUEVE ───────────────────────
+       (dirección, 03/09/2026)
+
+       Guardar sin más dejaría el partido escrito DOS VECES: en la fecha vieja
+       y en la nueva. Así que primero se mira si en la fecha nueva ya hay un
+       partido trabajado —ese no se pisa, se avisa— y después se pregunta, se
+       guarda en la nueva y se quita de la vieja. */
+    const fechaVieja = jornadaGuardada.current;
+    const seMueve = !!fechaVieja && fechaVieja !== jornada;
+
+    if (seMueve) {
+      let ocupada: PlanillaGuardada | null | undefined = null;
+      try { ocupada = await getPlanilla(numTorneo, jornada); } catch { ocupada = null; }
+      if (ocupada && planillaConTrabajo(ocupada)) {
+        setError(
+          `Ya hay un partido guardado en ${etiquetaFecha(jornada)} de este torneo, y tiene ` +
+          'trabajo adentro. No se puede mover este encima. Escoge otra # FECHA. ' +
+          'Lo que escribiste está a salvo en este aparato.',
+        );
+        return;
+      }
+      if (!window.confirm(
+        `Este partido estaba guardado como ${etiquetaFecha(fechaVieja)}.\n\n` +
+        `¿Moverlo a ${etiquetaFecha(jornada)}?\n\n` +
+        'Queda guardado en la fecha nueva y se quita de la vieja. No se pierde nada de lo escrito.',
+      )) return;
+    }
+
     const p = { ...planillaDeAhora(), definitivo: cerrar };
     guardarBorradorLocal(p);             // primero lo seguro, sin internet
     setGuardandoPlanilla(true);
     setError('');
     try {
       const sacadas = await guardarPlanilla(p);
+
+      /* Guardado en la fecha nueva: ahora sí se quita de la vieja. En este
+         orden y no al revés — si se borrara primero y fallara el guardado, el
+         partido se perdería. */
+      if (seMueve) {
+        try {
+          await borrarPlanilla(numTorneo, fechaVieja);
+          borrarBorradorLocal(numTorneo, fechaVieja);
+        } catch { /* si no se pudo, quedan dos: mejor dos que ninguno */ }
+      }
+      jornadaGuardada.current = jornada;
       setSinGuardar(false);
       setDefinitivo(cerrar);
       setGuardadoEn(p.actualizada_en);
@@ -2492,6 +2567,7 @@ export default function CrearPospartidoPage() {
     ultimoArmado.current = '';
     primeraCarga.current = true;
     setJornada(''); setFecha(''); setLlegar(''); setRival(''); setEscenario(''); setResumen('');
+    jornadaGuardada.current = '';
     setDt(''); setAt('');
     setGolesNos(''); setGolesEllos(''); setAutogoles(0);
     setGuardadoEn('');
@@ -3313,17 +3389,39 @@ export default function CrearPospartidoPage() {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-2 px-4 py-3 rounded-2xl mb-3"
-                   style={{ background: VERDE }}>
+              {/* ── LA BOTONERA, EN DOS PISOS (dirección, 03/09/2026) ──────────
+                  Estaba todo en una sola fila que se envolvía: el título tenía
+                  `flex-1` peleando el espacio con doce botones, y en el celular
+                  quedaba partido en cinco renglones —MI / BANCO / DE / POST /
+                  PARTIDOS—, ilegible.
+
+                  Ahora el título tiene su propio renglón, con ACTUALIZAR a la
+                  derecha, y los filtros van debajo, agrupados: primero en qué
+                  va el partido, después cómo quedó, y al final los
+                  desplegables. */}
+              <div className="rounded-2xl mb-3" style={{ background: VERDE }}>
+
+                <div className="flex items-center gap-2 px-4 pt-3">
                 <Archive className="w-5 h-5 text-white shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-white font-black text-[15px] tracking-wide">
+                  <h2 className="text-white font-black text-[15px] tracking-wide leading-tight">
                     {esProfe ? 'MI BANCO DE POST PARTIDOS' : 'PARTIDOS'}
                   </h2>
                   <p className="text-white/75 text-[11px] font-semibold">
                     {todos.length} {todos.length === 1 ? 'partido' : 'partidos'}
                   </p>
                 </div>
+
+                  <button onClick={refrescarBanco}
+                    disabled={cargandoBanco}
+                    title="Volver a leer el banco"
+                    className="shrink-0 rounded-lg px-2.5 h-[30px] flex items-center text-white text-[11px] font-black disabled:opacity-50"
+                    style={{ background: 'rgba(255,255,255,.18)' }}>
+                    {cargandoBanco ? '…' : 'ACTUALIZAR'}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 px-4 pb-3 pt-2.5">
                 {/* FILTRAR POR ESTADO Y POR FORMADOR (dirección, 29/08/2026):
                     con 38 partidos, sin esto toca leerlos todos. */}
                 {/* LOS TRES ESTADOS, DE BOTONES (dirección, 29/08/2026): se
@@ -3410,7 +3508,12 @@ export default function CrearPospartidoPage() {
                   </select>
                 )}
 
-                {(
+                {/* LAS FECHAS SON SOLO DE ADMINISTRACIÓN (dirección, 03/09/2026).
+                    Al formador le sobran: su banco tiene cuatro o cinco partidos
+                    y los ve todos de un vistazo. Y en el celular esas dos
+                    casillas de calendario salían como dos botones grises
+                    vacíos, que no se entendía qué eran. */}
+                {!esProfe && (
                   <>
                     <input
                       type="date"
@@ -3447,13 +3550,7 @@ export default function CrearPospartidoPage() {
                   </button>
                 )}
 
-                <button onClick={refrescarBanco}
-                  disabled={cargandoBanco}
-                  title="Volver a leer el banco"
-                  className="shrink-0 rounded-lg px-2.5 py-1.5 text-white text-[11px] font-black disabled:opacity-50"
-                  style={{ background: 'rgba(255,255,255,.18)' }}>
-                  ACTUALIZAR
-                </button>
+                </div>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -4005,24 +4102,21 @@ export default function CrearPospartidoPage() {
               cancha quepa en el mismo renglón. */}
           <div className={enMatriz
             ? 'grid grid-cols-1 sm:grid-cols-[220px] gap-2 mt-3'
-            : esProfe
-              ? 'grid grid-cols-2 gap-2 mt-3 sm:grid-cols-[0.85fr_196px_1.3fr_1.3fr]'
-              : 'grid grid-cols-2 gap-2 mt-3 sm:grid-cols-[0.6fr_0.85fr_196px_1.3fr_1.3fr]'}>
-            {!esProfe && (
+            : 'grid grid-cols-2 gap-2 mt-3 sm:grid-cols-[0.6fr_0.85fr_196px_1.3fr_1.3fr]'}>
+            {/* AL FORMADOR TAMBIÉN SE LE DEJA CAMBIAR LA # FECHA (dirección,
+                03/09/2026). Se le había quitado el 29/08 para que no se fuera a
+                una fecha inventada; pero pasa lo contrario con más frecuencia:
+                la dirección abre el partido en la fecha equivocada y el
+                formador, que es el que estuvo en la cancha, es quien se da
+                cuenta. Y no puede arreglarlo.
+
+                No queda suelto: la lista sigue siendo de 1A a 30A, y si la
+                fecha cambia, el partido se MUEVE —se guarda en la nueva y se
+                quita de la vieja— con su pregunta antes. */}
             <div>
               <label className="block text-white/45 text-[9.5px] font-black uppercase tracking-widest mb-1">
                 # FECHA
               </label>
-              {/* AL FORMADOR LA FECHA TAMPOCO SE LE PIDE (dirección,
-                  29/08/2026): el partido se lo abrió la dirección, ya viene
-                  con su fecha y no se cambia desde aquí. Antes tenía la lista
-                  de 1A a 30A y podía irse a una fecha que no existía. */}
-              {esProfe ? (
-                <span className="w-full rounded-lg px-2 flex items-center text-white text-[12.5px] font-black"
-                  style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}>
-                  {jornada ? etiquetaFecha(jornada) : '—'}
-                </span>
-              ) : (
               <select value={jornada} onChange={e => setJornada(e.target.value)}
                 style={{ background: CAMPO, border: `1px solid ${BORDE}`, height: 38 }}
                 className="w-full rounded-lg px-2 text-white text-[12.5px] font-bold outline-none cursor-pointer">
@@ -4042,9 +4136,13 @@ export default function CrearPospartidoPage() {
                   <option key={f} value={f} style={{ color: '#111827', backgroundColor: 'white' }}>{f}</option>
                 ))}
               </select>
+              {/* Un recordatorio chiquito, solo cuando de verdad se movió. */}
+              {!!jornadaGuardada.current && jornadaGuardada.current !== jornada && (
+                <p className="text-[10px] font-black mt-1 leading-tight" style={{ color: AMBAR }}>
+                  Estaba en {etiquetaFecha(jornadaGuardada.current)}. Al guardar se mueve.
+                </p>
               )}
             </div>
-            )}
 
             {/* DÍA · HORA · RIVAL son de un PARTIDO. En la matriz —que es la
                 lista del torneo para cobrar— no hay partido, así que no se

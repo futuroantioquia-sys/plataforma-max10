@@ -42,12 +42,13 @@ import {
   getCanchasTorneo, saveCanchasTorneo, CANCHAS_VACIAS,
   type FilaProgramacion, type CanchasTorneo,
 } from '@/lib/programacion';
-import { getDeportistas } from '@/lib/db';
+import { getDeportistas, getProfes, getFichasProyecto,
+  minutosDeEntreno, horaTextoDeMinutos } from '@/lib/db';
 import {
   getPlanilla, guardarPlanilla, etiquetaFecha, borrarPlanilla, borrarBorradorLocal,
   type PlanillaGuardada,
 } from '@/lib/pospartido';
-import type { Deportista } from '@/lib/db';
+import type { Deportista, Profe, InfoProyecto } from '@/lib/db';
 
 /* ── Colores oficiales ───────────────────────────────────────────────────── */
 const LIENZO = '#333F50';
@@ -294,8 +295,12 @@ const RX_COMPETENCIAS = [
   /torneo.?2|^c\s*2$/i,
   /torneo.?3|^c\s*3$/i,
   /torneo.?4|^c\s*4$/i,
+  /* QUINTA COMPETENCIA (dirección, 02/09/2026): en Total Afiliados se agregó
+     C5 porque hay deportistas que juegan cinco torneos al año. Si esta lista
+     no la mira, un torneo puesto en C5 no le armaría el equipo a nadie. */
+  /torneo.?5|^c\s*5$/i,
 ];
-const CLAVES_VIRTUALES = ['__TORNEO1__', '__TORNEO2__', '__TORNEO3__', '__TORNEO4__'];
+const CLAVES_VIRTUALES = ['__TORNEO1__', '__TORNEO2__', '__TORNEO3__', '__TORNEO4__', '__TORNEO5__'];
 
 function torneosDelDeportista(dep: Deportista): number[] {
   const vals: string[] = [];
@@ -730,6 +735,11 @@ export default function ProgramacionCompetenciaPage() {
 
   const [cuadro, setCuadro] = useState<FilaTorneo[] | null>(null);
   const [deportistas, setDeportistas] = useState<Deportista[]>([]);
+  /* Los formadores con sus proyectos, y la ficha de cada proyecto —días, hora
+     y sede—. De ahí sale el aviso de «está entrenando a esa hora».
+     — dirección, 02/09/2026 */
+  const [profes, setProfes] = useState<Profe[]>([]);
+  const [fichas, setFichas] = useState<Record<string, InfoProyecto>>({});
   /* ── LA LISTA DEL CUERPO TÉCNICO ──────────────────────────────────────────
      Sale del MISMO cuadro de Torneos y Competencias, de la columna FORMADOR:
      esos son los nombres con los que trabaja la academia —CASTRO, TABARES,
@@ -788,7 +798,22 @@ export default function ProgramacionCompetenciaPage() {
      programación. Por eso el día se ve arriba, en el título, y la columna de
      DÍA DE JUEGO ya no está en el cuadro. Dejando el día en blanco se ven
      todos, que sirve para no perder de vista un partido sin fecha. */
+  /* ── EN QUÉ DÍA ABRE LA PROGRAMACIÓN ──────────────────────────────────────
+     (dirección, 03/09/2026)
+
+     Arrancaba siempre en HOY, y un miércoles no hay nada que ver: había que
+     ponerle la fecha del sábado a mano cada vez. La regla que puso la
+     dirección, en orden:
+
+       1. ¿HOY hay partidos?  → hoy.
+       2. ¿No? Pues el PRÓXIMO DÍA CON PARTIDOS que venga. Si el viernes 4 ya
+          está programado y estamos en lunes, abre el viernes.
+       3. ¿Tampoco hay ninguno? → EL SÁBADO que viene, que es cuando se juega.
+
+     El día lo escoge una sola vez, al entrar. Después manda lo que la
+     dirección ponga en el calendario: si se corre a otro día, ahí se queda. */
   const [filtroDia, setFiltroDia]       = useState(() => hoyISO());
+  const yaEscogioDia = useRef(false);
   /* HASTA QUÉ DÍA (dirección, 29/08/2026). Vacío = un solo día. Sirve para
      agarrar un fin de semana entero —sábado y domingo— o un puente con el
      lunes festivo, sobre todo para armar UNA sola imagen de todo el puente. */
@@ -864,11 +889,38 @@ export default function ProgramacionCompetenciaPage() {
 
   useEffect(() => { void recargar(); }, [recargar]);
 
+  /* Se escoge el día apenas llega la programación de la base, y una sola vez:
+     si se hiciera en cada carga, le movería la fecha a la dirección mientras
+     está trabajando. — dirección, 03/09/2026 */
+  useEffect(() => {
+    if (yaEscogioDia.current || filas === null) return;
+    yaEscogioDia.current = true;
+
+    const hoy = hoyISO();
+    const conPartido = new Set((filas ?? []).map(f => String(f.fecha ?? '')).filter(Boolean));
+
+    /* 1 y 2: hoy, o el próximo día que tenga partidos. Se miran los quince
+       días que vienen: más allá ya no es "el partido que sigue". */
+    for (let i = 0; i <= 14; i++) {
+      const dia = correrDias(hoy, i);
+      if (conPartido.has(dia)) { setFiltroDia(dia); return; }
+    }
+
+    /* 3: no hay nada programado todavía. Se abre EL SÁBADO que viene —hoy
+       mismo si hoy es sábado—, que es el día que la academia juega. */
+    const falta = (6 - diaDeLaSemana(hoy) + 7) % 7;
+    setFiltroDia(correrDias(hoy, falta));
+  }, [filas]);
+
   useEffect(() => {
     let vivo = true;
     (async () => {
       try { const c = await getCuadro(); if (vivo) setCuadro(c); } catch { /* nada */ }
       try { const d = await getDeportistas(); if (vivo) setDeportistas(d); } catch { /* nada */ }
+      /* Para cruzar el partido contra los ENTRENAMIENTOS del profe.
+         — dirección, 02/09/2026 */
+      try { const p = await getProfes(); if (vivo) setProfes(p); } catch { /* nada */ }
+      try { const f = await getFichasProyecto(); if (vivo) setFichas(f); } catch { /* nada */ }
     })();
     return () => { vivo = false; };
   }, []);
@@ -926,16 +978,34 @@ export default function ProgramacionCompetenciaPage() {
     return [...set].sort((a, b) => a.localeCompare(b, 'es'));
   }, [lista, torneoDe]);
 
-  /** LOS PROGRAMAS, tal como están escritos en la columna PROGRAMA del cuadro
-   *  de Torneos y Competencias. — dirección, 29/08/2026 */
+/* ── SOLO EL PROGRAMA DUEÑO DEL TORNEO ────────────────────────────────────
+   (dirección, 02/09/2026)
+
+   «En la tercera imagen solo aparecería el programa del torneo, no tendría por
+    qué aparecer 2 o 3 programas.»
+
+   La columna PROGRAMA del cuadro de Torneos puede traer varios separados por
+   coma —"FORMACIÓN, SELECCIÓN, DESARROLLO"—, y este filtro los estaba
+   ofreciendo TAL CUAL: salían nueve renglones, y cuatro de ellos eran
+   combinaciones que no son un programa de la academia.
+
+   Desde hoy el ORDEN de esa columna manda: el PRIMERO es el programa del
+   torneo. Aquí solo se ofrece ese, y el filtro compara contra ese. Los demás
+   siguen guardados y siguen sirviendo para asignarle el torneo a un deportista
+   de otro programa; simplemente no ensucian este desplegable. */
+  const programaDelTorneo = useCallback((t: any): string => {
+    const crudo = String(limpiar(t?.programa ?? '') ?? '');
+    return String(crudo.split(',')[0] ?? '').trim().toUpperCase();
+  }, []);
+
   const programasParaFiltrar = useMemo(() => {
     const set = new Set<string>();
     for (const t of cuadro ?? []) {
-      const n = String(limpiar((t as any).programa ?? '') ?? '').toUpperCase();
+      const n = programaDelTorneo(t);
       if (n) set.add(n);
     }
     return [...set].sort((a, b) => a.localeCompare(b, 'es'));
-  }, [cuadro]);
+  }, [cuadro, programaDelTorneo]);
 
   /** El cuerpo técnico COMPLETO para el filtro: todos los del cuadro de
    *  Torneos, aunque todavía no tengan ningún partido programado —JIMÉNEZ, por
@@ -966,7 +1036,9 @@ export default function ProgramacionCompetenciaPage() {
         }
         if (filtroProgramas.length) {
           const t: any = torneoDe(f.torneo_num);
-          if (!filtroProgramas.some(x => pelar(x) === pelar(t?.programa))) return false;
+          /* Se compara contra el programa DUEÑO —el primero de la columna—,
+             no contra la lista completa. — 02/09/2026 */
+          if (!filtroProgramas.some(x => pelar(x) === pelar(programaDelTorneo(t)))) return false;
         }
         /* CUERPO TÉCNICO: vale si figura de D.T o de A.T. */
         if (filtroProfe) {
@@ -992,7 +1064,7 @@ export default function ProgramacionCompetenciaPage() {
           ? minutosDeLaHora(b.hora_partido) : minutosDeLaHora(b.hora);
         return ha - hb;
       });
-  }, [lista, filtroDia, filtroHasta, filtroTorneos, filtroProgramas, filtroProfe, torneoDe, ordenMano]);
+  }, [lista, filtroDia, filtroHasta, filtroTorneos, filtroProgramas, filtroProfe, torneoDe, ordenMano, programaDelTorneo]);
 
   /* ── LAS DOS HORAS, AMARRADAS ─────────────────────────────────────────────
      (dirección, 02/09/2026)
@@ -1166,6 +1238,193 @@ export default function ProgramacionCompetenciaPage() {
     });
     return salida;
   }, [visibles, minutosDelPartido]);
+
+  /* ══ ¿ESTÁ ENTRENANDO A ESA HORA? ══════════════════════════════════════
+     (dirección, 02/09/2026)
+
+     «Si un partido del sábado es a las 10:00am y el profe está en la sede
+      Sabaneta con un entrenamiento hasta las 10:00am, en programación en el
+      partido debe aparecer en rojo diciendo que tiene entrenamiento hasta las
+      10:00am en la sede Sabaneta. Saldrá en rojo desde 1 hora antes del inicio
+      del entrenamiento hasta una hora después de finalizado.»
+
+     DE DÓNDE SALE CADA COSA:
+       · Qué días y a qué hora entrena un proyecto → la ficha del proyecto,
+         que se llena en Información de Proyectos y Formadores.
+       · Cuánto dura → el programa: hora y media, y una hora en Estimulación.
+       · Qué proyectos son de cada profe → la tabla de formadores.
+
+     LA HORA DE MARGEN NO ES CAPRICHO: hay que salir de una cancha, cruzar la
+     ciudad y llegar a la otra. Por eso el aviso abre una hora antes de que
+     arranque el entrenamiento y cierra una hora después de que termine.
+
+     SI FALTA EL DATO, NO SE INVENTA. Un proyecto sin hora puesta no genera
+     aviso: se avisa de lo que se sabe, y de lo demás se calla. */
+  const MARGEN_VIAJE = 60;
+
+  /** El programa de cada proyecto, sacado de las fichas de los deportistas.
+   *  Sirve para saber si el entrenamiento dura una hora o una hora y media. */
+  const programaDeProyecto = useMemo(() => {
+    const votos = new Map<string, Record<string, number>>();
+    deportistas.forEach(d => {
+      const proy = String(getCol(d, /^proy/i) ?? '').trim();
+      const prog = String(getCol(d, /^program/i) ?? '').trim();
+      if (!proy || !prog) return;
+      const v = votos.get(proy) ?? {};
+      v[prog] = (v[prog] ?? 0) + 1;
+      votos.set(proy, v);
+    });
+    const out = new Map<string, string>();
+    votos.forEach((v, proy) => {
+      const gana = Object.entries(v).sort((a, b) => b[1] - a[1])[0];
+      if (gana) out.set(proy, gana[0]);
+    });
+    return out;
+  }, [deportistas]);
+
+  /** Los entrenamientos de cada formador, listos para comparar. */
+  type Entreno = { proyecto: string; dia: number; desde: number; hasta: number; sede: string };
+  const entrenosPorProfe = useMemo(() => {
+    const m = new Map<string, Entreno[]>();
+    const porProfe = new Map<string, Entreno[]>();   // usuario → sus entrenamientos
+    profes.forEach(p => {
+      const suyos: Entreno[] = [];
+      (p.proyectos ?? []).forEach(proy => {
+        const f = fichas[String(proy).trim()];
+        if (!f) return;
+        const desde = minutosDeLaHora(f.hora);
+        if (desde === 99999) return;                    // sin hora puesta: no se inventa
+        const dura = minutosDeEntreno(programaDeProyecto.get(String(proy).trim()) ?? '');
+        (f.dias ?? []).forEach(dia => {
+          suyos.push({ proyecto: String(proy).trim(), dia, desde, hasta: desde + dura, sede: f.sede ?? '' });
+        });
+      });
+      if (!suyos.length) return;
+      porProfe.set(p.usuario, suyos);
+    });
+
+    /* ── BAJO QUÉ NOMBRES SE BUSCA A CADA UNO ──────────────────────────────
+       En la programación el D.T se escribe corto —DUVAN, RIOS, MARTIN—, y ese
+       texto sale del cuadro de Torneos, no de la tabla de formadores. Así que
+       se guarda a cada señor bajo los nombres con los que puede aparecer: su
+       usuario, su nombre completo y su primer apellido.
+
+       PERO UN APELLIDO PUEDE SER DE DOS (02/09/2026): la academia tiene a
+       JULIÁN RÍOS HERRERA (usuario RIOS) y a JAVIER DUVÁN RÍOS OSPINA (usuario
+       DUVAN). Si "RIOS" apuntara a los dos, a Julián le saldrían en rojo los
+       entrenamientos de Duván. Por eso un alias que le sirva a más de un
+       formador SE DESCARTA: se prefiere no avisar que avisar mentiras. El
+       usuario, que es único, nunca se descarta. */
+    const dueños = new Map<string, Set<string>>();
+    const anotar = (alias: string, usuario: string) => {
+      const k = pelar(alias);
+      if (!k) return;
+      const y = dueños.get(k) ?? new Set<string>();
+      y.add(usuario);
+      dueños.set(k, y);
+    };
+    profes.forEach(p => {
+      anotar(p.usuario, p.usuario);
+      anotar(p.nombre || '', p.usuario);
+      anotar(primerApellido(p.nombre || ''), p.usuario);
+    });
+
+    /* ── LOS ENTRENAMIENTOS PEGADOS SE JUNTAN EN UNO ───────────────────────
+       (dirección, 02/09/2026)
+
+       «Duván entrena de 7:30am hasta las 9:00 y de 9:00am a 10:00 tiene otro
+        entrenamiento. Si el partido fuera a las 11:00am, con el entrenamiento
+        que termina a las 9:00am sí le daría, pero como tiene otro a las 10:00am
+        no le daría.»
+
+       Mirando los entrenamientos uno por uno, el aviso decía «hasta las 9:00»
+       —el primero que encontrara— y eso confunde: lo que de verdad lo tiene
+       ocupado es que sale a las DIEZ. Así que los que se tocan o se pisan se
+       juntan en un solo bloque: 7:30 a 10:00.
+
+       La SEDE que se muestra es la del ÚLTIMO pedazo del bloque: es de donde
+       tiene que salir para llegar al partido. */
+    const juntarPegados = (lista: Entreno[]): Entreno[] => {
+      const porDia = new Map<number, Entreno[]>();
+      lista.forEach(e => porDia.set(e.dia, [...(porDia.get(e.dia) ?? []), e]));
+      const out: Entreno[] = [];
+      porDia.forEach((delDia, dia) => {
+        const orden = [...delDia].sort((a, b) => a.desde - b.desde);
+        let bloque: Entreno | null = null;
+        orden.forEach(e => {
+          if (bloque && e.desde <= bloque.hasta) {
+            /* Se pega al anterior: se estira el bloque y se queda con la sede
+               y el proyecto del pedazo que termina más tarde. */
+            if (e.hasta >= bloque.hasta) { bloque.hasta = e.hasta; bloque.sede = e.sede; }
+            bloque.proyecto = `${bloque.proyecto}, ${e.proyecto}`;
+            return;
+          }
+          if (bloque) out.push(bloque);
+          bloque = { ...e, dia };
+        });
+        if (bloque) out.push(bloque);
+      });
+      return out;
+    };
+
+    dueños.forEach((quienes, alias) => {
+      if (quienes.size !== 1) return;                 // apellido repetido: se descarta
+      const usuario = [...quienes][0];
+      const suyos = porProfe.get(usuario);
+      if (suyos && suyos.length) m.set(alias, juntarPegados(suyos));
+    });
+    return m;
+  }, [profes, fichas, programaDeProyecto]);
+
+  /** Qué día de la semana cae esa fecha. 0 = domingo … 6 = sábado. */
+  function diaDeLaFecha(fecha: string): number {
+    const m = String(fecha ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return -1;
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay();
+  }
+
+  type ChoqueEntreno = { quien: string; proyecto: string; sede: string; hasta: string; desde: string; terminaMin: number };
+
+  const choquesEntreno = useMemo(() => {
+    const out = new Map<string, ChoqueEntreno>();
+    if (!entrenosPorProfe.size) return out;
+
+    visibles.forEach(f => {
+      const dia = diaDeLaFecha(f.fecha);
+      if (dia < 0) return;
+
+      /* Se miran las DOS horas del partido: si el señor tiene que estar en la
+         cancha a la hora de llegada, ese es el problema aunque el pitazo sea
+         más tarde. */
+      const horas = [minutosDeLaHora(f.hora), minutosDelPartido(f)]
+        .filter(x => x !== 99999);
+      if (!horas.length) return;
+
+      [f.dt, f.at].forEach(quien => {
+        const k = pelar(quien);
+        if (!k) return;
+        (entrenosPorProfe.get(k) ?? []).forEach(e => {
+          if (e.dia !== dia) return;
+          const abre   = e.desde - MARGEN_VIAJE;
+          const cierra = e.hasta + MARGEN_VIAJE;
+          if (!horas.some(h => h >= abre && h <= cierra)) return;
+          /* Si choca con más de un bloque, manda EL QUE TERMINA MÁS TARDE: es
+             el que de verdad lo tiene ocupado. — 02/09/2026 */
+          const ya = out.get(f.id);
+          if (ya && ya.terminaMin >= e.hasta) return;
+          out.set(f.id, {
+            quien:      String(quien ?? '').trim().toUpperCase(),
+            proyecto:   e.proyecto,
+            sede:       e.sede,
+            desde:      horaTextoDeMinutos(e.desde),
+            hasta:      horaTextoDeMinutos(e.hasta),
+            terminaMin: e.hasta,
+          });
+        });
+      });
+    });
+    return out;
+  }, [visibles, entrenosPorProfe, minutosDelPartido]);
 
   /** "1h 15m" · "45m" — para decirlo en el aviso. */
   function huecoBonito(min: number): string {
@@ -2450,6 +2709,9 @@ export default function ProgramacionCompetenciaPage() {
                     const yaEsta = !!f.microciclo_id;
                     const ocupado = trabajando === f.id;
                     const choque = choques.get(f.id);
+                    /* El otro rojo: está entrenando a esa hora. — 02/09/2026 */
+                    const enEntreno = choquesEntreno.get(f.id);
+                    const enRojo = !!choque || !!enEntreno;
                     return (
                       <div key={f.id}
                         className="flex flex-col gap-1"
@@ -2491,10 +2753,10 @@ export default function ProgramacionCompetenciaPage() {
                              style={{
                                gridTemplateColumns: COLUMNAS,
                                /* EN ROJO CUANDO HAY CHOQUE (dirección, 02/09/2026) */
-                               background: choque ? 'rgba(192,80,77,.18)' : CAMPO,
+                               background: enRojo ? 'rgba(192,80,77,.18)' : CAMPO,
                                border: `1px solid ${
-                                 filaEncima === f.id ? AMBAR : choque ? ROJO : BORDE}`,
-                               borderLeft: choque ? `4px solid ${ROJO}` : undefined,
+                                 filaEncima === f.id ? AMBAR : enRojo ? ROJO : BORDE}`,
+                               borderLeft: enRojo ? `4px solid ${ROJO}` : undefined,
                              }}>
 
                           <input
@@ -2644,6 +2906,20 @@ export default function ProgramacionCompetenciaPage() {
                              style={{ color: '#F0A6A3' }}>
                             ⚠ {choque.quien} tiene otro partido a {huecoBonito(choque.hueco)} de
                             este. Con menos de 2 horas entre pitazo y pitazo no alcanza a llegar.
+                          </p>
+                        )}
+
+                        {/* EL OTRO ROJO: ESTÁ ENTRENANDO (dirección, 02/09/2026).
+                            Se dice hasta qué hora y en qué sede, que es lo que
+                            hay que saber para decidir si se mueve el partido o
+                            se manda a otro. */}
+                        {enEntreno && (
+                          <p className="text-[11px] font-black leading-snug pl-[46px] pr-[84px]"
+                             style={{ color: '#F0A6A3' }}>
+                            ⚠ {enEntreno.quien} tiene entrenamiento de {enEntreno.desde} a{' '}
+                            {enEntreno.hasta}
+                            {enEntreno.sede ? ` en la sede ${enEntreno.sede}` : ''}
+                            {enEntreno.proyecto ? ` (${enEntreno.proyecto})` : ''}.
                           </p>
                         )}
                       </div>

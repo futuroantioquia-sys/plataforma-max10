@@ -66,8 +66,16 @@ export function nuevoId(): string {
 }
 
 /* ── Listas para los desplegables ────────────────────────────────────────── */
+/* PRE-PROGRESIÓN SE QUITÓ (dirección, 02/09/2026). No es un programa de la
+   academia: quedó de una etapa anterior y solo servía para escoger mal. Al
+   revisar antes de quitarlo: NINGÚN torneo la tenía puesta, y del lado de las
+   fichas quedaba una sola deportista —Karen Pérez, código 23541— que además
+   está RETIRADA. Así que no se le quita el programa a nadie que esté
+   entrenando.
+   Si alguna ficha vieja todavía la trae escrita, se sigue viendo: las listas
+   de Total Afiliados también se arman con lo que digan las fichas. */
 export const PROGRAMAS = [
-  'ESTIMULACIÓN', 'FORMACIÓN', 'PRE-PROGRESIÓN', 'PROGRESIÓN', 'SELECCIÓN', 'DESARROLLO',
+  'ESTIMULACIÓN', 'FORMACIÓN', 'PROGRESIÓN', 'SELECCIÓN', 'DESARROLLO',
 ];
 
 export const CATEGORIAS = Array.from({ length: 15 }, (_, i) => `SUB ${i + 4}`); // SUB 4 … SUB 18

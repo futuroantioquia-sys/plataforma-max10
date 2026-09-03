@@ -14,9 +14,13 @@ import { getCuadro, type FilaTorneo } from '@/lib/torneos';
 const RX_PROY = /proyecto|^proy\b/i;
 
 // ── Orden de programas en la tabla ────────────────────────────
+/* SIN PRE-PROGRESIÓN (dirección, 02/09/2026): no es un programa de la academia.
+   La única ficha que la traía es de una deportista retirada, y ninguna otra
+   pantalla la usa. Ojo: esta lista solo pone las opciones DE FÁBRICA; el
+   desplegable también se arma con lo que digan las fichas, así que si alguna
+   todavía la tiene escrita, se sigue viendo y no se le borra. */
 const ORDEN_PROGRAMA = [
-  'Estimulación', 'Formación', 'Progresión',
-  'Pre-Progresión', 'Selección', 'Desarrollo',
+  'Estimulación', 'Formación', 'Progresión', 'Selección', 'Desarrollo',
 ];
 
 // ── Columnas con desplegable (opciones auto-generadas del Excel) ─
@@ -325,6 +329,10 @@ const VT1  = '__TORNEO1__';
 const VT2  = '__TORNEO2__';
 const VT3  = '__TORNEO3__';
 const VT4  = '__TORNEO4__';
+/* QUINTA COMPETENCIA (dirección, 02/09/2026). Con cuatro casillas ya no
+   alcanzaba: hay deportistas que juegan cinco torneos en el año. Se llama C5 y
+   funciona igual que las otras cuatro. */
+const VT5  = '__TORNEO5__';
 const VPOS = '__POSICION__';
 /* Dos columnas que NO vienen del Excel: se calculan solas y no se editan.
    Van enseguida de PROGRAMA. — 25/08/2026 */
@@ -433,12 +441,13 @@ function consignaA(dep: Deportista): { texto: string; color: string; manual: boo
    arma el pospartido y se cuadra el valor. En el desplegable sí se ve el
    número con su nombre —"33 · CRISTOREY SUB 11 REGOL"— para no escoger a
    ciegas, y al pasar el mouse por la casilla también aparece completo. */
-function numCompetencia(col: string): 0 | 1 | 2 | 3 | 4 {
+function numCompetencia(col: string): 0 | 1 | 2 | 3 | 4 | 5 {
   const c = String(col ?? '').trim();
   if (col === VT1 || /^compite$/i.test(c) || /torneo.?1/i.test(c) || /^c\s*1$/i.test(c)) return 1;
   if (col === VT2 || /torneo.?2/i.test(c) || /^c\s*2$/i.test(c)) return 2;
   if (col === VT3 || /torneo.?3/i.test(c) || /^c\s*3$/i.test(c)) return 3;
   if (col === VT4 || /torneo.?4/i.test(c) || /^c\s*4$/i.test(c)) return 4;
+  if (col === VT5 || /torneo.?5/i.test(c) || /^c\s*5$/i.test(c)) return 5;
   return 0;
 }
 
@@ -753,17 +762,18 @@ export default function GeneralPage() {
     const comp2 = todas.filter(c => numCompetencia(c) === 2);
     const comp3 = todas.filter(c => numCompetencia(c) === 3);
     const comp4 = todas.filter(c => numCompetencia(c) === 4);
+    const comp5 = todas.filter(c => numCompetencia(c) === 5);
     // Estas columnas las ubicamos manualmente, así que las sacamos del bloque "resto"
     const excluidas = new Set([
       ...fecha, ...tipoAfil, ...estado, ...cod, ...programa, ...proyecto, ...profe,
       ...sedeEnt, ...jornadaEnt,
       ...celAcud, ...cal, ...com, ...competencia,
-      ...comp1, ...comp2, ...comp3, ...comp4,
+      ...comp1, ...comp2, ...comp3, ...comp4, ...comp5,
       VPOS,
     ]);
     const resto    = todas.filter(c => !excluidas.has(c));
 
-    // Torneos: COMPETENCIA → CAL → COM → T1 → T2 → T3 → T4 → POSICIÓN
+    // Torneos: COMPETENCIA → CAL → COM → C1 → C2 → C3 → C4 → C5 → POSICIÓN
     const torneos = [
       ...(competencia.length ? competencia : [VTC]),
       ...cal,
@@ -772,6 +782,7 @@ export default function GeneralPage() {
       ...(comp2.length ? comp2 : [VT2]),
       ...(comp3.length ? comp3 : [VT3]),
       ...(comp4.length ? comp4 : [VT4]),
+      ...(comp5.length ? comp5 : [VT5]),
       VPOS,
     ];
 
@@ -982,6 +993,26 @@ export default function GeneralPage() {
     try { localStorage.setItem(LLAVE_ULTIMO_TORNEO, v); } catch { /* nada */ }
   }
 
+  /* ── EL BOTÓN "OTROS TORNEOS" ─────────────────────────────────────────────
+     (dirección, 02/09/2026)
+
+     Primero los de dos años arriba salían siempre, en un grupito al final.
+     La dirección lo afinó: que NO se vean, y que al final del desplegable haya
+     un renglón «OTROS TORNEOS»; al escogerlo, ahí sí aparecen.
+
+     Así el desplegable de todos los días queda corto —su categoría y una
+     arriba, que es el 99% de los casos— y el caso raro está a un clic, pero
+     nunca estorbando.
+
+     Se recuerda POR CASILLA (deportista + C1..C5): abrirlo en un renglón no se
+     lo abre a los demás. Y se olvida al recargar la pantalla, porque es una
+     ayuda del momento, no un dato de la academia. */
+  const VALOR_OTROS = '__OTROS_TORNEOS__';
+  const [otrosAbiertos, setOtrosAbiertos] = useState<Set<string>>(new Set());
+  function abrirOtros(clave: string) {
+    setOtrosAbiertos(prev => { const n = new Set(prev); n.add(clave); return n; });
+  }
+
   /** El año de nacimiento de la ficha. 0 si no está.
    *  Se lee derecho de la ficha —sin pasar por getValCelda— porque esto corre
    *  más arriba en la pantalla, antes de que esa ayuda exista. El año de
@@ -1024,26 +1055,57 @@ export default function GeneralPage() {
     let lista = suyos.length ? suyos : conNumero;
 
     /* ── Y ahora la edad ──────────────────────────────────────────────── */
+    /* DOS AÑOS ARRIBA, PERO APARTADOS (dirección, 02/09/2026)
+
+       «necesito solucionar algo que pocas veces pasa: que un deportista
+        participe de un torneo con 2 años menos (no como lo hicimos, que era
+        de una). ¿Qué sugieres?»
+
+       No se abrió la lista a dos años de una, y es por lo que usted mismo dijo
+       el 31 de agosto: «me salen muchas categorías que no son necesarias».
+       Abrirla a dos años vuelve a llenar el desplegable de opciones que casi
+       nunca sirven, y ahí es donde se cuela el error.
+
+       Entonces quedaron en DOS PISOS:
+         · Su categoría y UNA arriba salen como siempre, en la lista de
+           trabajo. Eso es lo normal en fútbol y es el 99% de los casos.
+         · DOS arriba salen abajo, en un grupito aparte que dice
+           «↑↑ DOS AÑOS ARRIBA · caso especial». Están cuando se necesitan,
+           pero nadie las escoge por descuido.
+
+       Tres arriba sigue sin ofrecerse, y bajar de categoría tampoco: eso sería
+       sobre-edad. Si algún día hace falta uno de esos, se escribe a mano y la
+       casilla lo respeta. */
     const anio = dep ? anioNacimiento(dep) : 0;
+    const esDeDosArriba = new Set<number>();
     if (anio) {
       const suSub = new Date().getFullYear() - anio;      // 2026 − 2019 = 7
-      const cabe = (f: any) => {
-        /* El SUB puede venir en la CATEGORÍA ("SUB 10") o en el nombre del
-           torneo ("RAVE SOCCER SUB 10"). Se mira primero la categoría. */
-        const sub = subDelTexto(f.categoria) || subDelTexto(f.torneo) || subDelTexto(f.nombre);
+      /* El SUB puede venir en la CATEGORÍA ("SUB 10") o en el nombre del
+         torneo ("RAVE SOCCER SUB 10"). Se mira primero la categoría. */
+      const subDe = (f: any) =>
+        subDelTexto(f.categoria) || subDelTexto(f.torneo) || subDelTexto(f.nombre);
+
+      const deSuEdad = lista.filter(({ f }) => {
+        const sub = subDe(f);
         if (!sub) return true;                            // sin SUB: no se esconde
         return sub === suSub || sub === suSub + 1;        // la suya y una arriba
-      };
-      const deSuEdad = lista.filter(({ f }) => cabe(f));
-      /* Si de su edad no hay ninguno, se le muestran todos: es peor dejarlo
-         sin poder escoger que mostrarle de más. */
-      if (deSuEdad.length) lista = deSuEdad;
+      });
+      const dosArriba = lista.filter(({ f }) => subDe(f) === suSub + 2);
+
+      /* Si no hay de su edad NI de dos arriba, se le muestran todos: es peor
+         dejarlo sin poder escoger que mostrarle de más. */
+      if (deSuEdad.length || dosArriba.length) {
+        dosArriba.forEach(({ n }) => esDeDosArriba.add(n));
+        lista = [...deSuEdad, ...dosArriba];
+      }
     }
 
     return lista.map(({ f, n }) => ({
       num: String(n),
       etiqueta: etiquetaTorneo(f, n),
       nombre: nombreTorneoCorto(f),
+      /** Va en el grupito de abajo: es una categoría dos años por encima. */
+      dosArriba: esDeDosArriba.has(n),
     }));
   }, [cuadroTorneos]);
 
@@ -2542,6 +2604,17 @@ export default function GeneralPage() {
                                   .filter(Boolean);
                                 const opsTorneo = torneosDePrograma(progDep, dep)
                                   .filter(t => !yaPuestos.includes(t.num));
+
+                                /* ¿Se destapó ya el renglón de OTROS TORNEOS en
+                                   ESTA casilla? Si lo que está puesto es de dos
+                                   años arriba, se destapa solo: si no, el
+                                   desplegable no tendría con qué mostrarlo y la
+                                   casilla se vería vacía. — 02/09/2026 */
+                                const claveCelda  = `${dep.id}|${col}`;
+                                const hayDosArriba = opsTorneo.some(t => t.dosArriba);
+                                const puestoEsDeDos = opsTorneo.some(t => t.dosArriba && t.num === puesto);
+                                const verOtros = puestoEsDeDos || otrosAbiertos.has(claveCelda);
+
                                 const ayuda = nombreDelNumero(puesto) ||
                                   (puesto ? puesto : `Escoge la competencia ${nComp} · solo salen los torneos de ${progDep || 'su programa'}`);
 
@@ -2561,6 +2634,10 @@ export default function GeneralPage() {
                                       value={puesto}
                                       onChange={e => {
                                         const v = e.target.value;
+                                        /* OTROS TORNEOS no es un torneo: solo
+                                           destapa los de dos años arriba en esta
+                                           casilla y no cambia nada. — 02/09/2026 */
+                                        if (v === VALOR_OTROS) { abrirOtros(claveCelda); return; }
                                         const antes = puesto;
                                         setCelda(dep.id, col, v);
                                         recordarTorneo(v);   // para que salga de primero la próxima
@@ -2587,24 +2664,50 @@ export default function GeneralPage() {
                                         <option value={puesto} style={{ color: '#111827', backgroundColor: 'white' }}>{puesto}</option>
                                       )}
                                       {(() => {
-                                        /* El último que se escogió arriba del todo, apartado
-                                           en su grupito para que se vea que es ese. */
-                                        const arriba = opsTorneo.filter(t => t.num === ultimoTorneo);
-                                        const resto  = opsTorneo.filter(t => t.num !== ultimoTorneo);
+                                        /* EL ORDEN DEL DESPLEGABLE (dirección, 02/09/2026)
+
+                                             1. EL ÚLTIMO QUE USASTE — el atajo de siempre.
+                                             2. LOS DEMÁS — su categoría y una arriba.
+                                             3. OTROS TORNEOS — un solo renglón. Al
+                                                escogerlo se destapan los de dos años
+                                                arriba, que hasta ese momento no se ven.
+
+                                           Mientras no se destape, el desplegable queda
+                                           corto: es lo que se usa todos los días. */
+                                        const ultimo = opsTorneo.filter(t => t.num === ultimoTorneo);
+                                        const normal = opsTorneo.filter(t => t.num !== ultimoTorneo && !t.dosArriba);
+                                        const dos    = opsTorneo.filter(t => t.num !== ultimoTorneo && t.dosArriba);
                                         const pinta = (t: { num: string; etiqueta: string }) => (
                                           <option key={t.num} value={t.num} style={{ color: '#111827', backgroundColor: 'white' }}>
                                             {t.etiqueta}
                                           </option>
                                         );
-                                        if (!arriba.length) return opsTorneo.map(pinta);
+                                        const elBoton = (!verOtros && hayDosArriba) ? (
+                                          <option value={VALOR_OTROS} style={{ color: '#111827', backgroundColor: '#FFF3D6', fontWeight: 900 }}>
+                                            ▾ OTROS TORNEOS
+                                          </option>
+                                        ) : null;
+
                                         return (
                                           <>
-                                            <optgroup label="EL ÚLTIMO QUE USASTE" style={{ color: '#111827', backgroundColor: 'white' }}>
-                                              {arriba.map(pinta)}
-                                            </optgroup>
-                                            <optgroup label="LOS DEMÁS" style={{ color: '#111827', backgroundColor: 'white' }}>
-                                              {resto.map(pinta)}
-                                            </optgroup>
+                                            {ultimo.length > 0 && (
+                                              <optgroup label="EL ÚLTIMO QUE USASTE" style={{ color: '#111827', backgroundColor: 'white' }}>
+                                                {ultimo.map(pinta)}
+                                              </optgroup>
+                                            )}
+                                            {normal.length > 0 && (
+                                              <optgroup label={ultimo.length ? 'LOS DEMÁS' : 'TORNEOS'}
+                                                style={{ color: '#111827', backgroundColor: 'white' }}>
+                                                {normal.map(pinta)}
+                                              </optgroup>
+                                            )}
+                                            {elBoton}
+                                            {verOtros && dos.length > 0 && (
+                                              <optgroup label="↑↑ DOS AÑOS ARRIBA · caso especial"
+                                                style={{ color: '#111827', backgroundColor: 'white' }}>
+                                                {dos.map(pinta)}
+                                              </optgroup>
+                                            )}
                                           </>
                                         );
                                       })()}

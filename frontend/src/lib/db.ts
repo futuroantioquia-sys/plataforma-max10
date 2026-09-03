@@ -3772,6 +3772,71 @@ export interface InfoProyecto {
   dias:     number[];   // 0 = domingo … 6 = sábado
   formador: string;
   sede:     string;
+  /* ── LA HORA EN QUE ARRANCA EL ENTRENAMIENTO ─────────────────────────────
+     (dirección, 02/09/2026)
+
+     Se guarda SOLO la hora de inicio, en formato "4:30 PM". La de salida no
+     se guarda: se saca sola, porque la academia tiene la duración fijada por
+     programa —hora y media, y una hora en Estimulación—. Guardar dos horas
+     que siempre son la misma cuenta es guardar un dato que se puede
+     contradecir consigo mismo.
+
+     Puede llegar vacía: la casilla es nueva y los proyectos viejos no la
+     tienen. Vacía significa «todavía no se ha puesto», no «a las 12». */
+  hora:     string;
+}
+
+/* ── CUÁNTO DURA UN ENTRENAMIENTO ─────────────────────────────────────────
+   (dirección, 02/09/2026)
+
+   «Si es formación, progresión, selección o desarrollo entrenan una hora y
+    media… Haz lo mismo con estimulación, pero ellos serían con una hora.»
+
+   Por eso la hora de salida NO se digita ni se guarda: se calcula. Se escribe
+   la de entrada y la de salida sale sola. Si mañana la academia cambia la
+   duración, se cambia aquí y queda cambiada en toda la plataforma.
+
+   La única que entrena una hora es Estimulación, que son los más chiquitos;
+   cualquier otro programa va con hora y media. */
+export const MINUTOS_ENTRENO_NORMAL       = 90;
+export const MINUTOS_ENTRENO_ESTIMULACION = 60;
+
+export function minutosDeEntreno(programa: string): number {
+  const p = String(programa ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return p.includes('ESTIMULACION') ? MINUTOS_ENTRENO_ESTIMULACION : MINUTOS_ENTRENO_NORMAL;
+}
+
+/** "4:30 PM" → minutos desde medianoche. -1 si no se entiende. */
+export function minutosDeHoraTexto(hora: string): number {
+  const t = String(hora ?? '').trim().toUpperCase();
+  let m = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
+  if (m) {
+    let h = Number(m[1]) % 12;
+    if (m[3] === 'PM') h += 12;
+    return h * 60 + Number(m[2]);
+  }
+  m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) return Number(m[1]) * 60 + Number(m[2]);
+  return -1;
+}
+
+/** Los minutos, de vuelta a "6:00 PM". */
+export function horaTextoDeMinutos(min: number): string {
+  if (!Number.isFinite(min)) return '';
+  const t = ((Math.round(min) % 1440) + 1440) % 1440;
+  const h24 = Math.floor(t / 60);
+  const mm = String(t % 60).padStart(2, '0');
+  const ampm = h24 >= 12 ? 'PM' : 'AM';
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h}:${mm} ${ampm}`;
+}
+
+/** "4:30 PM" + Formación → "6:00 PM". Vacío si la entrada no se entiende. */
+export function horaFinEntreno(horaInicio: string, programa: string): string {
+  const m = minutosDeHoraTexto(horaInicio);
+  if (m < 0) return '';
+  return horaTextoDeMinutos(m + minutosDeEntreno(programa));
 }
 
 /* ── TODAS LAS FICHAS DE PROYECTO, DE UN SOLO VIAJE ──────────────────────────
@@ -3791,7 +3856,7 @@ export async function getFichasProyecto(): Promise<Record<string, InfoProyecto>>
     let desde = 0; const paso = 1000;
     for (let vuelta = 0; vuelta < 20; vuelta++) {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/jornadas_proyecto?select=proyecto,dias,nombre_formador,sede`,
+        `${SUPABASE_URL}/rest/v1/jornadas_proyecto?select=*`,
         { headers: { ...HDR_MC(), Range: `${desde}-${desde + paso - 1}`, 'Range-Unit': 'items' }, cache: 'no-store' },
       );
       if (!res.ok && res.status !== 206) break;
@@ -3804,6 +3869,9 @@ export async function getFichasProyecto(): Promise<Record<string, InfoProyecto>>
           dias:     Array.isArray(r.dias) ? r.dias : [],
           formador: String(r.nombre_formador ?? ''),
           sede:     String(r.sede ?? ''),
+          /* Si la base todavía no tiene la casilla, llega vacía y la pantalla
+             la muestra como «— poner —». — 02/09/2026 */
+          hora:     String(r.hora_inicio ?? ''),
         };
       });
       if (data.length < paso) break;
@@ -3819,7 +3887,7 @@ export async function getFichasProyecto(): Promise<Record<string, InfoProyecto>>
    donde los ve todo el mundo y no se borran al limpiar el navegador. */
 export async function saveFichaProyecto(
   proyecto: string,
-  datos: { dias?: number[]; sede?: string; nombre_formador?: string },
+  datos: { dias?: number[]; sede?: string; nombre_formador?: string; hora?: string },
 ): Promise<boolean> {
   const p = String(proyecto ?? '').trim();
   if (!p) return false;
@@ -3828,9 +3896,25 @@ export async function saveFichaProyecto(
     if (datos.dias !== undefined)            fila.dias = datos.dias;
     if (datos.sede !== undefined)            fila.sede = datos.sede;
     if (datos.nombre_formador !== undefined) fila.nombre_formador = datos.nombre_formador;
-    const { error } = await supabase()
+    if (datos.hora !== undefined)            fila.hora_inicio = datos.hora;
+
+    let { error } = await supabase()
       .from('jornadas_proyecto')
       .upsert(fila, { onConflict: 'proyecto' });
+
+    /* ── SI LA CASILLA DE LA HORA TODAVÍA NO EXISTE ────────────────────────
+       `hora_inicio` es nueva (02/09/2026) y la base solo la tiene después de
+       correr PASO-HORARIO-PROYECTO.bat. Si no está, la base RECHAZA TODO el
+       guardado —se perderían también los días y la sede—. Así que se vuelve a
+       intentar sin ella: se guarda lo demás y la hora es lo único que espera.
+       — 02/09/2026 */
+    if (error && /hora_inicio/i.test(String(error.message ?? ''))) {
+      const { hora_inicio: _fuera, ...sinHora } = fila;
+      const r2 = await supabase()
+        .from('jornadas_proyecto')
+        .upsert(sinHora, { onConflict: 'proyecto' });
+      error = r2.error;
+    }
     if (error) { console.error('[db] saveFichaProyecto:', error.message); return false; }
     /* La copia del navegador se deja al día también, para que /asistencia la
        encuentre de una sin tener que volver a preguntar. */
@@ -3847,12 +3931,12 @@ export async function saveFichaProyecto(
  */
 export async function getInfoProyecto(proyecto: string): Promise<InfoProyecto> {
   const p = (proyecto ?? '').trim();
-  const vacio: InfoProyecto = { dias: [], formador: '', sede: '' };
+  const vacio: InfoProyecto = { dias: [], formador: '', sede: '', hora: '' };
   if (!p) return vacio;
 
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/jornadas_proyecto?select=dias,nombre_formador,sede&proyecto=eq.${encodeURIComponent(p)}&limit=1`,
+      `${SUPABASE_URL}/rest/v1/jornadas_proyecto?select=*&proyecto=eq.${encodeURIComponent(p)}&limit=1`,
       { headers: HDR_MC(), cache: 'no-store' }
     );
     if (res.ok) {
@@ -3863,6 +3947,7 @@ export async function getInfoProyecto(proyecto: string): Promise<InfoProyecto> {
           dias:     Array.isArray(r.dias) ? r.dias : [],
           formador: r.nombre_formador ?? '',
           sede:     r.sede ?? '',
+          hora:     String(r.hora_inicio ?? ''),
         };
         if (info.dias.length) { try { localStorage.setItem(`futuro_dias_${p}`, JSON.stringify(info.dias)); } catch {} }
         return info;
