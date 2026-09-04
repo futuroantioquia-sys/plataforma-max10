@@ -458,7 +458,7 @@ export default function SeguimientoPage() {
   const initials = nombre.split(' ').filter(Boolean).slice(0,2).map(w => w[0]).join('').toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#f1f5f9]">
+    <div data-hoja="clara" className="min-h-screen bg-[#f1f5f9]">
 
       {/* HEADER */}
       <header className="relative bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">

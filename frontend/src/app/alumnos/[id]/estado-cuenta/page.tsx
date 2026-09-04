@@ -997,14 +997,20 @@ function EstadoCuentaInner() {
     /* Hasta el 5 alcanza este mes; del 6 en adelante, el que viene. */
     const objetivo = new Date(hoy.getFullYear(), hoy.getMonth() + (hoy.getDate() <= 5 ? 0 : 1), 1);
     const nombreMes = MESES_NOM[objetivo.getMonth()];
-    const numeroMes = objetivo.getMonth() + 1;
 
-    /* ¿Ya lo pagó? Entonces no se le recuerda nada. */
-    const yaPago = pagos.some(r =>
-      MES_NUM[r.detalle] === numeroMes &&
-      String(r.detalle).includes(String(objetivo.getFullYear())) &&
-      r.estado === 'PAGÓ');
-    if (yaPago) return null;
+    /* ── EL DESCUENTO SE AVISA SIEMPRE ─────────────────────────────────
+       (dirección, 04/09/2026 — «siempre saldrán los dos avisos, primero el
+        del descuento, haya pagado o no, ya que muchos no lo saben»)
+
+       Aquí se escondía el aviso cuando el mes ya estaba pagado: parecía lo
+       lógico —para qué ofrecerle un descuento a quien ya pagó—. Pero el
+       aviso no es una oferta de este mes: es la REGLA de la academia, y hay
+       papás que llevan un año pagando tarde sin saber que existe. Así que
+       ahora sale siempre, y quien ya pagó lo lee pensando en el mes que
+       viene.
+
+       Lo único que sigue sin verlo es el BECADO y el que no tiene tarifa
+       puesta: a ellos no hay cifra que mostrarles. */
 
     return {
       mes: nombreMes,
@@ -1372,26 +1378,36 @@ function EstadoCuentaInner() {
         <div className="rounded-xl px-4 py-3 mt-3"
              style={{ background: '#3C4759', border: `1px solid ${AMBAR}` }}>
 
-          {avisoProntoPago && (
-            <p className="text-white font-bold text-[13px] leading-relaxed mb-2.5 pb-2.5"
-               style={{ borderBottom: `1px solid ${AMBAR}55` }}>
-              Si pagas hasta el <span className="font-black">5 de {avisoProntoPago.mes}</span> te ganas
-              el <span className="font-black">10% de descuento</span> en la mensualidad: no pagas{' '}
-              <span className="font-black">{avisoProntoPago.completo}</span>, sino{' '}
-              <span className="font-black text-[15px]" style={{ color: AMBAR }}>
-                {avisoProntoPago.condesc}
-              </span>.
-            </p>
-          )}
+          {/* MISMO TAMAÑO Y EN DOS RENGLONES (dirección, 03/09/2026 — «en el
+              primer aviso que quede en el mismo tamaño de letra y solo en dos
+              filas»). Iba en 13 px con la cifra del descuento en 15, y con
+              tanto texto se desparramaba en cuatro renglones. Ahora va en los
+              mismos 12.5 px del aviso de la cuenta —incluida la cifra— y el
+              texto se acortó para que quepa en dos. */}
+          {/* ── UN SOLO PÁRRAFO ───────────────────────────────────────────
+              (dirección, 04/09/2026 — «quedará todo en un solo cuadro, une
+               ambos textos»)
 
-          <p className="text-white/85 font-bold text-[12.5px] leading-relaxed">
-            Recuerda pagar a la <span className="font-black">Cuenta de Ahorros Bancolombia</span>{' '}
+              Eran dos párrafos separados por una rayita: el descuento arriba
+              y la cuenta abajo. Pero es UNA sola instrucción —cuánto pagar y
+              dónde—, y partida en dos se leía como si fueran dos avisos que
+              compiten. Ahora es un solo bloque corrido y justificado.
+
+              Si el deportista es becado o no tiene tarifa, la primera frase
+              no existe y el párrafo arranca directo en la cuenta. */}
+          <p className="text-white font-bold text-[14px] leading-relaxed"
+             style={{ textAlign: 'justify' }}>
+            {avisoProntoPago && (
+              <>
+                Si pagas <span className="font-black">{avisoProntoPago.mes}</span> antes del día{' '}
+                <span className="font-black">5</span> te ganas el <span className="font-black">10%</span>:
+                en vez de {avisoProntoPago.completo} pagas{' '}
+                <span className="font-black" style={{ color: AMBAR }}>{avisoProntoPago.condesc}</span>.{' '}
+              </>
+            )}
+            <span className="font-black">Cuenta de Ahorros Bancolombia</span>{' '}
             <span className="font-black" style={{ color: AMBAR }}>{cuentaPago.numero}</span>,
-            a nombre de <span className="font-black">{cuentaPago.titular}</span>
-            {cuentaPago.nit ? <> · NIT {cuentaPago.nit}</> : null}.
-          </p>
-          <p className="text-white/50 font-semibold text-[11px] mt-1">
-            Y no olvides subir el soporte del pago.
+            a nombre de <span className="font-black">{cuentaPago.titular}</span>, y sube el soporte.
           </p>
         </div>
 

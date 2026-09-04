@@ -184,18 +184,35 @@ export async function descargarPlanillaPDF(d: DatosPlanilla): Promise<void> {
   const Y_CUADRO   = 33;               // dónde empieza el cuadro
   const ALTO_TIT   = 9;
 
-  /* ── EL ESPACIO DE ABAJO, MEDIDO ─────────────────────────────────────────
-     Debajo del cuadro va la tarjeta del marcador, después el promedio del
-     equipo y por último el pie. Cada pedazo tiene su altura apuntada aquí y
-     de la suma sale cuánto le queda al cuadro. Antes esto se calculaba con un
-     número a ojo y el marcador terminó tapándole la última fila al equipo.
-     Si mañana la tarjeta crece, se cambia el número aquí y todo lo demás se
-     reacomoda solo. — 27/08/2026 */
+  /* ── TODO EN UNA SOLA HOJA, SIN HUECOS ───────────────────────────────────
+     (dirección, 04/09/2026 — «el PDF debe quedar en una sola hoja, ajusta
+      bien los espacios; incluso hay un espacio inmenso sin información»)
+
+     Lo que pasaba: el alto de cada renglón estaba amarrado entre 4,6 y 7 mm.
+       · Con equipo grande no cabían y se iba a una SEGUNDA hoja, donde el
+         marcador quedaba solo, huérfano de su planilla.
+       · Con equipo normal las filas topaban en 7 mm, el cuadro terminaba a
+         media página y debajo quedaba ese hueco enorme que se veía como un
+         error de impresión.
+
+     Ahora la hoja se reparte de verdad: se mide todo lo que va abajo —el
+     marcador, el promedio, el resumen y el pie—, y lo que queda en el medio
+     se divide entre los deportistas que haya. El renglón se estira hasta 16 mm
+     cuando son pocos y se aprieta hasta 2,8 mm cuando son muchos, pero SIEMPRE
+     caben en una hoja. Lo poco que sobre no se deja como hueco: se le regala
+     a la tarjeta del marcador y al recuadro del resumen, que se ven mejor
+     grandes que apretados. */
   const HUECO_CUADRO = 5;              // del cuadro a la tarjeta del marcador
-  const ALTO_CARD    = 26;             // la tarjeta del marcador
   const HUECO_PROM   = 4;              // de la tarjeta al promedio
   const ALTO_PROM    = 11;             // el cuadro verde del promedio
   const ALTO_PIE     = 10;             // el renglón de MAX 10 SPORT
+
+  const CARD_NORMAL  = 26;             // la tarjeta del marcador, como siempre
+  const CARD_MIN     = 18;             // lo más flaca que puede quedar
+  const CARD_MAX     = 44;             // lo más gorda, cuando sobra espacio
+  const FILA_COMODA  = 2.8;            // por debajo de esto ya va apretado
+  const FILA_TOPE    = 2.0;            // el último recurso, antes que partir la hoja
+  const FILA_MAX     = 16;
 
   /* EL RESUMEN DEL JUEGO (dirección, 28/08/2026). Se mide ANTES de repartir
      la hoja: así el cuadro de los deportistas se encoge lo necesario y el
@@ -204,22 +221,52 @@ export async function descargarPlanillaPDF(d: DatosPlanilla): Promise<void> {
   const resumenTxt = String(d.resumen ?? '').replace(/\s+\n/g, '\n').trim();
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
+  /* CON EQUIPO MUY GRANDE EL RESUMEN SE RECORTA (04/09/2026): primero está
+     que salgan todos los deportistas y que todo quepa en la hoja. */
+  const topeLineas = d.filas.length > 32 ? 3 : 8;
   const lineasResumen: string[] = resumenTxt
-    ? (doc.splitTextToSize(resumenTxt, ANCHO - 10) as string[]).slice(0, 5)
+    ? (doc.splitTextToSize(resumenTxt, ANCHO - 10) as string[]).slice(0, topeLineas)
     : [];
-  const HUECO_RES = lineasResumen.length ? 4 : 0;
-  const ALTO_RES  = lineasResumen.length ? 8 + lineasResumen.length * 4.2 + 2.5 : 0;
+  const hayResumen = lineasResumen.length > 0;
+  const HUECO_RES  = hayResumen ? 4 : 0;
+  const RES_MIN    = hayResumen ? 8 + lineasResumen.length * 4.2 + 2.5 : 0;
 
-  const PIE = HUECO_CUADRO + ALTO_CARD + HUECO_PROM + ALTO_PROM
-            + HUECO_RES + ALTO_RES + ALTO_PIE;
-  const DISPONIBLE = H - Y_CUADRO - ALTO_TIT - PIE;
+  /* Desde donde arranca el primer renglón hasta donde empieza el pie: es todo
+     lo que hay para repartir. */
+  const ARRIBA = Y_CUADRO + ALTO_TIT;
+  const TOTAL  = (H - ALTO_PIE) - ARRIBA;
 
-  /* ALTO DE LA FILA: se ajusta para que TODO el equipo quepa en la hoja. Si
-     ni encogiéndolas caben, se sigue en una segunda hoja — antes las filas
-     sobrantes simplemente no se pintaban y nadie se enteraba. — 27/08/2026 */
-  const nFilas   = Math.max(1, d.filas.length);
-  const altoFila = Math.max(4.6, Math.min(7, DISPONIBLE / nFilas));
-  const porHoja  = Math.max(1, Math.floor(DISPONIBLE / altoFila));
+  /* Lo que ocupa el bloque de abajo si el marcador va de su tamaño normal. */
+  const ABAJO_NORMAL = HUECO_CUADRO + CARD_NORMAL + HUECO_PROM + ALTO_PROM
+                     + HUECO_RES + RES_MIN;
+  /* Y lo que ocuparía si al marcador lo apretamos todo lo que se puede. */
+  const ABAJO_MINIMO = HUECO_CUADRO + CARD_MIN + HUECO_PROM + ALTO_PROM
+                     + HUECO_RES + RES_MIN;
+
+  const nFilas = Math.max(1, d.filas.length);
+
+  /* 1. El renglón, con el marcador de tamaño normal. */
+  let altoFila = Math.min(FILA_MAX, (TOTAL - ABAJO_NORMAL) / nFilas);
+  /* 2. ¿Equipo enorme? Se le quita al marcador antes que partir la hoja. */
+  if (altoFila < FILA_COMODA) {
+    altoFila = Math.max(FILA_TOPE, (TOTAL - ABAJO_MINIMO) / nFilas);
+  }
+  const altoTabla = altoFila * nFilas;
+
+  /* 3. Lo que sobre se reparte abajo: primero el resumen, después el marcador.
+        Así no queda ni un hueco muerto en la mitad de la hoja. */
+  const FIJO_ABAJO = HUECO_CUADRO + HUECO_PROM + ALTO_PROM + HUECO_RES;
+  let ALTO_RES  = RES_MIN;
+  let ALTO_CARD = TOTAL - altoTabla - FIJO_ABAJO - ALTO_RES;
+  if (ALTO_CARD > CARD_MAX) {
+    const extra = ALTO_CARD - CARD_MAX;
+    ALTO_CARD = CARD_MAX;
+    if (hayResumen) ALTO_RES += Math.min(extra, 34);
+  }
+  if (ALTO_CARD < CARD_MIN) ALTO_CARD = CARD_MIN;
+
+  /* UNA SOLA HOJA, SIEMPRE. Todos los deportistas van en la primera. */
+  const porHoja = nFilas;
 
   /** Pinta el fondo gris oscuro de toda la hoja. Va PRIMERO, siempre. */
   function fondoDeLaHoja() {
@@ -278,24 +325,33 @@ export async function descargarPlanillaPDF(d: DatosPlanilla): Promise<void> {
       doc.setFillColor(...fondoDeCasilla(c.clave));
       doc.rect(x, y, a, altoFila, 'F');
 
-      // 2. La pastilla de color, si esta casilla lleva
+      /* 2. La pastilla de color, si esta casilla lleva.
+            LA PASTILLA NO CRECE SIN LÍMITE (04/09/2026): cuando el equipo es
+            chico el renglón se estira, y una pastilla de 15 mm de alto se ve
+            como un ladrillo. Se le pone tope de 7,2 mm y queda centrada en su
+            renglón, igual que en pantalla. */
+      const altoPast = Math.min(7.2, altoFila - 1.2);
+      const yPast    = y + (altoFila - altoPast) / 2;
       const past = pastillaDe(c.clave, valor);
       if (past) {
         doc.setFillColor(...past);
-        doc.roundedRect(x + 0.7, y + 0.6, a - 1.4, altoFila - 1.2, 0.7, 0.7, 'F');
+        doc.roundedRect(x + 0.7, yPast, a - 1.4, altoPast, 0.7, 0.7, 'F');
       } else if (LLEVAN_PASTILLA.has(c.clave)) {
         /* Sin llenar, en pantalla queda un recuadro con el borde marcado —así
            el formador ve dónde se toca. El PDF lo copia igual. */
         doc.setDrawColor(...BORDE);
         doc.setLineWidth(0.25);
-        doc.roundedRect(x + 0.7, y + 0.6, a - 1.4, altoFila - 1.2, 0.7, 0.7, 'S');
+        doc.roundedRect(x + 0.7, yPast, a - 1.4, altoPast, 0.7, 0.7, 'S');
       }
 
       // 3. El texto
       const vacia = !valor.trim() || valor.trim() === '—';
       doc.setTextColor(...(vacia ? APAGADO : BLANCO));
       doc.setFont('helvetica', (c.clave === 'deportista' || c.clave === 'num') ? 'bold' : 'normal');
-      doc.setFontSize(altoFila < 5.6 ? 6.6 : 7.6);
+      /* LA LETRA VA CON EL RENGLÓN (04/09/2026): antes solo había dos tamaños
+         —6,6 y 7,6— y con renglones estirados quedaba una letrica perdida en
+         mitad de la casilla. Ahora crece y se encoge con él, entre 5,4 y 9. */
+      doc.setFontSize(Math.max(5.4, Math.min(9, altoFila * 1.15)));
       const t = recortar(doc, vacia ? '—' : valor, a);
       const centrada = c.clave !== 'deportista' && c.clave !== 'posicion';
       doc.text(

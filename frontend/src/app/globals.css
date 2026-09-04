@@ -12,8 +12,26 @@
   --dorado:         #f59e0b;
   --fondo:          #333F50;   /* gris oscuro del nuevo diseño */
   --card:           #ffffff;
-  --texto:          #111827;
-  --texto-suave:    #6b7280;
+  /* ── LA LETRA POR DEFECTO ES BLANCA ─────────────────────────────────────
+     (dirección, 04/09/2026 — «letras blancas en toda la app, todos los
+      módulos, ya que con el nuevo diseño algunas no se ven; recuerda que el
+      nuevo diseño gris verde debe quedar en toda la app»)
+
+     AQUÍ ESTABA LA FALLA, Y ERA UNA SOLA LÍNEA. Cuando la plataforma se pasó
+     al gris oscuro se cambió el FONDO (--fondo) pero se dejó el color de
+     letra de cuando todo era blanco: #111827, que es casi negro. Así que
+     `body` pintaba de negro TODO texto que no dijera de qué color va —y en
+     una pantalla oscura, negro sobre gris no se ve—.
+
+     Por eso el problema aparecía salteado y en módulos distintos: no era
+     cada pantalla, era el color heredado. Se corrige de raíz poniéndolo
+     blanco, que es lo que corresponde a un fondo oscuro.
+
+     OJO SI ALGÚN DÍA VUELVE UNA PANTALLA CON FONDO BLANCO: esa tiene que
+     decir su propio color oscuro (como ya lo hacen el Libro Contable y el
+     formulario de Valoración, ver abajo). Heredar ya no le sirve. */
+  --texto:          #FFFFFF;
+  --texto-suave:    #C9D2DE;
   --borde:          #e5e7eb;
   --radio:          16px;
   --radio-lg:       24px;
@@ -261,3 +279,15 @@ body {
   height: 1px;
   background: linear-gradient(to right, transparent, #e5e7eb 20%, #e5e7eb 80%, transparent);
 }
+
+/* ── LAS POCAS PANTALLAS QUE SIGUEN SIENDO BLANCAS ────────────────────────
+   (dirección, 04/09/2026)
+
+   Casi toda la plataforma es oscura, pero quedan hojas blancas de verdad —el
+   formulario de Valoración, que es un formato para imprimir, y el cuadro del
+   Libro Contable—. Con la letra por defecto en blanco, esas se quedarían en
+   blanco sobre blanco.
+
+   Se les devuelve la letra oscura marcando su caja con `data-hoja="clara"`.
+   Todo lo que esté adentro vuelve a heredar negro, como antes. */
+[data-hoja="clara"] { color: #111827; }

@@ -2407,7 +2407,7 @@ export default function ContabilidadPage() {
               {conceptos.map(c => <option key={c.id} value={c.nombre} />)}
             </datalist>
             <div ref={scrollRef} className="overflow-x-auto" style={{ maxHeight: '72vh' }}>
-              <table className="border-collapse text-xs" style={{ tableLayout: 'fixed', width: colsVis.reduce((s, c) => s + (colW[c.key] ?? c.def), 0) }}>
+              <table data-hoja="clara" className="border-collapse text-xs" style={{ tableLayout: 'fixed', width: colsVis.reduce((s, c) => s + (colW[c.key] ?? c.def), 0) }}>
                 <colgroup>
                   {colsVis.map(c => <col key={c.key} style={{ width: colW[c.key] ?? c.def }} />)}
                 </colgroup>

@@ -7,7 +7,7 @@ export default function MantenimientoPage() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-[#f0f7ff] flex flex-col items-center justify-center p-6">
+    <div data-hoja="clara" className="min-h-screen bg-[#f0f7ff] flex flex-col items-center justify-center p-6">
       <div className="bg-white rounded-3xl shadow-xl p-8 max-w-sm w-full text-center border border-gray-100">
 
         {/* Icono */}

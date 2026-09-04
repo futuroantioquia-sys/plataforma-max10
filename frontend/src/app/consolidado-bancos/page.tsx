@@ -253,7 +253,7 @@ export default function ConsolidadoBancosPage() {
 
   // ── RENDER ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div data-hoja="clara" className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-10 shadow">
         <button onClick={() => router.push('/dashboard')}

@@ -368,7 +368,7 @@ export default function SubirBancosPage() {
                    { bg:'#fee2e2', txt:'#991b1b', lbl:'ERROR' };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div data-hoja="clara" className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-10 shadow">
         <button onClick={() => router.push('/dashboard')} className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition"><ArrowLeft className="w-4 h-4"/></button>
         <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center"><Upload className="w-4 h-4 text-white"/></div>

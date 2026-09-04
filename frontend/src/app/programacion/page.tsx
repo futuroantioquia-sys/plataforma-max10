@@ -1576,6 +1576,16 @@ export default function ProgramacionCompetenciaPage() {
     setAbriBanco(false);
   }
 
+  /* ── LA # FECHA NO SE TOCA (dirección, 04/09/2026) ────────────────────────
+     Se intentó "arreglar" que dos partidos del mismo torneo tuvieran la misma
+     # FECHA. Estaba MAL: la # FECHA es el CONSECUTIVO DE PARTIDOS del torneo
+     —cada equipo lleva unos 20 juegos y apenas se está pasando el último a la
+     app; con el tiempo se van desatrasando—. Repetirse es normal, igual que
+     se repite un rival o un escenario.
+
+     Regla: la # FECHA es INFORMATIVA. No se corrige sola, no se pinta de
+     rojo y no manda sobre nada. */
+
   /* ── Cambiar una casilla ── */
   function cambiar(id: string, campo: keyof FilaProgramacion, valor: string) {
     setFilas(prev => (prev ?? []).map(f => (f.id === id ? { ...f, [campo]: valor } : f)));

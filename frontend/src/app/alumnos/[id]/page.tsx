@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload } from 'lucide-react';
+import { Edit3, Save, X, Camera, Clipboard, DollarSign, MessageCircle, Trash2, Upload, Download } from 'lucide-react';
 import { cn, abrirSoporte } from '@/lib/utils';
 import { getDeportistas, getDeportistaPorId, saveDeportistas, getFoto, saveFoto, getDocumentos, saveDocumento, deleteDocumento, getCalificacionesEscolares, addCalificacionEscolar, renameCalificacionEscolar, deleteCalificacionEscolar, enviarMensaje, getEvaluaciones } from '@/lib/db';
 import { partirNombre } from '@/lib/nombres';
@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client';
 import { parseValoracionExcel } from '@/lib/valoracionExcel';
 import { useAuthStore } from '@/store/auth.store';
 import { BalonCargando } from '@/components/BalonCargando';
+import { RecortarFoto } from '@/components/RecortarFoto';
 import { rutaAnterior } from '@/components/RastreoRuta';
 
 const FOTOS_KEY = 'futuro_fotos_deportistas';
@@ -368,42 +369,51 @@ export default function PerfilDeportista() {
     await deleteCalificacionEscolar(cal.id).catch(err => console.error('[perfil] eliminarCalif:', err));
   }
 
+  /* ── LA FOTO SE ACOMODA A MANO ─────────────────────────────────────────
+     (dirección, 04/09/2026 — «que la gente la suba y la pueda mover hasta
+      verla como en un recuadro»)
+
+     Antes se guardaba la foto tal cual y cada pantalla ADIVINABA el recorte.
+     Ahora, al escoger el archivo, se abre el recuadro blanco: la persona
+     mueve la foto y la acerca hasta que quede de la cabeza a los escudos, y
+     lo que se guarda es exactamente eso, ya recortado en 3:4.
+
+     Así nadie tiene que volver a adivinar nada, ni aquí ni en la valoración
+     ni en el PDF. */
+  const [fotoPorRecortar, setFotoPorRecortar] = useState<string | null>(null);
+
   async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
     if (!file) return;
+    try {
+      /* Se achica primero —una foto de celular pesa 5 MB y el recuadro no
+         necesita tanto— y se muestra para acomodarla. */
+      let previa: string;
+      try { previa = await comprimirImagen(file, 1400, 0.92); }
+      catch { previa = await leerArchivoComoDataURL(file); }
+      setFotoPorRecortar(previa);
+    } catch (err) {
+      console.error('[perfil] subirFoto:', err);
+    }
+  }
+
+  /** Guarda la foto ya acomodada por la persona. */
+  async function guardarFotoRecortada(b64: string) {
+    setFotoPorRecortar(null);
     setProcesandoFoto(true);
     try {
-      // TODO: activar con `npm install @imgly/background-removal`
-      // const { removeBackground } = await import('@imgly/background-removal');
-      // const blob = await removeBackground(file, { output: { format: 'image/png', quality: 1 } });
-      // const img = new Image();
-      // img.src = URL.createObjectURL(blob);
-      // await new Promise<void>(res => { img.onload = () => res(); });
-      // const canvas = document.createElement('canvas');
-      // canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-      // const ctx = canvas.getContext('2d')!;
-      // ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      // ctx.drawImage(img, 0, 0); URL.revokeObjectURL(img.src);
-      // const b64 = canvas.toDataURL('image/jpeg', 0.92);
-
-      // Comprimir a ~800px/JPEG (pesa ~100 KB) y ESPERAR el guardado para que
-      // la foto llegue siempre a Supabase → se ve desde profe y admin también.
-      let b64: string;
-      try {
-        b64 = await comprimirImagen(file, 800, 0.85);
-      } catch {
-        // Si por algún motivo no se puede comprimir, usar el original.
-        b64 = await leerArchivoComoDataURL(file);
-      }
       setFoto(b64);
       await saveFoto(id, b64);
     } catch (err) {
-      console.error('[perfil] subirFoto:', err);
+      console.error('[perfil] guardarFotoRecortada:', err);
     } finally {
       setProcesandoFoto(false);
-      if (e.target) e.target.value = '';
     }
   }
+
+  /* La versión anterior guardaba la foto sin dejar acomodarla. Se retiró el
+     04/09/2026 al entrar el recuadro para moverla. */
 
   async function guardar() {
     if (!dep) return;
@@ -864,9 +874,14 @@ export default function PerfilDeportista() {
                   —la misma del resto de la plataforma— y la foto se ajusta
                   dentro anclada al centro. Todas las fichas se ven iguales y
                   las franjas negras quedan por fuera del recorte. */}
+              {/* TOCAR LA FOTO YA NO ES "CAMBIARLA", ES ACOMODARLA
+                  (dirección, 04/09/2026). Para cambiarla está el botón
+                  «Cambiar foto» aquí debajo, con su nombre. Tocar la foto abre
+                  el recuadro de línea blanca para moverla y dejarla desde la
+                  cabeza hasta el logo del pecho. */}
               <div
-                onClick={() => inputFotoRef.current?.click()}
-                title="Clic para cambiar la foto"
+                onClick={() => { if (foto) setFotoPorRecortar(foto); else inputFotoRef.current?.click(); }}
+                title="Toca la foto para acomodarla dentro del marco"
                 style={{
                   /* CON UN TAMAÑO MÁXIMO (dirección, 29/08/2026).
                      Iba al ancho completo de la tarjeta: en el celular se veía
@@ -892,42 +907,57 @@ export default function PerfilDeportista() {
                   src={foto}
                   alt={dep._nombre}
                   onLoad={e => {
-                    /* ── EL RECORTE SE CALCULA, NO SE ADIVINA ─────────────────
-                       Lo que pidió la dirección: de la cabeza hasta debajo de
-                       los escudos. Eso es, más o menos, la MITAD DE ARRIBA de
-                       la foto — el 55%.
+                    /* ── EL MISMO ENCUADRE DE LA FICHA DE PAGOS ─────────────
+                       (dirección, 04/09/2026 — «mira lo hermosa que está en su
+                        ficha… siempre asííííí en todo… está hasta abajo de los
+                        escudos tal cual»)
 
-                       Los intentos anteriores fallaron porque usaban un
-                       acercamiento fijo, y un número fijo solo sirve para fotos
-                       tomadas a la misma distancia. Aquí se mide la foto de
-                       verdad al cargarse y se calcula cuánto hay que acercarla
-                       para que quede a la vista justo ese 55% de arriba:
+                       Aquí se estaba ADIVINANDO otra cosa: se acercaba la foto
+                       hasta dejar «el 55% de arriba», y con una foto tomada de
+                       cerca eso deja la cara pegada y corta los escudos. En el
+                       Estado de Cuenta, en cambio, el encuadre salía perfecto
+                       desde hace días: cabeza y escudos, sin acercar de más.
 
-                         · Foto vertical normal → se acerca casi el doble.
-                         · Foto apaisada → igual, porque también se ve entera.
-                         · Foto muy alargada → casi no se acerca; el recuadro
-                           ya le está cortando lo de abajo.
+                       Se copió esa misma regla, que es mucho más humilde:
+                         · Foto VERTICAL → no se toca. El recuadro ya la
+                           encuadra bien y no hay nada que acercar.
+                         · Foto APAISADA → solo se acerca lo justo para que
+                           llene de lado a lado; si no, se ve cielo, niño
+                           chiquito y pasto.
+                       Y el encuadre se ancla en el 22% de altura, no en el
+                       borde: ahí es donde queda la cara en una foto de busto.
 
-                       Y como se ancla ARRIBA, la cabeza no se puede cortar.
-                       El 0,55 es el único número con significado aquí: súbalo
-                       para ver más cuerpo, bájelo para acercarse a la cara.
-                       — dirección, 27/08/2026 */
+                       La foto que se sube desde hoy ya viene recortada a mano
+                       en 3:4 (ver components/RecortarFoto.tsx), así que a esa
+                       no hay que hacerle nada: la fórmula le da 1. */
                     const im = e.currentTarget;
-                    const formaFoto = im.naturalWidth / Math.max(1, im.naturalHeight);
-                    const formaCaja = 3 / 4;
-                    const seVeAhora = Math.min(1, formaFoto / formaCaja);
-                    setFotoZoom(Math.min(2.5, Math.max(1, seVeAhora / 0.55)));
+                    const forma = im.naturalWidth / Math.max(1, im.naturalHeight);
+                    const cajaForma = 3 / 4;
+                    setFotoZoom(forma > cajaForma
+                      ? Math.min(2, Math.max(1, (forma / cajaForma) * 0.75))
+                      : 1);
                   }}
                   style={{
                     width: '100%', height: '100%',
                     objectFit: 'cover',
-                    objectPosition: '50% 0%',
+                    objectPosition: '50% 22%',
                     transform: fotoZoom > 1 ? `scale(${fotoZoom})` : undefined,
-                    transformOrigin: '50% 5%',
+                    transformOrigin: '50% 22%',
                     display: 'block',
                   }}
                 />
               </div>
+
+              {/* CÓMO SE ACOMODA. Sin este renglón nadie descubre que la foto
+                  se toca para moverla. — dirección, 04/09/2026 */}
+              <p style={{
+                marginTop: 8, textAlign: 'center', fontSize: 10, fontWeight: 900,
+                letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.3,
+                color: 'rgba(91,227,155,0.8)',
+              }}>
+                Toca la foto para acomodarla
+              </p>
+
               {/* Pie de foto — cambiar + eliminar */}
               <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                 <button
@@ -942,6 +972,11 @@ export default function PerfilDeportista() {
                   <Camera size={13} color="rgba(255,255,255,0.45)"/>
                   Cambiar foto
                 </button>
+                {/* AQUÍ NO VA "BAJAR FOTO" (dirección, 04/09/2026).
+                    Esta tarjeta es la del PADRE, y el padre no baja la foto
+                    —él ya la tiene, fue quien la subió—. El botón para bajarla
+                    vive en la ficha de formadores y administración, más abajo,
+                    como el iconito verde al lado de la cámara. */}
                 <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14 }}>|</span>
                 <button
                   onClick={() => {
@@ -1202,6 +1237,26 @@ export default function PerfilDeportista() {
           );
         })()}
 
+        {/* ── EL MARCO PARA ACOMODAR LA FOTO — TAMBIÉN PARA EL PAPÁ ─────────
+            (dirección, 04/09/2026 — «no quedó la mano para ubicar la foto ni
+             explicar cómo hacerlo»)
+
+            Faltaba aquí, y era justo donde más falta hacía: EL PAPÁ ES QUIEN
+            SUBE LA FOTO. Sin este recuadro, el papá escogía la foto y no
+            pasaba nada de nada —quedaba guardada a medias, esperando un marco
+            que en su pantalla no existía—.
+
+            Ahora al papá le sale el mismo recuadro de línea blanca, con el
+            letrero de «procura que se vea desde la cabeza hasta el logo del
+            pecho», y la mueve con el dedo hasta dejarla bien. */}
+        {fotoPorRecortar && (
+          <RecortarFoto
+            src={fotoPorRecortar}
+            onCancelar={() => setFotoPorRecortar(null)}
+            onListo={guardarFotoRecortada}
+          />
+        )}
+
       </div>
     );
   }
@@ -1267,7 +1322,22 @@ export default function PerfilDeportista() {
                   chiquito y de lejos; allá es más grande y con el recorte que
                   siempre deja la cara arriba. Se copió tal cual para que la
                   misma foto se vea igual en las dos pantallas. */}
-              <div className="w-[112px] h-[140px] sm:w-[144px] sm:h-[180px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex items-center justify-center">
+              {/* ── TOCA LA FOTO PARA ACOMODARLA ─────────────────────────
+                  (dirección, 04/09/2026 — «no quedó la mano para ubicar la
+                   foto ni explicar cómo hacerlo»)
+
+                  Antes, para reencuadrar una foto que ya estaba subida tocaba
+                  volverla a buscar en el computador y subirla otra vez. Ahora
+                  se toca la foto y se abre el mismo recuadro de línea blanca:
+                  se mueve con el dedo, se acerca o se aleja, y se guarda.
+
+                  El aviso de abajo lo dice, para que nadie tenga que
+                  adivinarlo. */}
+              <div
+                onClick={() => { if (foto) setFotoPorRecortar(foto); }}
+                title={foto ? 'Toca la foto para acomodarla dentro del marco' : undefined}
+                className="w-[112px] h-[140px] sm:w-[144px] sm:h-[180px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex items-center justify-center"
+                style={{ cursor: foto ? 'pointer' : undefined }}>
                 {foto
                   ? <img src={foto} alt=""
                       onLoad={e => {
@@ -1311,6 +1381,29 @@ export default function PerfilDeportista() {
                   className="bg-white hover:bg-white rounded-full p-1.5 shadow-md transition hover:scale-105">
                   <Camera className="w-3.5 h-3.5" style={{ color: '#0a2e12' }}/>
                 </button>
+                {/* ── BAJAR LA FOTO ───────────────────────────────────────
+                    (dirección, 04/09/2026 — «deja el botón descargar,
+                     pequeño ícono aquí junto a los otros dos»)
+
+                    Va de segundo, en medio de la cámara y la papelera: es lo
+                    que uno hace más seguido de las tres, y así la papelera
+                    queda de última, lejos del dedo.
+
+                    La flechita va VERDE —la cámara es oscura y la papelera
+                    roja—, para que los tres círculos blancos no se confundan
+                    entre sí. El archivo sale con el nombre y el código del
+                    deportista, para reconocerlo en la carpeta de Descargas.
+
+                    Al padre no le sale: él ya tiene la foto de su hijo. */}
+                {foto && !esPadre && (
+                  <a
+                    href={foto}
+                    download={`${(dep._nombre || 'deportista').replace(/[\\/:*?"<>|]/g, ' ').trim()}${codigoVal ? ` - ${codigoVal}` : ''}.jpg`}
+                    title="Bajar la foto a este computador"
+                    className="bg-white hover:bg-white rounded-full p-1.5 shadow-md transition hover:scale-105 flex items-center justify-center">
+                    <Download className="w-3.5 h-3.5" style={{ color: '#0a7d2e' }}/>
+                  </a>
+                )}
                 {foto && (
                   <button
                     onClick={() => {
@@ -1330,6 +1423,16 @@ export default function PerfilDeportista() {
                 )}
               </div>
               <input ref={inputFotoRef} type="file" accept="image/*" className="hidden" onChange={subirFoto}/>
+
+              {/* EL LETRERITO QUE EXPLICA CÓMO. Dos palabras, debajo de la
+                  foto: sin esto nadie descubre que la foto se toca.
+                  — dirección, 04/09/2026 */}
+              {foto && (
+                <p className="mt-3 text-center text-[9px] font-black uppercase tracking-wider leading-tight"
+                   style={{ color: 'rgba(91,227,155,0.75)' }}>
+                  Toca la foto para acomodarla
+                </p>
+              )}
             </div>
 
             {/* Nombre + filas de datos */}
@@ -1771,6 +1874,15 @@ export default function PerfilDeportista() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* El recuadro blanco para acomodar la foto antes de guardarla. */}
+      {fotoPorRecortar && (
+        <RecortarFoto
+          src={fotoPorRecortar}
+          onCancelar={() => setFotoPorRecortar(null)}
+          onListo={guardarFotoRecortada}
+        />
       )}
 
     </div>

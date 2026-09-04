@@ -62,7 +62,7 @@ export default function SesionesPage() {
   if (cargando) return <BalonCargando texto="Cargando sesiones..." />;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div data-hoja="clara" className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-[#2e1065] via-[#581c87] to-[#9333ea] px-6 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
         <button onClick={() => router.push('/dashboard')} className="text-white/70 hover:text-white">← Volver</button>
         <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">

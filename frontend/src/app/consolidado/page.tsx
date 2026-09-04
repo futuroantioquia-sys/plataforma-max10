@@ -35,10 +35,11 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, RefreshCw, Users, CalendarCheck, ClipboardList,
-  CalendarDays, AlertTriangle, ChevronRight, Loader2, Search, X,
+  CalendarDays, AlertTriangle, ChevronRight, Loader2, Search, X, ShieldCheck, Trophy,
 } from 'lucide-react';
 import { getDeportistasPorProyecto, getProfes, getEvaluacionesResumen, getMicrociclos, getMicrociclo, getResumenAsistencia, getFichasProyecto } from '@/lib/db';
 import { VistaPreliminar } from '@/components/VistaPreliminarMicrociclo';
+import { getBanco, type FichaBanco } from '@/lib/pospartido';
 import type { Deportista, Profe, EvaluacionResumen, Microciclo, ResumenAsistenciaDia, InfoProyecto } from '@/lib/db';
 import { esProfesor, esSuperAdmin, esAccesoTotal } from '@/lib/permisos';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/client';
@@ -84,6 +85,20 @@ function rangoDelMes(mes: string): { desde: string; hasta: string } {
   return { desde: `${mes}-01`, hasta: `${mes}-${String(ultimo).padStart(2, '0')}` };
 }
 const mesActual = () => hoyISO().slice(0, 7);
+/* ── EL MES QUE SE ESTÁ CALIFICANDO ─────────────────────────────────────────
+   (dirección, 03/09/2026 — «que siempre aparezca por defecto seleccionado el
+    mes anterior, que es el que se está calificando»)
+
+   El mes en curso todavía no se puede evaluar: va por la mitad y a todo el
+   mundo le falta algo. Lo que se revisa es el mes que ya cerró. Por eso la
+   pantalla abre en el mes ANTERIOR; el actual sigue en la lista, un renglón
+   más arriba, para quien quiera mirarlo. */
+const mesAnterior = () => {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
 function mesBonito(mes: string): string {
   const NOM = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
                'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
@@ -158,7 +173,15 @@ function mesesTemporada(anio: number): { clave: string; corto: string }[] {
 /** Separador invisible para armar la "huella" de una lista de grupos. */
 const SEP = '\u0001';
 
-type Pestana = 'asistencia' | 'microciclos' | 'informes';
+/* 'total' = CONTROL TOTAL: un renglón por FORMADOR con sus tres deberes al
+   frente —asistencias, microciclos y post partidos—. Las otras tres pestañas
+   son por GRUPO; esta es por PERSONA, que es como se califica.
+   — dirección, 03/09/2026 */
+type Pestana = 'asistencia' | 'microciclos' | 'informes' | 'pospartidos' | 'total';
+
+/** Los anchos del cuadro CONTROL TOTAL. El nombre manda; los tres deberes
+ *  van iguales entre sí. — dirección, 03/09/2026 */
+const CT_COLS = 'minmax(190px,1.5fr) minmax(140px,1fr) minmax(150px,1fr) minmax(150px,1fr)';
 
 /* ── Lo que se muestra de cada grupo ─────────────────────────────────────── */
 interface FilaGrupo {
@@ -237,10 +260,13 @@ export default function ConsolidadoPage() {
   const [recarga, setRecarga] = useState(0);
 
   const [pestana, setPestana] = useState<Pestana>('asistencia');
-  const [mes, setMes] = useState(mesActual());
+  const [mes, setMes] = useState(mesAnterior());
   const [fProfe, setFProfe] = useState('');
   const [buscar, setBuscar] = useState('');
   const [abierto, setAbierto] = useState<string>('');   // el grupo desplegado
+  /* CONTROL TOTAL: qué casilla está abierta — "FORMADOR|microciclos".
+     — dirección, 03/09/2026 */
+  const [abiertoCT, setAbiertoCT] = useState<string>('');
   /** El año que se está mirando: sale del mes escogido arriba. */
   const anioVista = useMemo(() => Number(mes.slice(0, 4)) || new Date().getFullYear(), [mes]);
 
@@ -669,6 +695,107 @@ export default function ConsolidadoPage() {
     [profes],
   );
 
+  /* ── LOS POST PARTIDOS DEL MES ─────────────────────────────────────────
+     (dirección, 03/09/2026 — CONTROL TOTAL)
+
+     El banco de post partidos trae TODAS las planillas con su D.T, su fecha y
+     si quedaron DEFINITIVAS. Con eso se sabe, por formador y por mes, cuántos
+     partidos tuvo y cuántos cerró.
+
+     Se pide una sola vez y solo cuando se entra a CONTROL TOTAL: las otras
+     pestañas no lo necesitan y no tiene por qué hacerlas esperar. */
+  const [banco, setBanco] = useState<FichaBanco[] | null>(null);
+  useEffect(() => {
+    if ((pestana !== 'total' && pestana !== 'pospartidos') || banco !== null) return;
+    getBanco().then(b => setBanco(b ?? [])).catch(() => setBanco([]));
+  }, [pestana, banco]);
+
+  /* ── EL CUADRO POR FORMADOR ────────────────────────────────────────────
+     Un renglón por PERSONA. Cada grupo suma en el renglón de su formador. */
+  const porFormador = useMemo(() => {
+    const { desde, hasta } = rangoDelMes(mes);
+    const mapa = new Map<string, {
+      formador: string; grupos: number; deportistas: number;
+      diasSinLlenar: number; diasConRegistro: number;
+      mcCerradas: number; mcPendientes: number; mcSinAbrir: number;
+      ppTotal: number; ppCerrados: number;
+    }>();
+
+    filas.forEach(f => {
+      const quien = (f.profe || 'SIN FORMADOR').trim().toUpperCase();
+      const a = mapa.get(quien) ?? {
+        formador: quien, grupos: 0, deportistas: 0,
+        diasSinLlenar: 0, diasConRegistro: 0,
+        mcCerradas: 0, mcPendientes: 0, mcSinAbrir: 0,
+        ppTotal: 0, ppCerrados: 0,
+      };
+      a.grupos          += 1;
+      a.deportistas     += f.activos;
+      a.diasSinLlenar   += f.diasSinLlenar;
+      a.diasConRegistro += f.diasConRegistro;
+      a.mcCerradas      += f.semanasCerradas;
+      a.mcPendientes    += f.semanasPendientes;
+      a.mcSinAbrir      += f.semanasSinAbrir.length;
+      mapa.set(quien, a);
+    });
+
+    /* Los post partidos se pegan por el nombre del D.T. En la programación el
+       D.T se escribe con el apellido o el nombre corto del formador, así que
+       se comparan las palabras: basta con que una coincida. */
+    const partes = (t: string) => new Set(
+      String(t ?? '').toUpperCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .split(/[^A-Z0-9]+/).filter(x => x.length >= 3));
+
+    (banco ?? []).forEach(pp => {
+      const fecha = String((pp as any).fecha ?? '').slice(0, 10);
+      if (!fecha || fecha < desde || fecha > hasta) return;
+      const dt = partes(String((pp as any).dt ?? ''));
+      if (!dt.size) return;
+      for (const [quien, a] of mapa) {
+        const suyo = partes(quien);
+        let coincide = false;
+        for (const w of dt) if (suyo.has(w)) { coincide = true; break; }
+        if (!coincide) continue;
+        a.ppTotal += 1;
+        if ((pp as any).definitivo === true) a.ppCerrados += 1;
+        break;
+      }
+    });
+
+    return [...mapa.values()].sort((a, b) => a.formador.localeCompare(b.formador, 'es'));
+  }, [filas, banco, mes]);
+
+  /** Los grupos de un formador (para abrir el detalle de una casilla). */
+  const gruposDe = useCallback((formador: string) =>
+    filas.filter(f => (f.profe || 'SIN FORMADOR').trim().toUpperCase() === formador),
+    [filas]);
+
+  /** Todas las semanas de un formador, de la más nueva a la más vieja. */
+  const semanasDe = useCallback((formador: string) => {
+    const out: { proyecto: string; mc: Microciclo }[] = [];
+    gruposDe(formador).forEach(g => {
+      (microsPorProyecto.get(g.proyecto) ?? []).forEach(mc => out.push({ proyecto: g.proyecto, mc }));
+    });
+    return out.sort((a, b) => String(b.mc.fecha_inicio).localeCompare(String(a.mc.fecha_inicio)));
+  }, [gruposDe, microsPorProyecto]);
+
+  /** Los partidos del mes de un formador, por el D.T de cada planilla. */
+  const partidosDe = useCallback((formador: string) => {
+    const { desde, hasta } = rangoDelMes(mes);
+    const partes = (t: string) => new Set(
+      String(t ?? '').toUpperCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .split(/[^A-Z0-9]+/).filter(x => x.length >= 3));
+    const suyo = partes(formador);
+    return (banco ?? []).filter(pp => {
+      const f = String((pp as any).fecha ?? '').slice(0, 10);
+      if (!f || f < desde || f > hasta) return false;
+      for (const w of partes(String((pp as any).dt ?? ''))) if (suyo.has(w)) return true;
+      return false;
+    }).sort((a, b) => String((a as any).fecha).localeCompare(String((b as any).fecha)));
+  }, [banco, mes]);
+
   /* ── VER EL MICROCICLO SIN SALIR DE AQUÍ ───────────────────────────────
      (dirección, 03/09/2026 — «¿dónde puedo ver cada microciclo?»)
 
@@ -799,6 +926,13 @@ export default function ConsolidadoPage() {
             ['asistencia',  'ASISTENCIA',  CalendarCheck],
             ['microciclos', 'MICROCICLOS', CalendarDays],
             ['informes',    'INFORMES',    ClipboardList],
+            /* POST PARTIDOS — la cuarta obligación del formador. Estaba solo
+               dentro de CONTROL TOTAL; la dirección la quiso también con su
+               propio botón, «y ya en un solo cuadro se tiene control de
+               todo». — dirección, 03/09/2026 */
+            ['pospartidos', 'POST PARTIDOS', Trophy],
+            /* CONTROL TOTAL — el resumen por persona. — 03/09/2026 */
+            ['total',       'CONTROL TOTAL', ShieldCheck],
           ] as const).map(([k, l, Icono]) => (
             <button key={k} onClick={() => setPestana(k)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-black transition"
@@ -836,8 +970,320 @@ export default function ConsolidadoPage() {
           </p>
         )}
 
+        {/* ═══ POST PARTIDOS — un renglón por FORMADOR ══════════════════════
+            (dirección, 03/09/2026 — «que se coloque botón post partidos y ya
+             en un solo cuadro se tiene control de todo»)
+
+            La planilla del post partido no se guarda por GRUPO sino por
+            TORNEO y por D.T, así que aquí el renglón es la PERSONA, igual que
+            en Control Total. Debajo van sus partidos del mes, uno por uno,
+            para ver cuál dejó sin cerrar. */}
+        {pestana === 'pospartidos' && (
+          banco === null ? (
+            <div className="rounded-2xl py-14 text-center" style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+              <Loader2 className="w-7 h-7 animate-spin mx-auto mb-2" style={{ color: GRIS }} />
+              <p className="text-white/50 text-[13px] font-semibold">Trayendo los post partidos…</p>
+            </div>
+          ) : (
+          <>
+            <div className="space-y-2">
+              {porFormador.map(p => {
+                const lista = partidosDe(p.formador);
+                const cerrados = lista.filter(x => (x as any).definitivo === true).length;
+                const sello = lista.length === 0
+                  ? { t: 'SIN PARTIDOS', c: GRIS }
+                  : cerrados >= lista.length ? { t: 'TERMINADO', c: VERDECL }
+                  : cerrados > 0            ? { t: 'A MEDIAS',  c: AMBAR }
+                  :                           { t: 'SIN HACER', c: ROJO };
+                return (
+                  <div key={p.formador} className="rounded-xl overflow-hidden"
+                    style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+                    <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-white font-black text-[17px] leading-tight truncate">{p.formador}</p>
+                        <p className="text-[11px] font-semibold" style={{ color: GRIS }}>
+                          {p.grupos} {p.grupos === 1 ? 'grupo' : 'grupos'} · {mesBonito(mes)}
+                        </p>
+                      </div>
+                      <span className="text-[12px] font-black" style={{ color: GRIS }}>
+                        {cerrados} de {lista.length} cerrados
+                      </span>
+                      <span className="rounded-lg px-3 py-1.5 text-[12px] font-black tracking-wide"
+                        style={{ background: `${sello.c}22`, border: `1px solid ${sello.c}`, color: sello.c }}>
+                        {sello.t}
+                      </span>
+                    </div>
+
+                    {lista.length > 0 && (
+                      <div style={{ background: CAMPO, borderTop: `1px solid ${BORDE}` }}>
+                        {lista.map((pp2, k) => {
+                          const cerrado = (pp2 as any).definitivo === true;
+                          return (
+                            <div key={k} className="flex items-center gap-3 px-4 py-2 text-[12px]"
+                              style={{ borderTop: k ? `1px solid ${BORDE}55` : 'none' }}>
+                              <span style={{ width: 96, color: GRIS }}>{String((pp2 as any).fecha ?? '').slice(0, 10)}</span>
+                              <span className="font-black text-white" style={{ width: 74 }}>
+                                {String((pp2 as any).jornada ?? '') || '—'}
+                              </span>
+                              <span className="flex-1 truncate text-white/80">
+                                {String((pp2 as any).rival ?? '') || <span style={{ color: GRIS }}>sin rival escrito</span>}
+                              </span>
+                              <span className="text-[10.5px] font-black text-white" style={{ width: 62, textAlign: 'center' }}>
+                                {String((pp2 as any).goles_nos ?? '—')} - {String((pp2 as any).goles_ellos ?? '—')}
+                              </span>
+                              <span className="text-[9.5px] font-black rounded px-2 py-1"
+                                style={cerrado
+                                  ? { background: `${VERDECL}26`, border: `1px solid ${VERDECL}`, color: VERDECL }
+                                  : { background: `${AMBAR}26`,   border: `1px solid ${AMBAR}`,   color: AMBAR }}>
+                                {cerrado ? 'CERRADO' : 'SIN CERRAR'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-center text-[11px] mt-4 leading-relaxed" style={{ color: GRIS }}>
+              Los partidos son los de <b>{mesBonito(mes)}</b> y se cuentan por el <b>D.T</b> de cada planilla.
+              <br /><b>CERRADO</b> es la planilla que el formador dio por definitiva; <b>SIN CERRAR</b> la
+              que dejó a medias.
+            </p>
+            <div aria-hidden style={{ height: 40 }} />
+          </>
+          )
+        )}
+
+        {/* ═══ CONTROL TOTAL — un renglón por FORMADOR ══════════════════════
+            (dirección, 03/09/2026 — «botón que diga control total, columnas
+             formador, asistencias, microciclos, post partidos, y debajo en
+             cada casilla al día, a medias, terminado; el nombre del formador
+             grande»)
+
+            Las otras tres pestañas son por GRUPO, y un formador con cuatro
+            grupos sale cuatro veces: para calificarlo hay que ir sumando de
+            cabeza. Este cuadro es por PERSONA: un renglón, sus tres deberes
+            al frente, y de un vistazo se ve quién está al día. */}
+        {pestana === 'total' && (
+          cargando && filas.length === 0 ? (
+            <div className="rounded-2xl py-14 text-center" style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+              <Loader2 className="w-7 h-7 animate-spin mx-auto mb-2" style={{ color: GRIS }} />
+              <p className="text-white/50 text-[13px] font-semibold">Cargando…</p>
+            </div>
+          ) : (
+          <>
+            {banco === null && (
+              <p className="text-[11.5px] font-semibold mb-2 flex items-center gap-2" style={{ color: GRIS }}>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Trayendo los post partidos del mes…
+              </p>
+            )}
+
+            <div className="rounded-2xl overflow-hidden" style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
+              {/* Los títulos */}
+              <div className="grid gap-2 px-4 py-2.5 text-[10px] font-black tracking-widest"
+                   style={{ gridTemplateColumns: CT_COLS, background: VERDE, color: '#fff' }}>
+                <span>FORMADOR</span>
+                <span className="text-center">ASISTENCIAS</span>
+                <span className="text-center">MICROCICLOS</span>
+                <span className="text-center">POST PARTIDOS</span>
+              </div>
+
+              {porFormador.length === 0 ? (
+                <p className="text-center text-white/45 text-[13px] font-semibold py-10">
+                  Ningún formador coincide con los filtros.
+                </p>
+              ) : porFormador.map((p, i) => {
+                /* ASISTENCIAS — al día si no le falta ni un día por llenar. */
+                const asis = p.diasSinLlenar === 0 && p.diasConRegistro > 0
+                  ? { t: 'AL DÍA',   c: VERDECL, d: `${p.diasConRegistro} días llenados` }
+                  : p.diasConRegistro > 0
+                  ? { t: 'A MEDIAS', c: AMBAR,   d: `le faltan ${p.diasSinLlenar} días` }
+                  : { t: 'SIN HACER', c: ROJO,   d: p.diasSinLlenar ? `${p.diasSinLlenar} días sin llenar` : 'sin entrenamientos' };
+
+                /* MICROCICLOS — terminado si cerró todas y no dejó ninguna sin abrir. */
+                const falta = p.mcPendientes + p.mcSinAbrir;
+                const mc = falta === 0 && p.mcCerradas > 0
+                  ? { t: 'TERMINADO', c: VERDECL, d: `${p.mcCerradas} semanas cerradas` }
+                  : p.mcCerradas > 0
+                  ? { t: 'A MEDIAS', c: AMBAR,   d: `${p.mcCerradas} cerradas · le faltan ${falta}` }
+                  : { t: 'SIN HACER', c: ROJO,   d: falta ? `${falta} semanas sin hacer` : 'sin semanas' };
+
+                /* POST PARTIDOS — terminado si cerró todas las planillas del mes. */
+                const pp = banco === null
+                  ? { t: '…', c: GRIS, d: 'cargando' }
+                  : p.ppTotal === 0
+                  ? { t: 'SIN PARTIDOS', c: GRIS, d: 'no jugó este mes' }
+                  : p.ppCerrados >= p.ppTotal
+                  ? { t: 'TERMINADO', c: VERDECL, d: `${p.ppCerrados} de ${p.ppTotal} cerrados` }
+                  : p.ppCerrados > 0
+                  ? { t: 'A MEDIAS', c: AMBAR,   d: `${p.ppCerrados} de ${p.ppTotal} cerrados` }
+                  : { t: 'SIN HACER', c: ROJO,   d: `0 de ${p.ppTotal} cerrados` };
+
+                /* ── LA CASILLA SE TOCA Y MUESTRA EL DETALLE ──────────
+                    (dirección, 03/09/2026 — «que esos botones nos lleven a
+                     verificar vista preliminar donde demos clic»)
+
+                    El sello dice CÓMO va; al tocarlo se abre debajo el
+                    desglose de POR QUÉ. Y en los microciclos, cada semana de
+                    ese desglose abre la hoja del formador en vista
+                    preliminar, con su PDF. */
+                const Casilla = ({ x, cual }: { x: { t: string; c: string; d: string }; cual: string }) => {
+                  const llave = `${p.formador}|${cual}`;
+                  const abierta = abiertoCT === llave;
+                  return (
+                    <button
+                      onClick={() => setAbiertoCT(abierta ? '' : llave)}
+                      title="Toca para ver el detalle"
+                      className="text-center transition hover:brightness-125">
+                      <span className="inline-block rounded-lg px-3 py-1.5 text-[12px] font-black tracking-wide"
+                        style={{ background: abierta ? x.c : `${x.c}22`,
+                                 border: `1px solid ${x.c}`,
+                                 color: abierta ? '#111827' : x.c }}>
+                        {x.t}
+                      </span>
+                      <p className="text-[10.5px] font-semibold mt-1" style={{ color: GRIS }}>{x.d}</p>
+                    </button>
+                  );
+                };
+
+                const cual = abiertoCT.startsWith(`${p.formador}|`) ? abiertoCT.split('|')[1] : '';
+
+                return (
+                  <div key={p.formador}
+                    style={{ background: i % 2 ? PANEL : '#36404F', borderTop: `1px solid ${BORDE}` }}>
+                    <div className="grid gap-2 items-center px-4 py-3"
+                      style={{ gridTemplateColumns: CT_COLS }}>
+                      <div className="min-w-0">
+                        {/* El nombre grande, que es lo que se busca con el ojo. */}
+                        <p className="text-white font-black text-[17px] leading-tight truncate"
+                           title={p.formador}>{p.formador}</p>
+                        <p className="text-[11px] font-semibold" style={{ color: GRIS }}>
+                          {p.grupos} {p.grupos === 1 ? 'grupo' : 'grupos'} · {p.deportistas} deportistas
+                        </p>
+                      </div>
+                      <Casilla x={asis} cual="asistencias" />
+                      <Casilla x={mc}   cual="microciclos" />
+                      <Casilla x={pp}   cual="pospartidos" />
+                    </div>
+
+                    {/* ── EL DESGLOSE ────────────────────────────────────── */}
+                    {cual && (
+                      <div className="px-4 pb-3">
+                        <div className="rounded-xl overflow-hidden" style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+
+                          {cual === 'asistencias' && (
+                            gruposDe(p.formador).map((g, k) => (
+                              <div key={g.proyecto} className="flex items-center gap-3 px-3 py-2 text-[12px]"
+                                style={{ borderTop: k ? `1px solid ${BORDE}55` : 'none' }}>
+                                <span className="font-black text-white" style={{ width: 110 }}>{g.proyecto}</span>
+                                <span className="flex-1" style={{ color: GRIS }}>
+                                  {g.diasConRegistro} días llenados
+                                </span>
+                                <span className="text-[10.5px] font-black rounded px-2 py-1"
+                                  style={g.diasSinLlenar
+                                    ? { background: ROJO, color: '#fff' }
+                                    : { background: VERDE, color: '#fff' }}>
+                                  {g.diasSinLlenar ? `${g.diasSinLlenar} SIN LLENAR` : 'AL DÍA'}
+                                </span>
+                              </div>
+                            ))
+                          )}
+
+                          {cual === 'microciclos' && (() => {
+                            const lista = semanasDe(p.formador);
+                            if (!lista.length) return (
+                              <p className="text-center text-[12px] font-semibold py-4" style={{ color: GRIS }}>
+                                A este formador no se le ha creado ninguna semana.
+                              </p>
+                            );
+                            return lista.slice(0, 40).map((x, k) => {
+                              const cerrado = x.mc.estado === 'cerrado';
+                              const ini = String(x.mc.fecha_inicio ?? '').slice(0, 10);
+                              const yaPaso = ini < lunesDeEstaSemana;
+                              const rot = cerrado ? 'TERMINADO' : yaPaso ? 'A MEDIAS' : 'EN CURSO';
+                              const col = cerrado ? VERDECL : yaPaso ? AMBAR : GRIS;
+                              return (
+                                <button key={x.mc.id}
+                                  onClick={() => verMicrociclo(x.mc)}
+                                  title="Ver la hoja del formador de esta semana"
+                                  className="w-full flex items-center gap-3 px-3 py-2 text-[12px] text-left transition hover:brightness-125"
+                                  style={{ borderTop: k ? `1px solid ${BORDE}55` : 'none' }}>
+                                  <span className="font-black text-white" style={{ width: 110 }}>{x.proyecto}</span>
+                                  <span className="font-black" style={{ width: 52, color: VERDECL }}>#{x.mc.numero || '—'}</span>
+                                  <span style={{ width: 96, color: GRIS }}>{ini || '—'}</span>
+                                  <span className="flex-1 truncate text-white/80">
+                                    {x.mc.objetivo_general || <span style={{ color: GRIS }}>sin objetivo escrito</span>}
+                                  </span>
+                                  <span className="text-[9.5px] font-black rounded px-2 py-1"
+                                    style={{ background: `${col}26`, border: `1px solid ${col}`, color: col }}>
+                                    {abriendoMc === x.mc.id ? 'ABRIENDO…' : rot}
+                                  </span>
+                                </button>
+                              );
+                            });
+                          })()}
+
+                          {cual === 'pospartidos' && (() => {
+                            const lista = partidosDe(p.formador);
+                            if (!lista.length) return (
+                              <p className="text-center text-[12px] font-semibold py-4" style={{ color: GRIS }}>
+                                Este formador no tuvo partidos en {mesBonito(mes)}.
+                              </p>
+                            );
+                            return lista.map((pp2, k) => {
+                              const cerrado = (pp2 as any).definitivo === true;
+                              return (
+                                <div key={k} className="flex items-center gap-3 px-3 py-2 text-[12px]"
+                                  style={{ borderTop: k ? `1px solid ${BORDE}55` : 'none' }}>
+                                  <span style={{ width: 96, color: GRIS }}>{String((pp2 as any).fecha ?? '').slice(0, 10)}</span>
+                                  <span className="font-black text-white" style={{ width: 74 }}>
+                                    {String((pp2 as any).jornada ?? '') || '—'}
+                                  </span>
+                                  <span className="flex-1 truncate text-white/80">
+                                    {String((pp2 as any).rival ?? '') || <span style={{ color: GRIS }}>sin rival escrito</span>}
+                                  </span>
+                                  <span className="text-[10.5px] font-black text-white" style={{ width: 62, textAlign: 'center' }}>
+                                    {String((pp2 as any).goles_nos ?? '—')} - {String((pp2 as any).goles_ellos ?? '—')}
+                                  </span>
+                                  <span className="text-[9.5px] font-black rounded px-2 py-1"
+                                    style={cerrado
+                                      ? { background: `${VERDECL}26`, border: `1px solid ${VERDECL}`, color: VERDECL }
+                                      : { background: `${AMBAR}26`,   border: `1px solid ${AMBAR}`,   color: AMBAR }}>
+                                    {cerrado ? 'CERRADO' : 'SIN CERRAR'}
+                                  </span>
+                                </div>
+                              );
+                            });
+                          })()}
+
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-center text-[11px] mt-3 leading-relaxed" style={{ color: GRIS }}>
+              Todo es del <b>{mesBonito(mes)}</b>, que es el mes escogido arriba. La pantalla abre
+              siempre en el <b>mes anterior</b>, que es el que se está calificando.<br />
+              <b>AL DÍA / TERMINADO</b> no le falta nada · <b>A MEDIAS</b> empezó pero le falta ·
+              {' '}<b>SIN HACER</b> no hay nada. Los post partidos se cuentan por el <b>D.T</b> de cada partido.<br />
+              <b className="text-white">Toca cualquier sello</b> y se abre el desglose. En MICROCICLOS, cada semana
+              del desglose abre la <b className="text-white">hoja del formador</b> tal como él la ve, con su PDF.
+            </p>
+            <div aria-hidden style={{ height: 40 }} />
+          </>
+          )
+        )}
+
         {/* ── EL CUADRO POR GRUPO ───────────────────────────────────────── */}
-        {cargando && filas.length === 0 ? (
+        {pestana !== 'total' && pestana !== 'pospartidos' && (
+        cargando && filas.length === 0 ? (
           <div className="rounded-2xl py-14 text-center" style={{ background: PANEL, border: `1px solid ${BORDE}` }}>
             <Loader2 className="w-7 h-7 animate-spin mx-auto mb-2" style={{ color: GRIS }} />
             <p className="text-white/50 text-[13px] font-semibold">Cargando…</p>
@@ -983,14 +1429,17 @@ export default function ConsolidadoPage() {
               );
             })}
           </div>
+        )
         )}
 
+        {pestana !== 'total' && pestana !== 'pospartidos' && (
         <p className="text-center text-[11px] mt-6 leading-relaxed" style={{ color: GRIS }}>
           En el renglón de cada grupo, el porcentaje es del <b>mes escogido</b> arriba.
           Abriendo el grupo se ven <b>todos los meses del año</b>, de febrero a diciembre.<br />
           Cada casilla dice <b>cuántas asistió de cuántas</b>. Un mes sin entrenamientos sale con un punto.
           Los días que el formador marcó como <b>cancelados</b>, o que no alcanzó a llenar, no se le cuentan al deportista.
         </p>
+        )}
       </main>
 
       {/* La hoja del formador, de solo lectura, con su botón de PDF. */}

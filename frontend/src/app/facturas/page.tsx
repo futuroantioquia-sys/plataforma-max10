@@ -36,7 +36,7 @@ export default function FacturasPendientesPage() {
   const td: React.CSSProperties = { border: '1px solid #fff', padding: '8px 10px', fontSize: 12, color: '#111827', whiteSpace: 'nowrap' };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div data-hoja="clara" className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => router.push('/dashboard')} className="text-white/80 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <FileText className="w-6 h-6 text-white" />

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle, XCircle, Eye, Clock, AlertCircle, BookOpen } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Eye, Clock, AlertCircle, BookOpen, Hash, CalendarDays } from 'lucide-react';
 import { getSoportesPendientes, getSoporteDatos, confirmarSoportePago, eliminarSoportePago, getDeportistas } from '@/lib/db';
 import type { SoportePago, Deportista } from '@/lib/db';
 import { BalonCargando } from '@/components/BalonCargando';
@@ -159,6 +159,69 @@ export default function PagosPendientesPage() {
     return data.startsWith('data:image/');
   }
 
+  /* ── ORDENAR POR CÓDIGO Y BUSCAR POR DÍA (dirección, 04/09/2026) ──────────
+     «Botones en el encabezado, por código, por día con calendario.»
+
+     Los soportes caían en el orden en que los mandó la nube, y cuando hay
+     treinta o cuarenta uno no encuentra ni el de un niño ni los de un día.
+     Ahora, encima del cuadro:
+
+       · POR DÍA    — del más nuevo al más viejo. Es el orden de siempre y
+                      queda puesto por defecto: lo primero que uno quiere ver
+                      es lo que acaba de llegar.
+       · POR CÓDIGO — 001, 002, 003… Sirve para cotejar contra el libro, que
+                      va por código.
+       · El calendario — se escoge un día y quedan SOLO los de ese día. Con
+                      TODOS LOS DÍAS vuelven todos.
+
+     El orden y el día son de la pantalla, no de la nube: no cambian ni mueven
+     nada, solo acomodan lo que se está viendo. */
+  const [orden, setOrden] = useState<'dia' | 'codigo'>('dia');
+  const [dia,   setDia]   = useState('');
+
+  /** El día (aaaa-mm-dd) en que se subió el soporte, en hora de acá. */
+  function diaDe(s: SoporteEnriquecido): string {
+    const t = s.created_at || s.fecha || '';
+    if (!t) return '';
+    const d = new Date(t);
+    if (isNaN(d.getTime())) return String(t).slice(0, 10);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  /** Lo que se pinta: filtrado por día y acomodado. */
+  const vista = useMemo(() => {
+    const lista = dia ? soportes.filter(s => diaDe(s) === dia) : [...soportes];
+    if (orden === 'codigo') {
+      /* `numeric` para que 9 vaya antes que 10, y no al revés como pasa
+         cuando se comparan como palabras. */
+      lista.sort((a, b) => String(a.depCodigo ?? '').localeCompare(
+        String(b.depCodigo ?? ''), 'es', { numeric: true, sensitivity: 'base' }));
+    } else {
+      lista.sort((a, b) => String(b.created_at ?? b.fecha ?? '')
+        .localeCompare(String(a.created_at ?? a.fecha ?? '')));
+    }
+    return lista;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [soportes, orden, dia]);
+
+  /** Cuántos soportes tiene cada día, para el letrero de al lado. */
+  const porDia = useMemo(() => {
+    const m = new Map<string, number>();
+    soportes.forEach(s => {
+      const d = diaDe(s);
+      if (d) m.set(d, (m.get(d) ?? 0) + 1);
+    });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [soportes]);
+
+  const diaBonito = (d: string) => {
+    if (!d) return '';
+    const [a, m, x] = d.split('-');
+    return `${x}/${m}/${a}`;
+  };
+
   return (
     <div className="min-h-screen" style={{ background: LIENZO }}>
 
@@ -217,8 +280,95 @@ export default function PagosPendientesPage() {
           </div>
         )}
 
-        {/* ── Tabla de soportes ── */}
+        {/* ── BOTONES DEL ENCABEZADO: POR CÓDIGO / POR DÍA + CALENDARIO ──────
+            (dirección, 04/09/2026)
+
+            Van pegados encima del cuadro verde, que es donde uno está
+            mirando cuando le hace falta acomodarlos. El botón puesto se ve
+            verde lleno; el otro, apagado. */}
         {!cargando && soportes.length > 0 && (
+          <div className="rounded-2xl border mb-2 px-3 py-2.5 flex flex-wrap items-center gap-2"
+               style={{ background: PANEL, borderColor: BORDE }}>
+
+            <span className="text-white/60 text-[10px] font-black uppercase tracking-wider mr-1">
+              Acomodar
+            </span>
+
+            <button
+              onClick={() => setOrden('dia')}
+              title="Los más nuevos de primeros"
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition hover:brightness-125"
+              style={{
+                background: orden === 'dia' ? VERDE : CAMPO,
+                border: `1px solid ${orden === 'dia' ? VERDE : BORDE}`,
+                color: '#FFFFFF',
+              }}>
+              <Clock className="w-3.5 h-3.5" /> Por día
+            </button>
+
+            <button
+              onClick={() => setOrden('codigo')}
+              title="001, 002, 003… igual que el libro"
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition hover:brightness-125"
+              style={{
+                background: orden === 'codigo' ? VERDE : CAMPO,
+                border: `1px solid ${orden === 'codigo' ? VERDE : BORDE}`,
+                color: '#FFFFFF',
+              }}>
+              <Hash className="w-3.5 h-3.5" /> Por código
+            </button>
+
+            <span className="mx-1 h-5 w-px" style={{ background: BORDE }} />
+
+            {/* EL CALENDARIO. Se escoge un día y quedan solo los de ese día. */}
+            <label className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 cursor-pointer"
+                   style={{ background: CAMPO, border: `1px solid ${dia ? VERDE : BORDE}` }}>
+              <CalendarDays className="w-3.5 h-3.5" style={{ color: dia ? VERDE : '#FFFFFF' }} />
+              <input
+                type="date"
+                value={dia}
+                onChange={e => setDia(e.target.value)}
+                title="Ver solo los soportes subidos ese día"
+                className="bg-transparent text-white text-[11px] font-bold outline-none cursor-pointer"
+                style={{ colorScheme: 'dark' }} />
+            </label>
+
+            {dia && (
+              <button
+                onClick={() => setDia('')}
+                className="rounded-xl px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition hover:brightness-125"
+                style={{ background: CAMPO, border: `1px solid ${BORDE}`, color: '#FFFFFF' }}>
+                Todos los días
+              </button>
+            )}
+
+            {/* Cuántos se están viendo de cuántos hay. */}
+            <span className="ml-auto text-white text-[11px] font-black">
+              {dia
+                ? <>{vista.length} de {soportes.length} · {diaBonito(dia)}</>
+                : <>{soportes.length} soporte{soportes.length === 1 ? '' : 's'}</>}
+            </span>
+          </div>
+        )}
+
+        {/* NINGUNO ESE DÍA. Se dice cuál es el último día que sí tuvo, para
+            no quedarse probando fechas a ciegas. — 04/09/2026 */}
+        {!cargando && soportes.length > 0 && vista.length === 0 && (
+          <div className="rounded-2xl border p-6 text-center mb-2"
+               style={{ background: PANEL, borderColor: BORDE }}>
+            <p className="text-white font-black text-sm">
+              El {diaBonito(dia)} no subieron ningún soporte.
+            </p>
+            <p className="text-white/70 text-[12px] mt-1">
+              {porDia.size > 0
+                ? <>Los días con soportes son: {[...porDia.keys()].sort().reverse().slice(0, 6).map(diaBonito).join(' · ')}</>
+                : 'No hay soportes con fecha.'}
+            </p>
+          </div>
+        )}
+
+        {/* ── Tabla de soportes ── */}
+        {!cargando && vista.length > 0 && (
           <div className="overflow-x-auto rounded-2xl shadow-sm border" style={{ borderColor: BORDE }}>
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -234,7 +384,13 @@ export default function PagosPendientesPage() {
                 </tr>
               </thead>
               <tbody>
-                {soportes.map((s, idx) => (
+                {/* Se pinta la VISTA (acomodada y filtrada), pero el número
+                    que se le pasa a confirmar/rechazar sigue siendo el puesto
+                    en la lista de verdad: así el orden de la pantalla no
+                    confunde los botones. — 04/09/2026 */}
+                {vista.map((s) => {
+                  const idx = soportes.findIndex(x => x.id === s.id);
+                  return (
                   <tr key={s.id} style={{ background: PANEL }} className="hover:brightness-125 transition">
 
                     {/* Código */}
@@ -358,7 +514,8 @@ export default function PagosPendientesPage() {
                     </td>
 
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -81,7 +81,7 @@ export default function MensajesCalidosoPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f1f5f9] flex flex-col">
+    <div data-hoja="clara" className="min-h-screen bg-[#f1f5f9] flex flex-col">
       <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => router.push(`/alumnos/${id}`)} className="text-white/70 hover:text-white transition">
           <ArrowLeft className="w-5 h-5" />

@@ -503,7 +503,7 @@ export default function LibroContablePage() {
   const G  = '#16a34a';
 
   return (
-    <div className="min-h-screen bg-[#f0f4ff]">
+    <div data-hoja="clara" className="min-h-screen bg-[#f0f4ff]">
 
       {/* HEADER */}
       <header className="relative bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">

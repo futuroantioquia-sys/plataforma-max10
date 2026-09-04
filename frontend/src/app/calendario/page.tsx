@@ -49,7 +49,7 @@ export default function CalendarioPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f0f7ff] flex flex-col">
+    <div data-hoja="clara" className="min-h-screen bg-[#f0f7ff] flex flex-col">
       <PageHeader
         titulo="Calendario"
         subtitulo="Entrenamientos y eventos"

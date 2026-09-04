@@ -764,7 +764,7 @@ function ValoracionDinamicaInner() {
                 <div className="flex-shrink-0">
                   <div className="w-[104px] h-[134px] sm:w-40 sm:h-52 rounded-2xl overflow-hidden border-2 border-[#16a34a]/50 bg-white/10 flex items-center justify-center shadow-[0_0_28px_rgba(22,163,74,0.3)]">
                     {(row.foto || fotoCalidoso)
-                      ? <img src={row.foto || fotoCalidoso} alt="" className="w-full h-full object-cover" style={{ objectPosition: 'top' }} />
+                      ? <img src={row.foto || fotoCalidoso} alt="" className="w-full h-full object-cover" style={{ objectPosition: '50% 22%' }} />
                       : <span className="text-white font-black text-3xl sm:text-4xl">{heroIniciales}</span>}
                   </div>
                   {heroCodigo && (

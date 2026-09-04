@@ -230,7 +230,7 @@ function AvatarStack({ lista, fotos, grad, max = 6 }: {
         <div key={d.id}
           className={cn('w-7 h-7 rounded-full ring-2 ring-white overflow-hidden flex items-center justify-center text-white text-[9px] font-black flex-shrink-0 bg-gradient-to-br', grad)}
           style={{ marginLeft: j > 0 ? '-6px' : 0 }}>
-          {fotos[d.id] ? <img src={fotos[d.id]} alt="" className="w-full h-full object-cover" /> : iniciales(d._nombre)}
+          {fotos[d.id] ? <img src={fotos[d.id]} alt="" className="w-full h-full object-cover" style={{ objectPosition: '50% 22%' }} /> : iniciales(d._nombre)}
         </div>
       ))}
       {lista.length > max && (

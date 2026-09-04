@@ -181,7 +181,7 @@ export default function PagosProyectoPage() {
   }).length;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div data-hoja="clara" className="min-h-screen bg-gray-50">
 
       {/* Header */}
       <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20 shadow">

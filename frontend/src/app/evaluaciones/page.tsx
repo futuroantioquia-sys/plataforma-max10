@@ -431,7 +431,7 @@ function VistaPadres({ data, nombreEntrenador, onClose }: {
             <div style={{ flexShrink: 0 }}>
               <div style={{ width: 90, height: 114, borderRadius: 12, overflow: 'hidden', border: '2px solid #00d48840', background: 'linear-gradient(135deg, #0d4a2b, #051a2e)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(0,212,136,0.2)' }}>
                 {data.foto
-                  ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+                  ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 22%' }} />
                   : <span style={{ color: '#00d488', fontSize: 30, fontWeight: 900 }}>{iniciales}</span>}
               </div>
               <div style={{ marginTop: 5, textAlign: 'center', background: '#00d48820', border: '1px solid #00d48840', borderRadius: 5, padding: '2px 4px' }}>
@@ -1385,7 +1385,7 @@ function ValoracionPageInner() {
 
   /* ════════════════════════════════════════════════════════════ */
   return (
-    <div style={{ minHeight: '100vh', background: '#e5e7eb' }}>
+    <div data-hoja="clara" style={{ minHeight: '100vh', background: '#e5e7eb' }}>
       {vistaGamificada && (
         <VistaPadres data={data} nombreEntrenador={nombreEntrenador} onClose={() => setVistaGamificada(false)} />
       )}
@@ -1533,7 +1533,7 @@ function ValoracionPageInner() {
                     <div onClick={() => fotoRef.current?.click()}
                       style={{ width: 90, height: 118, borderRadius: 8, overflow: 'hidden', background: VERDE_GRAD, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
                       {data.foto
-                        ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+                        ? <img src={data.foto} alt="foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 22%' }} />
                         : <span style={{ color: '#fff', fontWeight: 900, fontSize: 30, lineHeight: 1 }}>
                             {data.nombre.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'FA'}
                           </span>
