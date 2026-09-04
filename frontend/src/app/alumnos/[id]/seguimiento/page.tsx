@@ -19,7 +19,7 @@ function nivelCorto(n: number): string {
   return ['—', 'Iniciación', 'En Desarrollo', 'Competente', 'Avanzado', 'Dominante'][n] ?? '—';
 }
 function nivelColor(n: number): string {
-  return ['#d1d5db', '#ef4444', '#f97316', '#eab308', '#3b82f6', '#16a34a'][n] ?? '#d1d5db';
+  return ['#4A5568', '#ef4444', '#f97316', '#eab308', '#3b82f6', '#16a34a'][n] ?? '#4A5568';
 }
 function nivelPct(n: number): number {
   return [0, 20, 40, 60, 80, 100][n] ?? 0;
@@ -46,7 +46,7 @@ function SkillBar({
   if (!nivelStr) return null;
 
   return (
-    <div className="rounded-xl overflow-hidden border border-gray-100 bg-white shadow-sm">
+    <div className="rounded-xl overflow-hidden border border-[#4A5568] bg-[#3C4759] shadow-sm">
       <button
         className="w-full flex items-center gap-3 px-4 py-3 text-left"
         onClick={onToggle}
@@ -56,14 +56,14 @@ function SkillBar({
           {[1,2,3,4,5].map(i => (
             <span key={i}
               className="w-2.5 h-2.5 rounded-full"
-              style={{ background: i <= n ? col : '#e5e7eb' }}
+              style={{ background: i <= n ? col : '#4A5568' }}
             />
           ))}
         </div>
 
         {/* Nombre + nivel */}
         <div className="flex-1 min-w-0">
-          <p className="font-black text-[#111827] text-sm leading-tight">{label}</p>
+          <p className="font-black text-white text-sm leading-tight">{label}</p>
           <p className="text-[10px] font-semibold" style={{ color: col }}>{text}</p>
         </div>
 
@@ -73,12 +73,12 @@ function SkillBar({
             style={{ background: col }}>
             {n || '—'}
           </span>
-          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          {expanded ? <ChevronUp className="w-4 h-4 text-[#C9D2DE]" /> : <ChevronDown className="w-4 h-4 text-[#C9D2DE]" />}
         </div>
       </button>
 
       {/* Barra de progreso */}
-      <div className="mx-4 mb-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div className="mx-4 mb-2 h-1.5 bg-[#2B3547] rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-700"
           style={{ width: `${pct}%`, background: col }}
@@ -88,7 +88,7 @@ function SkillBar({
       {/* Descripción expandible */}
       {expanded && desc && (
         <div className="px-4 pb-3">
-          <p className="text-xs text-gray-500 leading-relaxed border-t border-gray-50 pt-2">{desc}</p>
+          <p className="text-xs text-[#C9D2DE] leading-relaxed border-t border-[#4A5568] pt-2">{desc}</p>
         </div>
       )}
     </div>
@@ -113,7 +113,7 @@ function Categoria({
   })();
 
   return (
-    <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-200">
+    <div className="rounded-2xl overflow-hidden shadow-sm border border-[#4A5568]">
       {/* Encabezado */}
       <div className="flex items-center gap-3 px-4 py-3" style={{ background: color }}>
         <Icon className="w-5 h-5 text-white flex-shrink-0" />
@@ -124,7 +124,7 @@ function Categoria({
       </div>
 
       {/* Skills */}
-      <div className="bg-gray-50 p-3 space-y-2">
+      <div className="bg-[#2B3547] p-3 space-y-2">
         {skills.map(s => (
           <SkillBar
             key={s.label}
@@ -165,8 +165,8 @@ function RadarChart({ eval: ev }: { eval: Evaluacion }) {
   const gridLevels = [0.2, 0.4, 0.6, 0.8, 1];
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-      <p className="font-black text-[#111827] text-xs uppercase tracking-widest mb-3 text-center">Perfil Global</p>
+    <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
+      <p className="font-black text-white text-xs uppercase tracking-widest mb-3 text-center">Perfil Global</p>
       <svg viewBox="0 0 220 220" className="w-full max-w-[240px] mx-auto block">
         {/* Grid */}
         {gridLevels.map(pct => (
@@ -178,7 +178,7 @@ function RadarChart({ eval: ev }: { eval: Evaluacion }) {
               return `${x},${y}`;
             }).join(' ')}
             fill="none"
-            stroke="#e5e7eb"
+            stroke="#4A5568"
             strokeWidth="1"
           />
         ))}
@@ -188,7 +188,7 @@ function RadarChart({ eval: ev }: { eval: Evaluacion }) {
             x1={cx} y1={cy}
             x2={cx + r * Math.cos(angles[i])}
             y2={cy + r * Math.sin(angles[i])}
-            stroke="#e5e7eb" strokeWidth="1"
+            stroke="#4A5568" strokeWidth="1"
           />
         ))}
         {/* Relleno */}
@@ -212,7 +212,7 @@ function RadarChart({ eval: ev }: { eval: Evaluacion }) {
           const ly = cy + (r + 18) * Math.sin(angles[i]);
           return (
             <text key={i} x={lx} y={ly + 4}
-              textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#374151">
+              textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#C9D2DE">
               {s.label}
             </text>
           );
@@ -458,7 +458,7 @@ export default function SeguimientoPage() {
   const initials = nombre.split(' ').filter(Boolean).slice(0,2).map(w => w[0]).join('').toUpperCase();
 
   return (
-    <div data-hoja="clara" className="min-h-screen bg-[#f1f5f9]">
+    <div className="min-h-screen bg-[#333F50]">
 
       {/* HEADER */}
       <header className="relative bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
@@ -517,8 +517,8 @@ export default function SeguimientoPage() {
 
             {/* ── Selector de evaluación (si hay más de 1) ── */}
             {evals.length > 1 && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Historial de evaluaciones</p>
+              <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-3">
+                <p className="text-[10px] font-black text-[#C9D2DE] uppercase tracking-widest mb-2">Historial de evaluaciones</p>
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {evals.map((e, i) => (
                     <button
@@ -526,12 +526,12 @@ export default function SeguimientoPage() {
                       onClick={() => { setIdxEval(i); setOpenSkills(new Set()); }}
                       className="flex-shrink-0 rounded-xl px-3 py-2 text-center transition"
                       style={{
-                        background: i === idxEval ? '#064e1e' : '#f1f5f9',
-                        color:      i === idxEval ? '#fff'    : '#374151',
+                        background: i === idxEval ? '#064e1e' : '#2B3547',
+                        color:      i === idxEval ? '#fff'    : '#FFFFFF',
                       }}>
                       <p className="text-[10px] font-black">{e.fecha}</p>
                       {e.calificacion && (
-                        <p className="text-[9px] font-semibold" style={{ color: i === idxEval ? '#86efac' : '#6b7280' }}>
+                        <p className="text-[9px] font-semibold" style={{ color: i === idxEval ? '#86efac' : '#C9D2DE' }}>
                           {nivelCorto(nivelNum(e.calificacion))}
                         </p>
                       )}
@@ -542,23 +542,23 @@ export default function SeguimientoPage() {
             )}
 
             {/* ── Fecha evaluación ── */}
-            <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 px-4 py-2.5 shadow-sm">
-              <Calendar className="w-4 h-4 text-[#16a34a]"/>
-              <p className="text-sm font-bold text-[#111827]">Evaluación: <span className="text-[#16a34a]">{ev.fecha}</span></p>
+            <div className="flex items-center gap-2 bg-[#3C4759] rounded-xl border border-[#4A5568] px-4 py-2.5 shadow-sm">
+              <Calendar className="w-4 h-4 text-[#5BE39B]"/>
+              <p className="text-sm font-bold text-white">Evaluación: <span className="text-[#5BE39B]">{ev.fecha}</span></p>
             </div>
 
             {/* ── Estadísticas ── */}
             {stats.length > 0 && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-                <p className="font-black text-[#111827] text-xs uppercase tracking-widest mb-3">Estadísticas</p>
+              <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
+                <p className="font-black text-white text-xs uppercase tracking-widest mb-3">Estadísticas</p>
                 <div className="grid grid-cols-3 gap-2">
                   {stats.map(s => (
                     <div key={s.label}
                       className="rounded-xl p-3 text-center"
                       style={{ background: `${s.col}15` }}>
                       <s.icon className="w-4 h-4 mx-auto mb-1" style={{ color: s.col }}/>
-                      <p className="font-black text-[#111827] text-lg leading-none">{s.val}</p>
-                      <p className="text-[10px] font-semibold text-gray-500 mt-0.5">{s.label}</p>
+                      <p className="font-black text-white text-lg leading-none">{s.val}</p>
+                      <p className="text-[10px] font-semibold text-[#C9D2DE] mt-0.5">{s.label}</p>
                     </div>
                   ))}
                 </div>
@@ -570,18 +570,18 @@ export default function SeguimientoPage() {
 
             {/* ── Observaciones ── */}
             {ev.observaciones?.trim() && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+              <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="w-4 h-4 text-[#16a34a]"/>
-                  <p className="font-black text-[#111827] text-xs uppercase tracking-widest">Observaciones del Entrenador</p>
+                  <TrendingUp className="w-4 h-4 text-[#5BE39B]"/>
+                  <p className="font-black text-white text-xs uppercase tracking-widest">Observaciones del Entrenador</p>
                 </div>
-                <p className="text-sm text-gray-600 leading-relaxed">{ev.observaciones}</p>
+                <p className="text-sm text-[#C9D2DE] leading-relaxed">{ev.observaciones}</p>
               </div>
             )}
 
             {/* ── Escala de referencia ── */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-              <p className="font-black text-[#111827] text-xs uppercase tracking-widest mb-3">Escala de Niveles</p>
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4">
+              <p className="font-black text-white text-xs uppercase tracking-widest mb-3">Escala de Niveles</p>
               <div className="space-y-1.5">
                 {[
                   { n:1, label:'Iniciación',    desc:'Aprendiendo los fundamentos básicos.' },
@@ -594,8 +594,8 @@ export default function SeguimientoPage() {
                     <div className="w-6 h-6 rounded-full flex items-center justify-center font-black text-xs text-white flex-shrink-0"
                       style={{ background: nivelColor(n) }}>{n}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-black text-[#111827] leading-none">{label}</p>
-                      <p className="text-[10px] text-gray-400">{desc}</p>
+                      <p className="text-xs font-black text-white leading-none">{label}</p>
+                      <p className="text-[10px] text-[#C9D2DE]">{desc}</p>
                     </div>
                   </div>
                 ))}

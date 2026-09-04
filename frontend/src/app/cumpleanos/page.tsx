@@ -828,23 +828,57 @@ export default function CumpleanosPage() {
              dónde está la cabeza y dónde los hombros, y así el corte queda
              igual en todas: un poco arriba de la cabeza y hasta los escudos.
              La silueta solo se DIBUJA cuando el diseño es SIN FONDO. */
+          /* ── LA FOTO QUE YA VIENE ENCUADRADA NO SE VUELVE A ENCUADRAR ────
+             (dirección, 04/09/2026 — «espero que esto mismo quede para
+              cumpleaños, pero esa sí la haces tú solo, por defecto siempre»)
+
+             Desde hoy el papá encuadra la foto a mano en el marco blanco de la
+             ficha: la deja de la cabeza a los escudos y queda guardada en 3:4
+             exacto. Esa foto YA está bien; volver a buscarle la silueta y
+             recortarla otra vez solo puede empeorarla.
+
+             Entonces: si la foto llega en 3:4, se usa TAL CUAL —solo se ajusta
+             a la forma del recuadro del cromo, centrada y anclada arriba, que
+             es donde está la cara—. La silueta se sigue calculando cuando la
+             tarjeta va SIN FONDO, porque ahí sí hace falta para borrar el
+             fondo, pero el encuadre lo manda la foto, no el cálculo.
+
+             A las fotos VIEJAS —las de antes del marco— se les sigue haciendo
+             todo el trabajo de siempre. */
+          const yaEncuadrada = Math.abs(img.width / Math.max(1, img.height) - 0.75) < 0.02;
+          const encuadreDeLaFoto = () => {
+            let sw = img.width, sh = sw / proporcion;
+            if (sh > img.height) { sh = img.height; sw = sh * proporcion; }
+            return { sx: (img.width - sw) / 2, sy: 0, sw, sh };
+          };
           try {
-            const silueta = await recortarPersona(img);
-            if (sinFondo) capa = silueta;                     // va sin fondo
-            enc = encuadreBusto(silueta, proporcion, 0.5);
+            if (yaEncuadrada) {
+              if (sinFondo) capa = await recortarPersona(img);
+              enc = encuadreDeLaFoto();
+            } else {
+              const silueta = await recortarPersona(img);
+              if (sinFondo) capa = silueta;                   // va sin fondo
+              enc = encuadreBusto(silueta, proporcion, 0.5);
+            }
           } catch {
             /* No se pudo hallar la silueta (foto rara o sin señal): se usa la
                foto completa, corrida un poco hacia arriba, que es donde casi
-               siempre está la cara. Nunca se recorta a ciegas la mitad. */
-            let sh = img.height;
-            let sw = sh * proporcion;
-            if (sw > img.width) { sw = img.width; sh = sw / proporcion; }
-            enc = {
-              sx: (img.width - sw) / 2,
-              sy: Math.max(0, (img.height - sh) * 0.15),
-              sw,
-              sh,
-            };
+               siempre está la cara. Nunca se recorta a ciegas la mitad.
+               Si la foto ya venía encuadrada en 3:4, se respeta ese encuadre
+               aunque la silueta haya fallado. — 04/09/2026 */
+            if (yaEncuadrada) {
+              enc = encuadreDeLaFoto();
+            } else {
+              let sh = img.height;
+              let sw = sh * proporcion;
+              if (sw > img.width) { sw = img.width; sh = sw / proporcion; }
+              enc = {
+                sx: (img.width - sw) / 2,
+                sy: Math.max(0, (img.height - sh) * 0.15),
+                sw,
+                sh,
+              };
+            }
           }
 
           // El deportista, encuadrado en su recuadro (el pequeño o todo el cromo)

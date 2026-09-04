@@ -361,14 +361,14 @@ export default function SubirBancosPage() {
   const cntVer = lineas.filter(l => l.estado === 'PEND').length;
 
   const G   = '#16a34a';
-  const ROW = '#f1f5f9';
-  const BW  = '1px solid white';
+  const ROW = '#36404F';   // fila de tabla sobre lienzo oscuro — dirección, 04/09/2026
+  const BW  = '1px solid #4A5568';
   const bdg = (e: BancoLinea['estado']) =>
     e === 'PAGÓ' ? { bg:'#dcfce7', txt:'#166534', lbl:'PAGÓ' } :
                    { bg:'#fee2e2', txt:'#991b1b', lbl:'ERROR' };
 
   return (
-    <div data-hoja="clara" className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
       <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-10 shadow">
         <button onClick={() => router.push('/dashboard')} className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition"><ArrowLeft className="w-4 h-4"/></button>
         <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center"><Upload className="w-4 h-4 text-white"/></div>
@@ -386,11 +386,11 @@ export default function SubirBancosPage() {
 
         {/* ── UPLOAD ── */}
         {fase === 'upload' && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-8">
             <div className="text-center mb-6">
               <FileSpreadsheet className="w-12 h-12 text-[#16a34a] mx-auto mb-3"/>
-              <h2 className="text-lg font-black text-[#111827]">Cargar extracto bancario</h2>
-              <p className="text-sm text-gray-500 mt-1">Detecta automáticamente las columnas, incluyendo tildes y espacios</p>
+              <h2 className="text-lg font-black text-white">Cargar extracto bancario</h2>
+              <p className="text-sm text-[#C9D2DE] mt-1">Detecta automáticamente las columnas, incluyendo tildes y espacios</p>
             </div>
             <div
               onDragOver={e => { e.preventDefault(); setArrastrar(true); }}
@@ -398,20 +398,20 @@ export default function SubirBancosPage() {
               onDrop={onDrop}
               onClick={() => fileRef.current?.click()}
               className={cn('border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition',
-                arrastrar ? 'border-[#16a34a] bg-green-50' : 'border-gray-200 hover:border-[#16a34a] hover:bg-green-50/30')}>
-              <Upload className="w-10 h-10 text-gray-300 mx-auto mb-3"/>
-              <p className="font-semibold text-gray-500 text-lg">Arrastra aquí o haz clic</p>
-              <p className="text-xs text-gray-400 mt-1">.xlsx · .xls — sin límite de filas</p>
+                arrastrar ? 'border-[#16a34a] bg-[#00B050]/15' : 'border-[#4A5568] bg-[#2B3547] hover:border-[#16a34a] hover:bg-[#00B050]/10')}>
+              <Upload className="w-10 h-10 text-[#4A5568] mx-auto mb-3"/>
+              <p className="font-semibold text-[#C9D2DE] text-lg">Arrastra aquí o haz clic</p>
+              <p className="text-xs text-[#C9D2DE] mt-1">.xlsx · .xls — sin límite de filas</p>
             </div>
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onFile}/>
             {cargando && (
               <div className="mt-5 flex flex-col items-center gap-2 text-[#16a34a]">
                 <Loader2 className="w-8 h-8 animate-spin"/>
                 <p className="text-sm font-semibold">Leyendo todas las filas del archivo...</p>
-                <p className="text-xs text-gray-400">Archivos grandes pueden tardar unos segundos</p>
+                <p className="text-xs text-[#C9D2DE]">Archivos grandes pueden tardar unos segundos</p>
               </div>
             )}
-            {error && <p className="mt-4 text-sm text-red-600 text-center font-semibold bg-red-50 rounded-xl p-3">{error}</p>}
+            {error && <p className="mt-4 text-sm text-white text-center font-semibold bg-[#2B3547] border border-[#C0504D] rounded-xl p-3">{error}</p>}
           </div>
         )}
 
@@ -419,11 +419,11 @@ export default function SubirBancosPage() {
         {fase === 'preview' && (
           <div className="space-y-4">
             {/* Columnas detectadas */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-5">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <h2 className="font-black text-[#111827]">Archivo listo</h2>
-                  <p className="text-xs text-gray-500">
+                  <h2 className="font-black text-white">Archivo listo</h2>
+                  <p className="text-xs text-[#C9D2DE]">
                     <span className="font-black text-[#16a34a] text-sm">{rawFilas.length.toLocaleString('es-CO')} filas</span>
                     {' '}leídas correctamente
                   </p>
@@ -432,7 +432,7 @@ export default function SubirBancosPage() {
               </div>
 
               {/* Columnas detectadas */}
-              <p className="text-[11px] font-black text-[#4b5563] uppercase tracking-wider mb-2">Columnas detectadas</p>
+              <p className="text-[11px] font-black text-[#C9D2DE] uppercase tracking-wider mb-2">Columnas detectadas</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {Object.entries({
                   'CÓDIGO':        colsDetect.codigo,
@@ -446,24 +446,24 @@ export default function SubirBancosPage() {
                   'DESCRIPCIÓN':   colsDetect.descripcion,
                   'CUENTA':        colsDetect.cuenta,
                 }).map(([campo, real]) => (
-                  <div key={campo} className={cn('rounded-lg px-3 py-2 text-[10px]', real ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200')}>
-                    <p className="font-black" style={{ color: real ? '#16a34a' : '#dc2626' }}>{campo}</p>
-                    <p className="text-gray-500 truncate">{real ?? '⚠ No detectada'}</p>
+                  <div key={campo} className={cn('rounded-lg px-3 py-2 text-[10px]', real ? 'bg-[#2B3547] border border-[#00B050]' : 'bg-[#2B3547] border border-[#C0504D]')}>
+                    <p className="font-black" style={{ color: real ? '#5BE39B' : '#C0504D' }}>{campo}</p>
+                    <p className="text-[#C9D2DE] truncate">{real ?? '⚠ No detectada'}</p>
                   </div>
                 ))}
               </div>
 
               {/* Advertencia si faltan columnas críticas */}
               {(!colsDetect.codigo || !colsDetect.detalle || !colsDetect.debito) && (
-                <div className="mt-3 bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-700 font-semibold">
+                <div className="mt-3 bg-[#2B3547] border border-[#E0A33A] rounded-xl p-3 text-xs text-[#E0A33A] font-semibold">
                   ⚠ Faltan columnas obligatorias: {[!colsDetect.codigo && 'CÓDIGO', !colsDetect.detalle && 'DETALLE', !colsDetect.debito && 'VALOR PAGADO'].filter(Boolean).join(', ')}. Verifica los encabezados del archivo.
                 </div>
               )}
             </div>
 
             {/* Vista previa de datos */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <p className="px-5 py-3 font-black text-[#111827] text-sm border-b border-gray-100">Primeras 5 filas</p>
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
+              <p className="px-5 py-3 font-black text-white text-sm border-b border-[#4A5568]">Primeras 5 filas</p>
               <div className="overflow-auto" style={{ maxHeight: 220 }}>
                 <table className="w-full text-xs border-collapse" style={{ minWidth: 700 }}>
                   <thead>
@@ -477,7 +477,7 @@ export default function SubirBancosPage() {
                     {rawFilas.slice(0, 5).map((f, i) => (
                       <tr key={i} style={{ background: ROW }}>
                         {Object.entries(f).filter(([k]) => !/no\s*aplica/i.test(k)).map(([k, v]) => (
-                          <td key={k} style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, color: '#111827', whiteSpace: 'nowrap' }}>{v}</td>
+                          <td key={k} style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, color: '#FFFFFF', whiteSpace: 'nowrap' }}>{v}</td>
                         ))}
                       </tr>
                     ))}
@@ -487,7 +487,7 @@ export default function SubirBancosPage() {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => { setFase('upload'); setRawFilas([]); }} className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-[#4b5563] hover:bg-gray-50 transition">Volver</button>
+              <button onClick={() => { setFase('upload'); setRawFilas([]); }} className="px-4 py-2.5 rounded-xl border border-[#4A5568] text-sm font-semibold text-[#C9D2DE] hover:bg-[#2B3547] transition">Volver</button>
               <button onClick={procesar} disabled={!colsDetect.codigo || !colsDetect.detalle || !colsDetect.debito}
                 className="flex-1 flex items-center justify-center gap-2 bg-[#16a34a] hover:bg-[#064e1e] text-white rounded-xl py-2.5 text-sm font-black transition disabled:opacity-50 disabled:cursor-not-allowed">
                 <Play className="w-4 h-4"/> Procesar {rawFilas.length.toLocaleString('es-CO')} filas
@@ -502,20 +502,20 @@ export default function SubirBancosPage() {
             <div className="grid grid-cols-2 gap-3">
               {[
                 { cnt: cntOk,  icon: <CheckCircle className="w-5 h-5 text-[#16a34a]"/>, txt: '#16a34a', lbl: 'PAGADOS' },
-                { cnt: cntErr, icon: <XCircle className="w-5 h-5 text-red-500"/>,        txt: '#991b1b', lbl: 'CÓDIGO NO ENCONTRADO' },
+                { cnt: cntErr, icon: <XCircle className="w-5 h-5 text-red-500"/>,        txt: '#C0504D', lbl: 'CÓDIGO NO ENCONTRADO' },
               ].map(r => (
-                <div key={r.lbl} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
+                <div key={r.lbl} className="bg-[#3C4759] rounded-xl border border-[#4A5568] shadow-sm p-4 text-center">
                   <div className="flex justify-center mb-1">{r.icon}</div>
                   <p className="text-2xl font-black" style={{ color: r.txt }}>{r.cnt}</p>
-                  <p className="text-[10px] font-bold text-gray-500">{r.lbl}</p>
+                  <p className="text-[10px] font-bold text-[#C9D2DE]">{r.lbl}</p>
                 </div>
               ))}
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                <p className="font-black text-[#111827] text-sm">Resultado del procesamiento</p>
-                <p className="text-xs text-gray-400">{lineas.length} grupos · {rawFilas.length.toLocaleString('es-CO')} filas originales</p>
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-[#4A5568] flex items-center justify-between">
+                <p className="font-black text-white text-sm">Resultado del procesamiento</p>
+                <p className="text-xs text-[#C9D2DE]">{lineas.length} grupos · {rawFilas.length.toLocaleString('es-CO')} filas originales</p>
               </div>
               <div className="overflow-auto" style={{ maxHeight: '50vh' }}>
                 <table className="w-full text-xs border-collapse" style={{ minWidth: 700 }}>
@@ -534,14 +534,14 @@ export default function SubirBancosPage() {
                           <td style={{ padding: '5px 8px', borderRight: BW, borderBottom: BW }}>
                             <span style={{ background: b.bg, color: b.txt, padding: '2px 7px', borderRadius: 6, fontWeight: 900, fontSize: 10, whiteSpace: 'nowrap' }}>{b.lbl}</span>
                           </td>
-                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, color: '#111827', whiteSpace: 'nowrap' }}>{ln.destino||'—'}</td>
-                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, color: '#4b5563', whiteSpace: 'nowrap' }}>{ln.fecha||'—'}</td>
-                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, textAlign: 'right', fontWeight: 900, color: '#111827', whiteSpace: 'nowrap' }}>{formatPeso(ln.debito)}</td>
-                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, textAlign: 'right', color: '#4b5563', whiteSpace: 'nowrap' }}>{ln.vCargado ? formatPeso(ln.vCargado) : '—'}</td>
-                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, fontWeight: 900, color: G, whiteSpace: 'nowrap' }}>{ln.codigo}</td>
-                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>{ln.deportista}</td>
-                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, color: '#111827', whiteSpace: 'nowrap' }}>{ln.detalle}</td>
-                          <td style={{ padding: '5px 10px', borderBottom: BW, color: '#4b5563', fontSize: 10 }}>{ln.mensaje}</td>
+                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, color: '#FFFFFF', whiteSpace: 'nowrap' }}>{ln.destino||'—'}</td>
+                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, color: '#C9D2DE', whiteSpace: 'nowrap' }}>{ln.fecha||'—'}</td>
+                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, textAlign: 'right', fontWeight: 900, color: '#FFFFFF', whiteSpace: 'nowrap' }}>{formatPeso(ln.debito)}</td>
+                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, textAlign: 'right', color: '#C9D2DE', whiteSpace: 'nowrap' }}>{ln.vCargado ? formatPeso(ln.vCargado) : '—'}</td>
+                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, fontWeight: 900, color: '#5BE39B', whiteSpace: 'nowrap' }}>{ln.codigo}</td>
+                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, fontWeight: 700, color: '#FFFFFF', whiteSpace: 'nowrap' }}>{ln.deportista}</td>
+                          <td style={{ padding: '5px 10px', borderRight: BW, borderBottom: BW, color: '#FFFFFF', whiteSpace: 'nowrap' }}>{ln.detalle}</td>
+                          <td style={{ padding: '5px 10px', borderBottom: BW, color: '#C9D2DE', fontSize: 10 }}>{ln.mensaje}</td>
                         </tr>
                       );
                     })}
@@ -551,8 +551,8 @@ export default function SubirBancosPage() {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setFase('preview')} className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-[#4b5563] hover:bg-gray-50 transition">Volver</button>
-              <button onClick={() => { setFase('upload'); setRawFilas([]); setLineas([]); }} className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-[#4b5563] hover:bg-gray-50 transition">Nuevo archivo</button>
+              <button onClick={() => setFase('preview')} className="px-4 py-2.5 rounded-xl border border-[#4A5568] text-sm font-semibold text-[#C9D2DE] hover:bg-[#2B3547] transition">Volver</button>
+              <button onClick={() => { setFase('upload'); setRawFilas([]); setLineas([]); }} className="px-4 py-2.5 rounded-xl border border-[#4A5568] text-sm font-semibold text-[#C9D2DE] hover:bg-[#2B3547] transition">Nuevo archivo</button>
               {cntOk > 0 && (
                 <button onClick={aplicar} className="flex-1 flex items-center justify-center gap-2 bg-[#16a34a] hover:bg-[#064e1e] text-white rounded-xl py-2.5 text-sm font-black transition">
                   <CheckCircle className="w-4 h-4"/> Aplicar {cntOk} pagos a estados de cuenta
@@ -564,22 +564,22 @@ export default function SubirBancosPage() {
 
         {/* ── APLICADO ── */}
         {fase === 'aplicado' && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-10 text-center">
             <CheckCircle className="w-16 h-16 text-[#16a34a] mx-auto mb-4"/>
-            <h2 className="text-xl font-black text-[#111827] mb-2">¡Cambios aplicados!</h2>
-            <p className="text-sm text-gray-500">{cntOk} pagados · {cntD10} con 10% · {cntVer} por verificar</p>
-            {cntErr > 0 && <p className="text-sm text-orange-500 font-semibold mt-1">{cntErr} errores no aplicados.</p>}
+            <h2 className="text-xl font-black text-white mb-2">¡Cambios aplicados!</h2>
+            <p className="text-sm text-[#C9D2DE]">{cntOk} pagados · {cntD10} con 10% · {cntVer} por verificar</p>
+            {cntErr > 0 && <p className="text-sm text-[#E0A33A] font-semibold mt-1">{cntErr} errores no aplicados.</p>}
 
-            <div className="mt-5 bg-red-50 border border-red-200 rounded-xl p-4 max-w-sm mx-auto text-left">
-              <p className="font-black text-red-700 mb-1 flex items-center gap-2 text-sm"><Trash2 className="w-4 h-4"/> ¿Era un archivo de prueba?</p>
-              <p className="text-red-600 text-xs mb-3">Elimina todos los cambios y deja los estados como estaban.</p>
+            <div className="mt-5 bg-[#2B3547] border border-[#C0504D] rounded-xl p-4 max-w-sm mx-auto text-left">
+              <p className="font-black text-white mb-1 flex items-center gap-2 text-sm"><Trash2 className="w-4 h-4"/> ¿Era un archivo de prueba?</p>
+              <p className="text-[#C9D2DE] text-xs mb-3">Elimina todos los cambios y deja los estados como estaban.</p>
               <button onClick={revertir} className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white rounded-lg py-2 text-sm font-black transition">
                 <Trash2 className="w-4 h-4"/> Eliminar cambios ({registrosAplicados.length} registros)
               </button>
             </div>
 
             <div className="flex gap-3 justify-center mt-5">
-              <button onClick={() => { setFase('upload'); setRawFilas([]); setLineas([]); setRegistrosAplicados([]); }} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-[#4b5563] hover:bg-gray-50 transition">Subir otro archivo</button>
+              <button onClick={() => { setFase('upload'); setRawFilas([]); setLineas([]); setRegistrosAplicados([]); }} className="px-5 py-2.5 rounded-xl border border-[#4A5568] text-sm font-semibold text-[#C9D2DE] hover:bg-[#2B3547] transition">Subir otro archivo</button>
               <button onClick={() => router.push('/consolidado-bancos')} className="px-5 py-2.5 bg-[#16a34a] hover:bg-[#064e1e] text-white rounded-xl text-sm font-black transition">Ver Consolidado Bancos</button>
             </div>
           </div>

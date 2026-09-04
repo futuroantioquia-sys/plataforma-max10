@@ -50,6 +50,19 @@ html { scroll-behavior: smooth; }
 body {
   background: var(--fondo);
   color: var(--texto);
+  /* ── LA LETRA, SIN DEPENDER DE INTERNET (dirección, 04/09/2026) ──────────
+     Antes la letra "Inter" se bajaba de Google en el momento de compilar.
+     El día que ese servidor no responda —o que el antivirus, la red de la
+     sede o el proveedor lo bloqueen—, NO se cae solo la letra: se cae TODO
+     el archivo de diseño de la plataforma, y la página sale en blanco y
+     negro con los balones del fondo gigantes. Fue exactamente lo que pasó.
+
+     Ahora se usa la letra que ya trae el computador: Segoe UI en Windows,
+     San Francisco en Mac y iPhone, Roboto en Android. Se ven prácticamente
+     iguales a Inter, no hay que bajar nada, y la plataforma arranca aunque
+     no haya internet. */
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   font-feature-settings: "kern" 1, "liga" 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

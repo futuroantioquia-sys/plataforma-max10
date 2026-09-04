@@ -62,7 +62,7 @@ export default function SesionesPage() {
   if (cargando) return <BalonCargando texto="Cargando sesiones..." />;
 
   return (
-    <div data-hoja="clara" className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
       <header className="bg-gradient-to-r from-[#2e1065] via-[#581c87] to-[#9333ea] px-6 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
         <button onClick={() => router.push('/dashboard')} className="text-white/70 hover:text-white">← Volver</button>
         <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -78,21 +78,21 @@ export default function SesionesPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* FORMULARIO NUEVA SESIÓN */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-5">
+          <h2 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-[#9333ea]" /> Registrar nueva sesión
           </h2>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Fecha</label>
+              <label className="block text-xs font-semibold text-[#C9D2DE] mb-1">Fecha</label>
               <input type="text" value={form.fecha} onChange={e => set('fecha', e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea]" />
+                className="w-full bg-[#2B3547] text-white placeholder:text-white/40 border border-[#4A5568] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea]" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Proyecto / Grupo</label>
+              <label className="block text-xs font-semibold text-[#C9D2DE] mb-1">Proyecto / Grupo</label>
               <select value={form.proyecto} onChange={e => { set('proyecto', e.target.value); setProyecto(e.target.value); }}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea]">
+                className="w-full bg-[#2B3547] text-white placeholder:text-white/40 border border-[#4A5568] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea]">
                 <option value="">— Seleccionar —</option>
                 {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -100,37 +100,37 @@ export default function SesionesPage() {
           </div>
 
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Profesor</label>
+            <label className="block text-xs font-semibold text-[#C9D2DE] mb-1">Profesor</label>
             <input type="text" value={form.profesor} onChange={e => set('profesor', e.target.value)}
               placeholder="Nombre del profesor"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea]" />
+              className="w-full bg-[#2B3547] text-white placeholder:text-white/40 border border-[#4A5568] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea]" />
           </div>
 
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Objetivo de la sesión</label>
+            <label className="block text-xs font-semibold text-[#C9D2DE] mb-1">Objetivo de la sesión</label>
             <input type="text" value={form.objetivo} onChange={e => set('objetivo', e.target.value)}
               placeholder="Ej: Mejorar control y pase corto"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea]" />
+              className="w-full bg-[#2B3547] text-white placeholder:text-white/40 border border-[#4A5568] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea]" />
           </div>
 
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Ejercicios realizados</label>
+            <label className="block text-xs font-semibold text-[#C9D2DE] mb-1">Ejercicios realizados</label>
             <textarea rows={4} value={form.ejercicios} onChange={e => set('ejercicios', e.target.value)}
               placeholder="Describe los ejercicios / partes de la sesión..."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea] resize-none" />
+              className="w-full bg-[#2B3547] text-white placeholder:text-white/40 border border-[#4A5568] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea] resize-none" />
           </div>
 
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Observaciones</label>
+            <label className="block text-xs font-semibold text-[#C9D2DE] mb-1">Observaciones</label>
             <textarea rows={3} value={form.observaciones} onChange={e => set('observaciones', e.target.value)}
               placeholder="Observaciones generales del grupo..."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea] resize-none" />
+              className="w-full bg-[#2B3547] text-white placeholder:text-white/40 border border-[#4A5568] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9333ea] resize-none" />
           </div>
 
           <button onClick={guardar} disabled={guardando}
             className={cn(
               'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition',
-              guardando ? 'bg-gray-300' : 'bg-[#9333ea] hover:bg-[#7e22ce]'
+              guardando ? 'bg-[#4A5568]' : 'bg-[#9333ea] hover:bg-[#7e22ce]'
             )}>
             <Save className="w-4 h-4" /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar sesión'}
           </button>
@@ -138,20 +138,20 @@ export default function SesionesPage() {
 
         {/* HISTORIAL */}
         {proyecto && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h2 className="text-sm font-bold text-gray-900 mb-4">Sesiones recientes — {proyecto}</h2>
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-5">
+            <h2 className="text-sm font-bold text-white mb-4">Sesiones recientes — {proyecto}</h2>
             {sesiones.length === 0 ? (
-              <p className="text-sm text-gray-400">Aún no hay sesiones registradas para este proyecto.</p>
+              <p className="text-sm text-[#C9D2DE]">Aún no hay sesiones registradas para este proyecto.</p>
             ) : (
               <div className="space-y-3">
                 {sesiones.map(s => (
-                  <div key={s.id} className="border border-gray-100 rounded-xl p-3">
+                  <div key={s.id} className="bg-[#2B3547] border border-[#4A5568] rounded-xl p-3">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-bold text-gray-700">{s.fecha}</span>
-                      <span className="text-xs text-gray-400">{s.profesor}</span>
+                      <span className="text-xs font-bold text-white">{s.fecha}</span>
+                      <span className="text-xs text-[#C9D2DE]">{s.profesor}</span>
                     </div>
-                    <p className="text-sm font-semibold text-gray-900">{s.objetivo}</p>
-                    {s.ejercicios && <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{s.ejercicios}</p>}
+                    <p className="text-sm font-semibold text-white">{s.objetivo}</p>
+                    {s.ejercicios && <p className="text-xs text-[#C9D2DE] mt-1 whitespace-pre-wrap">{s.ejercicios}</p>}
                   </div>
                 ))}
               </div>

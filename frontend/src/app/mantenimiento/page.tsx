@@ -7,24 +7,25 @@ export default function MantenimientoPage() {
   const router = useRouter();
 
   return (
-    <div data-hoja="clara" className="min-h-screen bg-[#f0f7ff] flex flex-col items-center justify-center p-6">
-      <div className="bg-white rounded-3xl shadow-xl p-8 max-w-sm w-full text-center border border-gray-100">
+    <div className="min-h-screen bg-[#333F50] flex flex-col items-center justify-center p-6">
+      <div className="bg-[#3C4759] rounded-3xl shadow-xl p-8 max-w-sm w-full text-center border border-[#4A5568]">
 
         {/* Icono */}
-        <div className="w-20 h-20 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-5 border-2 border-amber-200">
-          <HardHat className="w-10 h-10 text-amber-500" />
+        {/* Recuadro del icono: tinte ámbar claro → CAMPO con borde ámbar — dirección, 04/09/2026 */}
+        <div className="w-20 h-20 bg-[#2B3547] rounded-2xl flex items-center justify-center mx-auto mb-5 border-2 border-[#E0A33A]">
+          <HardHat className="w-10 h-10 text-[#E0A33A]" />
         </div>
 
         {/* Título */}
-        <h1 className="text-2xl font-black text-gray-800 mb-2">
+        <h1 className="text-2xl font-black text-white mb-2">
           En Mantenimiento
         </h1>
 
         {/* Subtítulo */}
-        <p className="text-gray-500 text-sm mb-1 font-semibold">
+        <p className="text-[#C9D2DE] text-sm mb-1 font-semibold">
           Esta sección está siendo actualizada.
         </p>
-        <p className="text-gray-400 text-xs mb-7">
+        <p className="text-[#C9D2DE] text-xs mb-7">
           Pronto estará disponible. Gracias por tu paciencia.
         </p>
 
@@ -56,7 +57,7 @@ export default function MantenimientoPage() {
       <div className="mt-8 flex items-center gap-2 opacity-40">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/ESCUDO%20F.A%202020.png" alt="FA" className="w-6 h-6 object-contain" />
-        <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Futuro Antioquia</span>
+        <span className="text-xs font-black text-[#C9D2DE] uppercase tracking-widest">Futuro Antioquia</span>
       </div>
     </div>
   );

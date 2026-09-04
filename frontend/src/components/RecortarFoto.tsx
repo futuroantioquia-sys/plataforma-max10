@@ -37,9 +37,35 @@ const GRIS  = '#7C879A';
 const SALIDA_ANCHO = 900;
 const SALIDA_ALTO  = 1200;
 
-/** El marco en pantalla. El alto sale solo de la proporción 3:4. */
-const MARCO_ANCHO = 264;
-const MARCO_ALTO  = (MARCO_ANCHO * 4) / 3;
+/* ── LAS RAYAS SON EL RECORTE, Y SON CUATRO ─────────────────────────────────
+   (dirección, 04/09/2026 — «el cuadro de la foto entre raya de arriba y raya
+    de abajo debe medir 3 x 4» · «faltan las rayas laterales» · «ahí sí sería
+    el ejercicio completo de ubicar bien»)
+
+   Antes las rayas eran un consejo pintado encima: se guardaba TODO el
+   recuadro, así que la foto salía con más cosas de las que uno había dejado
+   entre ellas —el REGOL de abajo, por ejemplo—.
+
+   Ahora el recorte es un CUADRO COMPLETO, con sus cuatro rayas: arriba, abajo
+   y las dos de los lados. Ese cuadro mide 3 de ancho por 4 de alto y es,
+   exacto, la foto que se guarda. Por fuera se sigue viendo el resto de la
+   foto, oscurecido, solo para poder agarrarla y acomodarla — eso no se
+   guarda. Así el ejercicio queda completo: uno ve lo que entra y lo que
+   sobra, y mueve hasta que la cabeza toque la raya de arriba y los escudos
+   la de abajo. */
+
+/** EL CUADRO QUE SE GUARDA: 3 de ancho por 4 de alto. */
+const BANDA_ANCHO = 234;
+const BANDA_ALTO  = (BANDA_ANCHO * 4) / 3;      // 312
+
+/** El pedazo que se ve por fuera, solo para acomodar. */
+const MARGEN_X      = 30;
+const MARGEN_ARRIBA = 26;
+const MARGEN_ABAJO  = 58;
+
+/** El visor completo que se ve en pantalla. */
+const MARCO_ANCHO = BANDA_ANCHO + MARGEN_X * 2;                 // 294
+const MARCO_ALTO  = MARGEN_ARRIBA + BANDA_ALTO + MARGEN_ABAJO;  // 396
 
 export function RecortarFoto({
   src, onCancelar, onListo,
@@ -57,38 +83,55 @@ export function RecortarFoto({
   const [guardando, setGuardando] = useState(false);
   const arrastre = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
 
-  /** Cuánto hay que agrandar la foto para que TAPE el marco. */
-  const base = nat ? Math.max(MARCO_ANCHO / nat.w, MARCO_ALTO / nat.h) : 1;
+  /* ── TODO SE MIDE CONTRA EL CUADRO, NO CONTRA EL VISOR ────────────────────
+     `pos` es dónde queda la esquina de arriba a la izquierda de la foto,
+     contada desde la esquina del VISOR. El cuadro que se guarda empieza en
+     (MARGEN_X, MARGEN_ARRIBA) y mide BANDA_ANCHO x BANDA_ALTO. */
+
+  /** Cuánto hay que agrandar la foto para que TAPE el cuadro que se guarda. */
+  const base = nat ? Math.max(BANDA_ANCHO / nat.w, BANDA_ALTO / nat.h) : 1;
   const s = base * escala;
   const anchoDib = nat ? nat.w * s : 0;
   const altoDib  = nat ? nat.h * s : 0;
 
-  /** La foto nunca puede dejar un hueco: se le ponen topes. */
-  const limitar = useCallback((p: { x: number; y: number }) => ({
-    x: Math.min(0, Math.max(MARCO_ANCHO - anchoDib, p.x)),
-    y: Math.min(0, Math.max(MARCO_ALTO  - altoDib,  p.y)),
-  }), [anchoDib, altoDib]);
+  /** Los bordes del cuadro dentro del visor. */
+  const CUADRO_X1 = MARGEN_X;
+  const CUADRO_Y1 = MARGEN_ARRIBA;
+  const CUADRO_X2 = MARGEN_X + BANDA_ANCHO;
+  const CUADRO_Y2 = MARGEN_ARRIBA + BANDA_ALTO;
 
-  /* Al cargar la foto se centra a lo ancho y se ancla ARRIBA: así la cabeza
-     siempre queda a la vista de entrada, que es lo que casi siempre sirve. */
+  /** El cuadro nunca puede quedar con un hueco: la foto lo tapa siempre. */
+  const limitar = useCallback((p: { x: number; y: number }) => ({
+    x: Math.min(CUADRO_X1, Math.max(CUADRO_X2 - anchoDib, p.x)),
+    y: Math.min(CUADRO_Y1, Math.max(CUADRO_Y2 - altoDib,  p.y)),
+  }), [anchoDib, altoDib, CUADRO_X1, CUADRO_X2, CUADRO_Y1, CUADRO_Y2]);
+
+  /* Al cargar se centra a lo ancho del cuadro y se ancla ARRIBA: así la
+     cabeza queda a la vista de entrada, que es lo que casi siempre sirve. */
   useEffect(() => {
     if (!nat) return;
-    setPos(limitar({ x: (MARCO_ANCHO - nat.w * base) / 2, y: 0 }));
+    setPos(limitar({
+      x: CUADRO_X1 + (BANDA_ANCHO - nat.w * base) / 2,
+      y: CUADRO_Y1,
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nat]);
 
-  /* Al acercar o alejar, se mantiene fijo el centro de lo que se está viendo. */
+  /* Al acercar o alejar se mantiene fijo el centro DEL CUADRO, que es lo que
+     la persona está mirando. */
   function cambiarEscala(nueva: number) {
     if (!nat) { setEscala(nueva); return; }
     const sViejo = base * escala;
     const sNuevo = base * nueva;
-    const cx = (MARCO_ANCHO / 2 - pos.x) / sViejo;
-    const cy = (MARCO_ALTO  / 2 - pos.y) / sViejo;
+    const centroX = CUADRO_X1 + BANDA_ANCHO / 2;
+    const centroY = CUADRO_Y1 + BANDA_ALTO / 2;
+    const cx = (centroX - pos.x) / sViejo;
+    const cy = (centroY - pos.y) / sViejo;
     setEscala(nueva);
-    const p = { x: MARCO_ANCHO / 2 - cx * sNuevo, y: MARCO_ALTO / 2 - cy * sNuevo };
+    const p = { x: centroX - cx * sNuevo, y: centroY - cy * sNuevo };
     setPos({
-      x: Math.min(0, Math.max(MARCO_ANCHO - nat.w * sNuevo, p.x)),
-      y: Math.min(0, Math.max(MARCO_ALTO  - nat.h * sNuevo, p.y)),
+      x: Math.min(CUADRO_X1, Math.max(CUADRO_X2 - nat.w * sNuevo, p.x)),
+      y: Math.min(CUADRO_Y1, Math.max(CUADRO_Y2 - nat.h * sNuevo, p.y)),
     });
   }
 
@@ -117,10 +160,18 @@ export function RecortarFoto({
       /* Fondo negro: si la foto no llenara algún borde, no queda transparente. */
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, SALIDA_ANCHO, SALIDA_ALTO);
-      /* El marco de la pantalla y el de salida son la misma forma, así que
-         basta con multiplicar todo por el mismo factor. */
-      const f = SALIDA_ANCHO / MARCO_ANCHO;
-      ctx.drawImage(im, pos.x * f, pos.y * f, anchoDib * f, altoDib * f);
+      /* SE GUARDA EL CUADRO, NO EL VISOR (dirección, 04/09/2026).
+         El cuadro de la pantalla y el de salida son la misma forma —3:4—, así
+         que basta con correr el origen hasta la esquina del cuadro y
+         multiplicar todo por el mismo factor. */
+      const f = SALIDA_ANCHO / BANDA_ANCHO;
+      ctx.drawImage(
+        im,
+        (pos.x - CUADRO_X1) * f,
+        (pos.y - CUADRO_Y1) * f,
+        anchoDib * f,
+        altoDib  * f,
+      );
       onListo(lienzo.toDataURL('image/jpeg', 0.9));
     } catch {
       /* Si el navegador no deja usar el lienzo, se guarda la foto tal cual:
@@ -147,7 +198,8 @@ export function RecortarFoto({
 
         {/* El letrero que pidió la dirección, antes del marco. */}
         <p className="px-4 pt-3 text-[12px] font-bold leading-snug text-center" style={{ color: '#F0C070' }}>
-          Procura que se vea desde la cabeza hasta el logo del pecho.
+          Lo que quede DENTRO del cuadro blanco es la foto. Muévela hasta que
+          la cabeza toque la raya de arriba y los escudos la de abajo.
         </p>
 
         {/* El marco: línea blanca, sin fondo. Lo de adentro es lo que queda. */}
@@ -163,7 +215,9 @@ export function RecortarFoto({
               height: MARCO_ALTO,
               overflow: 'hidden',
               borderRadius: 12,
-              border: '2px solid #FFFFFF',
+              /* El borde blanco pasó a ser el del CUADRO que se guarda; el
+                 visor de afuera lleva uno discreto. — 04/09/2026 */
+              border: `1px solid ${BORDE}`,
               background: '#000',
               cursor: 'grab',
               touchAction: 'none',
@@ -190,17 +244,121 @@ export function RecortarFoto({
                 display: 'block',
               }}
             />
-            {/* Una raya guía a la altura del pecho, para que sepan dónde parar. */}
+            {/* ── LO QUE QUEDA POR FUERA, OSCURECIDO ────────────────────────
+                Cuatro sombras alrededor del cuadro. No es adorno: es lo que
+                deja ver de un golpe qué entra en la foto y qué se va a botar.
+                — dirección, 04/09/2026 */}
+            {[
+              { top: 0, left: 0, right: 0, height: MARGEN_ARRIBA },
+              { bottom: 0, left: 0, right: 0, height: MARGEN_ABAJO },
+              { top: MARGEN_ARRIBA, left: 0, width: MARGEN_X, height: BANDA_ALTO },
+              { top: MARGEN_ARRIBA, right: 0, width: MARGEN_X, height: BANDA_ALTO },
+            ].map((caja, i) => (
+              <div key={i} style={{
+                position: 'absolute', ...caja,
+                background: 'rgba(0,0,0,.62)', pointerEvents: 'none',
+              }} />
+            ))}
+
+            {/* ── EL CUADRO QUE SE GUARDA: SUS CUATRO RAYAS ─────────────────
+                (dirección, 04/09/2026 — «faltan las rayas laterales… ahí sí
+                 sería el ejercicio completo de ubicar bien»)
+
+                Con solo dos rayas uno veía dónde parar arriba y abajo, pero no
+                por dónde cortaba a los lados, y la foto salía distinta a lo
+                que uno había dejado. Con las cuatro, el cuadro se ve entero:
+                esto —exacto, 3 de ancho por 4 de alto— es la foto que queda. */}
+            {/* EL MARCO VA EN RAYITAS, COMO UNA TIJERA (dirección, 04/09/2026
+                — «coloca todo el marco y la raya de la mitad en puntos o
+                 rayitas discontinuas, que vean bien que será un recorte»).
+
+                Con la línea entera parecía un adorno, un borde más de la
+                pantalla. En rayitas se lee de una lo que es: por aquí se
+                corta. Es el mismo lenguaje del papel y la tijera, y no hay
+                que explicarlo. */}
             <div style={{
-              position: 'absolute', left: 0, right: 0, bottom: '14%',
-              borderTop: '1px dashed rgba(255,255,255,.55)', pointerEvents: 'none',
+              position: 'absolute',
+              left: MARGEN_X, top: MARGEN_ARRIBA,
+              width: BANDA_ANCHO, height: BANDA_ALTO,
+              border: '2px dashed #FFFFFF',
+              boxShadow: '0 0 0 1px rgba(0,0,0,.55)',
+              pointerEvents: 'none',
+            }} />
+
+            {/* Las esquinas, enteras y gruesas. Son lo ÚNICO que se deja en
+                línea seguida: marcan de dónde a dónde va el recorte y le dan
+                el aire de mira de cámara. — dirección, 04/09/2026 */}
+            {[
+              { top: MARGEN_ARRIBA - 1, left: MARGEN_X - 1, borderTop: 1, borderLeft: 1 },
+              { top: MARGEN_ARRIBA - 1, left: MARGEN_X + BANDA_ANCHO - 21, borderTop: 1, borderRight: 1 },
+              { top: MARGEN_ARRIBA + BANDA_ALTO - 21, left: MARGEN_X - 1, borderBottom: 1, borderLeft: 1 },
+              { top: MARGEN_ARRIBA + BANDA_ALTO - 21, left: MARGEN_X + BANDA_ANCHO - 21, borderBottom: 1, borderRight: 1 },
+            ].map((e, i) => (
+              <div key={`esq${i}`} style={{
+                position: 'absolute', top: e.top, left: e.left, width: 22, height: 22,
+                borderTop:    e.borderTop    ? '4px solid #FFFFFF' : undefined,
+                borderBottom: e.borderBottom ? '4px solid #FFFFFF' : undefined,
+                borderLeft:   e.borderLeft   ? '4px solid #FFFFFF' : undefined,
+                borderRight:  e.borderRight  ? '4px solid #FFFFFF' : undefined,
+                pointerEvents: 'none',
+              }} />
+            ))}
+
+            {/* ── LA RAYA DE LA NARIZ: VA PARADA, NO ACOSTADA ────────────────
+                (dirección, 04/09/2026 — «la raya de la nariz era VERTICAL,
+                 corrige urgente, si no, no daría lo que queremos de cabeza y
+                 escudos»)
+
+                Y tiene toda la razón. Una raya acostada a media altura pelea
+                con las otras dos: la de arriba manda la cabeza y la de abajo
+                los escudos, y una tercera en la mitad solo confunde.
+
+                Parada en el centro hace otra cosa distinta y necesaria:
+                CENTRAR al niño de lado a lado. Uno le pone la nariz encima y
+                el cuerpo queda derecho. Con las tres: cabeza arriba, escudos
+                abajo y nariz al centro, todas las fotos quedan iguales.
+
+                Casi no se ve, a propósito: es puntería, no un límite. */}
+            <div style={{
+              position: 'absolute',
+              top: MARGEN_ARRIBA, height: BANDA_ALTO,
+              left: MARGEN_X + BANDA_ANCHO / 2,
+              borderLeft: '1px dashed rgba(255,255,255,.28)',
+              pointerEvents: 'none',
             }} />
             <span style={{
-              position: 'absolute', left: 6, bottom: 'calc(14% + 3px)',
-              fontSize: 9, fontWeight: 900, letterSpacing: '.08em',
-              color: 'rgba(255,255,255,.75)', pointerEvents: 'none',
+              position: 'absolute',
+              left: MARGEN_X + BANDA_ANCHO / 2 + 4,
+              top: MARGEN_ARRIBA + BANDA_ALTO / 2 - 5,
+              fontSize: 8, fontWeight: 900, letterSpacing: '.08em',
+              color: 'rgba(255,255,255,.45)', textShadow: '0 1px 2px rgba(0,0,0,.8)',
+              pointerEvents: 'none',
             }}>
-              LOGO DEL PECHO
+              NARIZ
+            </span>
+
+            {/* EL LETRERO DE ARRIBA — la cabeza va tocando esta raya. */}
+            <span style={{
+              position: 'absolute', left: MARGEN_X + 4, top: MARGEN_ARRIBA + 4,
+              fontSize: 9, fontWeight: 900, letterSpacing: '.08em',
+              color: 'rgba(255,255,255,.9)', textShadow: '0 1px 2px rgba(0,0,0,.9)',
+              pointerEvents: 'none',
+            }}>
+              ABAJO DE LA CABEZA
+            </span>
+
+            {/* EL DE ABAJO — hasta aquí llegan los escudos.
+                Dice ESCUDOS y no "logo del pecho": hay camisetas con
+                patrocinador arriba y otras abajo, pero los escudos están
+                siempre en el mismo sitio. — dirección, 04/09/2026 */}
+            <span style={{
+              position: 'absolute', left: MARGEN_X + 4,
+              top: MARGEN_ARRIBA + BANDA_ALTO - 15,
+              fontSize: 9, fontWeight: 900, letterSpacing: '.08em',
+              color: 'rgba(255,255,255,.9)', textShadow: '0 1px 2px rgba(0,0,0,.9)',
+              pointerEvents: 'none',
+            }}>
+              HASTA ABAJO DE LOS ESCUDOS
             </span>
           </div>
         </div>

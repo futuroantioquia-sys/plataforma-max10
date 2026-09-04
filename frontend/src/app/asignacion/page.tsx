@@ -448,7 +448,12 @@ export default function AsignacionPage() {
                             <td style={{ ...R_STYLE, background: colorCodigo(colAfil(dep)), color: 'white', fontWeight: 900, textAlign: 'center' }}>
                               {colCodigo(dep) || '—'}
                             </td>
-                            <td style={{ ...R_STYLE, fontWeight: 700, color: '#111827', minWidth: 180 }}>
+                            {/* EL NOMBRE, EN BLANCO (dirección, 04/09/2026).
+                                Estaba en negro (#111827), de cuando el cuadro
+                                tenía fondo claro. Con el diseño gris verde la
+                                fila quedó oscura y el nombre —lo único que uno
+                                viene a leer aquí— se volvió invisible. */}
+                            <td style={{ ...R_STYLE, fontWeight: 700, color: '#FFFFFF', minWidth: 180 }}>
                               {dep._nombre}
                             </td>
                             <td style={{ ...R_STYLE, textAlign: 'center' }}>{colAno(dep) || '—'}</td>

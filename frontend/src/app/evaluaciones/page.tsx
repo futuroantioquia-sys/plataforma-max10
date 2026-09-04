@@ -37,7 +37,8 @@ function AutoTextarea({ value, onChange, placeholder, style }: {
   }, [value]);
   return (
     <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={1}
-      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 15, resize: 'none', overflow: 'hidden', fontFamily: 'Arial, sans-serif', color: '#333', display: 'block', lineHeight: 1.5, ...style }} />
+      className="placeholder:text-white/40"
+      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 15, resize: 'none', overflow: 'hidden', fontFamily: 'Arial, sans-serif', color: '#fff', display: 'block', lineHeight: 1.5, ...style }} />
   );
 }
 
@@ -212,9 +213,12 @@ const DESC_TRABAJO_EQUIPO: Record<string, string> = {
 const POSICIONES = ['', 'PORTERO', 'CENTRAL', 'LATERAL DERECHO', 'LATERAL IZQUIERDO', 'EXTREMO DERECHO', 'EXTREMO IZQUIERDO', 'VOLANTE', 'MEDIOCAMPISTA', 'DELANTERO CENTRO'];
 const PERFILES = ['', 'DERECHO', 'IZQUIERDO', 'AMBIDIESTRO'];
 
+/* Los dos grises de la hoja pasan al diseño oscuro: `grisClaro` es ahora el
+   CAMPO (recuadros internos) y `grisAzul` el HONDO (franja de cada aspecto).
+   Los verdes y el naranja de los botones no se tocan. — dirección, 04/09/2026 */
 const C = {
   negro: '#1a1a1a', verde: '#15803d', naranja: '#e85d04',
-  verdeClaro: '#166534', grisClaro: '#f0f0f0', grisAzul: '#475569',
+  verdeClaro: '#166534', grisClaro: '#2B3547', grisAzul: '#2A3342',
 };
 const VERDE_GRAD = 'linear-gradient(135deg, #16a34a 0%, #052a10 100%)';
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -625,9 +629,9 @@ function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descri
   return (
     <tbody style={{ breakInside: 'avoid', pageBreakInside: 'avoid' } as React.CSSProperties}>
       <tr>
-        <td colSpan={4} style={{ background: hayError ? '#fff5f5' : '#fff', color: hayError ? '#ef4444' : '#16a34a', textAlign: 'center', fontWeight: 900, fontSize: 13, padding: '5px 8px', letterSpacing: 1, borderLeft: hayError ? '3px solid #ef4444' : 'none' }}>
+        <td colSpan={4} style={{ background: hayError ? 'rgba(192,80,77,0.22)' : '#3C4759', color: hayError ? '#ef4444' : '#16a34a', textAlign: 'center', fontWeight: 900, fontSize: 13, padding: '5px 8px', letterSpacing: 1, borderLeft: hayError ? '3px solid #ef4444' : 'none' }}>
           {titulo}{hayError && ' ⚠'}
-          {definicion ? <div style={{ color: '#6b7280', fontWeight: 500, fontSize: 10, letterSpacing: 0, marginTop: 2, textTransform: 'none' }}>{definicion}</div> : null}
+          {definicion ? <div style={{ color: '#C9D2DE', fontWeight: 500, fontSize: 10, letterSpacing: 0, marginTop: 2, textTransform: 'none' }}>{definicion}</div> : null}
         </td>
       </tr>
       <tr>
@@ -652,7 +656,8 @@ function BloqueAspecto({ titulo, subtitulo, nivel, onNivel, desc, onDesc, descri
           <textarea value={desc} onChange={e => onDesc(e.target.value)}
             rows={2} placeholder="Selecciona un nivel para ver la descripción..."
             readOnly
-            style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#333', cursor: 'default' }} />
+            className="placeholder:text-white/40"
+            style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', fontSize: 16, resize: 'none', fontFamily: 'Arial, sans-serif', color: '#fff', cursor: 'default' }} />
         </td>
       </tr>
     </tbody>
@@ -1368,13 +1373,14 @@ function ValoracionPageInner() {
   const inp = (campo: keyof Valoracion, placeholder = '', type = 'text') => (
     <input type={type} value={data[campo]} onChange={e => set(campo, e.target.value)}
       placeholder={placeholder}
-      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontWeight: 700, fontSize: 12, fontFamily: 'Arial, sans-serif' }} />
+      className="placeholder:text-white/40"
+      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontWeight: 700, fontSize: 12, fontFamily: 'Arial, sans-serif', color: '#fff', colorScheme: 'dark' }} />
   );
 
   const sel = (campo: keyof Valoracion, opts: string[]) => (
     <select value={data[campo]} onChange={e => set(campo, e.target.value)}
-      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'Arial, sans-serif' }}>
-      {opts.map(o => <option key={o} value={o}>{o || '— Seleccionar —'}</option>)}
+      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'Arial, sans-serif', color: '#fff' }}>
+      {opts.map(o => <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o || '— Seleccionar —'}</option>)}
     </select>
   );
 
@@ -1384,30 +1390,32 @@ function ValoracionPageInner() {
   };
 
   /* ════════════════════════════════════════════════════════════ */
+  /* Ya no es una hoja blanca: se quita `data-hoja="clara"` para que la letra
+     vuelva a heredar el blanco del diseño. — dirección, 04/09/2026 */
   return (
-    <div data-hoja="clara" style={{ minHeight: '100vh', background: '#e5e7eb' }}>
+    <div style={{ minHeight: '100vh', background: '#333F50' }}>
       {vistaGamificada && (
         <VistaPadres data={data} nombreEntrenador={nombreEntrenador} onClose={() => setVistaGamificada(false)} />
       )}
 
       {/* Barra herramientas — FIJA arriba. En móvil se organiza y se colapsa al bajar. */}
-      <div ref={toolbarRef} className="print:hidden" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: '#fff', borderBottom: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+      <div ref={toolbarRef} className="print:hidden" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: '#3C4759', borderBottom: '1px solid #4A5568', boxShadow: '0 2px 8px rgba(0,0,0,0.28)' }}>
 
         {/* ===== ESCRITORIO: barra completa siempre ===== */}
         <div className="hidden sm:flex" style={{ alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 16px' }}>
-          <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>{etiquetaVolver}</button>
-          <span style={{ fontWeight: 800, color: '#111', flex: 1, fontSize: 15 }}>Valoración del Deportista</span>
+          <button onClick={volverAlDeportista} style={{ color: '#C9D2DE', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>{etiquetaVolver}</button>
+          <span style={{ fontWeight: 800, color: '#fff', flex: 1, fontSize: 15 }}>Valoración del Deportista</span>
           {historial.length > 0 && (
-            <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+            <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #4A5568', background: '#2B3547', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
               <History size={13} /> Historial ({historial.length})
             </button>
           )}
-          <button onClick={nuevaValoracion} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>＋ Nueva valoración</button>
+          <button onClick={nuevaValoracion} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #00B050', background: '#2B3547', color: '#5BE39B', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>＋ Nueva valoración</button>
           {/* La 1ª valoración se carga SOLO desde la ventana de Informes (perfil), una única vez. Se mantiene el input oculto para el importador. */}
           <input ref={inputExcelRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importarExcel} />
-          <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}><RefreshCw size={13} /> Limpiar</button>
-          <button onClick={() => { textosManual.current = false; generarTextos(); }} title="Rellena Logros, Retos y Logros y Retos del Equipo según la valoración" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}><RefreshCw size={13} /> Regenerar textos</button>
-          <button onClick={() => { const c = data.codigo.trim(); if (!c) { alert('Ingresa el código del deportista.'); return; } router.push(`/valoracion-dinamica?cod=${encodeURIComponent(c)}`); }} title="Ver la valoración en Vista Dinámica" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>📊 Vista Dinámica</button>
+          <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #4A5568', background: '#2B3547', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}><RefreshCw size={13} /> Limpiar</button>
+          <button onClick={() => { textosManual.current = false; generarTextos(); }} title="Rellena Logros, Retos y Logros y Retos del Equipo según la valoración" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #00B050', background: '#2B3547', color: '#5BE39B', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}><RefreshCw size={13} /> Regenerar textos</button>
+          <button onClick={() => { const c = data.codigo.trim(); if (!c) { alert('Ingresa el código del deportista.'); return; } router.push(`/valoracion-dinamica?cod=${encodeURIComponent(c)}`); }} title="Ver la valoración en Vista Dinámica" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #00B050', background: '#2B3547', color: '#5BE39B', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>📊 Vista Dinámica</button>
           <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.verde, color: '#fff', cursor: guardando ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, opacity: guardando ? 0.7 : 1 }}><Save size={13} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}</button>
           <button onClick={descargarPDF} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: C.naranja, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}><Download size={13} /> Descargar</button>
         </div>
@@ -1418,27 +1426,27 @@ function ValoracionPageInner() {
             /* Completa y organizada (arriba) */
             <div style={{ padding: '8px 12px 10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <button onClick={volverAlDeportista} style={{ color: '#6b7280', fontSize: 13, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>{etiquetaVolver}</button>
-                <span style={{ fontWeight: 900, color: '#111', fontSize: 14 }}>· Valoración</span>
+                <button onClick={volverAlDeportista} style={{ color: '#C9D2DE', fontSize: 13, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>{etiquetaVolver}</button>
+                <span style={{ fontWeight: 900, color: '#fff', fontSize: 14 }}>· Valoración</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
-                <button onClick={nuevaValoracion} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', fontSize: 12, fontWeight: 800 }}>＋ Nueva</button>
-                <button onClick={() => { textosManual.current = false; generarTextos(); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', fontSize: 12, fontWeight: 800 }}><RefreshCw size={13} /> Regenerar</button>
+                <button onClick={nuevaValoracion} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #00B050', background: '#2B3547', color: '#5BE39B', fontSize: 12, fontWeight: 800 }}>＋ Nueva</button>
+                <button onClick={() => { textosManual.current = false; generarTextos(); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #00B050', background: '#2B3547', color: '#5BE39B', fontSize: 12, fontWeight: 800 }}><RefreshCw size={13} /> Regenerar</button>
                 <button onClick={guardar} disabled={guardando} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: 'none', background: C.verde, color: '#fff', fontSize: 12, fontWeight: 800, opacity: guardando ? 0.7 : 1 }}><Save size={13} /> {guardado ? 'Guardado' : guardando ? '...' : 'Guardar'}</button>
                 <button onClick={descargarPDF} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: 'none', background: C.naranja, color: '#fff', fontSize: 12, fontWeight: 800 }}><Download size={13} /> Descargar</button>
-                <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #e5e7eb', background: '#f9fafb', color: '#374151', fontSize: 12, fontWeight: 800 }}><RefreshCw size={13} /> Limpiar</button>
-                <button onClick={() => { const c = data.codigo.trim(); if (!c) { alert('Ingresa el código del deportista.'); return; } router.push(`/valoracion-dinamica?cod=${encodeURIComponent(c)}`); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #16a34a', background: '#ecfdf5', color: '#166534', fontSize: 12, fontWeight: 800 }}>📊 Dinámica</button>
+                <button onClick={limpiar} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #4A5568', background: '#2B3547', color: '#fff', fontSize: 12, fontWeight: 800 }}><RefreshCw size={13} /> Limpiar</button>
+                <button onClick={() => { const c = data.codigo.trim(); if (!c) { alert('Ingresa el código del deportista.'); return; } router.push(`/valoracion-dinamica?cod=${encodeURIComponent(c)}`); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #00B050', background: '#2B3547', color: '#5BE39B', fontSize: 12, fontWeight: 800 }}>📊 Dinámica</button>
                 {historial.length > 0 && (
-                  <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #e5e7eb', background: '#f9fafb', color: '#374151', fontSize: 12, fontWeight: 800 }}><History size={13} /> Historial</button>
+                  <button onClick={() => setVerHistorial(v => !v)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 4px', borderRadius: 9, border: '1px solid #4A5568', background: '#2B3547', color: '#fff', fontSize: 12, fontWeight: 800 }}><History size={13} /> Historial</button>
                 )}
               </div>
             </div>
           ) : (
             /* Compacta (al bajar): Atrás · Guardar · Limpiar */
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, padding: '10px 12px' }}>
-              <button onClick={volverAlDeportista} style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 5, color: '#6b7280', fontSize: 13, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 2px' }}>← Atrás</button>
+              <button onClick={volverAlDeportista} style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 5, color: '#C9D2DE', fontSize: 13, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 2px' }}>← Atrás</button>
               <button onClick={guardar} disabled={guardando} style={{ justifySelf: 'center', display: 'inline-flex', alignItems: 'center', gap: 6, background: C.verde, color: '#fff', border: 'none', borderRadius: 9, padding: '9px 24px', fontSize: 14, fontWeight: 800, opacity: guardando ? 0.7 : 1 }}><Save size={14} /> {guardado ? '¡Guardado!' : guardando ? 'Guardando...' : 'Guardar'}</button>
-              <button onClick={limpiar} style={{ justifySelf: 'end', display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f9fafb', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 9, padding: '8px 14px', fontSize: 13, fontWeight: 700 }}><RefreshCw size={13} /> Limpiar</button>
+              <button onClick={limpiar} style={{ justifySelf: 'end', display: 'inline-flex', alignItems: 'center', gap: 5, background: '#2B3547', color: '#fff', border: '1px solid #4A5568', borderRadius: 9, padding: '8px 14px', fontSize: 13, fontWeight: 700 }}><RefreshCw size={13} /> Limpiar</button>
             </div>
           )}
         </div>
@@ -1476,18 +1484,18 @@ function ValoracionPageInner() {
 
       {/* HISTORIAL DE EVALUACIONES DEL DEPORTISTA */}
       {verHistorial && historial.length > 0 && (
-        <div className="print:hidden" style={{ maxWidth: 780, margin: '0 auto', background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '10px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Evaluaciones anteriores de {data.nombre || data.codigo}:</div>
+        <div className="print:hidden" style={{ maxWidth: 780, margin: '0 auto', background: '#3C4759', borderBottom: '1px solid #4A5568', padding: '10px 16px' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 6 }}>Evaluaciones anteriores de {data.nombre || data.codigo}:</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto' }}>
             {historial.map(ev => (
               <div key={ev.id}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 6, border: editandoId === ev.id ? '1.5px solid #16a34a' : '1px solid #e5e7eb', background: editandoId === ev.id ? '#ecfdf5' : '#f9fafb', fontSize: 12 }}>
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 6, border: editandoId === ev.id ? '1.5px solid #00B050' : '1px solid #4A5568', background: editandoId === ev.id ? '#36404F' : '#2B3547', fontSize: 12 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, color: '#111827' }}>
+                  <span style={{ fontWeight: 700, color: '#fff' }}>
                     {`Informe ${((ev as any).numeroInforme ?? '').toString().trim() || '—'} / ${ev.fecha} / ${ev.nombre || data.nombre || ev.codigo}`}
                     {editandoId === ev.id ? '  · (editando)' : ''}
                   </span>
-                  <span style={{ color: '#6b7280' }}>{ev.proyecto || ev.programa || ev.perfil || '—'}</span>
+                  <span style={{ color: '#C9D2DE' }}>{ev.proyecto || ev.programa || ev.perfil || '—'}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button onClick={() => cargarDeHistorial(ev)}
@@ -1495,7 +1503,7 @@ function ValoracionPageInner() {
                     ✎ Editar
                   </button>
                   <button onClick={() => eliminarDeHistorial(ev)}
-                    style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fee2e2', color: '#b91c1c', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                    style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #C0504D', background: '#C0504D', color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
                     🗑 Eliminar
                   </button>
                 </div>
@@ -1506,7 +1514,7 @@ function ValoracionPageInner() {
       )}
 
       {/* FORMULARIO */}
-      <div style={{ maxWidth: 780, margin: '16px auto', background: '#fff', boxShadow: '0 2px 20px rgba(0,0,0,0.12)', fontFamily: 'Arial, sans-serif' }}>
+      <div style={{ maxWidth: 780, margin: '16px auto', background: '#3C4759', boxShadow: '0 2px 20px rgba(0,0,0,0.35)', fontFamily: 'Arial, sans-serif' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
 
           {/* ── ENCABEZADO ── */}
@@ -1525,8 +1533,8 @@ function ValoracionPageInner() {
                     Valoración Integral del Deportista
                   </div>
                 </div>
-                {/* Hero - fondo blanco */}
-                <div style={{ background: '#fff', padding: '12px 16px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                {/* Hero - fondo del panel */}
+                <div style={{ background: '#3C4759', padding: '12px 16px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                   {/* Foto proporcional */}
                   <div style={{ flexShrink: 0 }}>
                     <input ref={fotoRef} type="file" accept="image/*" onChange={onFoto} style={{ display: 'none' }} />
@@ -1544,9 +1552,10 @@ function ValoracionPageInner() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <input value={data.nombre} onChange={e => set('nombre', e.target.value)}
                       placeholder="NOMBRE DEL DEPORTISTA"
-                      style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: `2px solid ${err('nombre') ? '#ef4444' : '#e5e7eb'}`, outline: 'none', color: '#111', fontWeight: 900, fontSize: 16, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Arial, sans-serif', padding: '0 0 4px 0', marginBottom: 10 }} />
+                      className="placeholder:text-white/40"
+                      style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: `2px solid ${err('nombre') ? '#ef4444' : '#4A5568'}`, outline: 'none', color: '#fff', fontWeight: 900, fontSize: 16, textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Arial, sans-serif', padding: '0 0 4px 0', marginBottom: 10 }} />
                     {encontrado && (
-                      <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#dcfce7', borderRadius: 5, padding: '2px 6px', fontSize: 9, color: '#16a34a', fontWeight: 700, marginBottom: 6, width: 'fit-content' }}>
+                      <div className="print:hidden" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#2B3547', borderRadius: 5, padding: '2px 6px', fontSize: 9, color: '#5BE39B', fontWeight: 700, marginBottom: 6, width: 'fit-content' }}>
                         <CheckCircle size={10} /> {encontrado}
                       </div>
                     )}
@@ -1558,7 +1567,8 @@ function ValoracionPageInner() {
                           <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>{lbl}</span>
                             <input value={data[field as keyof Valoracion]} onChange={e => set(field as keyof Valoracion, e.target.value)} placeholder="Auto-cargado del perfil"
-                              style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err(field as keyof Valoracion) ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', flex: 1, padding: 0 }} />
+                              className="placeholder:text-white/40"
+                              style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err(field as keyof Valoracion) ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#fff', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', flex: 1, padding: 0 }} />
                           </div>
                         );
                       })}
@@ -1567,13 +1577,14 @@ function ValoracionPageInner() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>FECHA INF.</span>
                           <input value={data.fecha} onChange={e => set('fecha', e.target.value)} placeholder="dd/mm/aaaa"
-                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('fecha') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 82, padding: 0 }} />
+                            className="placeholder:text-white/40"
+                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('fecha') ? '#ef4444' : 'transparent'}`, outline: 'none', color: '#fff', fontWeight: 600, fontSize: 11, fontFamily: 'Arial, sans-serif', width: 82, padding: 0 }} />
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>POSICIÓN</span>
                           <select value={data.posicion} onChange={e => set('posicion', e.target.value)}
-                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('posicion') ? '#ef4444' : 'transparent'}`, outline: 'none', color: err('posicion') ? '#ef4444' : '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
-                            {POSICIONES.map(o => <option key={o} value={o}>{o || '— Seleccionar —'}</option>)}
+                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('posicion') ? '#ef4444' : 'transparent'}`, outline: 'none', color: err('posicion') ? '#ef4444' : '#fff', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                            {POSICIONES.map(o => <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o || '— Seleccionar —'}</option>)}
                           </select>
                         </div>
                       </div>
@@ -1586,23 +1597,26 @@ function ValoracionPageInner() {
                           <select value={data.numeroInforme} onChange={e => set('numeroInforme', e.target.value)}
                             title="Obligatorio: elige si es el Informe 1, 2, 3 o 4"
                             style={{
-                              background: err('numeroInforme') ? '#fde8e8' : 'transparent',
+                              /* El aviso de "falta el número" ahora es el rojo institucional
+                                 relleno: sobre gris oscuro un rosa claro no se notaba.
+                                 — dirección, 04/09/2026 */
+                              background: err('numeroInforme') ? '#C0504D' : 'transparent',
                               border: err('numeroInforme') ? '1.5px solid #C0504D' : 'none',
                               borderBottom: err('numeroInforme') ? '1.5px solid #C0504D' : '1px solid transparent',
                               borderRadius: err('numeroInforme') ? 5 : 0,
-                              outline: 'none', color: err('numeroInforme') ? '#7f1d1d' : '#222',
+                              outline: 'none', color: '#fff',
                               fontWeight: 700, fontSize: 11, cursor: 'pointer',
                               fontFamily: 'Arial, sans-serif', padding: err('numeroInforme') ? '1px 4px' : 0,
                             }}>
-                            <option value="">— Elige 1, 2, 3 o 4 —</option>
-                            {[1, 2, 3, 4].map(n => <option key={n} value={String(n)}>Informe {n}</option>)}
+                            <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>— Elige 1, 2, 3 o 4 —</option>
+                            {[1, 2, 3, 4].map(n => <option key={n} value={String(n)} style={{ color: '#111827', backgroundColor: 'white' }}>Informe {n}</option>)}
                           </select>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 62, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>PERFIL</span>
                           <select value={data.perfil} onChange={e => set('perfil', e.target.value)}
-                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('perfil') ? '#ef4444' : 'transparent'}`, outline: 'none', color: err('perfil') ? '#ef4444' : '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
-                            {PERFILES.map(o => <option key={o} value={o}>{o || '— Seleccionar —'}</option>)}
+                            style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${err('perfil') ? '#ef4444' : 'transparent'}`, outline: 'none', color: err('perfil') ? '#ef4444' : '#fff', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                            {PERFILES.map(o => <option key={o} value={o} style={{ color: '#111827', backgroundColor: 'white' }}>{o || '— Seleccionar —'}</option>)}
                           </select>
                         </div>
                       </div>
@@ -1610,15 +1624,15 @@ function ValoracionPageInner() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, minWidth: 72, textAlign: 'center', flexShrink: 0, letterSpacing: 0.5 }}>PERIODO</span>
                         <select value={data.periodoDesde} onChange={e => set('periodoDesde', e.target.value)}
-                          style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #cbd5e1', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
-                          <option value="">Mes inicial</option>
-                          {MESES.map(m => <option key={m} value={m}>{m}</option>)}
+                          style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #4A5568', outline: 'none', color: '#fff', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                          <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>Mes inicial</option>
+                          {MESES.map(m => <option key={m} value={m} style={{ color: '#111827', backgroundColor: 'white' }}>{m}</option>)}
                         </select>
-                        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>a</span>
+                        <span style={{ fontSize: 10, color: '#C9D2DE', fontWeight: 700 }}>a</span>
                         <select value={data.periodoHasta} onChange={e => set('periodoHasta', e.target.value)}
-                          style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #cbd5e1', outline: 'none', color: '#222', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
-                          <option value="">Mes final</option>
-                          {MESES.map(m => <option key={m} value={m}>{m}</option>)}
+                          style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #4A5568', outline: 'none', color: '#fff', fontWeight: 600, fontSize: 11, cursor: 'pointer', fontFamily: 'Arial, sans-serif', padding: 0 }}>
+                          <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>Mes final</option>
+                          {MESES.map(m => <option key={m} value={m} style={{ color: '#111827', backgroundColor: 'white' }}>{m}</option>)}
                         </select>
                       </div>
                     </div>
@@ -1626,9 +1640,10 @@ function ValoracionPageInner() {
                   {/* LOGO + CÓDIGO - derecha */}
                   <div style={{ flexShrink: 0, textAlign: 'center', alignSelf: 'flex-start', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     <img src="/ESCUDO%20F.A%202020.png" alt="Futuro Antioquia" style={{ width: 72, height: 72, objectFit: 'contain' }} />
-                    <div style={{ color: '#374151', fontSize: 9, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 }}>CÓDIGO</div>
+                    <div style={{ color: '#fff', fontSize: 9, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 }}>CÓDIGO</div>
                     <div style={{ background: VERDE_GRAD, borderRadius: 10, minWidth: 65, textAlign: 'center', padding: '8px 10px', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact', outline: err('codigo') ? '2px solid #ef4444' : 'none' } as React.CSSProperties}>
                       <input value={data.codigo} onChange={e => set('codigo', e.target.value)} placeholder="—"
+                        className="placeholder:text-white/40"
                         style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontWeight: 900, fontSize: 20, width: 85, textAlign: 'center', fontFamily: 'Arial, sans-serif', padding: 0 }} />
                     </div>
                   </div>
@@ -1657,7 +1672,7 @@ function ValoracionPageInner() {
           {/* TÉCNICA */}
           <tbody>
             <tr>{celda(VERDE_GRAD, '#fff', 'TÉCNICA (RELACIONAMIENTO CON EL BALÓN)', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
-            <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Evalúa la ejecución de los fundamentos básicos del juego</td></tr>
+            <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#C9D2DE', padding: '2px 8px', fontStyle: 'italic' }}>Evalúa la ejecución de los fundamentos básicos del juego</td></tr>
           </tbody>
           <BloqueAspecto titulo={metaVal.control?.titulo ?? "CONTROL"} subtitulo={metaVal.control?.subtitulo ?? "Recepción y Dominio del Balón"} definicion={metaVal.control?.definicion}
             nivel={data.controlNivel} onNivel={v => set('controlNivel', v)} showError={intentoDescarga}
@@ -1702,7 +1717,7 @@ function ValoracionPageInner() {
           {/* TÁCTICA */}
           <tbody>
             <tr>{celda(VERDE_GRAD, '#fff', 'TÁCTICA', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '5px 8px' } as any)}</tr>
-            <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#555', padding: '2px 8px', fontStyle: 'italic' }}>Comprensión del juego y toma de decisiones</td></tr>
+            <tr><td colSpan={4} style={{ textAlign: 'center', fontSize: 10, color: '#C9D2DE', padding: '2px 8px', fontStyle: 'italic' }}>Comprensión del juego y toma de decisiones</td></tr>
           </tbody>
           <BloqueAspecto titulo={metaVal.posicion?.titulo ?? "UBICACIÓN ESPACIAL"} subtitulo={metaVal.posicion?.subtitulo ?? "Posicionamiento y Orientación"} definicion={metaVal.posicion?.definicion}
             nivel={data.posicionNivel} onNivel={v => set('posicionNivel', v)} showError={intentoDescarga}
@@ -1785,18 +1800,18 @@ function ValoracionPageInner() {
               ['trabajoEquipoComp',  'TRABAJO EN EQUIPO'],
               ['sentidoPertenencia', 'SENTIDO DE PERTENENCIA'],
             ] as [string, string][]).map(([key, label], i) => (
-              <tr key={key} style={{ background: (intentoDescarga && !(data as any)[key]) ? '#fff5f5' : i % 2 === 0 ? C.grisClaro : '#fff' }}>
-                <td colSpan={2} style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, color: (intentoDescarga && !(data as any)[key]) ? '#ef4444' : '#333', letterSpacing: 1 }}>{label}{(intentoDescarga && !(data as any)[key]) && ' ⚠'}</td>
+              <tr key={key} style={{ background: (intentoDescarga && !(data as any)[key]) ? 'rgba(192,80,77,0.22)' : i % 2 === 0 ? '#36404F' : '#3C4759' }}>
+                <td colSpan={2} style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, color: (intentoDescarga && !(data as any)[key]) ? '#ef4444' : '#fff', letterSpacing: 1 }}>{label}{(intentoDescarga && !(data as any)[key]) && ' ⚠'}</td>
                 <td colSpan={2} style={{ padding: '4px 10px' }}>
                   <select value={(data as any)[key]} onChange={e => set(key as any, e.target.value)}
-                    style={{ width: '100%', fontSize: 11, padding: '4px 6px', border: `1px solid ${(intentoDescarga && !(data as any)[key]) ? '#ef4444' : '#ccc'}`, borderRadius: 4, background: (intentoDescarga && !(data as any)[key]) ? '#fee2e2' : '#fff', color: '#333' }}>
-                    <option value="">— Seleccionar —</option>
-                    <option value="SIEMPRE">SIEMPRE</option>
-                    <option value="CASI SIEMPRE">CASI SIEMPRE</option>
-                    <option value="ALGUNAS VECES">ALGUNAS VECES</option>
-                    <option value="CASI NUNCA">CASI NUNCA</option>
-                    <option value="NUNCA">NUNCA</option>
-                    <option value="No Aplica">No Aplica</option>
+                    style={{ width: '100%', fontSize: 11, padding: '4px 6px', border: `1px solid ${(intentoDescarga && !(data as any)[key]) ? '#ef4444' : '#4A5568'}`, borderRadius: 4, background: (intentoDescarga && !(data as any)[key]) ? '#C0504D' : '#2B3547', color: '#fff' }}>
+                    <option value="" style={{ color: '#111827', backgroundColor: 'white' }}>— Seleccionar —</option>
+                    <option value="SIEMPRE" style={{ color: '#111827', backgroundColor: 'white' }}>SIEMPRE</option>
+                    <option value="CASI SIEMPRE" style={{ color: '#111827', backgroundColor: 'white' }}>CASI SIEMPRE</option>
+                    <option value="ALGUNAS VECES" style={{ color: '#111827', backgroundColor: 'white' }}>ALGUNAS VECES</option>
+                    <option value="CASI NUNCA" style={{ color: '#111827', backgroundColor: 'white' }}>CASI NUNCA</option>
+                    <option value="NUNCA" style={{ color: '#111827', backgroundColor: 'white' }}>NUNCA</option>
+                    <option value="No Aplica" style={{ color: '#111827', backgroundColor: 'white' }}>No Aplica</option>
                   </select>
                 </td>
               </tr>
@@ -1840,7 +1855,7 @@ function ValoracionPageInner() {
               ['Comportamental',       comportamental],
             ];
             const barra = (val: number, alto: number) => (
-              <div style={{ background: '#e5e7eb', borderRadius: 4, height: alto, flex: 1, overflow: 'hidden', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
+              <div style={{ background: '#2B3547', borderRadius: 4, height: alto, flex: 1, overflow: 'hidden', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}>
                 <div style={{ width: `${(val / 5) * 100}%`, height: '100%', background: color(val), borderRadius: 4, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties} />
               </div>
             );
@@ -1848,8 +1863,8 @@ function ValoracionPageInner() {
               <tbody>
                 <tr>{celda(VERDE_GRAD, '#fff', 'VALORACIÓN POR COMPONENTES', { colSpan: 4, textAlign: 'center', fontSize: 13, letterSpacing: 2, padding: '6px 8px' } as any)}</tr>
                 {filas.map(([nombre, val], i) => (
-                  <tr key={nombre} style={{ background: i % 2 === 0 ? C.grisClaro : '#fff' }}>
-                    <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 700, color: '#333', textTransform: 'uppercase', letterSpacing: 0.5 }}>{nombre}</td>
+                  <tr key={nombre} style={{ background: i % 2 === 0 ? '#36404F' : '#3C4759' }}>
+                    <td colSpan={2} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>{nombre}</td>
                     <td colSpan={2} style={{ padding: '7px 10px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {barra(val, 10)}
@@ -1884,7 +1899,7 @@ function ValoracionPageInner() {
                 <div style={{ fontSize: 10, fontWeight: 800, color: '#16a34a', letterSpacing: 1, marginBottom: 2 }}>LOGROS</div>
                 <AutoTextarea value={data.logrosTrimestre} onChange={v => { textosManual.current = true; set('logrosTrimestre', v); }}
                   placeholder="Se genera automáticamente al completar la valoración (puedes editarlo)…" />
-                <div style={{ borderTop: '1px dashed #cbd5e1', margin: '6px 0' }} />
+                <div style={{ borderTop: '1px dashed #4A5568', margin: '6px 0' }} />
                 <div style={{ fontSize: 10, fontWeight: 800, color: '#0ea5e9', letterSpacing: 1, marginBottom: 2 }}>RETOS</div>
                 <AutoTextarea value={data.objetivosTrimestre} onChange={v => { textosManual.current = true; set('objetivosTrimestre', v); }}
                   placeholder="Se genera automáticamente al completar la valoración (puedes editarlo)…" />
@@ -1907,7 +1922,7 @@ function ValoracionPageInner() {
           <tbody style={{ breakInside: 'avoid', pageBreakInside: 'avoid', breakBefore: 'avoid', pageBreakBefore: 'avoid' } as React.CSSProperties}>
             <tr>
               <td colSpan={2} style={{ padding: '8px 24px 6px', textAlign: 'center', verticalAlign: 'bottom' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.25 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#fff', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.25 }}>
                   {(() => {
                     const prof = profes.find(p => p.proyectos.some(pr => pr.trim().toUpperCase() === (data.proyecto || '').trim().toUpperCase()));
                     const full = ((prof?.nombre && prof.nombre.trim()) ? prof.nombre.trim() : (prof?.usuario || nombreEntrenador)) || '';
@@ -1918,21 +1933,21 @@ function ValoracionPageInner() {
                     return (<><div>{nom}</div><div>{ape}</div></>);
                   })()}
                 </div>
-                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Nombre del Formador</div>
+                <div style={{ borderTop: '1px solid #4A5568', paddingTop: 4, fontSize: 10, color: '#C9D2DE' }}>Nombre del Formador</div>
               </td>
               <td colSpan={2} style={{ padding: '8px 24px 6px', textAlign: 'center', verticalAlign: 'bottom' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#111', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.25 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#fff', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.25 }}>
                   <div>HERNÁN DARÍO</div><div>MARULANDA MORENO</div>
                 </div>
-                <div style={{ borderTop: '1px solid #333', paddingTop: 4, fontSize: 10, color: '#555' }}>Director General</div>
+                <div style={{ borderTop: '1px solid #4A5568', paddingTop: 4, fontSize: 10, color: '#C9D2DE' }}>Director General</div>
               </td>
             </tr>
             <tr>
               <td colSpan={4} style={{ textAlign: 'center', paddingTop: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#111', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   Academia de Fútbol Futuro Antioquia
                 </div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#555', marginTop: 2 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#C9D2DE', marginTop: 2 }}>
                   34 Años Acompañando Sueños
                 </div>
               </td>
@@ -1980,7 +1995,7 @@ function primerInformeLibre(historial: any[]): string {
 
 export default function ValoracionPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#e5e7eb' }} />}>
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#333F50' }} />}>
       <ValoracionPageInner />
     </Suspense>
   );

@@ -184,6 +184,21 @@ export default function PerfilDeportista() {
   /* Cuánto hay que acercar la foto para que se vea de la cabeza a los
      escudos. Lo decide la propia foto al cargarse (ver su onLoad). */
   const [fotoZoom, setFotoZoom] = useState(1);
+  /* ── LAS FOTOS NUEVAS NO SE TOCAN (dirección, 04/09/2026) ──────────────────
+     «Lo que queda entre las dos rayas es lo que debe quedar, y el recuadro es
+      siempre 3 x 4.»
+
+     Una foto subida con el marco blanco YA VIENE recortada en 3:4, exacta.
+     A esa no hay que acercarla ni correrle el encuadre: cualquier arreglo que
+     se le haga después la mueve y aparece "más larga, hasta abajo de REGOL",
+     que es justo lo que se veía.
+
+     Solo las fotos VIEJAS —las que se subieron antes de que existiera el
+     marco— siguen necesitando el acomodo a ojo. Este dato dice cuál es cuál. */
+  const [fotoYaEncuadrada, setFotoYaEncuadrada] = useState(false);
+  /** Mira la forma de la foto: 3:4 (0,75) = viene del marco, no se toca. */
+  const esTresPorCuatro = (w: number, h: number) =>
+    Math.abs(w / Math.max(1, h) - 0.75) < 0.02;
   const [editando,      setEditando]      = useState(false);
   const [edits,         setEdits]         = useState<Record<string, string>>({});
   const [tab,           setTab]           = useState(0);
@@ -931,6 +946,9 @@ export default function PerfilDeportista() {
                        en 3:4 (ver components/RecortarFoto.tsx), así que a esa
                        no hay que hacerle nada: la fórmula le da 1. */
                     const im = e.currentTarget;
+                    const ya = esTresPorCuatro(im.naturalWidth, im.naturalHeight);
+                    setFotoYaEncuadrada(ya);
+                    if (ya) { setFotoZoom(1); return; }   // recortada a mano: no se toca
                     const forma = im.naturalWidth / Math.max(1, im.naturalHeight);
                     const cajaForma = 3 / 4;
                     setFotoZoom(forma > cajaForma
@@ -940,7 +958,10 @@ export default function PerfilDeportista() {
                   style={{
                     width: '100%', height: '100%',
                     objectFit: 'cover',
-                    objectPosition: '50% 22%',
+                    /* Ya encuadrada = se muestra completa y centrada: el marco
+                       de la pantalla es 3:4 y la foto también, así que entra
+                       exacta y se ve IGUAL a como quedó en el recuadro. */
+                    objectPosition: fotoYaEncuadrada ? '50% 50%' : '50% 22%',
                     transform: fotoZoom > 1 ? `scale(${fotoZoom})` : undefined,
                     transformOrigin: '50% 22%',
                     display: 'block',
@@ -1336,28 +1357,36 @@ export default function PerfilDeportista() {
               <div
                 onClick={() => { if (foto) setFotoPorRecortar(foto); }}
                 title={foto ? 'Toca la foto para acomodarla dentro del marco' : undefined}
-                className="w-[112px] h-[140px] sm:w-[144px] sm:h-[180px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex items-center justify-center"
+                /* EL RECUADRO AHORA ES 3 x 4, NO 4 x 5 (dirección, 04/09/2026).
+                   Aquí estaba la falla de verdad: la foto se recortaba en 3:4
+                   dentro del marco blanco, pero después se metía en un cuadro
+                   de 4:5 —112 x 140—. Al no ser la misma forma, el navegador
+                   tenía que recortarla otra vez por su cuenta, y por eso salía
+                   "más larga y hasta abajo de REGOL". Ya son la misma forma:
+                   lo que se ve en el marco es lo que queda en la ficha. */
+                className="w-[112px] h-[149px] sm:w-[144px] sm:h-[192px] rounded-xl overflow-hidden bg-[#0d3d1a] border border-white/20 flex items-center justify-center"
                 style={{ cursor: foto ? 'pointer' : undefined }}>
                 {foto
                   ? <img src={foto} alt=""
                       onLoad={e => {
-                        /* Si la foto original es APAISADA, el recuadro la
-                           mostraría completa —cielo, niño chiquito y pasto— y
-                           correr el recorte hacia arriba no serviría de nada,
-                           porque no sobra por arriba ni por abajo: sobra por
-                           los lados. Entonces solo a esas se les acerca lo
-                           justo para que llenen por ancho. A las verticales no
-                           se les toca nada. */
+                        /* Foto NUEVA (ya recortada en 3:4 con el marco): no se
+                           le toca nada, entra exacta.
+                           Foto VIEJA y apaisada: el recuadro la mostraría
+                           completa —cielo, niño chiquito y pasto—, así que se
+                           le acerca lo justo para que llene de lado a lado. */
                         const im = e.currentTarget;
+                        const ya = esTresPorCuatro(im.naturalWidth, im.naturalHeight);
+                        setFotoYaEncuadrada(ya);
+                        if (ya) { setFotoZoom(1); return; }
                         const forma = im.naturalWidth / Math.max(1, im.naturalHeight);
-                        const cajaForma = 4 / 5;
+                        const cajaForma = 3 / 4;
                         setFotoZoom(forma > cajaForma
                           ? Math.min(2, Math.max(1, (forma / cajaForma) * 0.75))
                           : 1);
                       }}
                       className="w-full h-full object-cover"
                       style={{
-                        objectPosition: '50% 22%',
+                        objectPosition: fotoYaEncuadrada ? '50% 50%' : '50% 22%',
                         transform: fotoZoom > 1 ? `scale(${fotoZoom})` : undefined,
                         transformOrigin: '50% 22%',
                       }} />

@@ -181,10 +181,13 @@ export default function PagosProyectoPage() {
   }).length;
 
   return (
-    <div data-hoja="clara" className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#333F50]">
 
       {/* Header */}
-      <header className="bg-gradient-to-r from-[#064e1e] via-[#052a10] to-black px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20 shadow">
+      {/* Degradado oficial de encabezado de la plataforma — dirección, 04/09/2026 */}
+      <header
+        className="px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20 shadow"
+        style={{ background: 'linear-gradient(to right, #333F50, #0EA142)' }}>
         <button onClick={() => router.push('/dashboard')} className="text-white/70 hover:text-white transition">
           <ArrowLeft className="w-5 h-5"/>
         </button>
@@ -202,20 +205,20 @@ export default function PagosProyectoPage() {
       </header>
 
       {/* Filtros */}
-      <div className="bg-white border-b border-gray-100 shadow-sm px-4 sm:px-6 py-3">
+      <div className="bg-[#3C4759] border-b border-[#4A5568] shadow-sm px-4 sm:px-6 py-3">
         <div className="max-w-2xl mx-auto flex gap-3 flex-wrap">
           <div className="flex flex-col min-w-[160px] flex-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Programa</label>
+            <label className="text-[10px] font-black text-[#C9D2DE] uppercase tracking-wider mb-1">Programa</label>
             <select value={prog} onChange={e => { setProg(e.target.value); setProy(''); setBusqueda(''); }}
-              className="text-sm font-black text-[#111827] bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-[#16a34a] cursor-pointer">
+              className="text-sm font-black text-white bg-[#2B3547] border border-[#4A5568] rounded-xl px-3 py-2 focus:outline-none focus:border-[#16a34a] cursor-pointer">
               <option value="">— Todos —</option>
               {programas.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
           <div className="flex flex-col min-w-[180px] flex-1">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Proyecto</label>
+            <label className="text-[10px] font-black text-[#C9D2DE] uppercase tracking-wider mb-1">Proyecto</label>
             <select value={proy} onChange={e => { setProy(e.target.value); setBusqueda(''); }}
-              className="text-sm font-black text-[#111827] bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-[#16a34a] cursor-pointer">
+              className="text-sm font-black text-white bg-[#2B3547] border border-[#4A5568] rounded-xl px-3 py-2 focus:outline-none focus:border-[#16a34a] cursor-pointer">
               <option value="">— Selecciona —</option>
               {proyectos.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -226,45 +229,46 @@ export default function PagosProyectoPage() {
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
 
         {!proy ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-            <Users className="w-12 h-12 text-gray-200 mx-auto mb-3"/>
-            <p className="text-gray-400 font-semibold text-sm">Selecciona un proyecto para ver los pagos</p>
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-12 text-center">
+            <Users className="w-12 h-12 text-[#4A5568] mx-auto mb-3"/>
+            <p className="text-[#C9D2DE] font-semibold text-sm">Selecciona un proyecto para ver los pagos</p>
           </div>
         ) : (
           <>
             {/* KPIs */}
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-center">
-                <p className="text-2xl font-black text-[#111827]">{depsFiltrados.length}</p>
-                <p className="text-[10px] font-black text-gray-400 uppercase">Deportistas</p>
+              <div className="bg-[#3C4759] rounded-xl border border-[#4A5568] shadow-sm p-3 text-center">
+                <p className="text-2xl font-black text-white">{depsFiltrados.length}</p>
+                <p className="text-[10px] font-black text-[#C9D2DE] uppercase">Deportistas</p>
               </div>
-              <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-                <p className="text-2xl font-black text-[#16a34a]">{alDia}</p>
-                <p className="text-[10px] font-black text-gray-400 uppercase">Al día</p>
+              {/* Tintes claros (green-50 / red-50) sustituidos por CAMPO + borde de color — dirección, 04/09/2026 */}
+              <div className="bg-[#2B3547] border border-[#00B050] rounded-xl p-3 text-center">
+                <p className="text-2xl font-black text-[#5BE39B]">{alDia}</p>
+                <p className="text-[10px] font-black text-[#C9D2DE] uppercase">Al día</p>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-                <p className="text-2xl font-black text-red-600">{depsFiltrados.length - alDia}</p>
-                <p className="text-[10px] font-black text-gray-400 uppercase">Pendientes</p>
+              <div className="bg-[#2B3547] border border-[#C0504D] rounded-xl p-3 text-center">
+                <p className="text-2xl font-black text-[#C0504D]">{depsFiltrados.length - alDia}</p>
+                <p className="text-[10px] font-black text-[#C9D2DE] uppercase">Pendientes</p>
               </div>
             </div>
 
             {/* Buscador */}
-            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm">
-              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex items-center gap-2 bg-[#3C4759] border border-[#4A5568] rounded-xl px-3 py-2.5 shadow-sm">
+              <svg className="w-4 h-4 text-[#C9D2DE] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
               </svg>
               <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
                 placeholder="Buscar por nombre o código..."
-                className="flex-1 text-sm text-[#111827] focus:outline-none bg-transparent"/>
-              {busqueda && <button onClick={() => setBusqueda('')} className="text-gray-300 hover:text-gray-500 text-lg leading-none">×</button>}
+                className="flex-1 text-sm text-white placeholder:text-white/40 focus:outline-none bg-transparent"/>
+              {busqueda && <button onClick={() => setBusqueda('')} className="text-[#C9D2DE] hover:text-white text-lg leading-none">×</button>}
             </div>
 
             {/* Lista */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
               {depsFiltrados.length === 0 ? (
-                <p className="text-center text-gray-400 font-semibold py-10 text-sm">Sin resultados</p>
+                <p className="text-center text-[#C9D2DE] font-semibold py-10 text-sm">Sin resultados</p>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-[#4A5568]">
                   {depsFiltrados.map(dep => {
                     const cod      = getCol(dep._columnas, /^c[oó]d/i);
                     const initials = dep._nombre.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
@@ -276,7 +280,7 @@ export default function PagosProyectoPage() {
                     return (
                       <button key={dep.id}
                         onClick={() => router.push(`/alumnos/${dep.id}/estado-cuenta`)}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition text-left">
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#2B3547] active:bg-[#2A3342] transition text-left">
 
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-black text-xs text-white"
                           style={{ background: color }}>
@@ -285,7 +289,7 @@ export default function PagosProyectoPage() {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="font-black text-[#111827] text-sm leading-tight truncate">{dep._nombre}</p>
+                            <p className="font-black text-white text-sm leading-tight truncate">{dep._nombre}</p>
                             {cod && (
                               <span className="text-[10px] font-black text-white px-1.5 py-0.5 rounded flex-shrink-0"
                                 style={{ backgroundColor: colorCodigo(getCol(dep._columnas, /^afil/i)) }}>
@@ -296,7 +300,7 @@ export default function PagosProyectoPage() {
                           <p className="text-[9px] font-black mt-0.5 truncate" style={{ color: aldiaD ? G : '#ef4444' }}>
                             {aldiaD ? '✓ AL DÍA' : `PENDIENTE: ${mesesPendientes.join(' · ')}`}
                           </p>
-                          <div className="mt-1.5 h-1 bg-gray-100 rounded-full overflow-hidden w-full">
+                          <div className="mt-1.5 h-1 bg-[#2B3547] rounded-full overflow-hidden w-full">
                             <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }}/>
                           </div>
                         </div>
@@ -305,7 +309,7 @@ export default function PagosProyectoPage() {
                           {aldiaD
                             ? <CheckCircle className="w-4 h-4 text-[#16a34a]"/>
                             : <Clock className="w-4 h-4 text-red-400"/>}
-                          <ChevronRight className="w-4 h-4 text-gray-300"/>
+                          <ChevronRight className="w-4 h-4 text-[#C9D2DE]"/>
                         </div>
                       </button>
                     );

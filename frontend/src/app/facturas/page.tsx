@@ -32,12 +32,16 @@ export default function FacturasPendientesPage() {
     else alert('No se pudo marcar. Intenta de nuevo.');
   }
 
-  const th: React.CSSProperties = { background: '#16a34a', color: '#fff', border: '1px solid #fff', padding: '9px 10px', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', whiteSpace: 'nowrap', textAlign: 'left' };
-  const td: React.CSSProperties = { border: '1px solid #fff', padding: '8px 10px', fontSize: 12, color: '#111827', whiteSpace: 'nowrap' };
+  /* Rejilla blanca de la tabla cambiada al BORDE oscuro para que no destelle sobre el panel — dirección, 04/09/2026 */
+  const th: React.CSSProperties = { background: '#16a34a', color: '#fff', border: '1px solid #4A5568', padding: '9px 10px', fontSize: 10, fontWeight: 900, letterSpacing: '0.04em', whiteSpace: 'nowrap', textAlign: 'left' };
+  const td: React.CSSProperties = { border: '1px solid #4A5568', padding: '8px 10px', fontSize: 12, color: '#FFFFFF', whiteSpace: 'nowrap' };
 
   return (
-    <div data-hoja="clara" className="min-h-screen bg-gray-50">
-      <header className="bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20">
+    <div className="min-h-screen bg-[#333F50]">
+      {/* Degradado oficial de encabezado de la plataforma — dirección, 04/09/2026 */}
+      <header
+        className="px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-20"
+        style={{ background: 'linear-gradient(to right, #333F50, #0EA142)' }}>
         <button onClick={() => router.push('/dashboard')} className="text-white/80 hover:text-white transition"><ArrowLeft className="w-5 h-5" /></button>
         <FileText className="w-6 h-6 text-white" />
         <div className="flex-1">
@@ -53,14 +57,14 @@ export default function FacturasPendientesPage() {
 
       <main className="px-3 py-4">
         {cargando ? (
-          <p className="text-center text-gray-400 py-16">Cargando…</p>
+          <p className="text-center text-[#C9D2DE] py-16">Cargando…</p>
         ) : rows.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
-            <FileText className="w-14 h-14 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 font-semibold">No hay facturas pendientes.</p>
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-16 text-center">
+            <FileText className="w-14 h-14 text-[#4A5568] mx-auto mb-3" />
+            <p className="text-[#C9D2DE] font-semibold">No hay facturas pendientes.</p>
           </div>
         ) : (
-          <div className="overflow-auto rounded-2xl shadow-sm border border-gray-200 bg-white" style={{ maxHeight: 'calc(100vh - 150px)' }}>
+          <div className="overflow-auto rounded-2xl shadow-sm border border-[#4A5568] bg-[#3C4759]" style={{ maxHeight: 'calc(100vh - 150px)' }}>
             <table className="border-collapse text-sm" style={{ minWidth: 1200 }}>
               <thead className="sticky top-0 z-10">
                 <tr>
@@ -71,7 +75,7 @@ export default function FacturasPendientesPage() {
               </thead>
               <tbody>
                 {rows.map((f, i) => (
-                  <tr key={f.id} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
+                  <tr key={f.id} style={{ background: i % 2 ? '#2B3547' : '#3C4759' }}>
                     <td style={td}>{(f.createdAt || '').slice(0, 10)}</td>
                     <td style={{ ...td, fontWeight: 900, textAlign: 'center', background: '#16a34a', color: '#fff' }}>{f.codigo || '—'}</td>
                     <td style={{ ...td, fontWeight: 700 }}>{f.nombreDeportista || '—'}</td>
@@ -83,11 +87,11 @@ export default function FacturasPendientesPage() {
                     <td style={td}>{f.email || '—'}</td>
                     <td style={{ ...td, whiteSpace: 'normal', minWidth: 160 }}>{f.detalle || '—'}</td>
                     <td style={{ ...td, fontWeight: 900, textAlign: 'right' }}>{peso(f.valor)}</td>
-                    <td style={{ ...td, whiteSpace: 'normal', minWidth: 150, color: '#6b7280' }}>{f.observacion || '—'}</td>
+                    <td style={{ ...td, whiteSpace: 'normal', minWidth: 150, color: '#C9D2DE' }}>{f.observacion || '—'}</td>
                     <td style={{ ...td, textAlign: 'center' }}>
                       <button onClick={() => darOk(f)} disabled={marcando === f.id}
                         className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 font-black text-[11px] text-white transition active:scale-95"
-                        style={{ background: marcando === f.id ? '#9ca3af' : '#16a34a' }}>
+                        style={{ background: marcando === f.id ? '#4A5568' : '#16a34a' }}>
                         <Check className="w-3.5 h-3.5" /> {marcando === f.id ? '…' : 'OK'}
                       </button>
                     </td>

@@ -49,7 +49,7 @@ export default function CalendarioPage() {
   }
 
   return (
-    <div data-hoja="clara" className="min-h-screen bg-[#f0f7ff] flex flex-col">
+    <div className="min-h-screen bg-[#333F50] flex flex-col">
       <PageHeader
         titulo="Calendario"
         subtitulo="Entrenamientos y eventos"
@@ -63,27 +63,27 @@ export default function CalendarioPage() {
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={prevMes}
-            className="w-10 h-10 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center hover:bg-gray-50 transition"
+            className="w-10 h-10 rounded-xl bg-[#3C4759] border border-[#4A5568] shadow-sm flex items-center justify-center hover:bg-[#2B3547] transition"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
+            <ChevronLeft className="w-5 h-5 text-[#C9D2DE]" />
           </button>
-          <h2 className="font-black text-lg text-gray-800 capitalize">
+          <h2 className="font-black text-lg text-white capitalize">
             {MESES[mes]} {anio}
           </h2>
           <button
             onClick={nextMes}
-            className="w-10 h-10 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center hover:bg-gray-50 transition"
+            className="w-10 h-10 rounded-xl bg-[#3C4759] border border-[#4A5568] shadow-sm flex items-center justify-center hover:bg-[#2B3547] transition"
           >
-            <ChevronRight className="w-5 h-5 text-gray-600" />
+            <ChevronRight className="w-5 h-5 text-[#C9D2DE]" />
           </button>
         </div>
 
         {/* Grilla del calendario */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
           {/* Cabeceras de días */}
-          <div className="grid grid-cols-7 border-b border-gray-100">
+          <div className="grid grid-cols-7 border-b border-[#4A5568] bg-[#2A3342]">
             {DIAS_SEMANA.map(d => (
-              <div key={d} className="py-2 text-center text-[11px] font-black text-gray-400 uppercase tracking-wider">
+              <div key={d} className="py-2 text-center text-[11px] font-black text-[#C9D2DE] uppercase tracking-wider">
                 {d}
               </div>
             ))}
@@ -93,7 +93,7 @@ export default function CalendarioPage() {
           <div className="grid grid-cols-7">
             {/* Espacios vacíos al inicio */}
             {Array.from({ length: offsetInicio }).map((_, i) => (
-              <div key={`empty-${i}`} className="h-12 sm:h-14 border-b border-r border-gray-50" />
+              <div key={`empty-${i}`} className="h-12 sm:h-14 border-b border-r border-[#4A5568]" />
             ))}
 
             {dias.map(({ fecha, jsDay }) => {
@@ -104,13 +104,13 @@ export default function CalendarioPage() {
               return (
                 <div
                   key={fecha.toISOString()}
-                  className={`h-12 sm:h-14 border-b border-r border-gray-50 flex flex-col items-center justify-center gap-0.5 transition
-                    ${esHoy ? 'bg-teal-50' : esFin ? 'bg-gray-50/50' : ''}
+                  className={`h-12 sm:h-14 border-b border-r border-[#4A5568] flex flex-col items-center justify-center gap-0.5 transition
+                    ${esHoy ? 'bg-[#2B3547]' : esFin ? 'bg-[#2A3342]' : ''}
                   `}
                 >
                   <span className={`text-sm font-bold leading-none
                     ${esHoy ? 'bg-teal-600 text-white w-7 h-7 rounded-full flex items-center justify-center' :
-                      esFin ? 'text-gray-400' : 'text-gray-700'}
+                      esFin ? 'text-[#C9D2DE]' : 'text-white'}
                   `}>
                     {fecha.getDate()}
                   </span>
@@ -127,22 +127,23 @@ export default function CalendarioPage() {
         <div className="mt-4 flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#16a34a]" />
-            <span className="text-xs text-gray-500">Día de entrenamiento</span>
+            <span className="text-xs text-[#C9D2DE]">Día de entrenamiento</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-6 h-6 rounded-full bg-teal-600 flex items-center justify-center">
               <span className="text-white text-[10px] font-bold">{hoy.getDate()}</span>
             </span>
-            <span className="text-xs text-gray-500">Hoy</span>
+            <span className="text-xs text-[#C9D2DE]">Hoy</span>
           </div>
         </div>
 
         {/* Aviso */}
-        <div className="mt-6 bg-teal-50 border border-teal-200 rounded-2xl p-4 flex items-start gap-3">
-          <Calendar className="w-5 h-5 text-teal-600 flex-shrink-0 mt-0.5" />
+        {/* Aviso: tinte teal claro cambiado a PANEL oscuro, se conserva el acento teal — dirección, 04/09/2026 */}
+        <div className="mt-6 bg-[#3C4759] border border-[#4A5568] rounded-2xl p-4 flex items-start gap-3">
+          <Calendar className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold text-teal-800 text-sm">Calendario en construcción</p>
-            <p className="text-teal-600 text-xs mt-0.5">
+            <p className="font-bold text-white text-sm">Calendario en construcción</p>
+            <p className="text-[#C9D2DE] text-xs mt-0.5">
               Próximamente podrás ver eventos, partidos y horarios de cada proyecto aquí.
               Los puntos verdes indican días de entrenamiento habituales (Miércoles y Viernes).
             </p>

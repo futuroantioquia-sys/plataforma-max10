@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
 import { BotonInicioFlotante } from '@/components/BotonInicioFlotante';
 import { AvisoMantenimiento } from '@/components/AvisoMantenimiento';
 import { RastreoRuta } from '@/components/RastreoRuta';
@@ -7,7 +6,19 @@ import { InstalarApp } from '@/components/InstalarApp';
 import { AvisoVersion } from '@/components/AvisoVersion';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'], preload: false, display: 'swap' });
+/* ── SE QUITÓ LA LETRA DE GOOGLE (dirección, 04/09/2026) ────────────────────
+   Aquí decía:  const inter = Inter({ ... })  —la letra "Inter", bajada de
+   fonts.googleapis.com cada vez que se compila.
+
+   El problema no era la letra: era que si ese servidor no contesta —antivirus,
+   red de la sede, proveedor, o un tropiezo de Google—, Next NO logra armar el
+   archivo de diseño y la plataforma sale SIN NADA de estilos: fondo blanco,
+   letra negra y los balones del fondo del tamaño de la pantalla. Se cae toda
+   la app por una letra.
+
+   La letra ahora se pone en globals.css con las que ya trae cada computador
+   (Segoe UI, San Francisco, Roboto). Se ven casi idénticas y no hay que bajar
+   nada: el servidor local arranca aunque no haya internet. */
 
 export const metadata: Metadata = {
   title:       'Futuro Antioquia — Plataforma Digital',
@@ -41,7 +52,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={inter.className}>
+      <body>
         <RastreoRuta />
         {children}
         <BotonInicioFlotante />

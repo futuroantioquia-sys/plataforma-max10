@@ -499,11 +499,11 @@ export default function LibroContablePage() {
   const noEncontrado = resultados?.filter(r => r.estado === 'no_encontrado').length  ?? 0;
   const mesInvalido  = resultados?.filter(r => r.estado === 'mes_invalido').length   ?? 0;
 
-  const BW = '1px solid white';
+  const BW = '1px solid #4A5568';
   const G  = '#16a34a';
 
   return (
-    <div data-hoja="clara" className="min-h-screen bg-[#f0f4ff]">
+    <div className="min-h-screen bg-[#333F50]">
 
       {/* HEADER */}
       <header className="relative bg-gradient-to-r from-[#064e1e] to-[#22c55e] px-4 py-4 flex items-center gap-3 sticky top-0 z-20 overflow-hidden">
@@ -534,35 +534,35 @@ export default function LibroContablePage() {
       <main className="max-w-2xl mx-auto px-4 py-5 space-y-5">
 
         {/* KPI */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
-          <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Users className="w-6 h-6 text-green-600" />
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4 flex items-center gap-4">
+          <div className="w-12 h-12 bg-[#00B050]/20 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Users className="w-6 h-6 text-[#5BE39B]" />
           </div>
           <div className="flex-1">
-            <p className="font-black text-[#1e3a8a] text-xl">{deportistas.length}</p>
-            <p className="text-gray-400 text-xs font-semibold">Deportistas en sistema</p>
+            <p className="font-black text-white text-xl">{deportistas.length}</p>
+            <p className="text-[#C9D2DE] text-xs font-semibold">Deportistas en sistema</p>
           </div>
           {!xlsxReady && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-400 font-semibold">
+            <div className="flex items-center gap-1.5 text-xs text-[#C9D2DE] font-semibold">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando motor…
             </div>
           )}
         </div>
 
         {/* INFO COLUMNAS */}
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-2">
+        <div className="bg-[#2B3547] border border-[#4A5568] rounded-2xl p-4 space-y-2">
           <div className="flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-blue-600 flex-shrink-0" />
-            <p className="font-black text-[#1e3a8a] text-sm">Columnas que se leen del Libro Contable</p>
+            <BookOpen className="w-4 h-4 text-[#5BE39B] flex-shrink-0" />
+            <p className="font-black text-white text-sm">Columnas que se leen del Libro Contable</p>
           </div>
           <div className="flex flex-wrap gap-2 pt-1">
             {['CÓDIGO','DEPORTISTA','FECHA','DESCRIPCIÓN','DETALLE','V. PAGADO'].map(c => (
-              <span key={c} className="bg-white border border-blue-200 text-[#1e3a8a] text-xs font-black px-3 py-1 rounded-lg">
+              <span key={c} className="bg-[#3C4759] border border-[#4A5568] text-white text-xs font-black px-3 py-1 rounded-lg">
                 {c}
               </span>
             ))}
           </div>
-          <p className="text-blue-700 text-[11px] font-semibold pt-1">
+          <p className="text-[#C9D2DE] text-[11px] font-semibold pt-1">
             Hoja requerida: <strong>LIBRO CONTABLE</strong> · DETALLE contiene el mes: <em>FEBRERO 2026, MARZO 2026 … DICIEMBRE 2026</em>
           </p>
         </div>
@@ -573,25 +573,25 @@ export default function LibroContablePage() {
           className={cn(
             'block border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all',
             xlsxReady && !importando
-              ? 'border-green-300 bg-green-50 hover:bg-green-100 hover:border-green-400'
-              : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+              ? 'border-[#00B050] bg-[#2B3547] hover:bg-[#00B050]/15 hover:border-[#5BE39B]'
+              : 'border-[#4A5568] bg-[#2B3547] cursor-not-allowed opacity-60'
           )}
         >
           {importando ? (
             <div className="flex flex-col items-center gap-3">
-              <RefreshCw className="w-8 h-8 text-green-500 animate-spin" />
-              <p className="font-black text-green-700">Procesando archivo…</p>
+              <RefreshCw className="w-8 h-8 text-[#5BE39B] animate-spin" />
+              <p className="font-black text-[#5BE39B]">Procesando archivo…</p>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">
-              <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center">
-                <Upload className="w-7 h-7 text-green-600" />
+              <div className="w-14 h-14 bg-[#00B050]/20 rounded-2xl flex items-center justify-center">
+                <Upload className="w-7 h-7 text-[#5BE39B]" />
               </div>
               <div>
-                <p className="font-black text-[#1e3a8a] text-sm">
+                <p className="font-black text-white text-sm">
                   {xlsxReady ? 'Seleccionar Libro Contable (.xlsx)' : 'Cargando motor Excel…'}
                 </p>
-                <p className="text-gray-400 text-xs mt-1">Arrastra o haz clic para seleccionar</p>
+                <p className="text-[#C9D2DE] text-xs mt-1">Arrastra o haz clic para seleccionar</p>
               </div>
             </div>
           )}
@@ -608,30 +608,30 @@ export default function LibroContablePage() {
 
         {/* DIAGNÓSTICO COLUMNAS */}
         {diagnostico && (
-          <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 text-xs space-y-1.5 text-gray-800">
-            <p className="font-black text-amber-700 text-sm mb-2">🔍 Diagnóstico del archivo</p>
+          <div className="bg-[#3C4759] border border-[#E0A33A] rounded-2xl p-4 text-xs space-y-1.5 text-white">
+            <p className="font-black text-[#E0A33A] text-sm mb-2">🔍 Diagnóstico del archivo</p>
             <p><strong>Hoja:</strong> {diagnostico.hoja} &nbsp;|&nbsp; <strong>Fila encabezados:</strong> {diagnostico.filaEnc}</p>
-            <p><strong>CÓDIGO (col {diagnostico.iCod}):</strong> <span className="text-blue-700 font-bold">&ldquo;{diagnostico.colNombres[diagnostico.iCod] || '—'}&rdquo;</span></p>
-            <p><strong>DEPORTISTA (col {diagnostico.iDep >= 0 ? diagnostico.iDep : '?'}):</strong> <span className="text-blue-700 font-bold">{diagnostico.iDep >= 0 ? `"${diagnostico.colNombres[diagnostico.iDep] || '—'}"` : '⚠ NO ENCONTRADO'}</span></p>
-            <p><strong>DETALLE (col {diagnostico.iDet}):</strong> <span className="text-blue-700 font-bold">&ldquo;{diagnostico.colNombres[diagnostico.iDet] || '—'}&rdquo;</span></p>
-            <p><strong>DESCRIPCIÓN (col {diagnostico.iDes >= 0 ? diagnostico.iDes : '?'}):</strong> <span className="text-blue-700 font-bold">{diagnostico.iDes >= 0 ? `"${diagnostico.colNombres[diagnostico.iDes] || '—'}"` : '⚠ NO ENCONTRADO'}</span></p>
-            <p><strong>V. PAGADO:</strong> <span className="text-blue-700 font-bold">{diagnostico.iVPag >= 0 ? `col ${diagnostico.iVPag} → "${diagnostico.colNombres[diagnostico.iVPag] || '—'}"` : '⚠ NO ENCONTRADO'}</span></p>
+            <p><strong>CÓDIGO (col {diagnostico.iCod}):</strong> <span className="text-[#E0A33A] font-bold">&ldquo;{diagnostico.colNombres[diagnostico.iCod] || '—'}&rdquo;</span></p>
+            <p><strong>DEPORTISTA (col {diagnostico.iDep >= 0 ? diagnostico.iDep : '?'}):</strong> <span className="text-[#E0A33A] font-bold">{diagnostico.iDep >= 0 ? `"${diagnostico.colNombres[diagnostico.iDep] || '—'}"` : '⚠ NO ENCONTRADO'}</span></p>
+            <p><strong>DETALLE (col {diagnostico.iDet}):</strong> <span className="text-[#E0A33A] font-bold">&ldquo;{diagnostico.colNombres[diagnostico.iDet] || '—'}&rdquo;</span></p>
+            <p><strong>DESCRIPCIÓN (col {diagnostico.iDes >= 0 ? diagnostico.iDes : '?'}):</strong> <span className="text-[#E0A33A] font-bold">{diagnostico.iDes >= 0 ? `"${diagnostico.colNombres[diagnostico.iDes] || '—'}"` : '⚠ NO ENCONTRADO'}</span></p>
+            <p><strong>V. PAGADO:</strong> <span className="text-[#E0A33A] font-bold">{diagnostico.iVPag >= 0 ? `col ${diagnostico.iVPag} → "${diagnostico.colNombres[diagnostico.iVPag] || '—'}"` : '⚠ NO ENCONTRADO'}</span></p>
             <p className="pt-1"><strong>Todos los encabezados:</strong></p>
-            <p className="bg-white rounded p-2 font-mono text-[10px] break-all">{diagnostico.colNombres.filter(h => h).join(' | ')}</p>
-            <p className="pt-1"><strong>Primeros códigos (col {diagnostico.iCod}):</strong> <span className={diagnostico.muestraCodigos.length ? 'text-green-700 font-bold' : 'text-red-500 font-bold'}>{diagnostico.muestraCodigos.length ? diagnostico.muestraCodigos.join(' / ') : '⚠ NINGUNO EN PRIMERAS 30 FILAS'}</span></p>
-            <p><strong>Primeros DETALLE/DESC (mes):</strong> <span className={diagnostico.muestraDetalle.length ? 'text-green-700 font-bold' : 'text-red-500 font-bold'}>{diagnostico.muestraDetalle.length ? diagnostico.muestraDetalle.join(' / ') : '⚠ NINGUNO EN PRIMERAS 30 FILAS'}</span></p>
-            <p className="pt-1 text-amber-700"><strong>Total filas de datos en el archivo:</strong> {diagnostico.totalFilas}</p>
+            <p className="bg-[#2B3547] rounded p-2 font-mono text-[10px] break-all">{diagnostico.colNombres.filter(h => h).join(' | ')}</p>
+            <p className="pt-1"><strong>Primeros códigos (col {diagnostico.iCod}):</strong> <span className={diagnostico.muestraCodigos.length ? 'text-[#5BE39B] font-bold' : 'text-[#C0504D] font-bold'}>{diagnostico.muestraCodigos.length ? diagnostico.muestraCodigos.join(' / ') : '⚠ NINGUNO EN PRIMERAS 30 FILAS'}</span></p>
+            <p><strong>Primeros DETALLE/DESC (mes):</strong> <span className={diagnostico.muestraDetalle.length ? 'text-[#5BE39B] font-bold' : 'text-[#C0504D] font-bold'}>{diagnostico.muestraDetalle.length ? diagnostico.muestraDetalle.join(' / ') : '⚠ NINGUNO EN PRIMERAS 30 FILAS'}</span></p>
+            <p className="pt-1 text-[#E0A33A]"><strong>Total filas de datos en el archivo:</strong> {diagnostico.totalFilas}</p>
 
             {diagnostico.primerasFilas.length > 0 && (
               <div className="pt-2">
-                <p className="font-black text-gray-700 mb-1">📋 Primeras {diagnostico.primerasFilas.length} filas de datos:</p>
-                <div className="overflow-x-auto max-h-48 overflow-y-auto rounded border border-amber-200">
+                <p className="font-black text-white mb-1">📋 Primeras {diagnostico.primerasFilas.length} filas de datos:</p>
+                <div className="overflow-x-auto max-h-48 overflow-y-auto rounded border border-[#4A5568]">
                   <table className="text-[9px] font-mono border-collapse" style={{minWidth: '800px'}}>
                     <thead>
-                      <tr className="bg-amber-200 sticky top-0">
-                        <th className="px-1 py-0.5 border border-amber-300 text-left">#</th>
+                      <tr className="bg-[#2A3342] sticky top-0">
+                        <th className="px-1 py-0.5 border border-[#4A5568] text-left">#</th>
                         {diagnostico.colNombres.map((h, ci) => (
-                          <th key={ci} className={`px-1 py-0.5 border border-amber-300 text-left whitespace-nowrap ${ci === diagnostico.iCod ? 'bg-blue-200' : ci === diagnostico.iDet ? 'bg-green-200' : ci === diagnostico.iDes ? 'bg-yellow-200' : ci === diagnostico.iDep ? 'bg-purple-200' : ''}`}>
+                          <th key={ci} className={`px-1 py-0.5 border border-[#4A5568] text-left whitespace-nowrap ${ci === diagnostico.iCod ? 'bg-blue-500/30' : ci === diagnostico.iDet ? 'bg-green-500/30' : ci === diagnostico.iDes ? 'bg-yellow-500/30' : ci === diagnostico.iDep ? 'bg-purple-500/30' : ''}`}>
                             {ci}:{h || '—'}
                           </th>
                         ))}
@@ -639,10 +639,10 @@ export default function LibroContablePage() {
                     </thead>
                     <tbody>
                       {diagnostico.primerasFilas.map((fila, fi) => (
-                        <tr key={fi} className={fi % 2 === 0 ? 'bg-white' : 'bg-amber-50'}>
-                          <td className="px-1 py-0.5 border border-amber-100 text-gray-400">{diagnostico.filaEnc + fi + 1}</td>
+                        <tr key={fi} className={fi % 2 === 0 ? 'bg-[#3C4759]' : 'bg-[#36404F]'}>
+                          <td className="px-1 py-0.5 border border-[#4A5568] text-[#C9D2DE]">{diagnostico.filaEnc + fi + 1}</td>
                           {fila.map((v, ci) => (
-                            <td key={ci} className={`px-1 py-0.5 border border-amber-100 max-w-[100px] truncate ${ci === diagnostico.iCod ? 'bg-blue-50 text-blue-800 font-bold' : ci === diagnostico.iDet ? 'bg-green-50 text-green-800 font-bold' : ci === diagnostico.iDes ? 'bg-yellow-50 text-yellow-800' : ci === diagnostico.iDep ? 'bg-purple-50 text-purple-800' : 'text-gray-700'}`} title={v}>
+                            <td key={ci} className={`px-1 py-0.5 border border-[#4A5568] max-w-[100px] truncate ${ci === diagnostico.iCod ? 'bg-blue-500/10 text-blue-200 font-bold' : ci === diagnostico.iDet ? 'bg-green-500/10 text-green-200 font-bold' : ci === diagnostico.iDes ? 'bg-yellow-500/10 text-yellow-200' : ci === diagnostico.iDep ? 'bg-purple-500/10 text-purple-200' : 'text-[#C9D2DE]'}`} title={v}>
                               {v || ''}
                             </td>
                           ))}
@@ -651,43 +651,43 @@ export default function LibroContablePage() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[9px] text-gray-500 mt-1">Azul=CÓDIGO · Verde=DETALLE · Amarillo=DESCRIPCIÓN · Morado=DEPORTISTA</p>
+                <p className="text-[9px] text-[#C9D2DE] mt-1">Azul=CÓDIGO · Verde=DETALLE · Amarillo=DESCRIPCIÓN · Morado=DEPORTISTA</p>
               </div>
             )}
 
             {/* ── FILAS CON MES VÁLIDO (escaneo completo del archivo) ── */}
-            <div className="pt-2 border-t border-amber-200 mt-2">
-              <p className="font-black text-gray-700 mb-1">
+            <div className="pt-2 border-t border-[#4A5568] mt-2">
+              <p className="font-black text-white mb-1">
                 🗓 Filas del archivo con mes válido (MARZO 2026 etc.):
-                <span className={`ml-2 font-bold ${diagnostico.filasConMes.length > 0 ? 'text-green-700' : 'text-red-600'}`}>
+                <span className={`ml-2 font-bold ${diagnostico.filasConMes.length > 0 ? 'text-[#5BE39B]' : 'text-[#C0504D]'}`}>
                   {diagnostico.filasConMes.length > 0 ? `${diagnostico.filasConMes.length} encontradas` : '⚠ NINGUNA ENCONTRADA EN TODO EL ARCHIVO'}
                 </span>
               </p>
               {diagnostico.filasConMes.length > 0 ? (
-                <div className="overflow-x-auto rounded border border-green-200">
+                <div className="overflow-x-auto rounded border border-[#4A5568]">
                   <table className="text-[9px] font-mono border-collapse w-full">
                     <thead>
-                      <tr className="bg-green-200">
+                      <tr className="bg-[#00B050]">
                         {['CÓDIGO (col I)','DEPORTISTA (col J)','DETALLE (col K)','V.PAGADO (col F)','DESCRIPCIÓN (col D)'].map(h => (
-                          <th key={h} className="px-2 py-1 border border-green-300 text-left whitespace-nowrap">{h}</th>
+                          <th key={h} className="px-2 py-1 border border-[#4A5568] text-left whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {diagnostico.filasConMes.map((fila, i) => (
-                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-green-50'}>
-                          <td className="px-2 py-1 border border-green-100 font-bold text-blue-700">{fila[diagnostico.iCod] || '—'}</td>
-                          <td className="px-2 py-1 border border-green-100 text-purple-700">{fila[diagnostico.iDep >= 0 ? diagnostico.iDep : 9] || '—'}</td>
-                          <td className="px-2 py-1 border border-green-100 font-bold text-green-700">{fila[diagnostico.iDet] || '—'}</td>
-                          <td className="px-2 py-1 border border-green-100 text-gray-700">{fila[diagnostico.iVPag >= 0 ? diagnostico.iVPag : 5] || '—'}</td>
-                          <td className="px-2 py-1 border border-green-100 text-yellow-700">{fila[diagnostico.iDes >= 0 ? diagnostico.iDes : 3] || '—'}</td>
+                        <tr key={i} className={i % 2 === 0 ? 'bg-[#3C4759]' : 'bg-[#36404F]'}>
+                          <td className="px-2 py-1 border border-[#4A5568] font-bold text-blue-200">{fila[diagnostico.iCod] || '—'}</td>
+                          <td className="px-2 py-1 border border-[#4A5568] text-purple-200">{fila[diagnostico.iDep >= 0 ? diagnostico.iDep : 9] || '—'}</td>
+                          <td className="px-2 py-1 border border-[#4A5568] font-bold text-[#5BE39B]">{fila[diagnostico.iDet] || '—'}</td>
+                          <td className="px-2 py-1 border border-[#4A5568] text-[#C9D2DE]">{fila[diagnostico.iVPag >= 0 ? diagnostico.iVPag : 5] || '—'}</td>
+                          <td className="px-2 py-1 border border-[#4A5568] text-yellow-200">{fila[diagnostico.iDes >= 0 ? diagnostico.iDes : 3] || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <p className="text-[10px] text-red-700 font-bold bg-red-50 rounded p-2">
+                <p className="text-[10px] text-[#C0504D] font-bold bg-[#2B3547] rounded p-2">
                   El archivo NO tiene ninguna fila con &quot;FEBRERO 2026&quot;, &quot;MARZO 2026&quot; etc. en la columna DETALLE (col K).
                   Verifica que la columna K del Excel realmente tenga esos valores.
                 </p>
@@ -696,30 +696,30 @@ export default function LibroContablePage() {
 
             {/* Muestra de deportistas del sistema para verificar matching */}
             {diagnostico.muestraDeportistasSistema.length > 0 && (
-              <div className="pt-2 border-t border-amber-200 mt-2">
-                <p className="font-black text-gray-700 mb-1">🏃 Deportistas en el sistema (primeros 5 — verifica que tengan código):</p>
-                <div className="overflow-x-auto rounded border border-amber-200">
+              <div className="pt-2 border-t border-[#4A5568] mt-2">
+                <p className="font-black text-white mb-1">🏃 Deportistas en el sistema (primeros 5 — verifica que tengan código):</p>
+                <div className="overflow-x-auto rounded border border-[#4A5568]">
                   <table className="text-[9px] font-mono border-collapse w-full">
                     <thead>
-                      <tr className="bg-amber-200">
+                      <tr className="bg-[#2A3342]">
                         {['NOMBRE','CÓDIGO detectado','COLUMNAS (muestra)'].map(h => (
-                          <th key={h} className="px-2 py-1 border border-amber-300 text-left">{h}</th>
+                          <th key={h} className="px-2 py-1 border border-[#4A5568] text-left">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {diagnostico.muestraDeportistasSistema.map((d, i) => (
-                        <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-amber-50'}>
-                          <td className="px-2 py-1 border border-amber-100 font-bold text-gray-800 whitespace-nowrap">{d.nombre}</td>
-                          <td className={`px-2 py-1 border border-amber-100 font-bold whitespace-nowrap ${d.codClave ? 'text-blue-700' : 'text-red-500'}`}>{d.codClave || '⚠ VACÍO'}</td>
-                          <td className="px-2 py-1 border border-amber-100 text-gray-600 max-w-[200px] truncate">{d.todasCols}</td>
+                        <tr key={i} className={i % 2 === 0 ? 'bg-[#3C4759]' : 'bg-[#36404F]'}>
+                          <td className="px-2 py-1 border border-[#4A5568] font-bold text-white whitespace-nowrap">{d.nombre}</td>
+                          <td className={`px-2 py-1 border border-[#4A5568] font-bold whitespace-nowrap ${d.codClave ? 'text-blue-200' : 'text-[#C0504D]'}`}>{d.codClave || '⚠ VACÍO'}</td>
+                          <td className="px-2 py-1 border border-[#4A5568] text-[#C9D2DE] max-w-[200px] truncate">{d.todasCols}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 {diagnostico.muestraDeportistasSistema.every(d => !d.codClave) && (
-                  <p className="text-[10px] text-red-600 font-bold mt-1">⚠ TODOS LOS CÓDIGOS ESTÁN VACÍOS — el matching falla. Verifica que la Vista General tenga columna &quot;CÓDIGO&quot;.</p>
+                  <p className="text-[10px] text-[#C0504D] font-bold mt-1">⚠ TODOS LOS CÓDIGOS ESTÁN VACÍOS — el matching falla. Verifica que la Vista General tenga columna &quot;CÓDIGO&quot;.</p>
                 )}
               </div>
             )}
@@ -728,28 +728,28 @@ export default function LibroContablePage() {
 
         {/* RESULTADO */}
         {resultados && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-            <h3 className="font-black text-[#1e3a8a] text-sm flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-500" />
+          <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-5 space-y-4">
+            <h3 className="font-black text-white text-sm flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-[#5BE39B]" />
               Resultado de la importación
             </h3>
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-                <p className="text-green-700 font-black text-2xl">{okCount}</p>
-                <p className="text-green-600 text-[10px] font-semibold uppercase tracking-wide">Pagos cargados</p>
+              <div className="bg-[#2B3547] border border-[#00B050] rounded-xl p-3 text-center">
+                <p className="text-[#5BE39B] font-black text-2xl">{okCount}</p>
+                <p className="text-[#5BE39B] text-[10px] font-semibold uppercase tracking-wide">Pagos cargados</p>
               </div>
-              <div className={cn('border rounded-xl p-3 text-center', noEncontrado > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100')}>
-                <p className={cn('font-black text-2xl', noEncontrado > 0 ? 'text-red-600' : 'text-gray-400')}>{noEncontrado}</p>
-                <p className={cn('text-[10px] font-semibold uppercase tracking-wide', noEncontrado > 0 ? 'text-red-500' : 'text-gray-400')}>Código no encontrado</p>
+              <div className={cn('border rounded-xl p-3 text-center', noEncontrado > 0 ? 'bg-[#2B3547] border-[#C0504D]' : 'bg-[#2B3547] border-[#4A5568]')}>
+                <p className={cn('font-black text-2xl', noEncontrado > 0 ? 'text-[#C0504D]' : 'text-[#C9D2DE]')}>{noEncontrado}</p>
+                <p className={cn('text-[10px] font-semibold uppercase tracking-wide', noEncontrado > 0 ? 'text-[#C0504D]' : 'text-[#C9D2DE]')}>Código no encontrado</p>
               </div>
-              <div className={cn('border rounded-xl p-3 text-center', mesInvalido > 0 ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-100')}>
-                <p className={cn('font-black text-2xl', mesInvalido > 0 ? 'text-orange-600' : 'text-gray-400')}>{mesInvalido}</p>
-                <p className={cn('text-[10px] font-semibold uppercase tracking-wide', mesInvalido > 0 ? 'text-orange-500' : 'text-gray-400')}>Mes ignorado</p>
+              <div className={cn('border rounded-xl p-3 text-center', mesInvalido > 0 ? 'bg-[#2B3547] border-[#E0A33A]' : 'bg-[#2B3547] border-[#4A5568]')}>
+                <p className={cn('font-black text-2xl', mesInvalido > 0 ? 'text-[#E0A33A]' : 'text-[#C9D2DE]')}>{mesInvalido}</p>
+                <p className={cn('text-[10px] font-semibold uppercase tracking-wide', mesInvalido > 0 ? 'text-[#E0A33A]' : 'text-[#C9D2DE]')}>Mes ignorado</p>
               </div>
             </div>
 
-            <div className="rounded-xl overflow-hidden border border-gray-100 max-h-72 overflow-y-auto">
-              <table className="w-full text-xs border-collapse">
+            <div className="rounded-xl overflow-hidden border border-[#4A5568] max-h-72 overflow-y-auto">
+              <table className="w-full text-xs border-collapse text-white">
                 <thead>
                   <tr>
                     {['CÓDIGO','DEPORTISTA','DETALLE','ESTADO'].map(h => (
@@ -761,9 +761,9 @@ export default function LibroContablePage() {
                 <tbody>
                   {resultados.map((r, i) => (
                     <tr key={i}
-                      style={{ background: i % 2 === 0 ? '#f0f7ff' : '#e8f5ff', borderBottom: BW }}>
+                      style={{ background: i % 2 === 0 ? '#3C4759' : '#36404F', borderBottom: BW }}>
                       <td className="px-3 py-2 font-mono text-[10px]"
-                        style={{ color: '#1d4ed8', fontWeight: 700, borderRight: BW }}>{r.codigo}</td>
+                        style={{ color: '#FFFFFF', fontWeight: 700, borderRight: BW }}>{r.codigo}</td>
                       <td className="px-3 py-2" style={{ borderRight: BW }}>{r.nombre}</td>
                       <td className="px-3 py-2 font-mono text-[10px]" style={{ borderRight: BW }}>{r.detalle}</td>
                       <td className="px-3 py-2">
@@ -783,31 +783,31 @@ export default function LibroContablePage() {
         )}
 
         {/* ── VER RESUMEN DE PAGOS GUARDADOS ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
           <button
             onClick={() => { if (!resumen) { cargarResumen(); } else { setResumen(null); } }}
             disabled={cargandoRes}
-            className="w-full flex items-center justify-between gap-2 px-5 py-4 hover:bg-gray-50 transition"
+            className="w-full flex items-center justify-between gap-2 px-5 py-4 hover:bg-[#2B3547] transition"
           >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                <BookOpen className="w-5 h-5 text-blue-600" />
+              <div className="w-9 h-9 bg-[#2B3547] rounded-xl flex items-center justify-center flex-shrink-0">
+                <BookOpen className="w-5 h-5 text-[#5BE39B]" />
               </div>
               <div className="text-left">
-                <p className="font-black text-[#1e3a8a] text-sm">Ver pagos guardados en el sistema</p>
-                <p className="text-gray-400 text-xs">Todos los pagos del Libro Contable sin ir a cada deportista</p>
+                <p className="font-black text-white text-sm">Ver pagos guardados en el sistema</p>
+                <p className="text-[#C9D2DE] text-xs">Todos los pagos del Libro Contable sin ir a cada deportista</p>
               </div>
             </div>
             <div className="flex-shrink-0">
               {cargandoRes
-                ? <RefreshCw className="w-4 h-4 text-gray-400 animate-spin" />
-                : <span className="text-gray-400 text-sm">{resumen ? '▲' : '▼'}</span>
+                ? <RefreshCw className="w-4 h-4 text-[#C9D2DE] animate-spin" />
+                : <span className="text-[#C9D2DE] text-sm">{resumen ? '▲' : '▼'}</span>
               }
             </div>
           </button>
 
           {resumen && (
-            <div className="border-t border-gray-100 p-4 space-y-3">
+            <div className="border-t border-[#4A5568] p-4 space-y-3">
 
               {/* Buscador */}
               <div className="flex gap-2 items-center">
@@ -815,16 +815,16 @@ export default function LibroContablePage() {
                   value={filtroRes}
                   onChange={e => setFiltroRes(e.target.value)}
                   placeholder="Buscar por código o nombre…"
-                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 text-[#111827]"
+                  className="flex-1 border border-[#4A5568] bg-[#2B3547] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00B050] text-white placeholder:text-white/40"
                 />
-                <div className="text-right text-xs font-black text-gray-400 whitespace-nowrap">
+                <div className="text-right text-xs font-black text-[#C9D2DE] whitespace-nowrap">
                   {resumen.length} deportistas · {resumen.reduce((s, r) => s + r.total, 0)} pagos
                 </div>
               </div>
 
               {/* Tabla */}
-              <div className="rounded-xl overflow-hidden border border-gray-100 max-h-[500px] overflow-y-auto">
-                <table className="w-full text-xs border-collapse">
+              <div className="rounded-xl overflow-hidden border border-[#4A5568] max-h-[500px] overflow-y-auto">
+                <table className="w-full text-xs border-collapse text-white">
                   <thead className="sticky top-0">
                     <tr>
                       {['CÓDIGO','DEPORTISTA','MESES PAGADOS','# PAGOS'].map(h => (
@@ -837,11 +837,11 @@ export default function LibroContablePage() {
                     {resumen
                       .filter(r => !filtroRes || r.codigo.includes(filtroRes) || sinTildes(r.nombre).includes(sinTildes(filtroRes)))
                       .map((r, i) => (
-                        <tr key={r.codigo} style={{ background: i % 2 === 0 ? '#f0f7ff' : '#e8f5ff', borderBottom: BW }}>
-                          <td className="px-3 py-2 font-mono font-bold text-blue-700 text-[11px]" style={{ borderRight: BW }}>{r.codigo}</td>
+                        <tr key={r.codigo} style={{ background: i % 2 === 0 ? '#3C4759' : '#36404F', borderBottom: BW }}>
+                          <td className="px-3 py-2 font-mono font-bold text-white text-[11px]" style={{ borderRight: BW }}>{r.codigo}</td>
                           <td className="px-3 py-2 font-semibold text-[11px]" style={{ borderRight: BW }}>
                             {r.nombre === '—'
-                              ? <span className="text-gray-400 italic text-[10px]">Sin nombre (solo código)</span>
+                              ? <span className="text-[#C9D2DE] italic text-[10px]">Sin nombre (solo código)</span>
                               : r.nombre}
                           </td>
                           <td className="px-3 py-2 text-[10px]" style={{ borderRight: BW }}>
@@ -853,7 +853,7 @@ export default function LibroContablePage() {
                               ))}
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-center font-black text-green-700">{r.total}</td>
+                          <td className="px-3 py-2 text-center font-black text-[#5BE39B]">{r.total}</td>
                         </tr>
                       ))}
                   </tbody>
@@ -861,7 +861,7 @@ export default function LibroContablePage() {
               </div>
 
               {resumen.filter(r => r.nombre === '—').length > 0 && (
-                <p className="text-[10px] text-amber-600 font-semibold">
+                <p className="text-[10px] text-[#E0A33A] font-semibold">
                   ⚠ {resumen.filter(r => r.nombre === '—').length} código(s) sin nombre: el pago está guardado pero no se vinculó a un deportista del sistema. El Estado de Cuenta los mostrará si el deportista tiene ese código en su columna CÓDIGO.
                 </p>
               )}
@@ -873,7 +873,7 @@ export default function LibroContablePage() {
         {!confirmEliminar && !eliminadoOk && (
           <button
             onClick={() => setConfirmEliminar(true)}
-            className="w-full flex items-center justify-center gap-2 bg-red-50 border border-red-200 text-red-600 rounded-2xl py-3 text-sm font-bold hover:bg-red-100 transition"
+            className="w-full flex items-center justify-center gap-2 bg-[#2B3547] border border-[#C0504D] text-[#C0504D] rounded-2xl py-3 text-sm font-bold hover:bg-[#3C4759] transition"
           >
             <Trash2 className="w-4 h-4" />
             Eliminar todos los pagos importados
@@ -881,9 +881,9 @@ export default function LibroContablePage() {
         )}
 
         {confirmEliminar && (
-          <div className="bg-red-50 border border-red-300 rounded-2xl p-4 space-y-3">
-            <p className="text-red-700 font-black text-sm">¿Seguro que deseas eliminar todos los pagos?</p>
-            <p className="text-red-600 text-xs">Esta acción borrará completamente todos los pagos. Luego podrás subir el libro actualizado desde cero.</p>
+          <div className="bg-[#2B3547] border border-[#C0504D] rounded-2xl p-4 space-y-3">
+            <p className="text-white font-black text-sm">¿Seguro que deseas eliminar todos los pagos?</p>
+            <p className="text-[#C9D2DE] text-xs">Esta acción borrará completamente todos los pagos. Luego podrás subir el libro actualizado desde cero.</p>
             <div className="flex gap-2">
               <button
                 onClick={handleEliminar}
@@ -894,7 +894,7 @@ export default function LibroContablePage() {
               </button>
               <button
                 onClick={() => setConfirmEliminar(false)}
-                className="flex-1 bg-white border border-gray-200 text-gray-600 rounded-xl py-2 text-sm font-bold hover:bg-gray-50 transition"
+                className="flex-1 bg-[#3C4759] border border-[#4A5568] text-white rounded-xl py-2 text-sm font-bold hover:bg-[#2B3547] transition"
               >
                 Cancelar
               </button>
@@ -903,9 +903,9 @@ export default function LibroContablePage() {
         )}
 
         {eliminadoOk && (
-          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-            <p className="text-green-700 font-bold text-sm">Pagos eliminados. Ya puedes subir el libro contable actualizado desde cero.</p>
+          <div className="bg-[#2B3547] border border-[#00B050] rounded-2xl p-4 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-[#5BE39B] flex-shrink-0" />
+            <p className="text-[#5BE39B] font-bold text-sm">Pagos eliminados. Ya puedes subir el libro contable actualizado desde cero.</p>
           </div>
         )}
 
