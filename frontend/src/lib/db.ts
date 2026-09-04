@@ -3696,6 +3696,48 @@ function mapDia(r: any): MicrocicloDia {
 }
 
 /** Lista de microciclos (cabeceras), opcionalmente de un solo proyecto. */
+/* ── EL OBJETIVO SE ESCRIBE POR DÍA, NO EN LA CABECERA ──────────────────────
+   (dirección, 04/09/2026 — «ese aviso no es válido, no sale de nada; la gente
+    sí tiene objetivo, que ese aviso salga si realmente no hay objetivo»)
+
+   Comprobado contra la base: de los 91 microciclos CERRADOS, NINGUNO tiene
+   escrito `objetivo_general`. La casilla existe en la tabla pero el formador
+   nunca la ve: en su pantalla el objetivo se escribe DÍA POR DÍA, y ahí sí
+   hay 88 días con objetivo escrito.
+
+   O sea que el cuadro de Control Total estaba mirando la casilla equivocada y
+   por eso decía «sin objetivo escrito» hasta en las semanas mejor trabajadas.
+
+   Esta función trae, de una sola pasada, el primer objetivo escrito de cada
+   semana, para poder mostrarlo en el cuadro. Es liviana: solo dos columnas. */
+export async function getObjetivosPorMicrociclo(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  try {
+    for (let desde = 0; desde < 20000; desde += 1000) {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/microciclo_dias`
+        + `?select=microciclo_id,dia_semana,objetivo_dia`
+        + `&order=microciclo_id.asc,dia_semana.asc&offset=${desde}&limit=1000`,
+        { headers: HDR_MC() },
+      );
+      if (!res.ok) break;
+      const filas = await res.json();
+      if (!Array.isArray(filas) || filas.length === 0) break;
+      filas.forEach((r: any) => {
+        const id = String(r.microciclo_id ?? '');
+        const t  = String(r.objetivo_dia ?? '').trim();
+        if (!id || !t) return;
+        if (!out[id]) out[id] = t;      // el primer día que tenga algo escrito
+      });
+      if (filas.length < 1000) break;
+    }
+  } catch {
+    /* Sin señal se queda vacío: el cuadro sigue funcionando, solo que sin
+       mostrar el objetivo. Nunca se cae por esto. */
+  }
+  return out;
+}
+
 export async function getMicrociclos(proyecto?: string): Promise<Microciclo[]> {
   const filtro = proyecto ? `&proyecto=eq.${encodeURIComponent(proyecto)}` : '';
   try {
@@ -3930,6 +3972,82 @@ export async function saveHorariosPorDia(v: HorariosPorDia): Promise<boolean> {
       method: 'POST',
       headers: { ...HDR_MC(), Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify({ id: ID_HORARIOS_DIA, data: v, updated_at: new Date().toISOString() }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   POST PARTIDOS QUE HAY QUE CORREGIR
+   (dirección, 04/09/2026 — «que el admón, al revisar el juego y ver que hay
+    dudas en la info, pueda cambiar el estado de TERMINADO por una opción
+    llamada CORREGIR; que el profe lo vea en su banco de post partidos y vea
+    por qué debe corregir; que al admón, al cambiar a corregir, le salga una
+    casilla para anotar la observación, la que el profe leerá»)
+
+   CÓMO FUNCIONA
+     1. El admón abre un partido TERMINADO, ve algo raro y le da CORREGIR.
+        Escribe qué está mal.
+     2. El partido pasa a POR CORREGIR y se DESTRABA, para que el formador
+        pueda escribir: si no, no podría corregir nada.
+     3. El formador lo ve en su banco en rojo, con la observación en letras,
+        y arregla lo que se le pidió.
+     4. Cuando termina, el partido SIGUE en POR CORREGIR. El formador no lo
+        puede cerrar: eso lo decidió la dirección — «queda por corregir hasta
+        que el admón lo ponga terminado, solo el admón».
+     5. El admón lo revisa y le da DAR POR TERMINADO. Ahí se borra la
+        observación y el partido vuelve a TERMINADO, limpio.
+
+   DÓNDE SE GUARDA. En `config_cobro`, el mismo cajón de las configuraciones
+   —el de los horarios por día—. No hubo que tocar la tabla de las planillas
+   ni crear nada nuevo en la base: son cuatro renglones de texto por partido y
+   así no se corre ningún riesgo con la información de los partidos, que es lo
+   que más cuidado merece.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export interface CorreccionPP {
+  /** Lo que el admón escribió: qué hay que corregir. */
+  texto: string;
+  /** Quién lo pidió, para que el formador sepa con quién hablar. */
+  quien: string;
+  /** Cuándo se pidió (ISO). */
+  cuando: string;
+}
+
+/** Un partido se identifica igual que su planilla: torneo + # FECHA. */
+export function clavePospartido(torneoNum: string, jornada: string): string {
+  return `${String(torneoNum ?? '').trim()}|${String(jornada ?? '').trim().toUpperCase()}`;
+}
+
+const ID_CORRECCIONES_PP = 'pospartido_correcciones';
+
+export async function getCorreccionesPospartido(): Promise<Record<string, CorreccionPP>> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/config_cobro?id=eq.${ID_CORRECCIONES_PP}&select=data`,
+      { headers: HDR_MC(), cache: 'no-store' },
+    );
+    if (!res.ok) return {};
+    const d = await res.json();
+    const data = Array.isArray(d) ? d[0]?.data : null;
+    return (data && typeof data === 'object') ? (data as Record<string, CorreccionPP>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Guarda el mapa completo, igual que los horarios: es poquito texto y así no
+ *  se pierde lo de otro partido por una escritura a medias. */
+export async function saveCorreccionesPospartido(
+  v: Record<string, CorreccionPP>,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/config_cobro`, {
+      method: 'POST',
+      headers: { ...HDR_MC(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ id: ID_CORRECCIONES_PP, data: v, updated_at: new Date().toISOString() }),
     });
     return res.ok;
   } catch {

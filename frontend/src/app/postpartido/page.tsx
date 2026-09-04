@@ -35,7 +35,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, AlertTriangle, Loader2, ChevronDown, FileDown, Save, Check, Trash2,
-  Archive, X, Zap, GripVertical, Users,
+  Archive, X, Zap, GripVertical, Users, Pencil,
 } from 'lucide-react';
 import { getCuadro, limpiar, type FilaTorneo } from '@/lib/torneos';
 import { esSuperAdmin, esAccesoTotal, esProfesor } from '@/lib/permisos';
@@ -46,7 +46,8 @@ import {
   getBanco, etiquetaFecha, numeroDeFecha,
   type PlanillaGuardada, type FichaBanco,
 } from '@/lib/pospartido';
-import { getDeportistas } from '@/lib/db';
+import { getDeportistas, getCorreccionesPospartido, saveCorreccionesPospartido,
+         clavePospartido, type CorreccionPP } from '@/lib/db';
 import type { Deportista } from '@/lib/db';
 
 /* ── Colores oficiales ───────────────────────────────────────────────────── */
@@ -1688,6 +1689,86 @@ export default function CrearPospartidoPage() {
     setEsAdmonPrincipal(esSuperAdmin());
   }, []);
 
+  /* ── PARTIDOS MANDADOS A CORREGIR ────────────────────────────────────────
+     (dirección, 04/09/2026 — ver el bloque grande en db.ts)
+
+     `correcciones` es el mapa de partidos con una observación pendiente:
+     "torneo|# FECHA" → { texto, quien, cuando }. Mientras un partido esté
+     ahí, va en ROJO como POR CORREGIR y el formador puede escribir en él,
+     pero NO puede cerrarlo: eso lo hace únicamente la dirección. */
+  const [correcciones, setCorrecciones] = useState<Record<string, CorreccionPP>>({});
+  const [pidiendoCorreccion, setPidiendoCorreccion] = useState<FichaBanco | null>(null);
+  const [textoCorreccion, setTextoCorreccion] = useState('');
+  const [guardandoCorr, setGuardandoCorr] = useState(false);
+
+  useEffect(() => { getCorreccionesPospartido().then(setCorrecciones).catch(() => {}); }, []);
+
+  /** La observación de un partido, si la tiene. */
+  const correccionDe = useCallback(
+    (torneoNum: string, jornada: string): CorreccionPP | null =>
+      correcciones[clavePospartido(torneoNum, jornada)] ?? null,
+    [correcciones],
+  );
+
+  /** El partido que está abierto arriba, ¿está mandado a corregir? */
+  const miCorreccion = correccionDe(numTorneo, jornada);
+
+  /** ADMÓN: manda un partido a corregir con su observación. */
+  async function mandarACorregir() {
+    const f = pidiendoCorreccion;
+    const texto = textoCorreccion.trim();
+    if (!f || !texto) return;
+    setGuardandoCorr(true);
+    try {
+      const clave = clavePospartido(f.torneo_num, f.jornada);
+      const nuevo = {
+        ...correcciones,
+        [clave]: {
+          texto,
+          quien: (nombreProfe || 'Administración').toString(),
+          cuando: new Date().toISOString(),
+        },
+      };
+      const ok = await saveCorreccionesPospartido(nuevo);
+      if (!ok) { setError('No se pudo guardar la observación. Inténtalo otra vez.'); return; }
+      setCorrecciones(nuevo);
+
+      /* SE DESTRABA LA PLANILLA. Si sigue cerrada, el formador ve el aviso
+         pero no puede arreglar nada — y eso sería peor que no avisarle. */
+      try {
+        const p = await getPlanilla(f.torneo_num, f.jornada);
+        if (p) await guardarPlanilla({ ...p, definitivo: false } as any);
+      } catch { /* si no se pudo destrabar, la observación igual queda */ }
+
+      setPidiendoCorreccion(null);
+      setTextoCorreccion('');
+      refrescarBanco();
+    } finally {
+      setGuardandoCorr(false);
+    }
+  }
+
+  /** ADMÓN: da por bueno lo corregido y el partido vuelve a TERMINADO. */
+  async function darPorTerminado(f: FichaBanco) {
+    const c = correccionDe(f.torneo_num, f.jornada);
+    if (!confirm(
+      `¿Dar por TERMINADO ${etiquetaFecha(f.jornada)} del torneo ${f.torneo_num}?\n\n`
+      + (c ? `Se borra la observación:\n"${c.texto}"\n\n` : '')
+      + 'El partido queda cerrado y el formador ya no lo puede cambiar.'
+    )) return;
+    const clave = clavePospartido(f.torneo_num, f.jornada);
+    const nuevo = { ...correcciones };
+    delete nuevo[clave];
+    const ok = await saveCorreccionesPospartido(nuevo);
+    if (!ok) { setError('No se pudo quitar la observación. Inténtalo otra vez.'); return; }
+    setCorrecciones(nuevo);
+    try {
+      const p = await getPlanilla(f.torneo_num, f.jornada);
+      if (p) await guardarPlanilla({ ...p, definitivo: true } as any);
+    } catch { /* nada */ }
+    refrescarBanco();
+  }
+
   /* ── LA MATRIZ ───────────────────────────────────────────────────────────
      Cuando en # FECHA no hay una fecha escogida, la pantalla está en MATRIZ:
      la lista pelada de los deportistas de este torneo, sin partido de por
@@ -2407,6 +2488,21 @@ export default function CrearPospartidoPage() {
     }
     if (!numTorneo) {
       setError('Primero escribe el número del torneo.');
+      return;
+    }
+    /* ── UN PARTIDO POR CORREGIR SOLO LO CIERRA LA DIRECCIÓN ────────────────
+       (dirección, 04/09/2026 — «queda por corregir hasta que el admón lo
+        ponga terminado; solo el admón»)
+
+       El formador SÍ puede escribir y guardar —para eso se le devolvió—, pero
+       no puede volver a darlo por terminado él mismo. Si pudiera, cerraría lo
+       mismo que estaba mal y la observación se perdería sin que nadie la
+       revisara. */
+    if (cerrar && esProfe && correccionDe(numTorneo, jornada)) {
+      setError(
+        'Este partido está POR CORREGIR. Guarda los cambios con GUARDAR AVANCE: '
+        + 'la dirección lo revisa y es ella la que lo pone en TERMINADO.',
+      );
       return;
     }
     /* La # FECHA es la que le pone nombre al partido en el BANCO. Sin ella no
@@ -3144,7 +3240,12 @@ export default function CrearPospartidoPage() {
          SIN INICIAR · creado desde Programación y todavía sin tocar
          A MEDIAS    · ya tiene marcador, pero no se ha cerrado
          TERMINADO   · el formador lo dio por definitivo                */
-    const estadoDe = (f: any): 'TERMINADO' | 'A MEDIAS' | 'SIN INICIAR' => {
+    /* ── Y UN CUARTO ESTADO: POR CORREGIR (dirección, 04/09/2026) ──────
+       Manda sobre todos los demás. Si la dirección le dejó una observación
+       a un partido, eso es lo único que importa verle hasta que se arregle:
+       no sirve que diga TERMINADO si está mal. */
+    const estadoDe = (f: any): 'POR CORREGIR' | 'TERMINADO' | 'A MEDIAS' | 'SIN INICIAR' => {
+      if (correccionDe(f?.torneo_num ?? '', f?.jornada ?? '')) return 'POR CORREGIR';
       if (f?.definitivo === true) return 'TERMINADO';
       const algo = String(f?.goles_nos ?? '').trim() !== ''
                 || String(f?.goles_ellos ?? '').trim() !== '';
@@ -3598,13 +3699,21 @@ export default function CrearPospartidoPage() {
               <div className="flex flex-col gap-2">
                 {todos.map((f, i) => {
                   const res = comoQuedo(f);
+                  /* La observación de la dirección, si este partido tiene una.
+                     — dirección, 04/09/2026 */
+                  const corrFila = correccionDe(f.torneo_num, f.jornada);
                   return (
-                    <div key={`${f.torneo_num}|${f.jornada}`}
+                    <div key={`${f.torneo_num}|${f.jornada}`} className="flex flex-col">
+                    <div
                       className="rounded-xl flex items-center gap-3 pl-2 pr-2 py-2"
                       style={{
-                        background: CAMPO,
-                        border: `1px solid ${BORDE}`,
-                        boxShadow: res ? `inset 4px 0 0 0 ${res.color}` : undefined,
+                        background: corrFila ? 'rgba(192,80,77,.14)' : CAMPO,
+                        border: `1px solid ${corrFila ? ROJO : BORDE}`,
+                        boxShadow: corrFila
+                          ? `inset 4px 0 0 0 ${ROJO}`
+                          : (res ? `inset 4px 0 0 0 ${res.color}` : undefined),
+                        borderBottomLeftRadius:  corrFila ? 0 : undefined,
+                        borderBottomRightRadius: corrFila ? 0 : undefined,
                       }}>
                       <span className="shrink-0 rounded-lg flex items-center justify-center
                         text-white font-black text-[12.5px]"
@@ -3678,6 +3787,13 @@ export default function CrearPospartidoPage() {
 
                       {(() => {
                         const est = estadoDe(f);
+                        if (est === 'POR CORREGIR') return (
+                          <span className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-[9.5px] font-black"
+                            style={{ background: 'rgba(192,80,77,.20)', border: `1px solid ${ROJO}`, color: '#F0A6A3' }}
+                            title="La dirección dejó una observación: mira el renglón rojo de abajo">
+                            ⚠ POR CORREGIR
+                          </span>
+                        );
                         if (est === 'TERMINADO') return (
                           <span className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-[9.5px] font-black"
                             style={{ background: 'rgba(0,176,80,.16)', border: `1px solid ${VERDE}`, color: '#5BE39B' }}>
@@ -3735,6 +3851,45 @@ export default function CrearPospartidoPage() {
                       </button>
                       )}
 
+                      {/* ── CORREGIR / DAR POR TERMINADO ─────────────────────
+                          (dirección, 04/09/2026)
+
+                          Solo administración. Si el partido está TERMINADO y
+                          algo no cuadra, CORREGIR abre la casilla para escribir
+                          qué está mal; el partido se destraba y le queda al
+                          formador en rojo con la observación.
+
+                          Si ya está POR CORREGIR, el botón cambia a DAR POR
+                          TERMINADO: la dirección revisa lo que arregló el
+                          formador y lo cierra. El formador NO lo puede cerrar
+                          él mismo — así se pidió. */}
+                      {esAdmon && !esProfe && (() => {
+                        const corr = correccionDe(f.torneo_num, f.jornada);
+                        if (corr) return (
+                          <button
+                            onClick={() => void darPorTerminado(f)}
+                            title="Ya quedó bien: cerrar el partido y quitar la observación"
+                            className="shrink-0 rounded-lg flex items-center justify-center gap-1.5 px-2.5
+                              transition hover:brightness-125"
+                            style={{ height: 34, background: VERDE, border: `1px solid ${VERDE}` }}>
+                            <Check className="w-3.5 h-3.5 text-white" />
+                            <span className="text-[10.5px] font-black text-white">DAR POR TERMINADO</span>
+                          </button>
+                        );
+                        if (!f.definitivo) return null;    // todavía no está cerrado: nada que corregir
+                        return (
+                          <button
+                            onClick={() => { setPidiendoCorreccion(f); setTextoCorreccion(''); }}
+                            title="Devolvérselo al formador con una observación"
+                            className="shrink-0 rounded-lg flex items-center justify-center gap-1.5 px-2.5
+                              transition hover:brightness-125"
+                            style={{ height: 34, background: 'transparent', border: `1px solid ${AMBAR}` }}>
+                            <Pencil className="w-3.5 h-3.5" style={{ color: AMBAR }} />
+                            <span className="text-[10.5px] font-black" style={{ color: AMBAR }}>CORREGIR</span>
+                          </button>
+                        );
+                      })()}
+
                       {/* BORRAR: solo administración. El formador no borra partidos.
                           — dirección, 29/08/2026 */}
                       {!esProfe && (
@@ -3760,6 +3915,35 @@ export default function CrearPospartidoPage() {
                         <Trash2 className="w-3.5 h-3.5" style={{ color: ROJO }} />
                       </button>
                       )}
+                    </div>
+
+                    {/* ── LO QUE HAY QUE CORREGIR, EN LETRAS ─────────────────
+                        (dirección, 04/09/2026 — «que el profe lo vea en su
+                         banco y vea por qué debe corregir»)
+
+                        Pegado debajo del partido, no en una ventana aparte: el
+                        formador tiene que poder leerlo mientras mira el
+                        renglón, sin abrir nada. */}
+                    {corrFila && (
+                      <div className="rounded-b-xl px-3 py-2"
+                        style={{
+                          background: 'rgba(192,80,77,.20)',
+                          borderLeft: `4px solid ${ROJO}`,
+                          borderRight: `1px solid ${ROJO}`,
+                          borderBottom: `1px solid ${ROJO}`,
+                        }}>
+                        <p className="text-[11.5px] font-black leading-snug" style={{ color: '#F0A6A3' }}>
+                          ⚠ HAY QUE CORREGIR:{' '}
+                          <span className="font-semibold text-white">{corrFila.texto}</span>
+                        </p>
+                        <p className="text-[10px] font-semibold mt-1" style={{ color: '#F0A6A3', opacity: .75 }}>
+                          {esProfe
+                            ? 'Ábrelo, arregla lo que dice y guarda. La dirección lo revisa y lo cierra ella misma.'
+                            : 'El formador lo está corrigiendo. Cuando quede bien, oprime DAR POR TERMINADO.'}
+                          {corrFila.cuando ? ` · ${String(corrFila.cuando).slice(0, 10)}` : ''}
+                        </p>
+                      </div>
+                    )}
                     </div>
                   );
                 })}
@@ -5355,6 +5539,74 @@ export default function CrearPospartidoPage() {
         )}
 
       </main>
+
+      {/* ══ LA CASILLA PARA ANOTAR QUÉ HAY QUE CORREGIR ══════════════════════
+          (dirección, 04/09/2026 — «el admón, cuando cambie a corregir, que le
+           salga casilla para anotar la observación, la que el profe leerá»)
+
+          Se pide obligatoriamente: devolverle un partido a un formador sin
+          decirle qué está mal no sirve de nada — se queda mirando el rojo sin
+          saber qué tocar. */}
+      {pidiendoCorreccion && (
+        <div className="fixed inset-0 z-[95] bg-black/70 flex items-center justify-center p-4"
+             onClick={() => !guardandoCorr && setPidiendoCorreccion(null)}>
+          <div className="rounded-2xl w-full max-w-[460px] overflow-hidden shadow-2xl"
+               style={{ background: PANEL, border: `1px solid ${BORDE}` }}
+               onClick={e => e.stopPropagation()}>
+
+            <div className="px-4 py-3" style={{ background: AMBAR }}>
+              <p className="font-black text-[15px] leading-tight" style={{ color: CAMPO }}>
+                DEVOLVER PARA CORREGIR
+              </p>
+              <p className="text-[11.5px] font-semibold mt-0.5" style={{ color: CAMPO }}>
+                {etiquetaFecha(pidiendoCorreccion.jornada)} · {nombreDeTorneoNum(pidiendoCorreccion.torneo_num)}
+                {pidiendoCorreccion.rival ? ` · vs ${pidiendoCorreccion.rival.toUpperCase()}` : ''}
+              </p>
+            </div>
+
+            <div className="p-4">
+              <label className="block text-[10px] font-black uppercase tracking-widest mb-2"
+                     style={{ color: GRIS }}>
+                ¿Qué debe corregir el formador?
+              </label>
+              <textarea
+                value={textoCorreccion}
+                onChange={e => setTextoCorreccion(e.target.value)}
+                rows={4}
+                autoFocus
+                placeholder="Ej: Faltan los minutos de los suplentes y el resumen del juego está en blanco."
+                className="w-full rounded-xl px-3 py-2.5 text-white text-[13px] outline-none resize-none
+                           placeholder:text-white/35"
+                style={{ background: CAMPO, border: `1px solid ${BORDE}` }} />
+
+              <p className="text-[11px] font-semibold leading-snug mt-2.5" style={{ color: GRIS }}>
+                Al guardar, el partido se destraba y le queda al formador en ROJO,
+                con este texto, en su banco. Él corrige y guarda; <b className="text-white">cerrarlo
+                otra vez lo haces tú</b>, con DAR POR TERMINADO.
+              </p>
+
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => setPidiendoCorreccion(null)}
+                  disabled={guardandoCorr}
+                  className="flex-1 rounded-xl py-2.5 text-white text-[12px] font-black
+                             transition hover:brightness-125 disabled:opacity-60"
+                  style={{ background: CAMPO, border: `1px solid ${BORDE}` }}>
+                  CANCELAR
+                </button>
+                <button
+                  onClick={() => void mandarACorregir()}
+                  disabled={guardandoCorr || !textoCorreccion.trim()}
+                  className="flex-1 rounded-xl py-2.5 text-white text-[12px] font-black
+                             transition hover:brightness-125 disabled:opacity-50"
+                  style={{ background: ROJO, border: `1px solid ${ROJO}` }}>
+                  {guardandoCorr ? 'GUARDANDO…' : 'MANDAR A CORREGIR'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

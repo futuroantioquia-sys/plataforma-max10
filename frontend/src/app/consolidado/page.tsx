@@ -37,7 +37,7 @@ import {
   ArrowLeft, RefreshCw, Users, CalendarCheck, ClipboardList,
   CalendarDays, AlertTriangle, ChevronRight, Loader2, Search, X, ShieldCheck, Trophy,
 } from 'lucide-react';
-import { getDeportistasPorProyecto, getProfes, getEvaluacionesResumen, getMicrociclos, getMicrociclo, getResumenAsistencia, getFichasProyecto } from '@/lib/db';
+import { getDeportistasPorProyecto, getProfes, getEvaluacionesResumen, getMicrociclos, getMicrociclo, getObjetivosPorMicrociclo, getResumenAsistencia, getFichasProyecto } from '@/lib/db';
 import { VistaPreliminar } from '@/components/VistaPreliminarMicrociclo';
 import { getBanco, type FichaBanco } from '@/lib/pospartido';
 import type { Deportista, Profe, EvaluacionResumen, Microciclo, ResumenAsistenciaDia, InfoProyecto } from '@/lib/db';
@@ -236,6 +236,9 @@ export default function ConsolidadoPage() {
   const [profes, setProfes] = useState<Profe[]>([]);
   const [evals, setEvals]   = useState<EvaluacionResumen[]>([]);
   const [micros, setMicros] = useState<Microciclo[]>([]);
+  /* El objetivo que el formador escribió día por día, por semana.
+     Ver getObjetivosPorMicrociclo en db.ts. — dirección, 04/09/2026 */
+  const [objetivos, setObjetivos] = useState<Record<string, string>>({});
   /* Los días que entrena cada proyecto. Sirven para saber si una semana sin
      microciclo es un descuido o es que ese grupo no entrena. — 02/09/2026 */
   const [fichas, setFichas] = useState<Record<string, InfoProyecto>>({});
@@ -300,6 +303,7 @@ export default function ConsolidadoPage() {
     /* Y estos dos por detrás, sin detener nada. */
     getEvaluacionesResumen().then(setEvals).catch(() => {});
     getMicrociclos().then(setMicros).catch(() => {});
+    getObjetivosPorMicrociclo().then(setObjetivos).catch(() => {});
     getFichasProyecto().then(setFichas).catch(() => {});
   }, []);
 
@@ -527,17 +531,28 @@ export default function ConsolidadoPage() {
      de lunes que van de agosto hasta la semana pasada; luego, por grupo, se
      mira cuáles de esos lunes no tienen microciclo. */
   const lunesEsperados = useMemo(() => {
+    /* NO SE PASA DEL MES QUE SE ESTÁ CALIFICANDO (dirección, 04/09/2026).
+       Antes la cuenta iba desde agosto hasta la semana pasada, sin importar
+       qué mes estuviera escogido arriba. Estando en septiembre y revisando
+       AGOSTO, las semanas de septiembre que el profe todavía no ha abierto se
+       le sumaban al agosto — se le cobraba en un mes lo que le falta en otro.
+       Ahora el corte es el último día del mes escogido. */
+    const [anioSel, mesSel] = mes.split('-').map(Number);
+    const finDelMes = new Date(anioSel, (mesSel || 1), 0);   // último día del mes
+    const topeMes = `${finDelMes.getFullYear()}-${String(finDelMes.getMonth() + 1).padStart(2, '0')}-${String(finDelMes.getDate()).padStart(2, '0')}`;
+
     const out: string[] = [];
     const d = new Date(anioVista, 7, 1);                 // 1 de agosto
     while (d.getDay() !== 1) d.setDate(d.getDate() + 1); // primer lunes
     for (let i = 0; i < 60; i++) {
       const iso = lunesDe(d);
       if (iso >= lunesDeEstaSemana) break;               // la de hoy no se cobra
+      if (iso > topeMes) break;                          // ni el mes que sigue
       out.push(iso);
       d.setDate(d.getDate() + 7);
     }
     return out;
-  }, [anioVista, lunesDeEstaSemana]);
+  }, [anioVista, lunesDeEstaSemana, mes]);
 
   /* ── EL CUADRO: una fila por grupo ─────────────────────────────────────── */
   const filas = useMemo<FilaGrupo[]>(() => {
@@ -1216,7 +1231,9 @@ export default function ConsolidadoPage() {
                                   <span className="font-black" style={{ width: 52, color: VERDECL }}>#{x.mc.numero || '—'}</span>
                                   <span style={{ width: 96, color: GRIS }}>{ini || '—'}</span>
                                   <span className="flex-1 truncate text-white/80">
-                                    {x.mc.objetivo_general || <span style={{ color: GRIS }}>sin objetivo escrito</span>}
+                                    {/* EL OBJETIVO SE ESCRIBE POR DÍA — 04/09/2026 */}
+                                    {objetivos[x.mc.id] || x.mc.objetivo_general
+                                      || <span style={{ color: GRIS }}>sin objetivo escrito</span>}
                                   </span>
                                   <span className="text-[9.5px] font-black rounded px-2 py-1"
                                     style={{ background: `${col}26`, border: `1px solid ${col}`, color: col }}>
@@ -1385,10 +1402,28 @@ export default function ConsolidadoPage() {
                             {f.semanasPendientes} {f.semanasPendientes === 1 ? 'PENDIENTE' : 'PENDIENTES'}
                           </span>
                         )}
-                        <span className="text-[10.5px] font-black rounded px-2 py-1"
-                          style={{ background: f.semanaAlDia ? VERDE : AMBAR, color: f.semanaAlDia ? '#fff' : CAMPO }}>
-                          {f.semanaAlDia ? 'ESTA SEMANA LISTA' : 'FALTA ESTA SEMANA'}
-                        </span>
+                        {/* ── «ESTA SEMANA» SOLO SI SE ESTÁ MIRANDO ESTE MES ──
+                            (dirección, 04/09/2026 — «no puede salir pendiente
+                             esta semana si estamos evaluando solo agosto en el
+                             desplegable y estamos a septiembre»)
+
+                            Y con toda la razón: esta pastilla habla de la
+                            semana de HOY, que es de septiembre. Puesta encima
+                            de un cuadro de AGOSTO decía una mentira —le cobraba
+                            al formador una semana que ni siquiera pertenece al
+                            mes que se está calificando— y dejaba en naranja a
+                            gente que tenía agosto completo.
+
+                            Ahora solo sale cuando el mes escogido es el mes en
+                            curso. Al revisar un mes ya cerrado desaparece: ahí
+                            lo que manda son SIN ABRIR y PENDIENTES, que sí son
+                            de ese mes. */}
+                        {mes === mesActual() && (
+                          <span className="text-[10.5px] font-black rounded px-2 py-1"
+                            style={{ background: f.semanaAlDia ? VERDE : AMBAR, color: f.semanaAlDia ? '#fff' : CAMPO }}>
+                            {f.semanaAlDia ? 'ESTA SEMANA LISTA' : 'FALTA ESTA SEMANA'}
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -1418,7 +1453,7 @@ export default function ConsolidadoPage() {
                       {pestana === 'microciclos' ? (
                         <DetalleMicrociclos lista={microsPorProyecto.get(f.proyecto) ?? []}
                           lunesHoy={lunesDeEstaSemana} sinAbrir={f.semanasSinAbrir}
-                          onVer={verMicrociclo} abriendo={abriendoMc} />
+                          onVer={verMicrociclo} abriendo={abriendoMc} objetivos={objetivos} />
                       ) : (
                         <DetalleDeportistas filas={detalleDe(f.proyecto)} pestana={pestana}
                           meses={mesesTemporada(anioVista)} cargando={cargandoDeps} />
@@ -1552,9 +1587,11 @@ function DetalleDeportistas({ filas, pestana, meses, cargando }: {
    número, para que la dirección sepa qué le están debiendo y a quién
    cobrárselo — pero se leen y se corrigen en la pantalla del formador. */
 function DetalleMicrociclos(
-  { lista, lunesHoy, sinAbrir = [], onVer, abriendo = '' }:
+  { lista, lunesHoy, sinAbrir = [], onVer, abriendo = '', objetivos = {} }:
   { lista: Microciclo[]; lunesHoy: string; sinAbrir?: string[];
-    onVer?: (mc: Microciclo) => void; abriendo?: string }
+    onVer?: (mc: Microciclo) => void; abriendo?: string;
+    /* El objetivo escrito día por día, por semana. — 04/09/2026 */
+    objetivos?: Record<string, string> }
 ) {
   const cerradas = lista.filter(mc => mc.estado === 'cerrado');
   const abiertas = lista.filter(mc => mc.estado !== 'cerrado');
@@ -1649,7 +1686,13 @@ function DetalleMicrociclos(
               <span className="font-black" style={{ width: 56, color: esta ? VERDECL : '#fff' }}>#{mc.numero || '—'}</span>
               <span style={{ width: 106, color: GRIS }}>{ini || '—'}</span>
               <span style={{ width: 106, color: GRIS }}>{String(mc.fecha_fin ?? '').slice(0, 10) || '—'}</span>
-              <span className="flex-1 text-white/85 truncate">{mc.objetivo_general || <span style={{ color: GRIS }}>sin objetivo escrito</span>}</span>
+              <span className="flex-1 text-white/85 truncate">
+                {/* Lo que el formador escribió como objetivo del día. Antes se
+                    miraba `objetivo_general`, una casilla que él nunca ve, y
+                    por eso decía «sin objetivo» siempre. — 04/09/2026 */}
+                {objetivos[mc.id] || mc.objetivo_general
+                  || <span style={{ color: GRIS }}>sin objetivo escrito</span>}
+              </span>
               <span className="font-black" style={{ width: 78, textAlign: 'center', color: (mc.dias?.length ?? 0) ? VERDECL : GRIS }}>
                 {mc.dias?.length ?? '—'}
               </span>

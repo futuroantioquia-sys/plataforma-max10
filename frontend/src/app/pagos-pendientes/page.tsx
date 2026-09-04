@@ -176,8 +176,79 @@ export default function PagosPendientesPage() {
 
      El orden y el día son de la pantalla, no de la nube: no cambian ni mueven
      nada, solo acomodan lo que se está viendo. */
-  const [orden, setOrden] = useState<'dia' | 'codigo'>('dia');
-  const [dia,   setDia]   = useState('');
+  /* ── EL DÍA ESCOGIDO NO SE PIERDE AL SALIR Y VOLVER ───────────────────────
+     (dirección, 04/09/2026 — «si voy a estado de cuenta y me devuelvo, que
+      quede en el día filtrado; si no, es muy difícil volver a ver todo»)
+
+     Revisar los soportes de un día es ir y volver: se abre la CUENTA del
+     deportista, se confirma allá, se regresa… y hasta hoy la pantalla volvía
+     con los 70 soportes de todos los días. Tocaba buscar otra vez el día en
+     el calendario, en cada uno. Con veinte soportes eso son veinte veces.
+
+     Ahora el día y el orden quedan anotados en este navegador. Al volver, la
+     pantalla se abre justo donde uno la dejó. Es de la persona y de este
+     computador: no cambia nada de la nube ni le mueve la vista a nadie más. */
+  const LLAVE_VISTA = 'pagos_pendientes_vista_v1';
+  const guardado = (() => {
+    if (typeof window === 'undefined') return null;
+    try { return JSON.parse(localStorage.getItem(LLAVE_VISTA) || 'null'); }
+    catch { return null; }
+  })();
+
+  const [orden, setOrden] = useState<'dia' | 'codigo'>(
+    guardado?.orden === 'codigo' ? 'codigo' : 'dia');
+  const [dia,   setDia]   = useState<string>(
+    typeof guardado?.dia === 'string' ? guardado.dia : '');
+
+  useEffect(() => {
+    try { localStorage.setItem(LLAVE_VISTA, JSON.stringify({ orden, dia })); }
+    catch { /* si el navegador no deja guardar, no pasa nada grave */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orden, dia]);
+
+  /* ── LA SOMBRA ROJA: «POR AQUÍ IBA» ──────────────────────────────────────
+     (dirección, 04/09/2026 — «que al devolverme quede una sombra de toda la
+      fila, puede ser roja clara, para saber dónde voy»)
+
+     Aunque la pantalla ya vuelve al día correcto, uno regresa a una lista de
+     veinte renglones iguales y no sabe en cuál estaba. Al salir hacia la
+     Cuenta o hacia el Libro se anota el renglón; al volver, esa fila queda
+     con un lavado rojo y una franja al lado, y la pantalla se desplaza sola
+     hasta ella. La marca se va con el primer clic en cualquier parte: cumple
+     su trabajo y no estorba. */
+  const LLAVE_ULTIMA = 'pagos_pendientes_ultima_v1';
+  const [ultimaFila, setUltimaFila] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    try { return localStorage.getItem(LLAVE_ULTIMA) || ''; } catch { return ''; }
+  });
+
+  /** Se llama justo antes de salir de la pantalla. */
+  const marcarDondeIba = (idSoporte: string) => {
+    try { localStorage.setItem(LLAVE_ULTIMA, idSoporte); } catch { /* noop */ }
+  };
+
+  /* Al volver: se lleva la vista hasta el renglón marcado. */
+  useEffect(() => {
+    if (!ultimaFila || cargando) return;
+    const t = setTimeout(() => {
+      try {
+        document.getElementById(`sop-${ultimaFila}`)
+          ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } catch { /* noop */ }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [ultimaFila, cargando]);
+
+  /* Con el primer clic en cualquier parte, la marca se apaga. */
+  useEffect(() => {
+    if (!ultimaFila) return;
+    const apagar = () => {
+      setUltimaFila('');
+      try { localStorage.removeItem(LLAVE_ULTIMA); } catch { /* noop */ }
+    };
+    window.addEventListener('pointerdown', apagar, { once: true });
+    return () => window.removeEventListener('pointerdown', apagar);
+  }, [ultimaFila]);
 
   /** El día (aaaa-mm-dd) en que se subió el soporte, en hora de acá. */
   function diaDe(s: SoporteEnriquecido): string {
@@ -391,7 +462,12 @@ export default function PagosPendientesPage() {
                 {vista.map((s) => {
                   const idx = soportes.findIndex(x => x.id === s.id);
                   return (
-                  <tr key={s.id} style={{ background: PANEL }} className="hover:brightness-125 transition">
+                  <tr key={s.id} id={`sop-${s.id}`}
+                      /* LA SOMBRA ROJA DE «POR AQUÍ IBA» — 04/09/2026 */
+                      style={ultimaFila === s.id
+                        ? { background: 'rgba(192,80,77,.30)', boxShadow: `inset 4px 0 0 ${ROJO}` }
+                        : { background: PANEL }}
+                      className="hover:brightness-125 transition">
 
                     {/* Código */}
                     <td className="px-3 py-3 font-black whitespace-nowrap" style={{ color: VERDE }}>
@@ -482,7 +558,7 @@ export default function PagosPendientesPage() {
                           <XCircle className="w-3.5 h-3.5"/>
                         </button>
                         <button
-                          onClick={() => router.push(`/alumnos/${s.depId}/estado-cuenta?readonly=1`)}
+                          onClick={() => { marcarDondeIba(s.id); router.push(`/alumnos/${s.depId}/estado-cuenta?readonly=1`); }}
                           title="Ver cuenta"
                           style={{ background: CAMPO, border: `1px solid ${BORDE}`, minHeight: 34 }}
                           className="flex items-center gap-1 px-2.5 rounded-lg hover:opacity-85 text-white font-semibold text-[11px] transition whitespace-nowrap">
@@ -501,7 +577,7 @@ export default function PagosPendientesPage() {
                             sale una barra VOLVER A PAGOS PENDIENTES para
                             devolverse de una a darle OK. */}
                         <button
-                          onClick={() => router.push(`/contabilidad?codigo=${encodeURIComponent(s.depCodigo || '')}`)}
+                          onClick={() => { marcarDondeIba(s.id); router.push(`/contabilidad?codigo=${encodeURIComponent(s.depCodigo || '')}`); }}
                           disabled={!String(s.depCodigo || '').trim()}
                           title={String(s.depCodigo || '').trim()
                             ? `Ver en el Libro Contable los movimientos del código ${s.depCodigo}`
