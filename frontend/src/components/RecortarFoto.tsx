@@ -33,6 +33,15 @@ const BORDE = '#4A5568';
 const VERDE = '#00B050';
 const GRIS  = '#7C879A';
 
+/* ── EL COLOR DEL RECORTE (dirección, 04/09/2026) ───────────────────────────
+   «El recuadro y el de la mitad, en rojo, que se vea.»
+
+   El blanco se confundía con la camiseta, con un escudo claro o con una pared
+   del fondo, y el marco desaparecía justo encima de las fotos donde más
+   falta hacía. El rojo no se confunde con nada de una cancha, y además es el
+   color con el que todo el mundo asocia «por aquí se corta». */
+const GUIA = '#FF3B30';
+
 /** El tamaño con que se guarda: 3 de ancho por 4 de alto. */
 const SALIDA_ANCHO = 900;
 const SALIDA_ALTO  = 1200;
@@ -280,7 +289,7 @@ export function RecortarFoto({
               position: 'absolute',
               left: MARGEN_X, top: MARGEN_ARRIBA,
               width: BANDA_ANCHO, height: BANDA_ALTO,
-              border: '2px dashed #FFFFFF',
+              border: `2px dashed ${GUIA}`,
               boxShadow: '0 0 0 1px rgba(0,0,0,.55)',
               pointerEvents: 'none',
             }} />
@@ -296,10 +305,10 @@ export function RecortarFoto({
             ].map((e, i) => (
               <div key={`esq${i}`} style={{
                 position: 'absolute', top: e.top, left: e.left, width: 22, height: 22,
-                borderTop:    e.borderTop    ? '4px solid #FFFFFF' : undefined,
-                borderBottom: e.borderBottom ? '4px solid #FFFFFF' : undefined,
-                borderLeft:   e.borderLeft   ? '4px solid #FFFFFF' : undefined,
-                borderRight:  e.borderRight  ? '4px solid #FFFFFF' : undefined,
+                borderTop:    e.borderTop    ? `4px solid ${GUIA}` : undefined,
+                borderBottom: e.borderBottom ? `4px solid ${GUIA}` : undefined,
+                borderLeft:   e.borderLeft   ? `4px solid ${GUIA}` : undefined,
+                borderRight:  e.borderRight  ? `4px solid ${GUIA}` : undefined,
                 pointerEvents: 'none',
               }} />
             ))}
@@ -314,28 +323,21 @@ export function RecortarFoto({
                 los escudos, y una tercera en la mitad solo confunde.
 
                 Parada en el centro hace otra cosa distinta y necesaria:
-                CENTRAR al niño de lado a lado. Uno le pone la nariz encima y
-                el cuerpo queda derecho. Con las tres: cabeza arriba, escudos
-                abajo y nariz al centro, todas las fotos quedan iguales.
+                CENTRAR al niño de lado a lado. Uno le pone la cara encima y el
+                cuerpo queda derecho. Con las tres —cabeza arriba, escudos
+                abajo y la del medio al centro— todas las fotos quedan iguales.
 
-                Casi no se ve, a propósito: es puntería, no un límite. */}
+                SIN LETRERO (dirección, 04/09/2026 — «quita esa palabra nariz
+                que confunde»). La raya sola se entiende: uno centra la cara y
+                ya. Una palabra encima solo hacía dudar de si había que poner
+                la nariz ahí exacta. */}
             <div style={{
               position: 'absolute',
               top: MARGEN_ARRIBA, height: BANDA_ALTO,
               left: MARGEN_X + BANDA_ANCHO / 2,
-              borderLeft: '1px dashed rgba(255,255,255,.28)',
+              borderLeft: `2px dashed ${GUIA}`,
               pointerEvents: 'none',
             }} />
-            <span style={{
-              position: 'absolute',
-              left: MARGEN_X + BANDA_ANCHO / 2 + 4,
-              top: MARGEN_ARRIBA + BANDA_ALTO / 2 - 5,
-              fontSize: 8, fontWeight: 900, letterSpacing: '.08em',
-              color: 'rgba(255,255,255,.45)', textShadow: '0 1px 2px rgba(0,0,0,.8)',
-              pointerEvents: 'none',
-            }}>
-              NARIZ
-            </span>
 
             {/* EL LETRERO DE ARRIBA — la cabeza va tocando esta raya. */}
             <span style={{
