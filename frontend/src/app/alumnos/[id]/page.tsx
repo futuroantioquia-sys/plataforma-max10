@@ -1287,21 +1287,34 @@ export default function PerfilDeportista() {
     <div className="min-h-screen" style={{ background: '#333F50' }}>
 
       {/* Header */}
-      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-lg">
-        <div className="flex items-center gap-3">
+      {/* ── EL ENCABEZADO, AJUSTADO AL CELULAR (dirección, 04/09/2026) ────────
+          Se partía en dos renglones —la flechita arriba y «Volver» debajo— y
+          el logo MAX 10 se salía por la derecha, cortado. Tres arreglos:
+            · En el celular el botón dice solo «Volver» (el nombre largo de la
+              pantalla de la que se viene sale de sm en adelante).
+            · Nada se parte: `whitespace-nowrap` y cada bloque con su
+              `shrink-0`, para que se aprieten los espacios y no las palabras.
+            · El lema «Conecta, Gestiona, Gana» solo sale en pantalla grande:
+              en el celular es lo que empujaba el logo fuera de la pantalla. */}
+      <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-3 sm:px-6 py-3.5 flex items-center justify-between gap-2 sticky top-0 z-20 shadow-lg">
+        <div className="flex items-center min-w-0">
           <button
             onClick={() => router.push(
               volverA.startsWith('/')
                 ? volverA
                 : (proyectoDep ? `/alumnos?proyecto=${encodeURIComponent(proyectoDep)}` : '/alumnos')
             )}
-            className="text-white/80 hover:text-white text-sm font-bold">
-            {volverA === '/cumpleanos' ? '← Volver a Cumpleaños'
-              : volverA.startsWith('/control-informes') ? '← Volver a Control de Informes'
-              : '← Volver'}
+            className="text-white/80 hover:text-white text-sm font-bold whitespace-nowrap shrink-0">
+            ←{' '}
+            <span className="hidden sm:inline">
+              {volverA === '/cumpleanos' ? 'Volver a Cumpleaños'
+                : volverA.startsWith('/control-informes') ? 'Volver a Control de Informes'
+                : 'Volver'}
+            </span>
+            <span className="sm:hidden">Volver</span>
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {esAdmin && editando && (
             <button onClick={() => { setEditando(false); setEdits({ ...dep._columnas }); }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-white/15 text-white hover:bg-white/25 border border-white/25 transition">
@@ -1310,20 +1323,20 @@ export default function PerfilDeportista() {
           )}
           {esAdmin && !editando && (
             <button onClick={eliminar}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-white/15 text-white hover:bg-white/25 border border-white/25 transition">
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-[13px] sm:text-sm font-semibold bg-white/15 text-white hover:bg-white/25 border border-white/25 transition whitespace-nowrap">
               <Trash2 className="w-4 h-4" /> Eliminar
             </button>
           )}
           {esAdmin && (
             <button onClick={() => editando ? guardar() : setEditando(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-white/15 text-white hover:bg-white/25 border border-white/25 transition">
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-[13px] sm:text-sm font-semibold bg-white/15 text-white hover:bg-white/25 border border-white/25 transition whitespace-nowrap">
               {editando ? <><Save className="w-4 h-4" /> Guardar</> : <><Edit3 className="w-4 h-4" /> Editar</>}
             </button>
           )}
-          <div className="flex flex-col items-center border-l border-white/30 pl-3">
+          <div className="flex flex-col items-center border-l border-white/30 pl-2 sm:pl-3 shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/MAX%2010.png" alt="MAX10" className="h-7 object-contain" />
-            <p className="text-white/50 text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
+            <img src="/MAX%2010.png" alt="MAX10" className="h-6 sm:h-7 object-contain" />
+            <p className="hidden sm:block text-white/50 text-[9px] leading-none mt-0.5 tracking-wide">Conecta, Gestiona, Gana</p>
           </div>
         </div>
       </header>
@@ -1456,19 +1469,49 @@ export default function PerfilDeportista() {
               {/* EL LETRERITO QUE EXPLICA CÓMO. Dos palabras, debajo de la
                   foto: sin esto nadie descubre que la foto se toca.
                   — dirección, 04/09/2026 */}
+              {/* EL LETRERO SE PASABA POR DEBAJO DE LOS BOTONES (dirección,
+                  04/09/2026). Los tres círculos van pegados al borde de abajo
+                  de la foto y se salen un poco; con `mt-3` el letrero les
+                  quedaba encima y en el celular se leía «TOCA LA 📷 ⬇ 🗑
+                  MODARLA». Con mt-6 pasa por debajo, limpio. */}
               {foto && (
-                <p className="mt-3 text-center text-[9px] font-black uppercase tracking-wider leading-tight"
+                <p className="mt-6 text-center text-[9px] font-black uppercase tracking-wider leading-tight"
                    style={{ color: 'rgba(91,227,155,0.75)' }}>
                   Toca la foto para acomodarla
                 </p>
               )}
             </div>
 
-            {/* Nombre + filas de datos */}
+            {/* ── NOMBRE, CÓDIGO Y DATOS ───────────────────────────────────
+                EN EL CELULAR ESTO SE ATROPELLABA (dirección, 04/09/2026 —
+                «organizar urgente la forma como el padre ve en un móvil…
+                 todo debe ajustarse a móviles»).
+
+                El renglón de arriba tenía TRES columnas al mismo nivel: foto,
+                datos y el cuadro del CÓDIGO. En un computador sobra ancho,
+                pero en un celular de 360 px la foto se lleva 112, el código
+                otros 76, y a los datos les quedaban unos 120: la pastilla
+                verde («PROGRAMA») ya medía 90, así que el VALOR —Selección,
+                SUB 7B, la fecha— se quedaba sin un solo píxel y no se veía
+                NADA. Y el código, al no caber, se montaba encima del apellido.
+
+                Ahora el código entró DENTRO de esta misma columna, arriba a la
+                derecha, al lado del nombre. Con eso los datos recuperan todo
+                el ancho que antes se llevaba esa tercera columna. */}
             <div className="flex-1 min-w-0 space-y-[5px]">
-              <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide">
-                {partirNombre(dep._nombre).nombres || dep._nombre}
-              </h1>
+              <div className="flex items-start justify-between gap-2">
+                <h1 className="text-white font-black text-base leading-tight uppercase tracking-wide min-w-0 break-words">
+                  {partirNombre(dep._nombre).nombres || dep._nombre}
+                </h1>
+                {codigoVal && (
+                  <div className="flex-shrink-0 text-center">
+                    <p className="text-white/60 text-[8px] font-black tracking-widest uppercase mb-0.5">CÓDIGO</p>
+                    <div className="bg-[#16a34a] text-white font-black text-[15px] sm:text-lg px-2.5 py-1.5 rounded-lg text-center shadow-md leading-none">
+                      {codigoVal}
+                    </div>
+                  </div>
+                )}
+              </div>
               {partirNombre(dep._nombre).apellidos && (
                 /* Un respiro entre el apellido y las pastillas verdes: iban
                    demasiado pegadas y el bloque se leía apretado.
@@ -1485,26 +1528,23 @@ export default function PerfilDeportista() {
                 { label: 'FECHA AFIL.', val: fechaAfilVal },
                 { label: 'MENSUALIDAD', val: mensualidadVal },
               ].filter(r => r.val).map(({ label, val }) => (
-                <div key={label} className="flex items-center gap-2">
-                  <span className="bg-[#16a34a] text-white text-[10px] font-black px-2 py-[3px] rounded-md w-[90px] text-center flex-shrink-0 tracking-wide">
+                /* La pastilla se encoge en el celular (76 px) y vuelve a 90 en
+                   pantalla grande; el valor se queda con lo que sobre, que es
+                   lo que uno viene a leer. — dirección, 04/09/2026 */
+                <div key={label} className="flex items-center gap-2 min-w-0">
+                  <span className="bg-[#16a34a] text-white text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-[3px] rounded-md w-[76px] sm:w-[90px] text-center flex-shrink-0 tracking-wide">
                     {label}
                   </span>
-                  <span className="text-white text-[11px] font-semibold truncate">
+                  <span className="text-white text-[11px] font-semibold truncate flex-1 min-w-0">
                     {val!.toUpperCase()}
                   </span>
                 </div>
               ))}
             </div>
 
-            {/* CÓDIGO — esquina superior derecha */}
-            {codigoVal && (
-              <div className="flex-shrink-0 text-center self-start">
-                <p className="text-white/60 text-[9px] font-black tracking-widest uppercase mb-1">CÓDIGO</p>
-                <div className="bg-[#16a34a] text-white font-black text-lg px-3 py-2 rounded-xl min-w-[60px] text-center shadow-md leading-none">
-                  {codigoVal}
-                </div>
-              </div>
-            )}
+            {/* EL CÓDIGO YA NO VA AQUÍ: se pasó arriba, al lado del nombre,
+                para que en el celular no le robe el ancho a los datos ni se
+                monte encima del apellido. — dirección, 04/09/2026 */}
           </div>
 
           {/* Botones de acceso */}
