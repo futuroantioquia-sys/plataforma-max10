@@ -816,7 +816,7 @@ export default function AfiliacionPage() {
                 onChange={e => setDocumento(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && document.getElementById('inp-codigo')?.focus()}
                 autoFocus
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300 text-[#111827]"
               />
             </div>
             <div>
@@ -830,7 +830,7 @@ export default function AfiliacionPage() {
                 value={codigo}
                 onChange={e => setCodigo(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && buscarAntiguo()}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300 text-[#111827]"
               />
             </div>
             {error && <ErrorBox msg={error} />}
@@ -857,7 +857,7 @@ export default function AfiliacionPage() {
                 onChange={e => setPin(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && validarNuevo()}
                 autoFocus
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-center tracking-[0.5em] font-black focus:outline-none focus:ring-2 focus:ring-[#16a34a] placeholder:text-gray-300 placeholder:tracking-normal placeholder:font-normal"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-center tracking-[0.5em] font-black focus:outline-none focus:ring-2 focus:ring-[#16a34a] placeholder:text-gray-300 placeholder:tracking-normal placeholder:font-normal text-[#111827]"
               />
             </div>
             {error && <ErrorBox msg={error} />}
@@ -905,7 +905,7 @@ export default function AfiliacionPage() {
           depId ? 'bg-blue-100 text-blue-700' : 'bg-[#dbeafe] text-[#1e3a8a]')}>
           {depId ? 'Afiliado 2026' : 'Sin Afiliación 2026'}
         </span>
-        <div className="ml-auto text-right leading-tight border-l border-gray-200 pl-3 flex-shrink-0">
+        <div className="ml-auto text-right leading-tight border-l border-gray-200 pl-3 flex-shrink-0 text-[#111827]">
           <p className="text-[#1e3a8a] font-black text-sm tracking-widest">MAX 10 SPORT</p>
           <p className="text-gray-400 text-[11px]">Conecta, Gestiona, Gana</p>
         </div>
@@ -1054,7 +1054,7 @@ export default function AfiliacionPage() {
                 </label>
                 <input type="text" value={valores['_nombre'] ?? ''}
                   onChange={e => setValores(v => ({ ...v, _nombre: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#16a34a] placeholder:text-gray-300"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#16a34a] placeholder:text-gray-300 text-[#111827]"
                   placeholder="Nombre completo del deportista" />
               </div>
             )}
@@ -1094,7 +1094,7 @@ export default function AfiliacionPage() {
                       <select
                         value={valores[c.key] ?? ''}
                         onChange={e => setValores(v => ({ ...v, [c.key]: e.target.value }))}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white">
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#16a34a] bg-white text-[#111827]">
                         <option value="">— Selecciona —</option>
                         {dropdown.opciones.map(o => (
                           <option key={o.value} value={o.value}>{o.label}</option>
@@ -1110,7 +1110,7 @@ export default function AfiliacionPage() {
                             list={dl.listId}
                             value={valores[c.key] ?? ''}
                             onChange={e => setValores(v => ({ ...v, [c.key]: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#16a34a] placeholder:text-gray-300"
+                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#16a34a] placeholder:text-gray-300 text-[#111827]"
                             placeholder={labelShow} />
                           <datalist id={dl.listId}>
                             {dl.opciones.map(o => <option key={o} value={o} />)}
@@ -1123,7 +1123,7 @@ export default function AfiliacionPage() {
                         value={valores[c.key] ?? ''}
                         onChange={e => setValores(v => ({ ...v, [c.key]: e.target.value }))}
                         rows={3}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#16a34a] resize-none placeholder:text-gray-300"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#16a34a] resize-none placeholder:text-gray-300 text-[#111827]"
                         placeholder={labelShow} />
                     ) : (
                       /* ── Input normal ── */
@@ -1142,7 +1142,7 @@ export default function AfiliacionPage() {
                             if (!depId && /^CODIGO$/i.test(c.key)) validarCodigoUnico(e.target.value);
                           }}
                           className={cn(
-                            'w-full border rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 placeholder:text-gray-300',
+                            'w-full border rounded-xl px-4 py-3 text-[15px] text-[#111827] focus:outline-none focus:ring-2 placeholder:text-gray-300',
                             !depId && /^CODIGO$/i.test(c.key) && codigoError
                               ? 'border-red-400 focus:ring-red-400 bg-red-50'
                               : 'border-gray-200 focus:ring-[#16a34a]'

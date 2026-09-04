@@ -1,0 +1,102 @@
+<meta charset="utf-8">
+<title>Formulario de Inscripción — antes y después</title>
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{font-family:system-ui,"Segoe UI",Roboto,sans-serif;background:#333F50;color:#fff;padding:26px 18px}
+  h1{font-size:20px;font-weight:900;letter-spacing:.01em;text-align:center}
+  .sub{text-align:center;color:#C9D2DE;font-size:13px;margin:6px 0 24px;line-height:1.6}
+  .par{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+  .col{flex:1 1 320px;max-width:380px}
+  .tag{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:900;
+       letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;justify-content:center}
+  .mal{color:#F0A6A3} .bien{color:#5BE39B}
+  .punto{width:9px;height:9px;border-radius:99px;display:inline-block}
+  .p-mal{background:#C0504D} .p-bien{background:#00B050}
+
+  /* la pantalla simulada */
+  .pantalla{border-radius:16px;overflow:hidden;border:1px solid #4A5568;
+            background:linear-gradient(160deg,#0f7a3c,#16a34a 45%,#0e8f45)}
+  .cab{text-align:center;padding:18px 12px 12px}
+  .fa{width:38px;height:38px;border-radius:9px;background:#fff;color:#16a34a;
+      font-weight:900;font-size:14px;display:flex;align-items:center;justify-content:center;margin:0 auto}
+  .cab h2{color:#fff;font-size:13px;font-weight:900;margin-top:9px}
+  .tarjeta{background:#fff;border-radius:14px;margin:0 16px 18px;padding:16px}
+  .pest{display:flex;gap:8px;margin-bottom:14px}
+  .pest div{flex:1;border-radius:10px;padding:10px 4px;text-align:center;
+            font-size:10.5px;font-weight:800}
+  .on{background:#16a34a;color:#fff}
+  .off{border:1.5px solid #16a34a;color:#16a34a;background:#fff}
+  label{display:block;font-size:9.5px;font-weight:900;letter-spacing:.08em;
+        text-transform:uppercase;color:#6b7280;margin:0 0 5px}
+  .campo{border:1.5px solid #cbd5e1;border-radius:10px;padding:10px 12px;
+         font-size:13px;margin-bottom:12px;background:#fff;min-height:38px}
+  .foco{border-color:#3b82f6}
+  .invisible{color:#fff}                 /* el error: letra blanca sobre blanco */
+  .visible{color:#111827;font-weight:600}
+  .fantasma{color:#cbd5e1}
+  .btn{background:#93b4f5;color:#fff;border-radius:10px;padding:11px;
+       text-align:center;font-size:12.5px;font-weight:800}
+  .btn.ok{background:#16a34a}
+  .pie{color:rgba(255,255,255,.8);font-size:10.5px;text-align:center;padding-bottom:14px}
+
+  .nota{margin-top:12px;font-size:12px;line-height:1.65;color:#C9D2DE;
+        background:#3C4759;border:1px solid #4A5568;border-radius:12px;padding:12px 14px}
+  .nota b{color:#fff}
+  .flecha{align-self:center;font-size:26px;color:#5BE39B;font-weight:900}
+  @media (max-width:760px){ .flecha{display:none} }
+</style>
+
+<h1>Formulario de Inscripción 2026</h1>
+<p class="sub">Lo que el papá escribe no se veía: quedaba <b>letra blanca sobre fondo blanco</b>.</p>
+
+<div class="par">
+
+  <div class="col">
+    <div class="tag mal"><span class="punto p-mal"></span> Como estaba</div>
+    <div class="pantalla">
+      <div class="cab">
+        <div class="fa">FA</div>
+        <h2>Formulario de Inscripción 2026</h2>
+      </div>
+      <div class="tarjeta">
+        <div class="pest">
+          <div class="on">Afiliado en 2026</div>
+          <div class="off">Sin Afiliación 2026</div>
+        </div>
+        <label>Número de documento</label>
+        <div class="campo foco invisible">1000234567</div>
+        <label>Código de deportista</label>
+        <div class="campo fantasma">Ej: FA-2024-001</div>
+        <div class="btn">Ingresar a mi ficha</div>
+      </div>
+      <p class="pie">← Volver al inicio</p>
+    </div>
+    <div class="nota">El papá escribe su documento y <b>la casilla se ve vacía</b>. Cree que no funcionó, lo borra y lo vuelve a escribir.</div>
+  </div>
+
+  <div class="flecha">→</div>
+
+  <div class="col">
+    <div class="tag bien"><span class="punto p-bien"></span> Como queda</div>
+    <div class="pantalla">
+      <div class="cab">
+        <div class="fa">FA</div>
+        <h2>Formulario de Inscripción 2026</h2>
+      </div>
+      <div class="tarjeta">
+        <div class="pest">
+          <div class="on">Afiliado en 2026</div>
+          <div class="off">Sin Afiliación 2026</div>
+        </div>
+        <label>Número de documento</label>
+        <div class="campo foco visible">1000234567</div>
+        <label>Código de deportista</label>
+        <div class="campo fantasma">Ej: FA-2024-001</div>
+        <div class="btn ok">Ingresar a mi ficha</div>
+      </div>
+      <p class="pie">← Volver al inicio</p>
+    </div>
+    <div class="nota">Se lee de una. Vale para <b>todas</b> las casillas del formulario: nombre, documento, teléfono, dirección, EPS y las notas largas.</div>
+  </div>
+
+</div>

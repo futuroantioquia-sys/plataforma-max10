@@ -1136,7 +1136,51 @@ function ValoracionPageInner() {
     const esNA = (s: string) => (s ?? '').trim().toUpperCase() === 'NO APLICA';
     const nvl = (s: string) => { if (esNA(s)) return -1; const i = NIVELES.indexOf(s); return i > 0 ? i : 0; };
     const cmp = (s: string) => { if (esNA(s)) return -1; return ({ 'SIEMPRE': 5, 'CASI SIEMPRE': 4, 'ALGUNAS VECES': 3, 'CASI NUNCA': 2, 'NUNCA': 1 } as Record<string, number>)[s] ?? 0; };
-    const items: { label: string; n: number }[] = [
+    /* ── AL PORTERO SE LE NOMBRAN SUS PROPIOS FUNDAMENTOS ────────────────────
+       (dirección, 04/09/2026 — «en el informe del portero no se generan los
+        logros y retos personales»)
+
+       Las casillas del portero son las mismas por dentro —así no tocó cambiar
+       la base—, pero se llaman distinto: donde el jugador de campo tiene
+       "control del balón", el arquero tiene BLOCAJE; donde tiene "pase",
+       DESVÍO. Si el texto se armara con los nombres de campo, al papá de un
+       arquero le llegaría un informe hablando de dribling y de cabeceo.
+
+       Aquí se escoge la lista de nombres según la posición. Los tres últimos
+       —cabeceo, quite y protección— NO EXISTEN en el formato del portero: por
+       eso quedan por fuera de su lista. */
+    const items: { label: string; n: number }[] = esPortero ? [
+      { label: 'la potencia de salto',            n: nvl(data.fuerzaNivel) },
+      { label: 'los reflejos',                    n: nvl(data.velocidadNivel) },
+      { label: 'la agilidad y coordinación',      n: nvl(data.resistenciaNivel) },
+      { label: 'el blocaje',                      n: nvl(data.controlNivel) },
+      { label: 'el desvío',                       n: nvl(data.paseNivel) },
+      { label: 'la estirada',                     n: nvl(data.conductaNivel) },
+      { label: 'el juego de pies',                n: nvl(data.driblingNivel) },
+      { label: 'la caída y reincorporación',      n: nvl(data.remataNivel) },
+      { label: 'la ubicación bajo los tres palos', n: nvl(data.posicionNivel) },
+      { label: 'el ángulo y la bisectriz',        n: nvl(data.visionNivel) },
+      { label: 'la transición ofensiva',          n: nvl(data.defensaNivel) },
+      { label: 'el control del espacio defensivo', n: nvl(data.amplitudNivel) },
+      { label: 'el balón parado',                 n: nvl(data.transicionNivel) },
+      { label: 'el juego aéreo',                  n: nvl(data.superioridadNivel) },
+      { label: 'el achique en el uno contra uno', n: nvl(data.basculacionNivel) },
+      { label: 'el trabajo en equipo',            n: nvl(data.trabajoNivel) },
+      { label: 'la resiliencia',                  n: nvl(data.disciplinaNivel) },
+      { label: 'el liderazgo y la comunicación',  n: nvl(data.actitudNivel) },
+      { label: 'la identidad de juego',           n: nvl(data.identidadNivel) },
+      { label: 'la cohesión con el equipo',       n: nvl(data.bloqueNivel) },
+      { label: 'el buen ambiente en el grupo',    n: nvl(data.climaNivel) },
+      { label: 'la actitud en competencia',       n: nvl(data.gestionCompNivel) },
+      { label: 'la responsabilidad',        n: cmp(data.responsabilidad) },
+      { label: 'la puntualidad',            n: cmp(data.puntualidad) },
+      { label: 'la disciplina',             n: cmp(data.disciplinaComp) },
+      { label: 'el respeto',                n: cmp(data.respeto) },
+      { label: 'la tolerancia',             n: cmp(data.tolerancia) },
+      { label: 'el compañerismo',           n: cmp(data.companerismo) },
+      { label: 'el liderazgo',              n: cmp(data.liderazgo) },
+      { label: 'el sentido de pertenencia', n: cmp(data.sentidoPertenencia) },
+    ] : [
       { label: 'la fuerza',                 n: nvl(data.fuerzaNivel) },
       { label: 'la velocidad',              n: nvl(data.velocidadNivel) },
       { label: 'la resistencia',            n: nvl(data.resistenciaNivel) },
@@ -1213,11 +1257,26 @@ function ValoracionPageInner() {
     set('equipoTrimestre', `${eqLogro} ${eqReto}`);
   };
 
-  // Cuando se completa el ÚLTIMO campo de evaluación, se generan solos los Logros y Objetivos.
+  /* ── AQUÍ ESTABA LA FALLA DEL PORTERO ──────────────────────────────────────
+     (dirección, 04/09/2026 — «en el informe del portero no se generan los
+      logros y retos personales»)
+
+     Los Logros y Retos se escriben solos cuando NO QUEDA NI UNA casilla de la
+     valoración sin llenar. Esta lista es la que se revisa.
+
+     El problema: incluía CABECEO, QUITE DEL BALÓN y PROTECCIÓN DEL BALÓN, que
+     son del jugador de campo y NO EXISTEN en el formato del portero. Al
+     arquero nunca se le muestran esas tres casillas, así que se quedaban
+     vacías para siempre; la lista nunca se completaba y los textos NUNCA
+     llegaban. El formador llenaba las 22 casillas del portero, las veía todas
+     puestas, y abajo seguía el letrero gris de «se genera automáticamente».
+
+     Ahora la lista se arma según la posición: al portero se le revisan sus 22
+     y al de campo sus 25. — 04/09/2026 */
   const camposEvaluacion = [
     data.fuerzaNivel, data.velocidadNivel, data.resistenciaNivel,
     data.controlNivel, data.paseNivel, data.conductaNivel, data.driblingNivel, data.remataNivel,
-    data.cabeceoNivel, data.quiteNivel, data.proteccionNivel,
+    ...(esPortero ? [] : [data.cabeceoNivel, data.quiteNivel, data.proteccionNivel]),
     data.posicionNivel, data.visionNivel, data.defensaNivel, data.amplitudNivel, data.transicionNivel,
     data.superioridadNivel, data.basculacionNivel,
     data.trabajoNivel, data.disciplinaNivel, data.actitudNivel, data.identidadNivel,
