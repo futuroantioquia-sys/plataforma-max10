@@ -49,6 +49,15 @@ const VERDE  = '#00B050';   // verde institucional
 const ROJO   = '#C0504D';   // lo que se rechaza
 const GRIS   = '#7C879A';   // guiones y casillas sin dato
 
+/* ── LAS FOTOS YA BAJADAS SE QUEDAN EN MEMORIA ────────────────────────────
+   (dirección, 05/09/2026 — «optimiza tiempos de lectura de pagos pendientes»)
+
+   Esta lista vive FUERA de la pantalla, a propósito: así sobrevive cuando uno
+   se va al Libro o a la Cuenta y se devuelve. Antes, cada regreso volvía a
+   bajar las mismas setenta fotos desde cero. Se borra sola al cerrar o
+   recargar la pestaña, que es cuando conviene volver a preguntar. */
+const CACHE_FOTOS = new Map<string, string>();
+
 export default function PagosPendientesPage() {
   const router = useRouter();
   const [soportes,   setSoportes]   = useState<SoporteEnriquecido[]>([]);
@@ -59,21 +68,64 @@ export default function PagosPendientesPage() {
   const [accion,     setAccion]     = useState<{ idx: number; tipo: 'confirmar' | 'rechazar' } | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [toast,      setToast]      = useState<{ msg: string; ok: boolean } | null>(null);
-  const [datosMap,   setDatosMap]   = useState<Record<string, string>>({}); // id -> imagen base64 (carga perezosa)
+  // id -> imagen base64. Arranca con lo que ya se bajó antes en esta pestaña.
+  const [datosMap,   setDatosMap]   = useState<Record<string, string>>(() => Object.fromEntries(CACHE_FOTOS));
   const [urlVista,   setUrlVista]   = useState('');   // URL que se muestra en el visor (blob: si es PDF)
 
-  // Cargar las imágenes de a una (sin bloquear la lista ni saturar la red)
+  /* ── POR QUÉ ESTO SE DEMORABA TANTO ───────────────────────────────────────
+     (dirección, 05/09/2026 — «optimiza tiempos de lectura de pagos
+      pendientes, se demora mucho mientras carga soportes»)
+
+     La lista de soportes viene liviana —sin las fotos—, así que aparece de
+     una. Lo que se demoraba eran LAS FOTOS: cada soporte es una foto del
+     celular del papá, de varios cientos de kilobytes, y se pedían
+
+        · UNA POR UNA, esperando a que llegara la anterior para pedir la
+          siguiente. Con 70 soportes eso son 70 viajes en fila india.
+        · TODAS, aunque uno solo esté mirando el día de hoy.
+        · OTRA VEZ DESDE CERO cada vez que se volvía a entrar a la pantalla
+          —por ejemplo al devolverse del Libro—, aunque ya se hubieran bajado
+          hace un minuto.
+
+     Los tres arreglos:
+        1. DE A SEIS AL TIEMPO en vez de una por una.
+        2. PRIMERO LAS QUE SE ESTÁN VIENDO (el día filtrado); las demás
+           quedan de últimas, ya sin nadie esperándolas.
+        3. SE GUARDAN EN MEMORIA mientras no se cierre la pestaña: ir al Libro
+           y devolverse ya no vuelve a bajar nada. */
   useEffect(() => {
+    if (!soportes.length) return;
     let cancel = false;
-    (async () => {
-      for (const s of soportes) {
+
+    // 1º las que se están viendo ahora mismo, 2º todas las demás.
+    const orden = [...vistaRef.current, ...soportes];
+    const pendientesFotos: string[] = [];
+    const yaEncolado = new Set<string>();
+    for (const s of orden) {
+      if (!s?.id || yaEncolado.has(s.id)) continue;
+      yaEncolado.add(s.id);
+      if (CACHE_FOTOS.has(s.id)) continue;
+      pendientesFotos.push(s.id);
+    }
+    if (!pendientesFotos.length) return;
+
+    let siguiente = 0;
+    const trabajador = async () => {
+      while (!cancel) {
+        const i = siguiente++;
+        if (i >= pendientesFotos.length) return;
+        const id = pendientesFotos[i];
+        const d = await getSoporteDatos(id);
         if (cancel) return;
-        if (datosMap[s.id]) continue;
-        const d = await getSoporteDatos(s.id);
-        if (cancel) return;
-        if (d) setDatosMap(prev => ({ ...prev, [s.id]: d }));
+        if (d) {
+          CACHE_FOTOS.set(id, d);
+          setDatosMap(prev => ({ ...prev, [id]: d }));
+        }
       }
-    })();
+    };
+    // Seis a la vez: suficiente para ir rápido sin ahogar la conexión.
+    Promise.all(Array.from({ length: 6 }, trabajador)).catch(() => { /* noop */ });
+
     return () => { cancel = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soportes]);
@@ -104,9 +156,13 @@ export default function PagosPendientesPage() {
         getDeportistas(),
       ]);
 
-      // Enriquecer cada soporte con info del deportista
+      // Enriquecer cada soporte con info del deportista.
+      // Se arma un índice por id: buscar en una lista de 1.185 fichas, setenta
+      // veces seguidas, es trabajo de más que se nota en la espera.
+      const porId = new Map<string, Deportista>();
+      for (const d of deportistas) porId.set(String(d.id), d);
       const enriquecidos: SoporteEnriquecido[] = pendientes.map(s => {
-        const dep = deportistas.find(d => d.id === s.deportista_id);
+        const dep = porId.get(String(s.deportista_id));
         return {
           ...s,
           depId:       dep?.id ?? s.deportista_id,
@@ -131,6 +187,7 @@ export default function PagosPendientesPage() {
     setProcesando(true);
     const ok = await confirmarSoportePago(s.id);
     if (ok) {
+      CACHE_FOTOS.delete(s.id);           // ya no se necesita esa foto en memoria
       setSoportes(prev => prev.filter(x => x.id !== s.id));
       mostrarToast('✅ Pago confirmado correctamente', true);
     } else {
@@ -145,6 +202,7 @@ export default function PagosPendientesPage() {
     setProcesando(true);
     const ok = await eliminarSoportePago(s.id);
     if (ok) {
+      CACHE_FOTOS.delete(s.id);
       setSoportes(prev => prev.filter(x => x.id !== s.id));
       mostrarToast('🗑️ Soporte eliminado', true);
     } else {
@@ -252,16 +310,31 @@ export default function PagosPendientesPage() {
     return () => clearTimeout(t);
   }, [ultimaFila, cargando]);
 
-  /* Con el primer clic en cualquier parte, la marca se apaga. */
+  /** Apaga la marca. Se llama cuando ya cumplió: el soporte quedó confirmado
+   *  o rechazado, o la dirección cambió de día. */
+  const apagarMarca = useCallback(() => {
+    setUltimaFila('');
+    try { localStorage.removeItem(LLAVE_ULTIMA); } catch { /* noop */ }
+  }, []);
+
+  /* ── LA FRANJA NO SE VA HASTA QUE SE USE ──────────────────────────────────
+     (dirección, 05/09/2026 — «volvió a pagos pendientes, pero desaparece la
+      banda roja para poder confirmar pago»)
+
+     ERROR CORREGIDO. Antes la franja se apagaba con el PRIMER clic en
+     cualquier parte de la pantalla. Sonaba razonable —«ya la vio, quítela»—,
+     pero en la práctica el primer clic casi nunca es el OK: es acomodar la
+     ventana, bajar un poco, tocar cualquier lado. Y para cuando la dirección
+     iba a confirmar, la franja ya no estaba y tocaba adivinar el renglón otra
+     vez, que era justo lo que se quería evitar.
+
+     Ahora la franja SE QUEDA hasta que hace su trabajo: se apaga sola cuando
+     ese soporte se confirma o se rechaza —el renglón desaparece con ella—. */
   useEffect(() => {
     if (!ultimaFila) return;
-    const apagar = () => {
-      setUltimaFila('');
-      try { localStorage.removeItem(LLAVE_ULTIMA); } catch { /* noop */ }
-    };
-    window.addEventListener('pointerdown', apagar, { once: true });
-    return () => window.removeEventListener('pointerdown', apagar);
-  }, [ultimaFila]);
+    if (!soportes.length) return;
+    if (!soportes.some(s => s.id === ultimaFila)) apagarMarca();
+  }, [soportes, ultimaFila, apagarMarca]);
 
   /** El día (aaaa-mm-dd) en que se subió el soporte, en hora de acá. */
   function diaDe(s: SoporteEnriquecido): string {
@@ -288,6 +361,10 @@ export default function PagosPendientesPage() {
     return lista;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soportes, orden, dia]);
+
+  /* Lo que se está viendo, para bajar PRIMERO esas fotos. */
+  const vistaRef = useRef<SoporteEnriquecido[]>([]);
+  vistaRef.current = vista;
 
   /** Cuántos soportes tiene cada día, para el letrero de al lado. */
   const porDia = useMemo(() => {
