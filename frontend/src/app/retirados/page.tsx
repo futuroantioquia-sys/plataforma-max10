@@ -738,8 +738,19 @@ function Tarjeta({ sol, dep, trabajando, onAprobar, onDevolver, onPazYSalvo, onB
             <p className="font-black text-[14px]" style={{ color: VERDE }}>A paz y salvo</p>
           )}
           {dep && (
+            /* ── LA ADMÓN MIRA, NO PAGA (dirección, 04/09/2026) ──────────
+               «En retiros la admón observa el estado de cuenta, pero no como
+                padre: dice PAGAR.»
+
+               El estado de cuenta es la MISMA pantalla para todo el mundo, y
+               por eso traía el botón rojo de PAGAR — que es del papá, para
+               subir su soporte—. La dirección entra a REVISAR una deuda antes
+               de firmar un retiro, no a pagarla. Con `readonly=1` los meses sin
+               pagar salen como PEND y no como un botón: se lee igual de bien
+               y no hay forma de empezar un pago por equivocación en nombre de
+               una familia. Es el mismo camino que usa Pagos Pendientes. */
             <a
-              href={`/alumnos/${dep.id}/estado-cuenta`}
+              href={`/alumnos/${dep.id}/estado-cuenta?readonly=1`}
               className="inline-block mt-1.5 text-[12px] font-bold underline"
               style={{ color: '#4E8FD6' }}>
               Ver el estado de cuenta de hoy →

@@ -427,7 +427,21 @@ export default function SolicitudRetiroPage() {
             autorizado={!!abierta?.paz_salvo}
             bajando={bajando}
             onDescargar={bajarPazYSalvo}
-            onEstadoCuenta={() => router.push(`/alumnos/${dep?.id}/estado-cuenta`)}
+            /* ── LA ADMÓN MIRA; EL PAPÁ SÍ PUEDE PAGAR ────────────────────
+               (dirección, 04/09/2026 — «en retiros la admón observa el estado
+                de cuentas, pero no como padre: dice PAGAR»)
+
+               Esta pantalla la usan los dos. Cuando entra la dirección a
+               radicar el retiro por el padre (modoAdmin), el estado de cuenta
+               se abre SOLO PARA MIRAR: los meses sin pagar dicen PEND en vez
+               del botón rojo, y no hay forma de arrancar un pago a nombre de
+               una familia por equivocación.
+
+               Cuando es el papá el que está en su propio retiro, el botón de
+               PAGAR se le deja: si queda debiendo, ahí mismo puede ponerse al
+               día y sacar su paz y salvo. */
+            onEstadoCuenta={() => router.push(
+              `/alumnos/${dep?.id}/estado-cuenta${modoAdmin ? '?readonly=1' : ''}`)}
             onInicio={() => router.push(`/alumnos/${dep?.id}`)}
           />
         )}
