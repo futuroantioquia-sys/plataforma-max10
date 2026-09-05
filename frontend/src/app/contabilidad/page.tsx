@@ -216,6 +216,25 @@ const DETALLE_BASE: string[] = (() => {
 
 const DETALLE_OPCIONES: string[] = [...DETALLE_BASE, 'OTRO'];
 
+/* ── ¿ESTO ES UN MES, UNA MATRÍCULA O UNA INSCRIPCIÓN? ─────────────────────
+   (dirección, 04/09/2026 — «si está en institucional solo puede haber
+    productos, no meses ni matrículas»)
+
+   No basta con comparar contra la lista fija: en el libro hay escrito
+   "MATRÍCULA 2026", "matricula 2025", "AGOSTO 2026"… con año, sin año, con
+   tilde y sin tilde. Esta función reconoce todas esas formas, para que un mes
+   no se cuele nunca en la lista de productos institucionales. */
+const esDetalleDeMes = (t: any): boolean => {
+  const x = String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim().toUpperCase();
+  if (!x) return false;
+  if (/^(MATRICULA|INSCRIPCION|OTRO)\b/.test(x)) return true;
+  return MESES_DET.some(m => {
+    const mm = m.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    return x === mm || x.startsWith(mm + ' ');
+  });
+};
+
 /* ── LO INSTITUCIONAL ENTRA SOLO EN LA LISTA ──────────────────────────────
    (dirección, 02/09/2026 — «una vez los cree, que en la columna concepto
     aparezca INSTITUCIONAL y en el detalle pueda seleccionarlos, ubícalos
@@ -272,15 +291,71 @@ const esGastoRepresentacion = (c: any) => /gastos?\s+de\s+representacion/.test(s
  *    3. Lo nuevo:     los productos creados en el módulo Productos.
  *  Y al final, OTRO. Sin repetidos: si algo está en la memoria y también en
  *  el módulo, sale una sola vez. */
+/* ── LA CASILLA SE ABRE VACÍA, PARA VER TODA LA LISTA ──────────────────────
+   (dirección, 04/09/2026 — «si hay un mes ya colocado o producto, uno mira el
+    listado desplegable y solo muestra el detalle en el que está. No señor: que
+    pueda verlos todos, y que al cambiarlo obvio se deba aceptar el cambio»)
+
+   El porqué: una casilla de escribir con listica (datalist) le muestra al
+   navegador SOLO las opciones que empiezan por lo que ya está escrito. Si la
+   fila decía "AGOSTO 2026", el desplegable mostraba "AGOSTO 2026" y nada más.
+   Parecía una lista de una sola opción, y no lo era.
+
+   La solución: al entrar a la casilla se vacía —ahí el navegador muestra la
+   lista completa— y se guarda aparte lo que decía. Al salir:
+     · si no se escogió nada, vuelve a quedar como estaba;
+     · si se escogió algo distinto Y la casilla ya tenía valor, se PREGUNTA
+       antes de cambiarlo. Llenar una vacía no pregunta: sería estorbar.  */
+const alEntrarCasilla = (e: React.FocusEvent<HTMLInputElement>) => {
+  const el = e.currentTarget;
+  el.dataset.previo = el.value;
+  el.value = '';
+};
+/** Devuelve el valor que hay que guardar, o null si no hay que tocar nada. */
+const alSalirCasilla = (
+  e: React.FocusEvent<HTMLInputElement> | React.KeyboardEvent<HTMLInputElement>,
+  comoSeLlama: string,
+): string | null => {
+  const el = e.currentTarget as HTMLInputElement;
+  const previo = el.dataset.previo ?? '';
+  const ahora  = el.value.trim();
+  if (!ahora) return null;                       // no escogió: queda como estaba
+  if (ahora === previo.trim()) return null;      // escogió lo mismo
+  if (previo.trim() && !window.confirm(
+    `Cambiar ${comoSeLlama}:\n\n"${previo.trim()}"  →  "${ahora}"\n\n¿Está seguro?`
+  )) { el.value = previo; return null; }
+  return ahora;
+};
+
 const opcionesDetalle = (
   concepto: any,
   institucional: string[] = [],
   memoria: string[] = [],
+  memoriaInst: string[] = [],
 ) => {
   if (esGastoRepresentacion(concepto)) return GASTOS_REPR_DETALLE;
+
+  /* ── SI EL CONCEPTO DICE INSTITUCIONAL, SOLO SALEN PRODUCTOS ─────────────
+     (dirección, 04/09/2026 — «si en concepto dice institucional, en el
+      desplegable de detalle y en el cuadro de editar solo aparecen los
+      productos que por memoria ya eran institucional»)
+
+     Tiene toda la lógica: en una fila institucional el DETALLE no es un mes ni
+     la matrícula — es QUÉ SE VENDIÓ. Ofrecerle ahí los doce meses del año era
+     invitar al error: bastaba un clic de más para dejar una camiseta anotada
+     como "AGOSTO 2026", y esa fila después no cuadra con nada.
+
+     Entonces, igual que ya pasaba con GASTOS DE REPRESENTACIÓN, la lista
+     cambia entera: quedan únicamente los productos —los que la memoria del
+     libro ya vio marcados como institucionales, más los creados en el módulo
+     Productos Institucional— y OTRO al final, por si aparece algo nuevo. */
+  const base = mismoTexto(concepto, CONCEPTO_INSTITUCIONAL)
+    ? [...memoriaInst, ...institucional, 'OTRO']
+    : [...DETALLE_BASE, ...memoria, ...institucional, 'OTRO'];
+
   const vistos = new Set<string>();
   const out: string[] = [];
-  for (const t of [...DETALLE_BASE, ...memoria, ...institucional, 'OTRO']) {
+  for (const t of base) {
     const limpio = String(t ?? '').trim();
     if (!limpio) continue;
     const llave = limpio.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
@@ -545,12 +620,36 @@ export default function ContabilidadPage() {
       if (!t) continue;
       const llave = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
       if (fijos.has(llave)) continue;
+      if (esDetalleDeMes(t)) continue;          // "MATRÍCULA 2026" y demás
       /* Los gastos de representación viejos venían con "G.R " adelante. */
       if (llave.startsWith('G.R ')) continue;
       cuenta.set(t.toUpperCase(), (cuenta.get(t.toUpperCase()) ?? 0) + 1);
     }
     /* De más usado a menos: lo que más se repite es lo que más se va a
        volver a necesitar, y así queda de primero en la listica. */
+    return [...cuenta.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+  }, [libro]);
+
+  /* LA MEMORIA, PERO SOLO DE LO INSTITUCIONAL (dirección, 04/09/2026).
+     Aquí no vale cualquier detalle que se haya usado alguna vez: valen los que
+     estaban en una fila cuyo CONCEPTO decía INSTITUCIONAL. Es lo que de verdad
+     se ha vendido. Hoy son doce: presentación, camiseta de papás, uniformes,
+     banda, medias, sombrilla… todos escritos a mano en su momento. */
+  const memoriaInstitucional = useMemo(() => {
+    const fijos = new Set(
+      [...DETALLE_BASE, 'OTRO'].map(t =>
+        t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()),
+    );
+    const cuenta = new Map<string, number>();
+    for (const m of libro) {
+      if (!mismoTexto(m.concepto, CONCEPTO_INSTITUCIONAL)) continue;
+      const t = String(m.detalle ?? '').trim();
+      if (!t) continue;
+      const llave = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+      if (fijos.has(llave)) continue;
+      if (esDetalleDeMes(t)) continue;     // un mes ahí fue un clic mal dado
+      cuenta.set(t.toUpperCase(), (cuenta.get(t.toUpperCase()) ?? 0) + 1);
+    }
     return [...cuenta.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
   }, [libro]);
   const [cargandoLibro, setCargandoLibro] = useState(false);
@@ -572,6 +671,8 @@ export default function ContabilidadPage() {
   const [soloIngresoSinConc, setSoloIngresoSinConc] = useState(false);
   const [soloSinDetalle,  setSoloSinDetalle]  = useState(false);
   const [soloSospechosas, setSoloSospechosas] = useState(false);
+  /* MAL ORIENTADAS — la primera "ley" del libro. — 04/09/2026 */
+  const [soloMalOrientadas, setSoloMalOrientadas] = useState(false);
   // Filtro por el chulo (estado de confirmación): 'todos' | 'verde' (confirmado) | 'rojo' (pendiente)
   const [filChulo, setFilChulo] = useState<'todos' | 'verde' | 'rojo'>('todos');
   const [filSem, setFilSem] = useState<'todos' | 'verde' | 'amarillo' | 'rojo' | 'morado'>('todos');
@@ -1545,6 +1646,10 @@ export default function ContabilidadPage() {
       }
       // "Sin detalle": filas a las que todavía les falta ese dato.
       if (soloSinDetalle  && String(m.detalle  ?? '').trim() && !dirtyIds.has(m.id || '')) return false;
+      /* MAL ORIENTADAS: institucional con un mes en el detalle. — 04/09/2026 */
+      if (soloMalOrientadas
+        && !(mismoTexto(m.concepto, CONCEPTO_INSTITUCIONAL) && esDetalleDeMes(m.detalle))
+        && !dirtyIds.has(m.id || '')) return false;
       // Filtro de SOSPECHOSAS: filas en rojo (codigo que no existe, o pago de mas)
       if (soloSospechosas) {
         const smS = semaforo[m.id || ''];
@@ -1566,7 +1671,7 @@ export default function ContabilidadPage() {
       }
       return true;
     });
-  }, [libro, filDebounced, soloEgresoSinConc, soloIngresoSinConc, soloSinDetalle, soloSospechosas, codigosReales, dirtyIds, filChulo, confirmadas, filCodModo, filSem, semaforo]);
+  }, [libro, filDebounced, soloEgresoSinConc, soloIngresoSinConc, soloSinDetalle, soloSospechosas, soloMalOrientadas, codigosReales, dirtyIds, filChulo, confirmadas, filCodModo, filSem, semaforo]);
   /** Pagos del libro que ya quedaron confirmados en el estado de cuenta. */
   const confirmadosCount = useMemo(
     () => libro.filter(m => {
@@ -1589,6 +1694,28 @@ export default function ContabilidadPage() {
   );
   const sinDetalleCount = useMemo(
     () => libro.filter(m => !String(m.detalle ?? '').trim()).length,
+    [libro],
+  );
+
+  /* ── FILAS MAL ORIENTADAS ─────────────────────────────────────────────────
+     (dirección, 04/09/2026 — «si hay alguno que diciendo institucional en el
+      pasado está un mes o matrícula, muéstralo en el encabezado como mal
+      orientado; luego te haré varias leyes para que esto funcione cada vez que
+      algo se oriente mal»)
+
+     Ésta es la primera ley: una fila cuyo CONCEPTO dice INSTITUCIONAL pero cuyo
+     DETALLE es un mes, una matrícula o una inscripción. Es imposible que las
+     dos cosas sean ciertas — o se vendió un producto, o se pagó una
+     mensualidad—, así que una de las dos está mal escrita.
+
+     No se corrige sola, y con razón: quien sabe qué pasó de verdad ese día es
+     la contadora, no el programa. Lo que hace el sistema es LEVANTAR LA MANO y
+     dejar las filas a un clic, para que ella decida.
+
+     Las leyes que vengan después se agregan aquí, cada una con su nombre. */
+  const malOrientadas = useMemo(
+    () => libro.filter(m =>
+      mismoTexto(m.concepto, CONCEPTO_INSTITUCIONAL) && esDetalleDeMes(m.detalle)),
     [libro],
   );
   /** Filas cuya DESCRIPCIÓN señala a alguien del directorio de Nómina y
@@ -2308,7 +2435,7 @@ export default function ContabilidadPage() {
                 ))}
               </div>
               <p className="font-black text-white text-sm">
-                {hayFiltro || soloEgresoSinConc || soloIngresoSinConc || soloSinDetalle || soloSospechosas
+                {hayFiltro || soloEgresoSinConc || soloIngresoSinConc || soloSinDetalle || soloSospechosas || soloMalOrientadas
                   ? <>{libroFiltrado.length.toLocaleString('es-CO')} <span className="text-white/40 font-semibold">de {libro.length.toLocaleString('es-CO')}</span></>
                   : <>{libro.length.toLocaleString('es-CO')}</>} movimientos
               </p>
@@ -2331,6 +2458,15 @@ export default function ContabilidadPage() {
                 className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSinDetalle ? 'bg-violet-600 text-white border-violet-600' : 'text-violet-700 bg-violet-50 border-violet-200 hover:bg-violet-100'}`}>
                 {soloSinDetalle ? '✓ ' : ''}Sin detalle ({sinDetalleCount.toLocaleString('es-CO')})
               </button>
+              {/* MAL ORIENTADAS — la primera de las "leyes". Solo sale cuando
+                  de verdad hay alguna: un cero no se muestra. — 04/09/2026 */}
+              {malOrientadas.length > 0 && (
+                <button onClick={() => setSoloMalOrientadas(v => !v)}
+                  title="Filas cuyo CONCEPTO dice INSTITUCIONAL pero cuyo DETALLE es un mes, una matrícula o una inscripción. Las dos cosas no pueden ser ciertas: o se vendió un producto, o se pagó una mensualidad. Tóquelas para revisarlas."
+                  className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloMalOrientadas ? 'bg-[#E0A33A] text-[#2B3547] border-[#E0A33A]' : 'text-[#E0A33A] bg-[rgba(224,163,58,.14)] border-[rgba(224,163,58,.45)] hover:bg-[rgba(224,163,58,.22)]'}`}>
+                  {soloMalOrientadas ? '✓ ' : '⚠ '}Mal orientadas ({malOrientadas.length.toLocaleString('es-CO')})
+                </button>
+              )}
               {numProblemas > 0 && (
                 <button onClick={() => setSoloSospechosas(v => !v)}
                   title="Filas en ROJO por revisar: codigo que no corresponde a ningun deportista, o pagos del mismo mes que suman mas que la mensualidad. No se publican hasta que usted las confirme."
@@ -2456,7 +2592,17 @@ export default function ContabilidadPage() {
               {codigosUnicos.map(c => <option key={c} value={c} />)}
             </datalist>
             <datalist id="detalle-libro">
-              {opcionesDetalle('', institucionales, memoriaDetalle).map(o => <option key={o} value={o} />)}
+              {opcionesDetalle('', institucionales, memoriaDetalle, memoriaInstitucional).map(o => <option key={o} value={o} />)}
+            </datalist>
+            {/* LA SEGUNDA LISTICA: SOLO PRODUCTOS (dirección, 04/09/2026).
+                La casilla DETALLE del cuadro se escribe a mano y sugiere de una
+                lista. Cuando el renglón ya dice INSTITUCIONAL en el concepto,
+                se le cambia la lista por esta: nada de meses ni matrícula,
+                únicamente lo que la institución vende. Así el desplegable dice
+                lo mismo aquí y en la ventana de editar. */}
+            <datalist id="detalle-libro-inst">
+              {opcionesDetalle(CONCEPTO_INSTITUCIONAL, institucionales, memoriaDetalle, memoriaInstitucional)
+                .map(o => <option key={o} value={o} />)}
             </datalist>
             {/* Lista de conceptos para ESCRIBIR y que filtre mientras se teclea.
                 Antes era un <select>: al escribir "INTERES" saltaba a la primera
@@ -2569,10 +2715,17 @@ export default function ContabilidadPage() {
                           /* Casilla de CONCEPTO: se escribe y la lista se va filtrando
                              por cualquier parte de la palabra (no solo por la primera
                              letra). Escribir "INTERES" ya muestra "INTERESES A FAVOR". */
+                          /* Se abre vacía y pregunta antes de cambiar, igual que
+                             el DETALLE. — dirección, 04/09/2026 */
                           <input autoFocus list="conceptos-libro" defaultValue={m.concepto || ''}
                             onClick={e => e.stopPropagation()}
-                            onBlur={e => { cambiarCampoLibro(m, 'concepto', e.target.value.trim().toUpperCase()); setEditCell(null); }}
-                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditCell(null); }}
+                            onFocus={alEntrarCasilla}
+                            onBlur={e => {
+                              const v = alSalirCasilla(e, 'el CONCEPTO');
+                              if (v !== null) cambiarCampoLibro(m, 'concepto', v.toUpperCase());
+                              setEditCell(null);
+                            }}
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { (e.currentTarget as HTMLInputElement).value = (e.currentTarget as HTMLInputElement).dataset.previo ?? ''; setEditCell(null); } }}
                             placeholder="Escriba y escoja…"
                             style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff', color: '#111827' }} />
                         ) : (
@@ -2711,11 +2864,54 @@ export default function ContabilidadPage() {
                                 <option value={String(m.detalle).trim()}>{String(m.detalle).trim()} (como estaba)</option>
                               )}
                             </select>
-                          ) : (
-                            <input autoFocus list="detalle-libro" defaultValue={m.detalle || ''}
+                          ) : mismoTexto(m.concepto, CONCEPTO_INSTITUCIONAL) ? (
+                            /* ── INSTITUCIONAL: LISTA CERRADA DE PRODUCTOS ──────────
+                               (dirección, 04/09/2026 — «te repito: si por defecto
+                                cuando se sube el extracto, o si lo ponemos manual la
+                                palabra INSTITUCIONAL en el concepto, NO aparecen meses
+                                ni matrículas»)
+
+                               Antes esto era una casilla de escribir con sugerencias.
+                               Sugerir no basta: la casilla seguía dejando teclear
+                               "AGOSTO 2026" a mano, y el desplegable del navegador
+                               mostraba lo que ya se había escrito otras veces. Por eso
+                               la dirección lo seguía viendo.
+
+                               Ahora es una lista CERRADA, igual que en Gastos de
+                               Representación: solo productos. No hay forma de dejar un
+                               mes aquí, ni escribiéndolo. */
+                            <select autoFocus defaultValue={m.detalle || ''}
                               onClick={e => e.stopPropagation()}
-                              onBlur={e => { cambiarCampoLibro(m, 'detalle', e.target.value.trim()); setEditCell(null); }}
-                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditCell(null); }}
+                              onChange={e => { cambiarCampoLibro(m, 'detalle', e.target.value); setEditCell(null); }}
+                              onBlur={() => setEditCell(null)}
+                              onKeyDown={e => { if (e.key === 'Escape') setEditCell(null); }}
+                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 3px', fontSize: 11, fontWeight: 700, background: '#fff', color: '#111827' }}>
+                              <option value="">— ¿qué producto? —</option>
+                              {opcionesDetalle(CONCEPTO_INSTITUCIONAL, institucionales, memoriaDetalle, memoriaInstitucional)
+                                .map(o => <option key={o} value={o}>{o}</option>)}
+                              {/* Si la fila ya traía algo que no está en la lista —un mes
+                                  mal puesto de antes— se conserva marcado, para no
+                                  borrárselo sin que nadie lo vea. */}
+                              {!!String(m.detalle ?? '').trim()
+                                && !opcionesDetalle(CONCEPTO_INSTITUCIONAL, institucionales, memoriaDetalle, memoriaInstitucional)
+                                     .some(o => mismoTexto(o, m.detalle)) && (
+                                <option value={String(m.detalle).trim()}>
+                                  {String(m.detalle).trim()} (como estaba — revisar)
+                                </option>
+                              )}
+                            </select>
+                          ) : (
+                            <input autoFocus
+                              list="detalle-libro"
+                              defaultValue={m.detalle || ''}
+                              onClick={e => e.stopPropagation()}
+                              onFocus={alEntrarCasilla}
+                              onBlur={e => {
+                                const v = alSalirCasilla(e, 'el DETALLE');
+                                if (v !== null) cambiarCampoLibro(m, 'detalle', v);
+                                setEditCell(null);
+                              }}
+                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { (e.currentTarget as HTMLInputElement).value = (e.currentTarget as HTMLInputElement).dataset.previo ?? ''; setEditCell(null); } }}
                               placeholder="Mes o texto libre (lo que se paga)"
                               style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff', color: '#111827' }} />
                           )
@@ -2936,8 +3132,8 @@ export default function ContabilidadPage() {
                               de meses a "en qué se gastó" (salud, estudio, vivienda…). */}
                           <select value={r.detalle || ''} onChange={e => editarSplit(i, 'detalle', e.target.value)} style={{ ...inp, minWidth: 120 }}>
                             <option value="">{esGastoRepresentacion(r.concepto) ? '— ¿en qué se gastó? —' : '—'}</option>
-                            {opcionesDetalle(r.concepto, institucionales, memoriaDetalle).map(o => <option key={o} value={o}>{o}</option>)}
-                            {r.detalle && !opcionesDetalle(r.concepto, institucionales, memoriaDetalle).includes(r.detalle) && <option value={r.detalle}>{r.detalle}</option>}
+                            {opcionesDetalle(r.concepto, institucionales, memoriaDetalle, memoriaInstitucional).map(o => <option key={o} value={o}>{o}</option>)}
+                            {r.detalle && !opcionesDetalle(r.concepto, institucionales, memoriaDetalle, memoriaInstitucional).includes(r.detalle) && <option value={r.detalle}>{r.detalle}</option>}
                           </select>
                         </td>
                         <td style={{ ...td, padding: 3 }}><input value={r.debito || ''} onChange={e => editarSplit(i, 'debito', numVal(e.target.value))} style={{ ...inp, textAlign: 'right', color: '#dc2626' }} /></td>
@@ -3044,8 +3240,8 @@ export default function ContabilidadPage() {
                     <label className={lbl}>{esGastoRepresentacion(nuevaFila.concepto) ? 'Detalle (¿en qué se gastó?)' : 'Detalle (mes)'}</label>
                     <select value={nuevaFila.detalle} onChange={e => editarNuevaFila('detalle', e.target.value)} style={inp}>
                       <option value="">—</option>
-                      {opcionesDetalle(nuevaFila.concepto, institucionales, memoriaDetalle).map(o => <option key={o} value={o}>{o}</option>)}
-                      {nuevaFila.detalle && !opcionesDetalle(nuevaFila.concepto, institucionales, memoriaDetalle).includes(nuevaFila.detalle) && <option value={nuevaFila.detalle}>{nuevaFila.detalle}</option>}
+                      {opcionesDetalle(nuevaFila.concepto, institucionales, memoriaDetalle, memoriaInstitucional).map(o => <option key={o} value={o}>{o}</option>)}
+                      {nuevaFila.detalle && !opcionesDetalle(nuevaFila.concepto, institucionales, memoriaDetalle, memoriaInstitucional).includes(nuevaFila.detalle) && <option value={nuevaFila.detalle}>{nuevaFila.detalle}</option>}
                     </select>
                   </div>
                 </div>

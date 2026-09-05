@@ -1,0 +1,426 @@
+<title>Brief WhatsApp Futuro Antioquia</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root{
+    /* Claro — papel frío con sesgo verde, no blanco puro */
+    --fondo:#EEF2EF; --hoja:#FFFFFF; --tinta:#16202B; --tinta-2:#4B5A67;
+    --linea:#D3DCD6; --linea-fuerte:#B6C3BB;
+    --verde:#008F41; --verde-claro:#00B050; --ambar:#B57A15; --rojo:#B03D3A;
+    --marca:#333F50; --cinta:#E6EDE8;
+    --mono-fondo:#F3F6F4; --mono-linea:#DBE3DD;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      /* Oscuro — la paleta de la propia plataforma */
+      --fondo:#2A3342; --hoja:#333F50; --tinta:#FFFFFF; --tinta-2:#C9D2DE;
+      --linea:#4A5568; --linea-fuerte:#5C6A80;
+      --verde:#5BE39B; --verde-claro:#00B050; --ambar:#E0A33A; --rojo:#F0A6A3;
+      --marca:#5BE39B; --cinta:#3C4759;
+      --mono-fondo:#2B3547; --mono-linea:#4A5568;
+    }
+  }
+  :root[data-theme="dark"]{
+    --fondo:#2A3342; --hoja:#333F50; --tinta:#FFFFFF; --tinta-2:#C9D2DE;
+    --linea:#4A5568; --linea-fuerte:#5C6A80;
+    --verde:#5BE39B; --verde-claro:#00B050; --ambar:#E0A33A; --rojo:#F0A6A3;
+    --marca:#5BE39B; --cinta:#3C4759;
+    --mono-fondo:#2B3547; --mono-linea:#4A5568;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--fondo); color:var(--tinta);
+    font-family:"Source Sans 3",system-ui,"Segoe UI",Roboto,sans-serif;
+    font-size:16.5px; line-height:1.62;
+  }
+  .envoltura{max-width:920px;margin:0 auto;padding:34px 20px 80px}
+
+  /* ── Encabezado ── */
+  header.tapa{display:flex;flex-direction:column;gap:8px;padding-bottom:20px;
+    border-bottom:3px solid var(--verde)}
+  .sello{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--verde)}
+  h1{font-family:Archivo,system-ui,sans-serif;font-weight:800;font-size:clamp(28px,5vw,42px);
+    line-height:1.05;margin:0;letter-spacing:-.02em;text-wrap:balance}
+  .bajada{color:var(--tinta-2);max-width:62ch;margin:0}
+
+  .cifras{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:14px;
+    font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--tinta-2)}
+  .cifras b{color:var(--tinta);font-variant-numeric:tabular-nums}
+
+  /* ── Secciones ── */
+  section{margin-top:44px}
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--tinta-2);margin:0 0 6px}
+  h2{font-family:Archivo,system-ui,sans-serif;font-weight:700;font-size:clamp(21px,3.4vw,27px);
+    margin:0 0 4px;letter-spacing:-.01em;text-wrap:balance}
+  h3{font-family:Archivo,system-ui,sans-serif;font-weight:700;font-size:16.5px;
+    margin:26px 0 6px;letter-spacing:.01em}
+  p{margin:0 0 12px;max-width:66ch}
+  ul{margin:0 0 12px;padding-left:20px;max-width:66ch}
+  li{margin:5px 0}
+  a{color:var(--verde)}
+
+  /* Reglas de oro — franja, no tarjetas */
+  .oro{background:var(--cinta);border-left:4px solid var(--verde);
+    border-radius:0 12px 12px 0;padding:18px 20px;margin-top:18px}
+  .oro ol{margin:0;padding-left:20px;max-width:64ch}
+  .oro li{margin:7px 0}
+  .oro li b{font-family:Archivo,sans-serif}
+
+  /* Pasos numerados — solo donde de verdad hay secuencia */
+  ol.pasos{list-style:none;counter-reset:p;margin:16px 0 0;padding:0;
+    display:flex;flex-direction:column;gap:14px}
+  ol.pasos li{counter-increment:p;display:grid;grid-template-columns:34px 1fr;gap:14px;
+    align-items:start;margin:0}
+  ol.pasos li::before{content:counter(p);font-family:Archivo,sans-serif;font-weight:800;
+    font-size:13px;width:30px;height:30px;border-radius:50%;display:flex;
+    align-items:center;justify-content:center;background:var(--verde);color:#fff;
+    margin-top:2px}
+  :root[data-theme="dark"] ol.pasos li::before,
+  :root:not([data-theme="light"]) ol.pasos li::before{color:#16202B}
+  @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) ol.pasos li::before{color:#fff}}
+  ol.pasos strong{font-family:Archivo,sans-serif;display:block;margin-bottom:2px}
+
+  /* Tabla de respuestas rápidas */
+  .tabla-envoltura{overflow-x:auto;margin-top:14px;
+    border:1px solid var(--linea);border-radius:12px;background:var(--hoja)}
+  table{border-collapse:collapse;width:100%;min-width:560px;font-size:15px}
+  th{font-family:Archivo,sans-serif;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+    text-align:left;padding:11px 14px;background:var(--cinta);color:var(--tinta-2);
+    border-bottom:1px solid var(--linea)}
+  td{padding:11px 14px;border-bottom:1px solid var(--linea);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td:first-child{font-weight:600;width:34%}
+
+  /* Plantillas para copiar */
+  .plantilla{background:var(--hoja);border:1px solid var(--linea);border-radius:12px;
+    margin-top:14px;overflow:hidden}
+  .plantilla .cabeza{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:10px 14px;border-bottom:1px solid var(--linea);background:var(--cinta)}
+  .plantilla .nombre{font-family:Archivo,sans-serif;font-weight:700;font-size:13.5px}
+  .chip{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.08em;
+    text-transform:uppercase;padding:3px 8px;border-radius:99px;border:1px solid currentColor}
+  .chip.uno{color:var(--tinta-2)} .chip.dos{color:var(--ambar)} .chip.tres{color:var(--rojo)}
+  .copiar{margin-left:auto;font-family:Archivo,sans-serif;font-size:12px;font-weight:700;
+    padding:5px 12px;border-radius:8px;border:1px solid var(--verde);color:var(--verde);
+    background:transparent;cursor:pointer}
+  .copiar:hover{background:var(--verde);color:var(--hoja)}
+  .copiar:focus-visible{outline:2px solid var(--verde);outline-offset:2px}
+  .plantilla pre{margin:0;padding:14px;font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:13px;line-height:1.65;white-space:pre-wrap;color:var(--tinta);
+    background:var(--mono-fondo)}
+  .campo{color:var(--verde);font-weight:600}
+
+  /* Bloque de advertencia */
+  .nunca{border:1px solid var(--rojo);border-radius:12px;padding:18px 20px;margin-top:18px;
+    background:var(--hoja)}
+  .nunca h3{margin-top:0;color:var(--rojo)}
+  .nunca ul{margin-bottom:0}
+
+  .completar{border:1px dashed var(--ambar);border-radius:12px;padding:18px 20px;
+    margin-top:18px;background:var(--hoja)}
+  .completar h3{margin-top:0;color:var(--ambar)}
+  .marca{background:rgba(224,163,58,.22);padding:0 5px;border-radius:4px;
+    font-family:"IBM Plex Mono",monospace;font-size:13px}
+
+  footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--linea);
+    color:var(--tinta-2);font-size:13.5px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="envoltura">
+
+  <header class="tapa">
+    <p class="sello">Futuro Antioquia · MAX 10 Sport</p>
+    <h1>Brief de atención por WhatsApp</h1>
+    <p class="bajada">Cómo se responde el WhatsApp de la academia: a las familias que ya están adentro
+      y a la gente que llega preguntando por primera vez. Lo que dice este documento es lo que se
+      contesta; lo que no está aquí, se consulta antes de responder.</p>
+    <div class="cifras">
+      <span><b>1.185</b> deportistas en plataforma</span>
+      <span><b>975</b> activos</span>
+      <span><b>5</b> programas</span>
+      <span><b>7</b> sedes</span>
+    </div>
+  </header>
+
+  <section>
+    <p class="eyebrow">Lo primero</p>
+    <h2>Las cinco reglas de oro</h2>
+    <div class="oro">
+      <ol>
+        <li><b>El tono es el de la casa.</b> Se abre con «Un saludo especial» y se cierra agradeciendo.
+          Nunca se regaña, nunca se presiona. La frase que nos representa es:
+          <i>«Si tiene alguna razón, duda, reclamo o comentario, le agradecemos hacerlo a la mayor
+          brevedad. Lo importante es dar claridad.»</i></li>
+        <li><b>Un dato que no se sabe, no se inventa.</b> Se dice «déjeme confirmarlo y le respondo hoy
+          mismo» y se confirma. Un dato inventado se vuelve un reclamo la semana siguiente.</li>
+        <li><b>La plataforma manda.</b> Antes de responder por saldos, asistencias o informes se mira
+          la ficha del deportista. No se contesta de memoria.</li>
+        <li><b>Nunca se habla del hijo de otro.</b> Ni saldos, ni asistencias, ni comportamiento.
+          Aunque sea un familiar y aunque insista.</li>
+        <li><b>Se responde dentro del horario y se avisa cuando no.</b> Si escriben fuera de horario,
+          el primer mensaje del día siguiente empieza reconociéndolo.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Parte 1 — Puertas adentro</p>
+    <h2>Interno: familias que ya están con nosotros</h2>
+    <p>Es el 82 % del WhatsApp. Casi siempre son cinco temas. La regla es la misma en los cinco:
+      <b>se abre la ficha del deportista en la plataforma y se responde con lo que dice ahí.</b></p>
+
+    <h3>Pagos — lo que hay que tener claro</h3>
+    <div class="tabla-envoltura">
+      <table>
+        <thead><tr><th>Si preguntan…</th><th>Se responde</th></tr></thead>
+        <tbody>
+          <tr><td>¿Cuánto debo?</td>
+              <td>Se abre el <b>Estado de Cuenta</b> del deportista y se le manda ese mismo documento.
+                  No se dice una cifra de memoria.</td></tr>
+          <tr><td>¿Cuándo se paga?</td>
+              <td>El ciclo va de <b>febrero a diciembre</b>. Además están la <b>matrícula</b> y la
+                  <b>inscripción</b>, que son aparte y de una sola vez.</td></tr>
+          <tr><td>¿Hay descuento?</td>
+              <td>Sí: <b>10 % pagando antes del día 5</b> del mes. Se le dice siempre, haya pagado o no
+                  — mucha gente no lo sabe.</td></tr>
+          <tr><td>¿A qué cuenta consigno?</td>
+              <td><b>Cuenta de Ahorros Bancolombia.</b> El número y el titular salen impresos en el
+                  Estado de Cuenta que se le manda. <span class="marca">Ojo: hay dos cuentas
+                  configuradas — confirmar cuál se le da a cada quién.</span></td></tr>
+          <tr><td>Ya pagué, ¿qué hago?</td>
+              <td>Que <b>suba el soporte desde la app</b>, en su Estado de Cuenta. Así queda registrado
+                  y la administración lo confirma. Un soporte por WhatsApp se pierde.</td></tr>
+          <tr><td>¿Ya me llegó el pago?</td>
+              <td>Se mira si el soporte está <b>por confirmar</b> o ya <b>confirmado</b>. Si está por
+                  confirmar, se le dice con esas palabras y en cuánto se revisa.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Entrenamientos</h3>
+    <ul>
+      <li><b>Sedes:</b> Institucional, Santa Mónica, Bello Niquía, Sabaneta, La 80, Centro y Rionegro.</li>
+      <li><b>Duración de la sesión:</b> 1 hora en CDC (Casa de Campeones); <b>1 hora y 30 minutos</b>
+        en las demás sedes.</li>
+      <li><b>Jornadas:</b> mañana, tarde y jornada continua.</li>
+      <li>El horario del grupo está en la plataforma. Si el papá pregunta por su horario,
+        <b>se le confirma el del grupo de su hijo</b>, no el general.</li>
+      <li>Cancelación de un entrenamiento: la avisa la dirección. Quien atiende no anuncia
+        cancelaciones por su cuenta.</li>
+    </ul>
+
+    <h3>Informes y valoraciones</h3>
+    <ul>
+      <li>El informe del deportista lo hace su formador y queda en la plataforma. El papá lo ve
+        desde la app, en la ficha de su hijo.</li>
+      <li>Hay <b>dos formatos</b>: jugador de campo y portero. Se abre solo el que corresponde según
+        la posición.</li>
+      <li>Si preguntan por qué su hijo no tiene informe, <b>no se justifica al formador</b>:
+        se pasa el caso a la dirección deportiva y se le responde después.</li>
+    </ul>
+
+    <h3>Asistencia</h3>
+    <ul>
+      <li>La asistencia la marca el formador todos los días. El papá la ve en la app.</li>
+      <li>Si un papá reclama una falla marcada, se revisa con el formador <b>antes</b> de responder.</li>
+    </ul>
+
+    <h3>Retiro y paz y salvo</h3>
+    <ul>
+      <li>El retiro <b>se solicita desde la app</b>, no por WhatsApp. Se le explica dónde queda.</li>
+      <li>El <b>paz y salvo</b> sale cuando la cuenta queda al día. Si debe, se le dice cuánto falta
+        y por qué — con el Estado de Cuenta en la mano.</li>
+      <li>Un retiro nunca se aprueba por chat. Lo aprueba la administración.</li>
+    </ul>
+  </section>
+
+  <section>
+    <p class="eyebrow">Mensajes listos</p>
+    <h2>Las tres plantillas de cobro</h2>
+    <p>Son las que ya usa la plataforma. Se mandan <b>con el Estado de Cuenta adjunto</b>, nunca solas.
+      Lo que va en verde lo llena la plataforma.</p>
+
+    <div class="plantilla">
+      <div class="cabeza">
+        <span class="nombre">Cobrar uno</span>
+        <span class="chip uno">Debe un mes</span>
+        <button class="copiar" data-copiar="p1">Copiar</button>
+      </div>
+      <pre id="p1">Un saludo especial.
+
+Valoramos muchísimo su cumplimiento en los pagos.
+
+Solo tiene pendiente este mes y la idea es que no se les junte con el próximo.
+
+Adjuntamos Estado de Cuenta Plataforma MAX 10.
+
+Si tiene alguna razón, duda, reclamo o comentario, le agradecemos hacerlo a la mayor brevedad. Lo importante es dar claridad.
+
+El Deportista <span class="campo">{NOMBRE}</span> tiene pendiente el pago de <span class="campo">{MES}</span> por <span class="campo">{VALOR_MES}</span>
+
+<span class="campo">{CUENTA_CORTA}</span>
+
+Gracias por su compromiso.</pre>
+    </div>
+
+    <div class="plantilla">
+      <div class="cabeza">
+        <span class="nombre">Cobrar dos</span>
+        <span class="chip dos">Debe dos meses</span>
+        <button class="copiar" data-copiar="p2">Copiar</button>
+      </div>
+      <pre id="p2">Un saludo especial.
+
+Adjuntamos Estado de Cuenta Plataforma MAX 10, del deportista <span class="campo">{NOMBRE}</span>.
+
+Si tiene alguna razón, duda, reclamo o comentario, le agradecemos hacerlo a la mayor brevedad. Lo importante es dar claridad.
+
+El Deportista <span class="campo">{NOMBRE}</span> tiene pendiente los pagos de <span class="campo">{MESES}</span>. <span class="campo">{VALOR_MES}</span> x <span class="campo">{CUANTOS}</span>. Total: <span class="campo">{TOTAL}{MATRICULA}</span>.
+
+<span class="campo">{CUENTA}</span>
+
+Contamos con su compromiso.</pre>
+    </div>
+
+    <div class="plantilla">
+      <div class="cabeza">
+        <span class="nombre">Cobrar tres</span>
+        <span class="chip tres">Debe tres o más</span>
+        <button class="copiar" data-copiar="p3">Copiar</button>
+      </div>
+      <pre id="p3">Un saludo especial.
+
+Adjuntamos Estado de Cuenta Plataforma MAX 10.
+
+Si tiene alguna razón, duda, reclamo o comentario, le agradecemos hacerlo a la mayor brevedad. Lo importante es dar claridad.
+
+El Deportista <span class="campo">{NOMBRE}</span> tiene pendiente <span class="campo">{MESES}</span>, por un total de <span class="campo">{TOTAL}</span>.
+
+Para que pueda continuar participando de su proyecto Deportivo, es fundamental colocarse a paz y salvo.
+
+<span class="campo">{CUENTA}</span></pre>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Parte 2 — Puertas afuera</p>
+    <h2>Externo: el que pregunta por primera vez</h2>
+    <p>Aquí no se vende: se ordena la conversación. La meta de este chat no es que pague,
+      es que <b>quede agendado para conocernos en una cancha</b>. Se sigue este orden, sin saltárselo.</p>
+
+    <ol class="pasos">
+      <li><strong>Saludar y presentarse</strong>
+        «Un saludo especial. Le habla <span class="marca">[nombre]</span> de la Academia de Fútbol
+        Futuro Antioquia. Con mucho gusto le cuento.»</li>
+      <li><strong>Preguntar las cuatro cosas — siempre las cuatro</strong>
+        Nombre del niño · <b>edad</b> · <b>barrio o sector</b> · si ha entrenado antes.
+        Sin esas cuatro no se puede recomendar nada, y contestar sin ellas hace perder al interesado.</li>
+      <li><strong>Recomendar el programa según la edad</strong>
+        Se le nombra <b>uno solo</b> y se le explica en una frase. No se le leen los cinco.</li>
+      <li><strong>Decir la sede y el horario que le sirve</strong>
+        Se cruza el barrio con las sedes. Si ninguna le queda cerca, se le dice con franqueza cuál es
+        la más cercana — es mejor eso que perderlo después.</li>
+      <li><strong>Hablar del valor con claridad</strong>
+        Se dice el valor completo: <b>inscripción, matrícula y mensualidad</b>, y que el ciclo va de
+        febrero a diciembre. Nada de «después le cuento»: la plata escondida se vuelve reclamo.</li>
+      <li><strong>Invitarlo a la cancha con día y hora</strong>
+        No «venga cuando quiera», sino <span class="marca">«¿le sirve el [día] a las [hora] en
+        [sede]?»</span>. Una invitación sin fecha no es una invitación.</li>
+      <li><strong>Anotarlo y hacer seguimiento</strong>
+        Todo interesado queda anotado con su día de visita. Si no llegó, se le escribe una vez más
+        a los dos días. Una sola vez.</li>
+      <li><strong>Si decide entrar: se le manda el formulario</strong>
+        La inscripción se llena en el <b>Formulario de Inscripción</b> de la plataforma. Se le pasa
+        el enlace y <b>el código de deportista nuevo</b> que entrega la administración. Sin ese
+        código no puede entrar.</li>
+    </ol>
+
+    <h3>Los cinco programas, en una línea cada uno</h3>
+    <div class="tabla-envoltura">
+      <table>
+        <thead><tr><th>Programa</th><th>Deportistas hoy</th><th>Cómo se explica</th></tr></thead>
+        <tbody>
+          <tr><td>Estimulación</td><td>328</td><td><span class="marca">[edades y enfoque]</span></td></tr>
+          <tr><td>Formación</td><td>444</td><td><span class="marca">[edades y enfoque]</span></td></tr>
+          <tr><td>Progresión</td><td>111</td><td><span class="marca">[edades y enfoque]</span></td></tr>
+          <tr><td>Selección</td><td>159</td><td><span class="marca">[edades y enfoque]</span></td></tr>
+          <tr><td>Desarrollo</td><td>142</td><td><span class="marca">[edades y enfoque]</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:10px;color:var(--tinta-2);font-size:14.5px">Los números son reales y sirven
+      para responder con confianza: <i>«En Formación tenemos más de 400 niños».</i> Dan tranquilidad
+      a un papá que está decidiendo.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Los límites</p>
+    <h2>Lo que nunca se hace por WhatsApp</h2>
+    <div class="nunca">
+      <h3>Sin excepción</h3>
+      <ul>
+        <li><b>Dar información de un deportista a alguien que no sea su acudiente.</b>
+          Ni tíos, ni entrenadores de otro club, ni «un amigo de la familia».</li>
+        <li><b>Negociar tarifas, descuentos o plazos.</b> Eso lo autoriza la dirección, y se deja por
+          escrito. Quien atiende no promete un acuerdo.</li>
+        <li><b>Aprobar un retiro o expedir un paz y salvo.</b></li>
+        <li><b>Comprometer un cupo</b> en un grupo sin confirmarlo antes.</li>
+        <li><b>Discutir.</b> Si un papá se altera, se responde una sola vez con calma y se pasa a la
+          dirección. Nunca se contesta un reclamo en caliente.</li>
+        <li><b>Opinar sobre el rendimiento de un niño.</b> Eso lo dice su formador, en su informe.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Antes de repartirlo</p>
+    <h2>Lo que falta llenar</h2>
+    <div class="completar">
+      <h3>Solo la dirección puede completar esto</h3>
+      <p style="margin-bottom:8px">Lo demás de este brief salió de la plataforma y es dato verificado.
+        Estas seis cosas no están en el sistema, y sin ellas quien atienda va a improvisar:</p>
+      <ul>
+        <li><b>Valores 2026:</b> inscripción, matrícula y mensualidad por programa.</li>
+        <li><b>Edades de cada programa</b> (para la tabla de arriba).</li>
+        <li><b>Horarios por sede</b> — días y horas, en una sola hoja.</li>
+        <li><b>Cuál de las dos cuentas bancarias</b> se le da a cada quién.</li>
+        <li><b>Horario de atención</b> del WhatsApp y quién responde fuera de él.</li>
+        <li><b>Qué se hace en la primera visita:</b> ¿es clase de prueba?, ¿cuántas?, ¿qué lleva el niño?</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Futuro Antioquia — MAX 10 Sport · 34 años acompañando sueños.<br>
+    Documento interno. Se actualiza cuando cambien los valores o las sedes.
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll(".copiar").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var pre = document.getElementById(b.dataset.copiar);
+      if (!pre) return;
+      var texto = pre.innerText;
+      var listo = function () {
+        var antes = b.textContent;
+        b.textContent = "Copiado";
+        setTimeout(function () { b.textContent = antes; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(texto).then(listo, function () { alterno(texto, listo); });
+      } else { alterno(texto, listo); }
+    });
+  });
+  function alterno(texto, listo) {
+    try {
+      var t = document.createElement("textarea");
+      t.value = texto; t.style.position = "fixed"; t.style.opacity = "0";
+      document.body.appendChild(t); t.select(); document.execCommand("copy");
+      document.body.removeChild(t); listo();
+    } catch (e) { /* si el navegador no deja, se selecciona a mano */ }
+  }
+</script>

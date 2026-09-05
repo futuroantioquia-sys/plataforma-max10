@@ -21,7 +21,10 @@ const RUTAS_PROFESOR = ['/asistencia', '/consolidado', '/evaluaciones', '/microc
 const RUTAS_DEPORTISTA = ['/dashboard', '/alumnos', '/afiliacion', '/calendario', '/mantenimiento', '/mis-pagos', '/retiro'];
 
 // TOTAL RETIRADOS — solo administración. Ni formadores ni padres.
-const RUTAS_SOLO_ADMIN = ['/retirados'];
+/* '/atencion' (04/09/2026) es el motor de atención por WhatsApp: la base de
+   conocimiento con la que se le responde a las familias y a la gente que
+   pregunta. Solo administración: ahí se decide qué contesta la academia. */
+const RUTAS_SOLO_ADMIN = ['/retirados', '/atencion'];
 const ROLES_ADMIN = ['1', 'total', 'deportivo', 'contabilidad'];
 
 export async function middleware(request: NextRequest) {

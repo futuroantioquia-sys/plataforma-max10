@@ -40,8 +40,9 @@ const TIPO_LABEL: Record<string, string> = {
 };
 
 const TIPO_COLOR: Record<string, string> = {
-  torneo:     'bg-blue-100 text-blue-800',
-  implemento: 'bg-purple-100 text-purple-800',
+  /* La pastilla del tipo, en la paleta de la casa. — 04/09/2026 */
+  torneo:     'bg-[rgba(78,143,214,.18)] text-[#8FBEF0] border border-[rgba(78,143,214,.5)]',
+  implemento: 'bg-[rgba(0,176,80,.16)] text-[#5BE39B] border border-[rgba(0,176,80,.5)]',
 };
 
 function formatPeso(v: number) {
@@ -455,11 +456,14 @@ export default function ProductosPage() {
     }
   }
 
+  /* EL LIENZO GRIS VERDE DE LA PLATAFORMA (dirección, 04/09/2026).
+     Esta pantalla era de las últimas que quedaban en el azul claro viejo, y el
+     encabezado iba en un verde distinto al del resto de la app. */
   return (
-    <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
-      {/* Header */}
+    <div className="min-h-screen" style={{ background: '#333F50' }}>
+      {/* Header — el mismo degradado de toda la plataforma */}
       <div className="sticky top-0 z-20 text-white px-4 py-3 flex items-center gap-3"
-        style={{ background: 'linear-gradient(135deg,#14532d 0%,#166534 100%)' }}>
+        style={{ background: 'linear-gradient(to right, #333F50, #0EA142)' }}>
         <button onClick={() => router.back()}
           className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -476,92 +480,23 @@ export default function ProductosPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
 
-        {/* ── LIMPIAR LOS TORNEOS YA CARGADOS ─────────────────────────────
-            Borra los cobros de torneo que están en el Estado de Cuenta de los
-            deportistas (la sección "Otros pagos"). No toca el catálogo de
-            abajo, ni lo institucional, ni las mensualidades. — 26/08/2026 */}
-        <div className="bg-[#3C4759] rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#4A5568]" style={{ background: '#fff7ed' }}>
-            <h2 className="font-black text-sm uppercase tracking-wide" style={{ color: '#9a3412' }}>
-              🧹 Limpiar los torneos ya cargados
-            </h2>
-          </div>
-          <div className="p-5 space-y-3">
-            <p className="text-[12.5px] text-white/70 leading-relaxed">
-              Quita los cobros de torneo que ya se le cargaron a los deportistas —los
-              que salen abajo del Estado de Cuenta, en <b>Otros pagos</b>— para volver
-              a cargarlos desde cero.
-              <br />
-              <span className="text-white/70">
-                No toca el catálogo de aquí abajo, ni lo institucional, ni las mensualidades.
-              </span>
-            </p>
+        {/* ── AQUÍ ESTABAN «LIMPIAR TORNEOS» Y «CARGA MASIVA» ────────────────
+            (dirección, 04/09/2026 — «elimina, es innecesario, y carga masiva
+             también»)
 
-            {!conteoTor && (
-              <button
-                onClick={contarCobrosTorneo}
-                disabled={limpiando}
-                className="w-full py-3 rounded-xl font-black text-sm text-white transition disabled:opacity-60"
-                style={{ background: '#ea580c' }}>
-                {limpiando ? 'Consultando…' : '1 · VER CUÁNTOS HAY'}
-              </button>
-            )}
+            Las dos eran de cuando este módulo manejaba torneos: una borraba los
+            cobros de torneo del Estado de Cuenta y la otra los cargaba de a
+            cientos desde un Excel. Los torneos se fueron a Competencias, así que
+            aquí no tenían nada que hacer — y un botón rojo que borra cobros, en
+            una pantalla donde ya no se usa, es un accidente esperando pasar.
 
-            {conteoTor && conteoTor.n === 0 && (
-              <div className="rounded-xl px-4 py-3 text-center"
-                style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                <p className="font-black text-sm" style={{ color: '#166534' }}>
-                  No hay ningún cobro de torneo cargado.
-                </p>
-                <p className="text-[12px] mt-0.5" style={{ color: '#15803d' }}>
-                  Puedes cargarlos cuando quieras.
-                </p>
-              </div>
-            )}
-
-            {conteoTor && conteoTor.n > 0 && (
-              <>
-                <div className="rounded-xl px-4 py-3 space-y-1"
-                  style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
-                  <p className="font-black text-[15px]" style={{ color: '#9a3412' }}>
-                    {conteoTor.n.toLocaleString('es-CO')} cobros de torneo
-                  </p>
-                  <p className="text-[12.5px]" style={{ color: '#9a3412' }}>
-                    ${conteoTor.valor.toLocaleString('es-CO')} · {conteoTor.deps} deportista(s)
-                  </p>
-                  {conteoTor.pagados > 0 ? (
-                    <p className="text-[12px] font-bold pt-1" style={{ color: '#b91c1c' }}>
-                      ⚠ {conteoTor.pagados} ya figuran PAGADOS. Al borrarlos, esas familias
-                      vuelven a aparecer debiendo lo que ya pagaron.
-                    </p>
-                  ) : (
-                    <p className="text-[12px] font-bold pt-1" style={{ color: '#15803d' }}>
-                      Ninguno está pagado: borrarlos no hace perder ningún pago.
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={borrarCobrosTorneo}
-                  disabled={limpiando}
-                  className="w-full py-3 rounded-xl font-black text-sm text-white transition disabled:opacity-60"
-                  style={{ background: '#dc2626' }}>
-                  {limpiando ? 'Borrando…' : `2 · BORRAR LOS ${conteoTor.n} COBROS`}
-                </button>
-                <button
-                  onClick={() => setConteoTor(null)}
-                  disabled={limpiando}
-                  className="w-full py-2 rounded-xl font-bold text-[12.5px] text-white/70 border border-[#4A5568] hover:bg-[#333F50] transition">
-                  Cancelar
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+            El módulo queda con lo suyo: crear, editar y quitar los productos
+            institucionales. */}
 
         {/* Formulario */}
         <div className="bg-[#3C4759] rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
           <div className="px-5 py-3 border-b border-[#4A5568]"
-            style={{ background: '#f8fafc' }}>
+            style={{ background: '#2B3547' }}>
             <h2 className="font-black text-sm text-white uppercase tracking-wide">
               {editId ? '✏️ Editar Producto' : '➕ Nuevo Producto'}
             </h2>
@@ -605,7 +540,7 @@ export default function ProductosPage() {
                 value={desc}
                 onChange={e => setDesc(e.target.value)}
                 placeholder="Ej: Camiseta de presentación, Sudadera, Maleta…"
-                className="w-full bg-[#2B3547] border border-[#4A5568] rounded-xl px-4 py-3 text-sm font-semibold text-white placeholder:text-white/35 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
+                className="w-full bg-[#2B3547] border border-[#4A5568] rounded-xl px-4 py-3 text-sm font-semibold text-white placeholder:text-white/35 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/40 transition"
               />
             </div>
 
@@ -625,7 +560,7 @@ export default function ProductosPage() {
                   onChange={e => setValor(String(pesosDeTexto(e.target.value) || ''))}
                   placeholder="45.000"
                   inputMode="numeric"
-                  className="w-full bg-[#2B3547] border border-[#4A5568] rounded-xl pl-8 pr-4 py-3 text-sm font-semibold text-white placeholder:text-white/35 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 transition"
+                  className="w-full bg-[#2B3547] border border-[#4A5568] rounded-xl pl-8 pr-4 py-3 text-sm font-semibold text-white placeholder:text-white/35 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/40 transition"
                 />
               </div>
             </div>
@@ -654,7 +589,7 @@ export default function ProductosPage() {
         {/* Lista de productos */}
         <div className="bg-[#3C4759] rounded-2xl shadow-sm border border-[#4A5568] overflow-hidden">
           <div className="px-5 py-3 border-b border-[#4A5568] flex items-center justify-between"
-            style={{ background: '#f8fafc' }}>
+            style={{ background: '#2B3547' }}>
             <h2 className="font-black text-sm text-white uppercase tracking-wide">
               Productos institucionales
             </h2>
@@ -670,7 +605,7 @@ export default function ProductosPage() {
               No hay productos registrados aún
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-[#4A5568]">
               {productos.map(p => (
                 <div key={p.id} className="flex items-center gap-3 px-5 py-3 hover:bg-[#333F50] transition">
                   <div className="flex-1 min-w-0">
@@ -684,7 +619,7 @@ export default function ProductosPage() {
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={() => editar(p)}
-                      className="w-8 h-8 rounded-lg bg-[rgba(78,143,214,.14)] hover:bg-blue-100 flex items-center justify-center transition text-[#8FBEF0]">
+                      className="w-8 h-8 rounded-lg bg-[rgba(78,143,214,.14)] hover:brightness-125 flex items-center justify-center transition text-[#8FBEF0]">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                           d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -704,182 +639,9 @@ export default function ProductosPage() {
           )}
         </div>
 
-        {/* Botón Carga Masiva */}
-        <button
-          onClick={() => { setShowMasiva(true); setMasivaProd(''); setMasivaFilas([]); setMasivaResumen(''); }}
-          className="w-full py-3.5 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
-          style={{ background: 'linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%)' }}>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-          </svg>
-          CARGA MASIVA DESDE EXCEL
-        </button>
 
       </div>
 
-      {/* ── Modal Carga Masiva ────────────────────────────────────────────── */}
-      {showMasiva && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="bg-[#3C4759] rounded-t-3xl sm:rounded-2xl w-full max-w-lg shadow-2xl flex flex-col"
-            style={{ maxHeight: '90vh' }}>
-
-            {/* Header modal */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#4A5568] flex-shrink-0">
-              <div>
-                <h3 className="font-black text-white text-base">Carga Masiva</h3>
-                <p className="text-xs text-white/40 mt-0.5">Asigna un producto a varios deportistas desde Excel</p>
-              </div>
-              <button onClick={() => setShowMasiva(false)}
-                className="w-8 h-8 rounded-full bg-[#2B3547] hover:bg-[#2B3547] flex items-center justify-center transition text-white/70 font-black text-lg leading-none">
-                ×
-              </button>
-            </div>
-
-            {/* Body modal */}
-            <div className="overflow-y-auto flex-1 p-5 space-y-4">
-
-              {/* 1. Cargar Excel — primero */}
-              <div>
-                <label className="block text-xs font-black text-white/70 uppercase tracking-wide mb-1.5">
-                  1. Cargar Excel
-                </label>
-                <p className="text-[11px] text-white/40 mb-2">
-                  Acepta dos formatos:<br/>
-                  <strong>· 2 cols:</strong> CÓDIGO, NOMBRE → selecciona el producto abajo.<br/>
-                  <strong>· 4 cols:</strong> CÓDIGO, DEPORTISTA, TORNEO, VALOR → se detecta automáticamente.
-                </p>
-                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-purple-300 hover:border-purple-400 bg-purple-50 rounded-xl py-5 cursor-pointer transition">
-                  <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                  </svg>
-                  <span className="text-sm font-black text-purple-600">Seleccionar archivo .xlsx / .xls</span>
-                  <input ref={xlsxRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={leerExcel} />
-                </label>
-
-                {/* Badge de modo detectado */}
-                {masivaFilas.length > 0 && (
-                  <div className={cn('mt-2 px-3 py-2 rounded-lg text-[11px] font-black',
-                    masivaMode === 'libre'
-                      ? 'bg-[rgba(78,143,214,.14)] text-[#8FBEF0] border border-[rgba(78,143,214,.45)]'
-                      : 'bg-[#333F50] text-white/70 border border-[#4A5568]')}>
-                    {masivaMode === 'libre'
-                      ? '🏆 Formato libre detectado — torneo y valor tomados del Excel por fila'
-                      : '📦 Formato producto — selecciona el producto a asignar abajo'}
-                  </div>
-                )}
-              </div>
-
-              {/* 2. Seleccionar producto (solo en modo producto) */}
-              {masivaMode === 'producto' && (
-                <div>
-                  <label className="block text-xs font-black text-white/70 uppercase tracking-wide mb-1.5">
-                    2. Seleccionar Producto
-                  </label>
-                  <select
-                    value={masivaProd}
-                    onChange={e => setMasivaProd(e.target.value)}
-                    className="w-full border border-[#4A5568] rounded-xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition bg-[#3C4759]">
-                    <option value="">-- Elige un producto --</option>
-                    {productos.map(p => (
-                      <option key={p.id} value={p.id}>
-                        [{p.tipo === 'torneo' ? 'Torneo' : 'Institucional'}] {p.descripcion} — {formatPeso(p.valor)}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* Eliminar cargas ya asignadas de este producto (para volver a subir limpio) */}
-                  {masivaProd && (
-                    <button
-                      type="button"
-                      onClick={eliminarCargasProducto}
-                      disabled={masivaSubiendo}
-                      className="mt-2 w-full py-2.5 rounded-xl border-2 border-[rgba(192,80,77,.45)] text-[#F08A87] font-black text-[11px] uppercase tracking-wide hover:bg-[rgba(192,80,77,.14)] transition disabled:opacity-40 flex items-center justify-center gap-1.5">
-                      🗑 Eliminar cargas de este producto y volver a subir
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* 3. Preview */}
-              {masivaFilas.length > 0 && (
-                <div>
-                  <p className="text-xs font-black text-white/70 uppercase tracking-wide mb-2">
-                    {masivaMode === 'producto' ? '3' : '2'}. Vista Previa — {masivaFilas.length} deportistas
-                  </p>
-                  <div className="border border-[#4A5568] rounded-xl overflow-hidden">
-                    {masivaMode === 'libre' ? (
-                      <>
-                        <div className="grid grid-cols-4 bg-[#2B3547] px-3 py-1.5 text-[10px] font-black text-white/70 uppercase tracking-wide">
-                          <span>Código</span><span>Deportista</span><span>Torneo</span><span>Valor / Estado</span>
-                        </div>
-                        <div className="divide-y divide-gray-50 max-h-52 overflow-y-auto">
-                          {masivaFilas.map((f, i) => (
-                            <div key={i} className="grid grid-cols-4 px-3 py-1.5 text-xs">
-                              <span className="font-mono font-bold text-white">{f.codigo}</span>
-                              <span className="text-white/70 truncate">{f.nombre || '—'}</span>
-                              <span className="text-[#8FBEF0] font-bold truncate">{f.torneo || '—'}</span>
-                              <span className={cn('font-bold text-[11px]', f.msg
-                                ? (f.ok ? 'text-[#5BE39B]' : 'text-[#F08A87]')
-                                : 'text-white/70')}>
-                                {f.msg ? f.msg : (f.valorPropio ? `$${f.valorPropio.toLocaleString('es-CO')}` : '—')}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-3 bg-[#2B3547] px-3 py-1.5 text-[10px] font-black text-white/70 uppercase tracking-wide">
-                          <span>Código</span><span>Nombre Excel</span><span>Estado</span>
-                        </div>
-                        <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
-                          {masivaFilas.map((f, i) => (
-                            <div key={i} className="grid grid-cols-3 px-3 py-1.5 text-xs">
-                              <span className="font-mono font-bold text-white">{f.codigo}</span>
-                              <span className="text-white/70 truncate">{f.nombre || '—'}</span>
-                              <span className={cn('font-bold text-[11px]', f.msg
-                                ? (f.ok ? 'text-[#5BE39B]' : 'text-[#F08A87]')
-                                : 'text-white/40')}>
-                                {f.msg || '—'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Resumen */}
-              {masivaResumen && (
-                <p className="text-sm font-black text-center py-2 rounded-xl bg-[#333F50] text-white">
-                  {masivaResumen}
-                </p>
-              )}
-            </div>
-
-            {/* Footer modal */}
-            <div className="px-5 py-4 border-t border-[#4A5568] flex gap-2 flex-shrink-0">
-              <button onClick={() => setShowMasiva(false)}
-                className="flex-1 py-3 rounded-xl border-2 border-[#4A5568] text-white/70 font-black text-sm hover:bg-[#333F50] transition">
-                Cerrar
-              </button>
-              <button
-                onClick={subirMasiva}
-                disabled={masivaFilas.length === 0 || masivaSubiendo || (masivaMode === 'producto' && !masivaProd)}
-                className="flex-1 py-3 rounded-xl font-black text-sm text-white transition active:scale-95 disabled:opacity-40"
-                style={{ background: '#7c3aed' }}>
-                {masivaSubiendo
-                  ? `Cargando ${masivaFilas.length}...`
-                  : `CARGAR ${masivaFilas.length > 0 ? masivaFilas.length + ' DEPORTISTAS' : ''}`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
