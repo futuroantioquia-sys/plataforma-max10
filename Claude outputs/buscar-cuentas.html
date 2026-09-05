@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buscar cuentas</title>
+<style>
+ body{margin:0;background:#333F50;color:#fff;font-family:system-ui,"Segoe UI",Arial,sans-serif;padding:18px}
+ h1{font-size:19px;margin:0 0 4px;letter-spacing:.5px}
+ p.sub{margin:0 0 16px;color:#9fb0c5;font-size:13px}
+ .caja{background:#3C4759;border:1px solid #4A5568;border-radius:12px;padding:14px;margin-bottom:14px}
+ .paso{display:inline-block;background:#00B050;color:#fff;font-weight:900;font-size:11px;border-radius:20px;padding:2px 10px;margin-bottom:8px}
+ table{border-collapse:collapse;font-size:11px;background:#fff;color:#111827;border-radius:6px;overflow:hidden}
+ th{background:#16a34a;color:#fff;font-size:10px;font-weight:900;padding:6px 8px;border:1px solid #fff}
+ td{padding:4px 8px;border:1px solid #e5e7eb}
+ .filtro{padding:4px}
+ input.f{width:120px;font-size:11px;font-weight:800;padding:2px 5px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#111827}
+ .btns{display:flex;gap:2px;margin-top:2px}
+ .b{flex:1;font-size:9px;font-weight:800;padding:1px 0;border-radius:4px;text-align:center;border:1px solid #d1d5db;background:#fff;color:#6b7280}
+ .b.on{background:#16a34a;border-color:#16a34a;color:#fff}
+ .lista{margin-top:6px;width:290px;background:#fff;border:2px solid #16a34a;border-radius:8px;overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+ .lh{background:#064e1e;color:#fff;font-size:9px;font-weight:900;padding:3px 7px;display:flex;justify-content:space-between}
+ .li{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 7px;border-bottom:1px solid #e5e7eb}
+ .num{font-size:11px;font-weight:900;color:#111827;font-variant-numeric:tabular-nums}
+ .nom{font-size:9px;font-weight:700;color:#475569;flex:1}
+ .cnt{font-size:9px;font-weight:900;color:#16a34a}
+ .nota{font-size:12px;color:#cfe0d4;line-height:1.55;margin:6px 0 0}
+ b.v{color:#5BE39B}
+ .gris{color:#94a3b8;font-weight:700}
+ .verde{background:#16a34a;color:#fff;font-weight:900;border-radius:4px;padding:1px 6px;display:inline-block}
+</style></head><body>
+
+<h1>BUSCAR CUENTAS EN EL LIBRO</h1>
+<p class="sub">Con el soporte en la mano, aunque solo muestre los últimos 4 dígitos.</p>
+
+<div class="caja">
+  <span class="paso">1 · PRENDER EL BOTÓN Nº CUENTA</span>
+  <table><tr><th>CÓDIGO</th></tr>
+    <tr><td class="filtro">
+      <input class="f" value="7196" readonly>
+      <div class="btns"><span class="b">Código</span><span class="b on">Nº cuenta</span></div>
+    </td></tr></table>
+  <p class="nota">Escribes <b class="v">7196</b> — los cuatro últimos que se ven en el soporte.</p>
+</div>
+
+<div class="caja">
+  <span class="paso">2 · SALEN SOLAS LAS CUENTAS POSIBLES</span>
+  <div class="lista">
+    <div class="lh"><span>CUENTAS POSIBLES (3)</span><span>✕</span></div>
+    <div class="li"><span class="num">91201717196</span><span class="nom">FERRETERÍA LA 80</span><span class="cnt">14 mov.</span></div>
+    <div class="li"><span class="num">29819177196</span><span class="nom">—</span><span class="cnt">3 mov.</span></div>
+    <div class="li"><span class="num">7196045</span><span class="nom">JUAN C. SERNA</span><span class="cnt">1 mov.</span></div>
+  </div>
+  <p class="nota">Primero las que <b class="v">TERMINAN</b> en 7196 (el soporte), después las que empiezan por ahí. Con el nombre y cuántos movimientos tiene cada una.<br>Un clic en una y el libro queda filtrado por esa cuenta.</p>
+</div>
+
+<div class="caja">
+  <span class="paso">3 · LO QUE YA NO IMPORTA</span>
+  <p class="nota">
+    · Puntos, guiones y espacios: <b class="v">236-000-03104</b> y <b class="v">23600003104</b> se encuentran igual.<br>
+    · También busca el número dentro del <b class="v">texto del banco</b> (la descripción), no solo en la columna CÓDIGO.<br>
+    · Sirve igual para las cuentas <span class="gris">grises claras</span> (proveedores, empleados) y para los códigos <span class="verde">verdes</span> de deportistas.
+  </p>
+</div>
+
+</body></html>

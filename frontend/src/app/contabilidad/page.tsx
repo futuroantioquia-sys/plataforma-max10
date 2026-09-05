@@ -270,6 +270,25 @@ const GASTOS_REPR_DETALLE = [
  *  Usa `sinTildes`, que está definido más abajo: no hay problema porque esta
  *  función solo se llama al dibujar la pantalla, nunca al cargar el archivo. */
 const esGastoRepresentacion = (c: any) => /gastos?\s+de\s+representacion/.test(sinTildes(String(c ?? '')));
+
+/* ── APORTE FORMACIÓN → SOLO LOS DOCE MESES ───────────────────────────────
+   Regla de la dirección (05/09/2026): «si en concepto aparece APORTE
+   FORMACIÓN, en el listado desplegable solo aparecen meses de enero a
+   diciembre».
+
+   El aporte de formación ES la mensualidad. Ahí no cabe la matrícula, ni la
+   inscripción, ni una camiseta: solo el mes que se está pagando. Se compara
+   sin tildes y sin importar mayúsculas, para que dé igual cómo esté escrito
+   (APORTE FORMACION, APORTE DE FORMACIÓN, APORTE A LA FORMACION…). */
+const MESES_DEL_ANIO: string[] = MESES_DET.map(m => `${m} 2026`);
+const esAporteFormacion = (c: any) => /\bAPORTE\b.*\bFORMACION\b/.test(sinTildes(String(c ?? '')));
+
+/* ── INSCRIPCIÓN → SOLO MATRÍCULA 2026 ────────────────────────────────────
+   Regla de la dirección (05/09/2026): «si en el concepto aparece INSCRIPCIÓN,
+   en detalle solo MATRÍCULA 2026». Es un pago que se hace una sola vez al
+   entrar, así que la lista tiene una sola opción y no hay dónde equivocarse. */
+const MATRICULA_UNICA: string[] = ['MATRÍCULA 2026'];
+const esInscripcion = (c: any) => /^INSCRIPCION\b/.test(sinTildes(String(c ?? '')).trim());
 /** Lista que le toca a la casilla DETALLE según el concepto de la fila.
  *
  *  ── LA LISTA SE ACUERDA DE LO QUE YA ESTÁ EN EL LIBRO ────────────────────
@@ -334,6 +353,8 @@ const opcionesDetalle = (
   memoriaInst: string[] = [],
 ) => {
   if (esGastoRepresentacion(concepto)) return GASTOS_REPR_DETALLE;
+  if (esAporteFormacion(concepto))     return MESES_DEL_ANIO;   // solo meses
+  if (esInscripcion(concepto))         return MATRICULA_UNICA;  // solo matrícula
 
   /* ── SI EL CONCEPTO DICE INSTITUCIONAL, SOLO SALEN PRODUCTOS ─────────────
      (dirección, 04/09/2026 — «si en concepto dice institucional, en el
@@ -364,6 +385,38 @@ const opcionesDetalle = (
     out.push(limpio);
   }
   return out;
+};
+
+/* ── LAS LISTAS CERRADAS: CUÁLES SON Y CÓMO SE LLAMAN ─────────────────────
+   Hay conceptos en los que el DETALLE NO se escribe a mano: se escoge de una
+   lista y punto. Sugerir no basta —una casilla de escribir siempre deja
+   teclear cualquier cosa—, así que en estos casos la casilla se vuelve un
+   desplegable cerrado.
+
+   Hoy son cuatro (todas reglas de la dirección):
+     · GASTOS DE REPRESENTACIÓN → en qué se gastó   (25/08/2026)
+     · INSTITUCIONAL            → qué producto      (04/09/2026)
+     · APORTE FORMACIÓN         → de qué mes        (05/09/2026)
+     · INSCRIPCIÓN              → MATRÍCULA 2026    (05/09/2026)
+
+   Mañana, para agregar una regla nueva, basta con añadir una línea aquí: la
+   pantalla se acomoda sola, tanto en el libro como en la ventana de editar. */
+const listaCerradaDetalle = (
+  concepto: any,
+  institucional: string[] = [],
+  memoria: string[] = [],
+  memoriaInst: string[] = [],
+): { titulo: string; opciones: string[] } | null => {
+  if (esGastoRepresentacion(concepto))
+    return { titulo: '— ¿en qué se gastó? —', opciones: GASTOS_REPR_DETALLE };
+  if (esAporteFormacion(concepto))
+    return { titulo: '— ¿de qué mes? —', opciones: MESES_DEL_ANIO };
+  if (esInscripcion(concepto))
+    return { titulo: '— ¿qué se pagó? —', opciones: MATRICULA_UNICA };
+  if (mismoTexto(concepto, CONCEPTO_INSTITUCIONAL))
+    return { titulo: '— ¿qué producto? —',
+             opciones: opcionesDetalle(CONCEPTO_INSTITUCIONAL, institucional, memoria, memoriaInst) };
+  return null;
 };
 
 /* ── PAGOS A TERCEROS (NÓMINA Y PROVEEDORES) ──────────────────────────────
@@ -710,6 +763,16 @@ export default function ContabilidadPage() {
   const [publicandoMatr, setPublicandoMatr] = useState(false);
   // Estado de cuenta abierto EN VENTANA sobre el libro (el libro no se mueve)
   const [estadoCuentaUrl, setEstadoCuentaUrl] = useState<string | null>(null);
+  /* ── ¿EN QUÉ FILA IBA? ────────────────────────────────────────────────────
+     Regla de la dirección (05/09/2026): «igual que en soportes, pero en el
+     libro contable, y no franja roja —que esa ya está— sino una franja GRIS
+     CLARA que no existe».
+
+     Cuando se abre el estado de cuenta desde una fila del libro, se guarda esa
+     fila. Al cerrar la ventana, la fila queda pintada de gris claro y la
+     pantalla se desplaza hasta ella, para no perder el punto entre miles de
+     movimientos. La franja se borra sola al primer clic en cualquier lado. */
+  const [filaDondeIba, setFilaDondeIba] = useState<string | null>(null);
   // Anchos ajustables de las columnas del Libro (se guardan en el navegador)
   /* ── LAS FILAS SEÑALADAS PARA BORRAR ────────────────────────────────────
      (dirección, 03/09/2026). Se guardan por ID, no por número de renglón: si
@@ -1624,9 +1687,22 @@ export default function ContabilidadPage() {
       if (f.codigo) {
         const needle = f.codigo.trim();
         const hay    = String(m.codigo ?? '').trim();
-        const ok = filCodModo === 'contiene'
-          ? hay.toLowerCase().includes(needle.toLowerCase())
-          : hay === needle;
+        let ok: boolean;
+        if (filCodModo === 'contiene') {
+          /* ── BUSCAR CUENTAS: SOLO LOS DÍGITOS, Y TAMBIÉN EN LA DESCRIPCIÓN ──
+             (dirección, 05/09/2026 — «poder filtrar el número que estoy mirando
+              en el soporte y buscarlo a ver si ya está en código o cuenta; hay
+              soportes que solo muestran los últimos 4 dígitos»)
+
+             Se comparan únicamente los números: así da igual que la cuenta esté
+             escrita 236-000-03104, 236 000 03104 o 23600003104. Y se busca en
+             dos partes: en la columna CÓDIGO y dentro del texto del banco, que
+             es donde muchas veces queda la cuenta escrita. */
+          const d = dig(needle);
+          ok = !d || dig(hay).includes(d) || dig(m.descripcion).includes(d);
+        } else {
+          ok = hay === needle;
+        }
         if (!ok) return false;
       }
       // Se busca por el nombre visible: el guardado o, si no hay, el del código.
@@ -2030,6 +2106,50 @@ export default function ContabilidadPage() {
     Array.from(new Set(libro.map(m => String(m.codigo ?? '').trim()).filter(Boolean)))
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
     [libro]);
+  /* ── CUENTAS POSIBLES: LA AYUDA MIENTRAS SE TECLEA ────────────────────────
+     (dirección, 05/09/2026 — «que al escribirlo vaya apareciendo, ejemplo
+      310443…, y que aparezcan las cuentas posibles; pero hay soportes que solo
+      muestran los últimos 4 dígitos: que al digitarlos aparezcan las cuentas
+      con esos dígitos de últimos»)
+
+     Con el soporte en la mano uno tiene un número —a veces la cuenta completa,
+     a veces solo los cuatro últimos— y necesita saber si esa cuenta YA existe
+     en el libro y de quién es. Desde el segundo dígito, debajo de la casilla
+     aparece la lista de cuentas que coinciden, con el nombre y cuántos
+     movimientos tiene cada una. Un clic y el libro queda filtrado por esa.
+
+     El orden es el que sirve leyendo un soporte:
+       1º las que TERMINAN en lo tecleado  (los últimos 4 dígitos del soporte),
+       2º las que EMPIEZAN por lo tecleado (se está escribiendo la cuenta),
+       3º las que lo llevan por dentro,
+     y dentro de cada grupo, primero la que más movimientos tiene. */
+  const cuentasPosibles = useMemo(() => {
+    if (filCodModo !== 'contiene') return [];
+    const d = String(fil.codigo ?? '').replace(/\D/g, '');
+    if (d.length < 2) return [];
+    const mapa = new Map<string, { cuenta: string; nombre: string; n: number }>();
+    for (const m of libro) {
+      const cuenta = String(m.codigo ?? '').trim();
+      if (!cuenta) continue;
+      const soloNum = cuenta.replace(/\D/g, '');
+      if (!soloNum.includes(d)) continue;
+      const y = mapa.get(cuenta);
+      if (y) { y.n += 1; if (!y.nombre) y.nombre = nombreDeFila(m) || ''; }
+      else mapa.set(cuenta, { cuenta, nombre: nombreDeFila(m) || '', n: 1 });
+    }
+    const rango = (c: string) => {
+      const s = c.replace(/\D/g, '');
+      if (s.endsWith(d)) return 0;
+      if (s.startsWith(d)) return 1;
+      return 2;
+    };
+    return Array.from(mapa.values())
+      .sort((a, b) => rango(a.cuenta) - rango(b.cuenta) || b.n - a.n)
+      .slice(0, 12);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [libro, fil.codigo, filCodModo]);
+  const [verCuentas, setVerCuentas] = useState(true);
+
   const totDebito = useMemo(() => libroFiltrado.reduce((s, m) => s + (Number(m.debito) || 0), 0), [libroFiltrado]);
   const totCredito = useMemo(() => libroFiltrado.reduce((s, m) => s + (Number(m.credito) || 0), 0), [libroFiltrado]);
   const filVacio = { banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', codigo: '', deportista: '', detalle: '' };
@@ -2096,6 +2216,15 @@ export default function ContabilidadPage() {
   }, [fil, libroBanco, soloEgresoSinConc, soloIngresoSinConc, soloSinDetalle]);
   // Aplicar el filtro con un pequeño retraso (evita recalcular/redibujar en cada tecla)
   useEffect(() => { const t = setTimeout(() => setFilDebounced(fil), 250); return () => clearTimeout(t); }, [fil]);
+
+  /* La franja gris se borra sola al primer clic en cualquier parte: ya cumplió
+     su oficio, que era decir «aquí ibas». — dirección, 05/09/2026 */
+  useEffect(() => {
+    if (!filaDondeIba || estadoCuentaUrl) return;
+    const quitar = () => setFilaDondeIba(null);
+    window.addEventListener('pointerdown', quitar, { once: true });
+    return () => window.removeEventListener('pointerdown', quitar);
+  }, [filaDondeIba, estadoCuentaUrl]);
   // Guardar el estado de la vista para poder volver exactamente aquí.
   // Saltamos el PRIMER montaje para no sobrescribir con valores por defecto lo ya guardado.
   const primerPersist = useRef(true);
@@ -2293,7 +2422,15 @@ export default function ContabilidadPage() {
               <span className="font-black text-sm">Estado de cuenta del deportista</span>
               <div className="flex items-center gap-2">
                 <a href={estadoCuentaUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-white/80 hover:text-white underline">Abrir en pestaña</a>
-                <button onClick={() => { setEstadoCuentaUrl(null); getPagadosKeys().then(keys => setPublicadas(prev => { const n = new Set(prev); keys.forEach(k => n.add(k)); return n; })).catch(() => {}); }}
+                <button onClick={() => {
+                    setEstadoCuentaUrl(null);
+                    /* Al volver: la pantalla se desplaza hasta la fila donde iba,
+                       que queda pintada de gris claro. — dirección, 05/09/2026 */
+                    if (filaDondeIba) setTimeout(() => {
+                      document.getElementById('mov-' + filaDondeIba)
+                        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    }, 80);
+                    getPagadosKeys().then(keys => setPublicadas(prev => { const n = new Set(prev); keys.forEach(k => n.add(k)); return n; })).catch(() => {}); }}
                   className="flex items-center gap-1 bg-white/20 hover:bg-white/35 px-3 py-1.5 rounded-lg text-sm font-black transition">
                   <X className="w-4 h-4" /> Volver al libro
                 </button>
@@ -2634,11 +2771,38 @@ export default function ContabilidadPage() {
                     <th style={thFil}><input value={fil.credito} onChange={e => setFil(f => ({ ...f, credito: e.target.value }))} placeholder="crédito…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.saldo} onChange={e => setFil(f => ({ ...f, saldo: e.target.value }))} placeholder="saldo…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.concepto} onChange={e => setFil(f => ({ ...f, concepto: e.target.value }))} placeholder="concepto…" style={inpFil} /></th>
-                    <th style={thFil}>
+                    <th style={{ ...thFil, position: 'relative' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <input autoComplete="off" value={fil.codigo} onChange={e => setFil(f => ({ ...f, codigo: e.target.value }))}
-                          placeholder={filCodModo === 'contiene' ? 'nº cuenta…' : 'exacto: 25450'}
+                        <input autoComplete="off" value={fil.codigo}
+                          onChange={e => { setFil(f => ({ ...f, codigo: e.target.value })); setVerCuentas(true); }}
+                          onFocus={() => setVerCuentas(true)}
+                          placeholder={filCodModo === 'contiene' ? 'nº cuenta o últimos 4…' : 'exacto: 25450'}
                           style={{ ...inpFil, fontWeight: 800 }} />
+                        {/* ── LAS CUENTAS POSIBLES ────────────────────────────────
+                            Aparece sola al teclear en modo Nº cuenta. Un clic deja
+                            el libro filtrado por esa cuenta. — dirección, 05/09/2026 */}
+                        {verCuentas && cuentasPosibles.length > 0 && (
+                          <div style={{ position: 'absolute', top: '100%', left: 2, zIndex: 40, minWidth: 250, maxWidth: 340,
+                                        background: '#fff', border: '2px solid #16a34a', borderRadius: 8,
+                                        boxShadow: '0 10px 24px rgba(0,0,0,.35)', overflow: 'hidden', textAlign: 'left' }}>
+                            <div style={{ background: '#064e1e', color: '#fff', fontSize: 9, fontWeight: 900, padding: '3px 7px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>CUENTAS POSIBLES ({cuentasPosibles.length})</span>
+                              <button type="button" onClick={() => setVerCuentas(false)}
+                                style={{ color: '#fff', fontWeight: 900, cursor: 'pointer', padding: '0 3px' }}>✕</button>
+                            </div>
+                            {cuentasPosibles.map(c => (
+                              <button key={c.cuenta} type="button"
+                                onClick={() => { setFil(f => ({ ...f, codigo: c.cuenta })); setVerCuentas(false); }}
+                                title={`Filtrar el libro por la cuenta ${c.cuenta}`}
+                                style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+                                         padding: '3px 7px', borderBottom: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>
+                                <span style={{ fontSize: 11, fontWeight: 900, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>{c.cuenta}</span>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: '#475569', flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre || '—'}</span>
+                                <span style={{ fontSize: 9, fontWeight: 900, color: '#16a34a', whiteSpace: 'nowrap' }}>{c.n} mov.</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: 2 }}>
                           <button type="button" onClick={() => setFilCodModo('exacto')}
                             title="Buscar el código exacto del deportista"
@@ -2701,7 +2865,7 @@ export default function ContabilidadPage() {
                       title={semaforo[m.id || '']?.motivo || filasProblema[m.id || ''] || undefined}
                       onMouseEnter={() => setHoverId(m.id || null)}
                       onMouseLeave={() => setHoverId(h => (h === m.id ? null : h))}
-                      style={{ background: hoverId === m.id ? '#cfe3ff' : resaltarId === m.id ? '#bbf7d0' : filasProblema[m.id || ''] ? '#fee2e2' : dirtyIds.has(m.id || '') ? '#fef9c3' : (i % 2 ? '#f8fafc' : '#fff'), transition: 'background 0.12s', outline: hoverId === m.id ? '2px solid #3b82f6' : resaltarId === m.id ? '2px solid #16a34a' : filasProblema[m.id || ''] ? '1px solid #ef4444' : undefined }}>
+                      style={{ background: hoverId === m.id ? '#cfe3ff' : resaltarId === m.id ? '#bbf7d0' : filaDondeIba === m.id ? '#D8DEE7' : filasProblema[m.id || ''] ? '#fee2e2' : dirtyIds.has(m.id || '') ? '#fef9c3' : (i % 2 ? '#f8fafc' : '#fff'), transition: 'background 0.12s', outline: hoverId === m.id ? '2px solid #3b82f6' : resaltarId === m.id ? '2px solid #16a34a' : filaDondeIba === m.id ? '2px solid #94A3B8' : filasProblema[m.id || ''] ? '1px solid #ef4444' : undefined }}>
                       <td style={{ ...tdC, color: '#94a3b8', fontWeight: 700, background: '#f8fafc', fontVariantNumeric: 'tabular-nums' }}>{numFila[m.id || ''] ?? ''}</td>
                       {esTodas && <td style={{ ...tdC, fontWeight: 700, color: '#475569' }}>{String(m.banco || '').replace('Bancolombia ', '')}</td>}
                       <td style={tdC}>{m.fecha}</td>
@@ -2809,7 +2973,7 @@ export default function ContabilidadPage() {
                           // Deportista real (ingreso) → enlace a su estado de cuenta (como antes)
                           if (nombreDep && depId) {
                             return (
-                              <button onClick={() => setEstadoCuentaUrl(`/alumnos/${depId}/estado-cuenta?edit=1`)}
+                              <button onClick={() => { setFilaDondeIba(m.id || null); setEstadoCuentaUrl(`/alumnos/${depId}/estado-cuenta?edit=1`); }}
                                 className="text-left text-[#5BE39B] hover:text-green-900 hover:underline font-semibold w-full truncate"
                                 title={`Ver estado de cuenta de ${nombreDep} (se abre en ventana, sin salir del libro)`}>
                                 {nombreDep}
@@ -2848,59 +3012,41 @@ export default function ContabilidadPage() {
                               <option value="">— ¿de qué mes? —</option>
                               {MESES_NOMINA.map(o => <option key={o} value={o}>{o}</option>)}
                             </select>
-                          ) : esGastoRepresentacion(m.concepto) ? (
-                            /* GASTOS DE REPRESENTACIÓN: aquí el DETALLE no es el mes,
-                               es EN QUÉ SE GASTÓ. Lista cerrada de nueve opciones. */
-                            <select autoFocus defaultValue={m.detalle || ''}
-                              onClick={e => e.stopPropagation()}
-                              onChange={e => { cambiarCampoLibro(m, 'detalle', e.target.value); setEditCell(null); }}
-                              onBlur={() => setEditCell(null)}
-                              onKeyDown={e => { if (e.key === 'Escape') setEditCell(null); }}
-                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 3px', fontSize: 11, fontWeight: 700, background: '#fff' }}>
-                              <option value="">— ¿en qué se gastó? —</option>
-                              {GASTOS_REPR_DETALLE.map(o => <option key={o} value={o}>{o}</option>)}
-                              {/* Si la fila ya traía otro texto, se conserva para no borrárselo sin querer */}
-                              {!!String(m.detalle ?? '').trim() && !GASTOS_REPR_DETALLE.includes(String(m.detalle).trim()) && (
-                                <option value={String(m.detalle).trim()}>{String(m.detalle).trim()} (como estaba)</option>
-                              )}
-                            </select>
-                          ) : mismoTexto(m.concepto, CONCEPTO_INSTITUCIONAL) ? (
-                            /* ── INSTITUCIONAL: LISTA CERRADA DE PRODUCTOS ──────────
-                               (dirección, 04/09/2026 — «te repito: si por defecto
-                                cuando se sube el extracto, o si lo ponemos manual la
-                                palabra INSTITUCIONAL en el concepto, NO aparecen meses
-                                ni matrículas»)
+                          ) : (() => {
+                            /* ── LISTAS CERRADAS SEGÚN EL CONCEPTO ────────────────
+                               (dirección, 25/08 · 04/09 · 05/09 de 2026)
 
-                               Antes esto era una casilla de escribir con sugerencias.
-                               Sugerir no basta: la casilla seguía dejando teclear
-                               "AGOSTO 2026" a mano, y el desplegable del navegador
-                               mostraba lo que ya se había escrito otras veces. Por eso
-                               la dirección lo seguía viendo.
+                               Cuando el concepto de la fila manda —gastos de
+                               representación, institucional, aporte formación o
+                               inscripción— la casilla deja de ser de escribir y se
+                               vuelve un desplegable CERRADO. Así no hay forma de
+                               dejar un mes en una camiseta, ni una camiseta en una
+                               mensualidad, ni escribiéndolo a mano.
 
-                               Ahora es una lista CERRADA, igual que en Gastos de
-                               Representación: solo productos. No hay forma de dejar un
-                               mes aquí, ni escribiéndolo. */
-                            <select autoFocus defaultValue={m.detalle || ''}
-                              onClick={e => e.stopPropagation()}
-                              onChange={e => { cambiarCampoLibro(m, 'detalle', e.target.value); setEditCell(null); }}
-                              onBlur={() => setEditCell(null)}
-                              onKeyDown={e => { if (e.key === 'Escape') setEditCell(null); }}
-                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 3px', fontSize: 11, fontWeight: 700, background: '#fff', color: '#111827' }}>
-                              <option value="">— ¿qué producto? —</option>
-                              {opcionesDetalle(CONCEPTO_INSTITUCIONAL, institucionales, memoriaDetalle, memoriaInstitucional)
-                                .map(o => <option key={o} value={o}>{o}</option>)}
-                              {/* Si la fila ya traía algo que no está en la lista —un mes
-                                  mal puesto de antes— se conserva marcado, para no
-                                  borrárselo sin que nadie lo vea. */}
-                              {!!String(m.detalle ?? '').trim()
-                                && !opcionesDetalle(CONCEPTO_INSTITUCIONAL, institucionales, memoriaDetalle, memoriaInstitucional)
-                                     .some(o => mismoTexto(o, m.detalle)) && (
-                                <option value={String(m.detalle).trim()}>
-                                  {String(m.detalle).trim()} (como estaba — revisar)
-                                </option>
-                              )}
-                            </select>
-                          ) : (
+                               Si la fila ya traía otro texto —algo mal orientado de
+                               antes— se conserva como última opción marcada
+                               «(como estaba — revisar)», para no borrárselo a nadie
+                               sin que se vea. */
+                            const cerrada = listaCerradaDetalle(m.concepto, institucionales, memoriaDetalle, memoriaInstitucional);
+                            if (!cerrada) return null;
+                            const yaEsta = String(m.detalle ?? '').trim();
+                            const estaEnLista = !!yaEsta && cerrada.opciones.some(o => mismoTexto(o, yaEsta));
+                            return (
+                              <select autoFocus defaultValue={yaEsta}
+                                onClick={e => e.stopPropagation()}
+                                onChange={e => { cambiarCampoLibro(m, 'detalle', e.target.value); setEditCell(null); }}
+                                onBlur={() => setEditCell(null)}
+                                onKeyDown={e => { if (e.key === 'Escape') setEditCell(null); }}
+                                style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 3px', fontSize: 11, fontWeight: 700, background: '#fff', color: '#111827' }}>
+                                <option value="">{cerrada.titulo}</option>
+                                {cerrada.opciones.map(o => <option key={o} value={o}>{o}</option>)}
+                                {!!yaEsta && !estaEnLista && (
+                                  <option value={yaEsta}>{yaEsta} (como estaba — revisar)</option>
+                                )}
+                              </select>
+                            );
+                          })() ?? (
+
                             <input autoFocus
                               list="detalle-libro"
                               defaultValue={m.detalle || ''}
