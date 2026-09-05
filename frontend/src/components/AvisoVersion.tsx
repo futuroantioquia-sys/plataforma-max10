@@ -165,7 +165,14 @@ export function AvisoVersion() {
        consulta de nada, y no toca la base de datos. */
     const alVolver = () => { if (document.visibilityState === 'visible') revisar(); };
     document.addEventListener('visibilitychange', alVolver);
-    const reloj = setInterval(() => revisar(), 15 * 60 * 1000);
+    /* CADA 3 MINUTOS, NO CADA 15 (dirección, 05/09/2026 — «todos los cambios
+       de diseño de contabilidad se le demoran o no le llegan a Diana»).
+
+       Quince minutos es mucho cuando se está publicando varias veces en una
+       hora: la contadora podía estar un buen rato trabajando sobre la pantalla
+       vieja sin que nada se lo dijera. La consulta es de nada —una página
+       liviana, sin tocar la base—, así que preguntar más seguido no cuesta. */
+    const reloj = setInterval(() => revisar(), 3 * 60 * 1000);
     return () => { document.removeEventListener('visibilitychange', alVolver); clearInterval(reloj); };
   }, [revisar]);
 

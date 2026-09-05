@@ -2132,49 +2132,6 @@ export default function ContabilidadPage() {
     Array.from(new Set(libro.map(m => String(m.codigo ?? '').trim()).filter(Boolean)))
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
     [libro]);
-  /* ── CUENTAS POSIBLES: LA AYUDA MIENTRAS SE TECLEA ────────────────────────
-     (dirección, 05/09/2026 — «que al escribirlo vaya apareciendo, ejemplo
-      310443…, y que aparezcan las cuentas posibles; pero hay soportes que solo
-      muestran los últimos 4 dígitos: que al digitarlos aparezcan las cuentas
-      con esos dígitos de últimos»)
-
-     Con el soporte en la mano uno tiene un número —a veces la cuenta completa,
-     a veces solo los cuatro últimos— y necesita saber si esa cuenta YA existe
-     en el libro y de quién es. Desde el segundo dígito, debajo de la casilla
-     aparece la lista de cuentas que coinciden, con el nombre y cuántos
-     movimientos tiene cada una. Un clic y el libro queda filtrado por esa.
-
-     El orden es el que sirve leyendo un soporte:
-       1º las que TERMINAN en lo tecleado  (los últimos 4 dígitos del soporte),
-       2º las que EMPIEZAN por lo tecleado (se está escribiendo la cuenta),
-       3º las que lo llevan por dentro,
-     y dentro de cada grupo, primero la que más movimientos tiene. */
-  const cuentasPosibles = useMemo(() => {
-    const d = String(fil.codigo ?? '').replace(/\D/g, '');
-    if (d.length < 2) return [];
-    const mapa = new Map<string, { cuenta: string; nombre: string; n: number }>();
-    for (const m of libro) {
-      const cuenta = String(m.codigo ?? '').trim();
-      if (!cuenta) continue;
-      const soloNum = cuenta.replace(/\D/g, '');
-      if (!soloNum.includes(d)) continue;
-      const y = mapa.get(cuenta);
-      if (y) { y.n += 1; if (!y.nombre) y.nombre = nombreDeFila(m) || ''; }
-      else mapa.set(cuenta, { cuenta, nombre: nombreDeFila(m) || '', n: 1 });
-    }
-    const rango = (c: string) => {
-      const s = c.replace(/\D/g, '');
-      if (s.endsWith(d)) return 0;
-      if (s.startsWith(d)) return 1;
-      return 2;
-    };
-    return Array.from(mapa.values())
-      .sort((a, b) => rango(a.cuenta) - rango(b.cuenta) || b.n - a.n)
-      .slice(0, 12);
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [libro, fil.codigo]);
-  const [verCuentas, setVerCuentas] = useState(true);
-
   const totDebito = useMemo(() => libroFiltrado.reduce((s, m) => s + (Number(m.debito) || 0), 0), [libroFiltrado]);
   const totCredito = useMemo(() => libroFiltrado.reduce((s, m) => s + (Number(m.credito) || 0), 0), [libroFiltrado]);
   const filVacio = { banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', codigo: '', deportista: '', detalle: '' };
@@ -2824,41 +2781,9 @@ export default function ContabilidadPage() {
                 </div>
               </div>
             )}
-            {/* ── LAS CUENTAS POSIBLES ─────────────────────────────────────
-                (dirección, 05/09/2026 — «reubica mejor esto, ya que borra el
-                 poder ver el código de la primera fila, y es mejor tener la
-                 certeza de que todo está ok»)
-
-                Antes esta lista salía colgando debajo de la casilla, encima de
-                la tabla, y tapaba justo el primer renglón —el que uno necesita
-                ver para confirmar que la búsqueda dio con la cuenta correcta—.
-                Ahora va como una FRANJA ENCIMA de la tabla: empuja la tabla
-                hacia abajo en vez de taparla, así que se ve la lista Y se ven
-                todos los renglones al tiempo. */}
-            {verCuentas && cuentasPosibles.length > 0 && (
-              <div className="px-4 py-2 border-b border-[#4A5568]" style={{ background: '#064e1e' }}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-white font-black" style={{ fontSize: 10, letterSpacing: '.06em' }}>
-                    CUENTAS POSIBLES CON “{fil.codigo}” ({cuentasPosibles.length})
-                  </span>
-                  <button type="button" onClick={() => setVerCuentas(false)}
-                    className="ml-auto text-white/70 hover:text-white font-black" style={{ fontSize: 11 }}>✕ ocultar</button>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {cuentasPosibles.map(c => (
-                    <button key={c.cuenta} type="button"
-                      onClick={() => { setFil(f => ({ ...f, codigo: c.cuenta })); setVerCuentas(false); }}
-                      title={`Filtrar el libro por la cuenta ${c.cuenta}`}
-                      className="flex items-center gap-2 rounded-lg px-2.5 py-1 hover:brightness-110 transition"
-                      style={{ background: '#FFFFFF', border: '1px solid #16a34a' }}>
-                      <span style={{ fontSize: 11.5, fontWeight: 900, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>{c.cuenta}</span>
-                      <span style={{ fontSize: 9.5, fontWeight: 700, color: '#475569', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre || '—'}</span>
-                      <span style={{ fontSize: 9.5, fontWeight: 900, color: '#16a34a', whiteSpace: 'nowrap' }}>{c.n} mov.</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* LAS CUENTAS POSIBLES se eliminaron el 05/09/2026 («elimina, es
+                innecesario»): desde que el buscador decide solo si va exacto o
+                por parte, la lista de candidatos ya no aportaba nada. */}
             <p className="px-4 py-1.5 text-[11px] text-white/40 bg-[#333F50] border-b border-[#4A5568]">
               💡 ¿Ajustar columnas? Arrastra la línea blanca del borde del encabezado. Doble clic en esa línea deja la columna como estaba.
             </p>
@@ -2920,8 +2845,7 @@ export default function ContabilidadPage() {
                         decide solo si busca exacto o por parte. */}
                     <th style={thFil}>
                       <input autoComplete="off" value={fil.codigo}
-                        onChange={e => { setFil(f => ({ ...f, codigo: e.target.value })); setVerCuentas(true); }}
-                        onFocus={() => setVerCuentas(true)}
+                        onChange={e => setFil(f => ({ ...f, codigo: e.target.value }))}
                         title="Escribe el código del deportista, la cédula o NIT, la cuenta, o solo los últimos dígitos del soporte. El buscador se encarga."
                         placeholder="código, cédula o cuenta…"
                         style={{ ...inpFil, fontWeight: 800 }} />
@@ -2937,6 +2861,21 @@ export default function ContabilidadPage() {
                         <option value="rojo">🔴 Pendientes</option>
                       </select>
                     </th>
+                    {/* ── EL HUECO NEGRO DEL FINAL ──────────────────────────
+                        (dirección, 05/09/2026 — «arréglale el diseño a ese
+                         hueco, que quede uniforme»)
+
+                        La tabla tiene cuatro columnas al final —CONFIRMAR,
+                        EDITAR, BORRAR y ✓— pero la fila de filtros solo traía
+                        TRES casillas. Faltaba una. Por eso todo se corría un
+                        puesto: el chulo de señalar quedaba debajo de BORRAR, y
+                        la última columna se quedaba sin casilla, mostrando el
+                        fondo oscuro de la pantalla: el hueco.
+
+                        Aquí están las dos que faltaban —EDITAR y BORRAR, vacías
+                        porque no se filtra por ellas— y el chulo vuelve a su
+                        columna. */}
+                    <th style={thFil}></th>
                     <th style={thFil}></th>
                     {/* Señala o suelta TODAS las filas que se están viendo. */}
                     <th style={thFil}>
