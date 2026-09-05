@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle, XCircle, Eye, Clock, AlertCircle, BookOpen, Hash, CalendarDays } from 'lucide-react';
 import { getSoportesPendientes, getSoporteDatos, confirmarSoportePago, eliminarSoportePago, getDeportistas } from '@/lib/db';
@@ -189,18 +189,24 @@ export default function PagosPendientesPage() {
      pantalla se abre justo donde uno la dejó. Es de la persona y de este
      computador: no cambia nada de la nube ni le mueve la vista a nadie más. */
   const LLAVE_VISTA = 'pagos_pendientes_vista_v1';
-  const guardado = (() => {
-    if (typeof window === 'undefined') return null;
-    try { return JSON.parse(localStorage.getItem(LLAVE_VISTA) || 'null'); }
-    catch { return null; }
-  })();
-
-  const [orden, setOrden] = useState<'dia' | 'codigo'>(
-    guardado?.orden === 'codigo' ? 'codigo' : 'dia');
-  const [dia,   setDia]   = useState<string>(
-    typeof guardado?.dia === 'string' ? guardado.dia : '');
+  /* Igual que la franja: la memoria del navegador se lee YA MONTADA la
+     pantalla, nunca al armarla. — corregido 05/09/2026 */
+  const [orden, setOrden] = useState<'dia' | 'codigo'>('dia');
+  const [dia,   setDia]   = useState<string>('');
+  const yaRestaure = useRef(false);
 
   useEffect(() => {
+    try {
+      const g = JSON.parse(localStorage.getItem(LLAVE_VISTA) || 'null');
+      if (g?.orden === 'codigo') setOrden('codigo');
+      if (typeof g?.dia === 'string') setDia(g.dia);
+    } catch { /* noop */ }
+    yaRestaure.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!yaRestaure.current) return;   // no pisar lo guardado con los valores de arranque
     try { localStorage.setItem(LLAVE_VISTA, JSON.stringify({ orden, dia })); }
     catch { /* si el navegador no deja guardar, no pasa nada grave */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,10 +223,17 @@ export default function PagosPendientesPage() {
      hasta ella. La marca se va con el primer clic en cualquier parte: cumple
      su trabajo y no estorba. */
   const LLAVE_ULTIMA = 'pagos_pendientes_ultima_v1';
-  const [ultimaFila, setUltimaFila] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
-    try { return localStorage.getItem(LLAVE_ULTIMA) || ''; } catch { return ''; }
-  });
+  /* OJO CON EL ARRANQUE (corregido 05/09/2026 — «a Diana no le aparece la
+     franja roja»): esto NO se puede leer al crear el estado. La pantalla se
+     arma primero en el servidor, donde no existe el navegador ni su memoria,
+     y React descartaba el valor al empatar las dos versiones. Por eso a veces
+     la franja salía y a veces no. Ahora arranca vacío y se lee UNA VEZ ya
+     montada la pantalla, que es cuando la memoria del navegador sí existe. */
+  const [ultimaFila, setUltimaFila] = useState<string>('');
+  useEffect(() => {
+    try { setUltimaFila(localStorage.getItem(LLAVE_ULTIMA) || ''); } catch { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Se llama justo antes de salir de la pantalla. */
   const marcarDondeIba = (idSoporte: string) => {
@@ -577,7 +590,10 @@ export default function PagosPendientesPage() {
                             sale una barra VOLVER A PAGOS PENDIENTES para
                             devolverse de una a darle OK. */}
                         <button
-                          onClick={() => { marcarDondeIba(s.id); router.push(`/contabilidad?codigo=${encodeURIComponent(s.depCodigo || '')}`); }}
+                          /* Se lleva también EL DÍA en que el papá subió el soporte:
+                             si el pago no aparece por código, allá el Libro se
+                             puede parar en ese día a buscarlo. — 05/09/2026 */
+                          onClick={() => { marcarDondeIba(s.id); router.push(`/contabilidad?codigo=${encodeURIComponent(s.depCodigo || '')}&dia=${encodeURIComponent(diaDe(s))}`); }}
                           disabled={!String(s.depCodigo || '').trim()}
                           title={String(s.depCodigo || '').trim()
                             ? `Ver en el Libro Contable los movimientos del código ${s.depCodigo}`

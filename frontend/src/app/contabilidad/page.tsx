@@ -427,6 +427,19 @@ const listaCerradaDetalle = (
    ni inscripción. El directorio sale del módulo "Nómina y Proveedores". */
 const MESES_NOMINA: string[] = MESES_DET.map(m => `${m} 2026`);
 
+/** Corre una fecha aaaa-mm-dd un día para atrás (-1) o para adelante (+1).
+ *  Se usa al buscar un soporte por fecha: el banco a veces registra el pago
+ *  al día siguiente de que el papá manda la foto. — 05/09/2026 */
+const correrDia = (aaaammdd: string, pasos: number): string => {
+  const t = String(aaaammdd ?? '').trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const [a, m, d] = t.split('-').map(Number);
+  const f = new Date(a, m - 1, d);
+  f.setDate(f.getDate() + pasos);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${f.getFullYear()}-${p(f.getMonth() + 1)}-${p(f.getDate())}`;
+};
+
 function loadXLSX(): Promise<any> {
   return new Promise((resolve, reject) => {
     const w = window as any;
@@ -2191,11 +2204,21 @@ export default function ContabilidadPage() {
   /** El deportista que me trajo desde PAGOS PENDIENTES. Mientras tenga valor,
    *  arriba se ve la barra para devolverse a confirmarle el pago. */
   const [vengoDePendientes, setVengoDePendientes] = useState('');
+  /** El DÍA en que el papá subió ese soporte. Sirve para el segundo caso:
+   *  el pago NO aparece por código, y hay que buscarlo por fecha en el libro
+   *  de ese día. — dirección, 05/09/2026 */
+  const [diaDelSoporte, setDiaDelSoporte] = useState('');
   useEffect(() => {
     if (entrePorEnlace.current) return;
     let cod = '';
-    try { cod = new URLSearchParams(window.location.search).get('codigo') ?? ''; } catch { /* nada */ }
+    let dia = '';
+    try {
+      const q = new URLSearchParams(window.location.search);
+      cod = q.get('codigo') ?? '';
+      dia = q.get('dia') ?? '';
+    } catch { /* nada */ }
     cod = cod.trim();
+    setDiaDelSoporte(dia.trim());
     if (!cod) return;
     entrePorEnlace.current = true;
     saltarReset.current = true;          // que no se reinicie el bloque de filas
@@ -2384,7 +2407,18 @@ export default function ContabilidadPage() {
     <div className="min-h-screen bg-[#333F50]">
       <header className="bg-gradient-to-r from-[#333F50] to-[#0EA142] px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/dashboard')} className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition">
+          {/* ── LA FLECHA DE ATRÁS SABE DE DÓNDE VINE ──────────────────────
+              (dirección, 05/09/2026 — «estoy en soportes, voy al libro, veo
+               que el pago sí está, solo me queda confirmar el soporte; pero si
+               le doy atrás, se sale: debe ir a soportes y en franja roja el
+               mismo código, para confirmar y que desaparezca»)
+
+              Si llegué desde SOPORTES, la flecha devuelve a SOPORTES —al mismo
+              renglón, que allá queda con su franja roja—. Si entré por el menú,
+              devuelve al tablero como siempre. */}
+          <button onClick={() => router.push(vengoDePendientes ? '/pagos-pendientes' : '/dashboard')}
+            title={vengoDePendientes ? 'Volver a Soportes, al mismo renglón' : 'Volver al tablero'}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/20 transition">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center"><Calculator className="w-4 h-4 text-white" /></div>
@@ -2464,6 +2498,40 @@ export default function ContabilidadPage() {
               <b style={{ color: '#E0A33A' }}>{vengoDePendientes}</b>.
               Si el pago aparece, devuélvete y dale <b style={{ color: '#5BE39B' }}>OK</b>.
             </p>
+            {/* ── SEGUNDO CASO: EL PAGO NO APARECE POR CÓDIGO ────────────────
+                (dirección, 05/09/2026 — «observo el soporte y voy a libro y no
+                 aparece; quito el código manualmente y que vaya a la parte del
+                 libro y cuenta donde paga, es decir fila o renglón con la fecha
+                 de cuando subió el soporte»)
+
+                Muchos pagos entran al banco SIN el código del deportista: el
+                papá pagó desde otra cuenta, o el banco no trajo la referencia.
+                Buscar por código no sirve; hay que mirar el día. Este botón
+                quita el código y para el libro en el día en que el papá subió
+                el soporte, en TODAS las cuentas. Con las flechitas se corre un
+                día para atrás o para adelante, porque el banco a veces registra
+                al día siguiente. */}
+            {!!diaDelSoporte && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => { setFil(x => ({ ...x, codigo: '', fecha: diaDelSoporte })); setLibroBanco('TODAS'); }}
+                  title={`Quitar el código y mirar todo lo que entró el ${diaDelSoporte}`}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-white font-black text-[12px] transition hover:brightness-110"
+                  style={{ background: '#C0504D' }}>
+                  NO APARECE · VER EL DÍA {diaDelSoporte}
+                </button>
+                {fil.fecha && (
+                  <>
+                    <button onClick={() => setFil(x => ({ ...x, fecha: correrDia(x.fecha || diaDelSoporte, -1) }))}
+                      title="Un día antes" className="px-2 py-2 rounded-lg text-white font-black text-[12px]"
+                      style={{ background: '#2B3547', border: '1px solid #4A5568' }}>‹</button>
+                    <button onClick={() => setFil(x => ({ ...x, fecha: correrDia(x.fecha || diaDelSoporte, 1) }))}
+                      title="Un día después" className="px-2 py-2 rounded-lg text-white font-black text-[12px]"
+                      style={{ background: '#2B3547', border: '1px solid #4A5568' }}>›</button>
+                  </>
+                )}
+              </div>
+            )}
             <button
               onClick={() => { setVengoDePendientes(''); setFil(x => ({ ...x, codigo: '' })); }}
               title="Quitar el filtro y quedarme en el libro completo"
