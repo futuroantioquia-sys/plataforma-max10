@@ -143,7 +143,7 @@ export function DirectorioFinanzas({
               placeholder={`Buscar por nombre, ${docLabel.toLowerCase()}, cuenta o banco…`}
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
-              className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
+              className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#16a34a]"
             />
           </div>
           <button onClick={agregar} disabled={guardando}

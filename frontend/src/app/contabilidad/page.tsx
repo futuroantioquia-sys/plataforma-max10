@@ -2516,7 +2516,7 @@ export default function ContabilidadPage() {
                             onBlur={e => { cambiarCampoLibro(m, 'concepto', e.target.value.trim().toUpperCase()); setEditCell(null); }}
                             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditCell(null); }}
                             placeholder="Escriba y escoja…"
-                            style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff' }} />
+                            style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff', color: '#111827' }} />
                         ) : (
                           <span className="block truncate">{m.concepto || <span style={{ color: '#cbd5e1' }}>—</span>}</span>
                         )}
@@ -2612,7 +2612,7 @@ export default function ContabilidadPage() {
                               onBlur={e => { cambiarCampoLibro(m, 'deportista', e.target.value.trim()); setEditCell(null); }}
                               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditCell(null); }}
                               placeholder="Nombre (proveedor / empleado)"
-                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff' }} />
+                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff', color: '#111827' }} />
                           ) : (
                             <span className="block truncate cursor-pointer" title="Clic para escribir el nombre (proveedor / empleado)"
                               onClick={() => setEditCell({ id: m.id || '', campo: 'deportista' })}>
@@ -2659,7 +2659,7 @@ export default function ContabilidadPage() {
                               onBlur={e => { cambiarCampoLibro(m, 'detalle', e.target.value.trim()); setEditCell(null); }}
                               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditCell(null); }}
                               placeholder="Mes o texto libre (lo que se paga)"
-                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff' }} />
+                              style={{ width: '100%', border: '1px solid #16a34a', borderRadius: 4, padding: '1px 4px', fontSize: 11, background: '#fff', color: '#111827' }} />
                           )
                         ) : (() => {
                           /* SEMAFORO: el mes se pinta con fondo pastel y letra negra
@@ -2824,7 +2824,20 @@ export default function ContabilidadPage() {
         const origCred = Number(editRow.orig.credito) || 0;
         const okDeb = Math.round(sumDeb) === Math.round(origDeb);
         const okCred = Math.round(sumCred) === Math.round(origCred);
-        const inp: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 6, padding: '4px 6px', fontSize: 12, outline: 'none' };
+        /* ── LAS CASILLAS DE ESTE CUADRO IBAN EN BLANCO SOBRE BLANCO ────────
+           (dirección, 04/09/2026 — «la contadora tiene problemas con eso»)
+
+           Estas casillas no traían color de letra ni fondo. Con el diseño
+           viejo eso no importaba: la letra de toda la app era casi negra. Con
+           el diseño gris verde la letra pasó a BLANCA, y como el navegador le
+           pone fondo blanco a un <input> sin fondo, quedó blanco sobre blanco:
+           la contadora escribía el concepto, el nombre o el valor y la casilla
+           se veía VACÍA.
+
+           Es la peor forma de fallar en un libro contable — uno cree que no
+           guardó, lo vuelve a escribir, y termina con el movimiento repetido.
+           Ahora fondo y letra van dichos a la fuerza. */
+        const inp: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 6, padding: '4px 6px', fontSize: 12, outline: 'none', background: '#FFFFFF', color: '#111827' };
         return (
           <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !guardandoEd && setEditRow(null)}>
             <div className="bg-[#3C4759] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -2912,7 +2925,8 @@ export default function ContabilidadPage() {
 
       {/* ── Modal: AGREGAR FILA MANUAL al libro ── */}
       {nuevaFila && (() => {
-        const inp: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' };
+        /* Fondo y letra dichos a la fuerza, igual que arriba. — 04/09/2026 */
+        const inp: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#FFFFFF', color: '#111827' };
         const lbl = 'block text-[11px] font-black text-white/70 uppercase tracking-wide mb-1';
         return (
           <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4" onClick={() => !guardandoManual && setNuevaFila(null)}>
@@ -3003,7 +3017,10 @@ const td: React.CSSProperties = { border: '1px solid #eef2f7', padding: '6px 8px
 const tdC: React.CSSProperties = { border: '1px solid #eef2f7', padding: '4px 6px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 // Celda y control de la fila de filtros (queda pegada bajo el encabezado)
 const thFil: React.CSSProperties = { position: 'sticky', top: 28, zIndex: 2, background: '#ecfdf5', border: '1px solid #fff', padding: '3px 4px' };
-const inpFil: React.CSSProperties = { width: '100%', minWidth: 60, border: '1px solid #cbd5e1', borderRadius: 6, padding: '3px 6px', fontSize: 11, outline: 'none' };
+/* LA FILA DE FILTROS DEL LIBRO, TAMBIÉN (dirección, 04/09/2026). Es la fila
+   donde la contadora escribe para buscar: iba blanco sobre blanco igual que
+   las demás casillas, así que tecleaba y no veía lo que estaba buscando. */
+const inpFil: React.CSSProperties = { width: '100%', minWidth: 60, border: '1px solid #cbd5e1', borderRadius: 6, padding: '3px 6px', fontSize: 11, outline: 'none', background: '#FFFFFF', color: '#111827' };
 const tfootTd: React.CSSProperties = { position: 'sticky', bottom: 0, zIndex: 2, background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '7px 8px', fontSize: 11, fontWeight: 900, color: '#334155', textAlign: 'center', whiteSpace: 'nowrap' };
 
 // ── Fila de revisión con buscador de deportista para pendientes ──
