@@ -2448,6 +2448,9 @@ export default function ContabilidadPage() {
         </div>
       )}
 
+      {/* La foto del soporte, flotando encima del libro. — 05/09/2026 */}
+      <SoporteFlotante />
+
       {/* Estado de cuenta EN VENTANA sobre el libro — al cerrar, sigues en la misma fila */}
       {estadoCuentaUrl && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-1 sm:p-3">
@@ -3557,6 +3560,119 @@ function FilaRevision({ r, i, deportistas, conceptos, onAsignar, onEditar }: {
           )}
       </td>
     </tr>
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LA VENTANITA DEL SOPORTE
+   (dirección, 05/09/2026 — «cuando le doy al soporte y le digo que vaya al
+    libro, ese soporte puede quedar flotando para buscarlo en el libro»)
+
+   Comprobar un pago es comparar dos cosas: la foto que mandó el papá y el
+   renglón del banco. Antes estaban en pantallas distintas y tocaba memorizar
+   el valor y la fecha. Ahora la foto viaja con uno y queda aquí encima,
+   en una ventanita que se arrastra por su barra, se agranda, se achica, se
+   esconde y se cierra. Al cerrarla se olvida: no vuelve a salir.
+
+   La foto viene en la memoria de la pestaña (sessionStorage), no de la nube:
+   se borra sola al cerrar el navegador y no le aparece a nadie más.
+   ══════════════════════════════════════════════════════════════════════════ */
+interface SoporteFlotanteDato { id: string; img: string; nombre: string; codigo: string; meses: string; cuando: string }
+const LLAVE_FLOTANTE = 'soporte_flotante_v1';
+
+function SoporteFlotante() {
+  const [dato, setDato] = useState<SoporteFlotanteDato | null>(null);
+  const [pos, setPos]   = useState({ x: 0, y: 0 });
+  const [ancho, setAncho] = useState(300);
+  const [encogido, setEncogido] = useState(false);
+  const arrastre = useRef<{ dx: number; dy: number } | null>(null);
+
+  useEffect(() => {
+    try {
+      const t = sessionStorage.getItem(LLAVE_FLOTANTE);
+      if (!t) return;
+      const d = JSON.parse(t);
+      if (d?.img) {
+        setDato(d);
+        // Arranca abajo a la derecha, donde no tapa el libro.
+        setPos({ x: Math.max(12, window.innerWidth - 330), y: Math.max(70, window.innerHeight - 430) });
+      }
+    } catch { /* noop */ }
+  }, []);
+
+  useEffect(() => {
+    const mover = (e: PointerEvent) => {
+      if (!arrastre.current) return;
+      setPos({
+        x: Math.min(window.innerWidth - 80, Math.max(0, e.clientX - arrastre.current.dx)),
+        y: Math.min(window.innerHeight - 40, Math.max(0, e.clientY - arrastre.current.dy)),
+      });
+    };
+    const soltar = () => { arrastre.current = null; };
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', soltar);
+    return () => { window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); };
+  }, []);
+
+  if (!dato) return null;
+  const esPdf = /^data:application\/pdf/i.test(dato.img);
+
+  const cerrar = () => { try { sessionStorage.removeItem(LLAVE_FLOTANTE); } catch { /* noop */ } setDato(null); };
+
+  return (
+    <div style={{ position: 'fixed', left: pos.x, top: pos.y, width: encogido ? 210 : ancho, zIndex: 55,
+                  background: '#3C4759', border: '2px solid #E0A33A', borderRadius: 14,
+                  boxShadow: '0 14px 40px rgba(0,0,0,.55)', overflow: 'hidden' }}>
+      {/* Barra para arrastrar */}
+      <div onPointerDown={e => { arrastre.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }; }}
+        style={{ cursor: 'move', background: '#064e1e', color: '#fff', padding: '5px 8px',
+                 display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none' }}>
+        <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '.06em' }}>SOPORTE DEL PAPÁ</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 3 }}>
+          {!encogido && (
+            <>
+              <button type="button" title="Más pequeño" onClick={() => setAncho(a => Math.max(200, a - 70))}
+                style={{ color: '#fff', fontWeight: 900, fontSize: 13, padding: '0 5px', cursor: 'pointer' }}>−</button>
+              <button type="button" title="Más grande" onClick={() => setAncho(a => Math.min(620, a + 70))}
+                style={{ color: '#fff', fontWeight: 900, fontSize: 13, padding: '0 5px', cursor: 'pointer' }}>+</button>
+            </>
+          )}
+          <button type="button" title={encogido ? 'Mostrar la foto' : 'Esconder la foto'} onClick={() => setEncogido(v => !v)}
+            style={{ color: '#fff', fontWeight: 900, fontSize: 13, padding: '0 5px', cursor: 'pointer' }}>{encogido ? '▣' : '▁'}</button>
+          <button type="button" title="Cerrar (no vuelve a salir)" onClick={cerrar}
+            style={{ color: '#fff', fontWeight: 900, fontSize: 13, padding: '0 5px', cursor: 'pointer' }}>✕</button>
+        </div>
+      </div>
+
+      {/* Quién es y qué está pagando */}
+      <div style={{ padding: '5px 8px', background: '#2B3547', borderBottom: '1px solid #4A5568' }}>
+        <p style={{ color: '#5BE39B', fontWeight: 900, fontSize: 11, lineHeight: 1.2 }}>
+          {dato.codigo || '—'} · <span style={{ color: '#fff' }}>{dato.nombre || '—'}</span>
+        </p>
+        {(dato.meses || dato.cuando) && (
+          <p style={{ color: '#E0A33A', fontWeight: 700, fontSize: 9.5, marginTop: 2 }}>
+            {dato.meses}{dato.meses && dato.cuando ? ' · ' : ''}
+            {dato.cuando ? new Date(dato.cuando).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
+          </p>
+        )}
+      </div>
+
+      {!encogido && (
+        esPdf ? (
+          <div style={{ padding: 10, textAlign: 'center' }}>
+            <a href={dato.img} target="_blank" rel="noreferrer"
+              style={{ color: '#5BE39B', fontWeight: 900, fontSize: 12, textDecoration: 'underline' }}>
+              Abrir el soporte en PDF
+            </a>
+          </div>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={dato.img} alt="Soporte del pago"
+            style={{ display: 'block', width: '100%', maxHeight: '58vh', objectFit: 'contain', background: '#111827' }} />
+        )
+      )}
+    </div>
   );
 }
 

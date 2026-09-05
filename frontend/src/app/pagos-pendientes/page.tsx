@@ -298,6 +298,34 @@ export default function PagosPendientesPage() {
     try { localStorage.setItem(LLAVE_ULTIMA, idSoporte); } catch { /* noop */ }
   };
 
+  /* ── EL SOPORTE SE VA FLOTANDO AL LIBRO ───────────────────────────────────
+     (dirección, 05/09/2026 — «cuando le doy al soporte y le digo que vaya al
+      libro, ese soporte puede quedar flotando para buscarlo en el libro»)
+
+     Comprobar un pago es comparar dos cosas que estaban en pantallas
+     distintas: la foto que mandó el papá y el renglón del banco. Tocaba
+     memorizar el valor y la fecha, irse al Libro y esperar no equivocarse.
+
+     Ahora la foto viaja con uno: se deja guardada aquí y allá en el Libro
+     aparece en una ventanita que se puede arrastrar, agrandar y cerrar. Se
+     guarda en la memoria de la pestaña —no en la nube—, así que se borra sola
+     al cerrar el navegador y no le aparece a nadie más. */
+  const LLAVE_FLOTANTE = 'soporte_flotante_v1';
+  const dejarFlotando = (s: SoporteEnriquecido) => {
+    try {
+      const img = datosMap[s.id] || CACHE_FOTOS.get(s.id) || '';
+      if (!img) { sessionStorage.removeItem(LLAVE_FLOTANTE); return; }
+      sessionStorage.setItem(LLAVE_FLOTANTE, JSON.stringify({
+        id: s.id,
+        img,
+        nombre: s.depNombre || '',
+        codigo: s.depCodigo || '',
+        meses: Array.isArray(s.meses) ? s.meses.join(' · ') : '',
+        cuando: s.created_at || s.fecha || '',
+      }));
+    } catch { /* si no cabe en la memoria de la pestaña, se sigue sin la ventanita */ }
+  };
+
   /* Al volver: se lleva la vista hasta el renglón marcado. */
   useEffect(() => {
     if (!ultimaFila || cargando) return;
@@ -714,7 +742,7 @@ export default function PagosPendientesPage() {
                           /* Se lleva también EL DÍA en que el papá subió el soporte:
                              si el pago no aparece por código, allá el Libro se
                              puede parar en ese día a buscarlo. — 05/09/2026 */
-                          onClick={() => { marcarDondeIba(s.id); router.push(`/contabilidad?codigo=${encodeURIComponent(s.depCodigo || '')}&dia=${encodeURIComponent(diaDe(s))}`); }}
+                          onClick={() => { marcarDondeIba(s.id); dejarFlotando(s); router.push(`/contabilidad?codigo=${encodeURIComponent(s.depCodigo || '')}&dia=${encodeURIComponent(diaDe(s))}`); }}
                           disabled={!String(s.depCodigo || '').trim()}
                           title={String(s.depCodigo || '').trim()
                             ? `Ver en el Libro Contable los movimientos del código ${s.depCodigo}`
@@ -893,7 +921,7 @@ export default function PagosPendientesPage() {
                     <Eye className="w-3.5 h-3.5" /> Cuenta
                   </button>
                   <button
-                    onClick={() => { marcarDondeIba(s.id); router.push(`/contabilidad?codigo=${encodeURIComponent(cod)}&dia=${encodeURIComponent(diaDe(s))}`); }}
+                    onClick={() => { marcarDondeIba(s.id); dejarFlotando(s); router.push(`/contabilidad?codigo=${encodeURIComponent(cod)}&dia=${encodeURIComponent(diaDe(s))}`); }}
                     disabled={!cod || cod === '—'}
                     style={{ background: CAMPO, border: `1px solid ${BORDE}` }}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-white font-black text-[11.5px] hover:opacity-85 transition disabled:opacity-35">
