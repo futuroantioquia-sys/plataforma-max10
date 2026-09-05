@@ -2491,6 +2491,80 @@ export default function ContabilidadPage() {
 
       <main className={`${vista === 'libro' ? 'max-w-none' : 'max-w-6xl'} mx-auto px-3 sm:px-6 py-5 space-y-4`}>
 
+        {/* Controles */}
+        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4 flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Cuenta bancaria</label>
+            <select value={banco} onChange={e => setBanco(e.target.value)} className="border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 bg-[#3C4759]">
+              {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 bg-[#16a34a] text-white text-sm font-black px-4 py-2 rounded-xl cursor-pointer hover:bg-[#064e1e] transition">
+            <Upload className="w-4 h-4" /> {cargando ? 'Leyendo…' : 'Subir extracto'}
+            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={onArchivo} disabled={cargando} />
+          </label>
+          {/* ── LAS TRES ACCIONES DEL LIBRO, ARRIBA ───────────────────────
+              (dirección, 05/09/2026 — «también en la fila de subir extracto»)
+
+              Exportar, eliminar y agregar no son filtros: son acciones. Abajo
+              quedaban revueltas entre los avisos de lo que falta por clasificar
+              y se perdían. Aquí arriba, en la misma fila de SUBIR EXTRACTO,
+              quedan donde uno las busca. Solo en la pestaña Libro. */}
+          {vista === 'libro' && (
+            <>
+              <button onClick={exportarLibro} disabled={!libroFiltrado.length} className={BTN_VERDE}>
+                <Download className="w-4 h-4" /> Exportar Excel
+              </button>
+              <button onClick={eliminarFilasPorNumero} disabled={borrandoFilas}
+                title="Eliminar filas basura del libro escribiendo su N° (la columna gris de la izquierda)"
+                className={BTN_ALERTA}>
+                <Trash2 className="w-4 h-4" /> {borrandoFilas ? 'Eliminando…' : 'Eliminar filas'}
+              </button>
+              <button onClick={abrirNuevaFila} title="Agregar un movimiento manualmente al libro (no vino del Excel del banco)"
+                className={BTN_VERDE}>
+                <Plus className="w-4 h-4" /> Agregar fila
+              </button>
+            </>
+          )}
+
+          {/* ── QUÉ CUENTA SE ESTÁ MIRANDO EN EL LIBRO ────────────────────
+              (dirección, 05/09/2026 — «enseguida de subir extracto»)
+
+              Estaba abajo, mezclado con los filtros y los avisos. Aquí arriba,
+              al lado de SUBIR EXTRACTO, se ve de una en qué cuenta se está
+              parado —o si están las cinco pegadas—, que es lo primero que uno
+              necesita saber al abrir el libro. Solo sale en la pestaña Libro,
+              que es la única donde manda. */}
+          {vista === 'libro' && (
+            <div className="flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
+              {['TODAS', ...BANCOS].map(b => (
+                <button key={b} onClick={() => setLibroBanco(b)}
+                  className={`text-xs font-black px-2.5 py-1.5 rounded-lg border transition ${libroBanco === b ? 'bg-[#00B050] text-white border-white shadow-sm' : 'text-white/70 border-transparent hover:bg-[#333F50]'}`}>
+                  {b === 'TODAS' ? 'Todas las cuentas' : b.replace('Bancolombia ', '')}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="ml-auto flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
+            {([['subir', 'Movimientos'], ['libro', 'Libro'], ['desconocidas', 'Por asignar'], ['cuentas', 'Cuentas']] as const).map(([v, l]) => (
+              <button key={v} onClick={() => setVista(v)}
+                className={`text-sm font-black px-3 py-1.5 rounded-lg transition ${vista === v ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white/70 hover:bg-[#2B3547]'}`}>{l}</button>
+            ))}
+          </div>
+          {mapeoCount < 100 && (
+            <button onClick={sembrar} disabled={sembrando} className="flex items-center gap-1.5 border border-amber-300 text-[#E0A33A] bg-[rgba(224,163,58,.14)] text-xs font-black px-3 py-2 rounded-xl hover:bg-amber-100 transition disabled:opacity-60">
+              <Database className="w-4 h-4" /> {sembrando ? progreso || 'Sembrando…' : 'Sembrar diccionario'}
+            </button>
+          )}
+          {movCount === 0 && (
+            <button onClick={importarHist} disabled={importando} className="flex items-center gap-1.5 border border-blue-300 text-[#8FBEF0] bg-[rgba(78,143,214,.14)] text-xs font-black px-3 py-2 rounded-xl hover:bg-blue-100 transition disabled:opacity-60">
+              <BookOpen className="w-4 h-4" /> {importando ? progreso || 'Importando…' : 'Importar histórico'}
+            </button>
+          )}
+        </div>
+
+        {/* La barra de la vuelta a Soportes va DEBAJO de Cuenta bancaria y
+            Subir extracto, no encima. — dirección, 05/09/2026 */}
         {/* ── LA VUELTA A PAGOS PENDIENTES ───────────────────────────────
             (dirección, 01/09/2026) Si llegué aquí desde el botón LIBRO de
             Pagos Pendientes, es para comprobar UNA cosa: que la plata del
@@ -2555,35 +2629,6 @@ export default function ContabilidadPage() {
           </div>
         )}
 
-        {/* Controles */}
-        <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm p-4 flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Cuenta bancaria</label>
-            <select value={banco} onChange={e => setBanco(e.target.value)} className="border border-[#4A5568] rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 bg-[#3C4759]">
-              {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-          </div>
-          <label className="flex items-center gap-2 bg-[#16a34a] text-white text-sm font-black px-4 py-2 rounded-xl cursor-pointer hover:bg-[#064e1e] transition">
-            <Upload className="w-4 h-4" /> {cargando ? 'Leyendo…' : 'Subir extracto'}
-            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={onArchivo} disabled={cargando} />
-          </label>
-          <div className="ml-auto flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
-            {([['subir', 'Movimientos'], ['libro', 'Libro'], ['desconocidas', 'Por asignar'], ['cuentas', 'Cuentas']] as const).map(([v, l]) => (
-              <button key={v} onClick={() => setVista(v)}
-                className={`text-sm font-black px-3 py-1.5 rounded-lg transition ${vista === v ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white/70 hover:bg-[#2B3547]'}`}>{l}</button>
-            ))}
-          </div>
-          {mapeoCount < 100 && (
-            <button onClick={sembrar} disabled={sembrando} className="flex items-center gap-1.5 border border-amber-300 text-[#E0A33A] bg-[rgba(224,163,58,.14)] text-xs font-black px-3 py-2 rounded-xl hover:bg-amber-100 transition disabled:opacity-60">
-              <Database className="w-4 h-4" /> {sembrando ? progreso || 'Sembrando…' : 'Sembrar diccionario'}
-            </button>
-          )}
-          {movCount === 0 && (
-            <button onClick={importarHist} disabled={importando} className="flex items-center gap-1.5 border border-blue-300 text-[#8FBEF0] bg-[rgba(78,143,214,.14)] text-xs font-black px-3 py-2 rounded-xl hover:bg-blue-100 transition disabled:opacity-60">
-              <BookOpen className="w-4 h-4" /> {importando ? progreso || 'Importando…' : 'Importar histórico'}
-            </button>
-          )}
-        </div>
 
         {/* ── Vista SUBIR / revisión ── */}
         {vista === 'subir' && (
@@ -2644,15 +2689,8 @@ export default function ContabilidadPage() {
         {vista === 'libro' && (
           <div className="bg-[#3C4759] rounded-2xl border border-[#4A5568] shadow-sm overflow-hidden">
             <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#4A5568]">
-              {/* Selector de cuenta: TODAS pega las tres cuentas */}
-              <div className="flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
-                {['TODAS', ...BANCOS].map(b => (
-                  <button key={b} onClick={() => setLibroBanco(b)}
-                    className={`text-xs font-black px-2.5 py-1.5 rounded-lg transition ${libroBanco === b ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white/70 hover:bg-[#2B3547]'}`}>
-                    {b === 'TODAS' ? 'Todas las cuentas' : b.replace('Bancolombia ', '')}
-                  </button>
-                ))}
-              </div>
+              {/* El selector de cuenta se subió al panel de arriba, enseguida
+                  de SUBIR EXTRACTO. — dirección, 05/09/2026 */}
               <p className="font-black text-white text-sm">
                 {hayFiltro || soloEgresoSinConc || soloIngresoSinConc || soloSinDetalle || soloSospechosas || soloMalOrientadas
                   ? <>{libroFiltrado.length.toLocaleString('es-CO')} <span className="text-white/40 font-semibold">de {libro.length.toLocaleString('es-CO')}</span></>
@@ -2664,17 +2702,17 @@ export default function ContabilidadPage() {
                   Se pueden prender los dos a la vez: ahí salen todas las filas sin concepto. */}
               <button onClick={() => setSoloEgresoSinConc(v => !v)}
                 title="EGRESOS sin clasificar: filas con DÉBITO (plata que salió) a las que todavía les falta el CONCEPTO"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloEgresoSinConc ? 'bg-red-600 text-white border-red-600' : 'text-[#F08A87] bg-[rgba(192,80,77,.14)] border-[rgba(192,80,77,.45)] hover:bg-[rgba(192,80,77,.20)]'}`}>
+                className={soloEgresoSinConc ? BTN_ALERTA_ON : BTN_ALERTA}>
                 {soloEgresoSinConc ? '✓ ' : '↑ '}Egresos sin concepto ({egresoSinConcCount.toLocaleString('es-CO')})
               </button>
               <button onClick={() => setSoloIngresoSinConc(v => !v)}
                 title="INGRESOS sin clasificar: filas con CRÉDITO (plata que entró) a las que todavía les falta el CONCEPTO"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloIngresoSinConc ? 'bg-emerald-600 text-white border-emerald-600' : 'text-[#5BE39B] bg-emerald-50 border-emerald-200 hover:bg-emerald-100'}`}>
+                className={soloIngresoSinConc ? BTN_ALERTA_ON : BTN_ALERTA}>
                 {soloIngresoSinConc ? '✓ ' : '↓ '}Ingresos sin concepto ({ingresoSinConcCount.toLocaleString('es-CO')})
               </button>
               <button onClick={() => setSoloSinDetalle(v => !v)}
                 title="Filas del libro que todavía no tienen DETALLE"
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSinDetalle ? 'bg-violet-600 text-white border-violet-600' : 'text-violet-700 bg-violet-50 border-violet-200 hover:bg-violet-100'}`}>
+                className={soloSinDetalle ? BTN_ALERTA_ON : BTN_ALERTA}>
                 {soloSinDetalle ? '✓ ' : ''}Sin detalle ({sinDetalleCount.toLocaleString('es-CO')})
               </button>
               {/* MAL ORIENTADAS — la primera de las "leyes". Solo sale cuando
@@ -2682,29 +2720,28 @@ export default function ContabilidadPage() {
               {malOrientadas.length > 0 && (
                 <button onClick={() => setSoloMalOrientadas(v => !v)}
                   title="Filas cuyo CONCEPTO dice INSTITUCIONAL pero cuyo DETALLE es un mes, una matrícula o una inscripción. Las dos cosas no pueden ser ciertas: o se vendió un producto, o se pagó una mensualidad. Tóquelas para revisarlas."
-                  className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloMalOrientadas ? 'bg-[#E0A33A] text-[#2B3547] border-[#E0A33A]' : 'text-[#E0A33A] bg-[rgba(224,163,58,.14)] border-[rgba(224,163,58,.45)] hover:bg-[rgba(224,163,58,.22)]'}`}>
+                  className={soloMalOrientadas ? BTN_ALERTA_ON : BTN_ALERTA}>
                   {soloMalOrientadas ? '✓ ' : '⚠ '}Mal orientadas ({malOrientadas.length.toLocaleString('es-CO')})
                 </button>
               )}
               {numProblemas > 0 && (
                 <button onClick={() => setSoloSospechosas(v => !v)}
                   title="Filas en ROJO por revisar: codigo que no corresponde a ningun deportista, o pagos del mismo mes que suman mas que la mensualidad. No se publican hasta que usted las confirme."
-                  className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${soloSospechosas ? 'bg-red-600 text-white border-red-600' : 'text-[#F08A87] bg-[rgba(192,80,77,.14)] border-[rgba(192,80,77,.45)] hover:bg-[rgba(192,80,77,.20)]'}`}>
+                  className={soloSospechosas ? BTN_ALERTA_ON : BTN_ALERTA}>
                   {soloSospechosas ? '✓ ' : '⚠ '}Sospechosas ({numProblemas.toLocaleString('es-CO')})
                 </button>
               )}
-              <button onClick={reclasificarConceptos} disabled={reclasificando}
-                title="Aplica las reglas de CONCEPTO (intereses a favor, tarjeta de crédito, 4x1000, cuota de manejo, servicio de nómina) a TODO el libro. Muestra primero cuántas filas cambia y pide confirmación. No toca ninguna fila con código de deportista y no publica nada."
-                className="flex items-center gap-1.5 text-sm font-black text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1.5 rounded-lg hover:bg-sky-100 transition disabled:opacity-60">
-                🏷 {reclasificando ? 'Reclasificando…' : 'Reclasificar conceptos'}
-              </button>
+              {/* RECLASIFICAR CONCEPTOS — retirado del encabezado el 05/09/2026
+                  por pedido de la dirección («vamos a ir limpiando este
+                  encabezado»). La función sigue en el código por si algún día se
+                  vuelve a necesitar; simplemente ya no tiene botón. */}
               {/* NÓMINA POR DESCRIPCIÓN: las transferencias que el banco siempre
                   describe igual (p. ej. "TRANSF A Diana Fernan") quedan con
                   concepto NOMINA, la cédula en CÓDIGO y el nombre del empleado. */}
               {nominaDescPendientes.length > 0 && (
                 <button onClick={aplicarNominaDescripcion} disabled={aplicandoNomina}
                   title="Reconoce por la descripción del banco (PAGO A NOMIN fredy alexander r, PAGO A PROVE sol marina vill, TRANSF A Diana Fernan…) a quién le corresponde el pago, según el directorio de Nómina y Proveedores. Le pone la cédula, el nombre completo y el concepto de su tipo. Muestra primero cuántas cambia y pide confirmación. No publica nada."
-                  className="flex items-center gap-1.5 text-sm font-black text-teal-700 bg-teal-50 border border-teal-200 px-3 py-1.5 rounded-lg hover:bg-teal-100 transition disabled:opacity-60">
+                  className={BTN_VERDE}>
                   👤 {aplicandoNomina ? 'Marcando…' : `Nómina y proveedores por descripción (${nominaDescPendientes.length.toLocaleString('es-CO')})`}
                 </button>
               )}
@@ -2717,19 +2754,12 @@ export default function ContabilidadPage() {
                   del semaforo; aqui se pueden volver a ver cuando se necesiten. */}
               <button onClick={() => setFilChulo(v => (v === 'verde' ? 'todos' : 'verde'))}
                 title="Pagos ya confirmados en el estado de cuenta. Se les apaga el color del semaforo."
-                className={`flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${filChulo === 'verde' ? 'bg-gray-700 text-white border-gray-700' : 'text-white/70 bg-[#333F50] border-[#4A5568] hover:bg-[#2B3547]'}`}>
+                className={filChulo === 'verde' ? BTN_VERDE_ON : BTN_VERDE}>
                 {filChulo === 'verde' ? '✓ ' : ''}Confirmados ({confirmadosCount.toLocaleString('es-CO')})
               </button>
-              <button onClick={confirmarVerdes} disabled={publicandoVerdes || !verdesPendientes.length}
-                title="Publica al estado de cuenta SOLO los pagos verdes (valor exacto). No toca amarillos, rojos ni morados."
-                className="flex items-center gap-1.5 text-sm font-black text-white bg-green-600 border border-green-600 px-3 py-1.5 rounded-lg hover:bg-green-700 transition disabled:opacity-50">
-                ✓ {publicandoVerdes ? 'Confirmando…' : `Confirmar los ${verdesPendientes.length.toLocaleString('es-CO')} verdes`}
-              </button>
-              <button onClick={confirmarMatriculas} disabled={publicandoMatr || !matriculasPendientes.length}
-                title="Publica al estado de cuenta las MATRÍCULAS que aún no están. El botón de los verdes no las incluye, porque la matrícula no se compara contra la mensualidad."
-                className="flex items-center gap-1.5 text-sm font-black text-white bg-indigo-600 border border-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50">
-                🎓 {publicandoMatr ? 'Confirmando…' : `Confirmar ${matriculasPendientes.length.toLocaleString('es-CO')} matrículas`}
-              </button>
+              {/* CONFIRMAR VERDES — retirado del encabezado el 05/09/2026. Se
+                  sigue publicando con el chulo de cada fila. */}
+              {/* CONFIRMAR MATRÍCULAS — retirado del encabezado el 05/09/2026. */}
               <span className="w-px h-6 bg-[#2B3547] mx-1" />
               {(hayFiltro || soloEgresoSinConc || soloIngresoSinConc || soloSinDetalle || soloSospechosas) && (
                 <button onClick={() => { setFil(filVacio); setSoloEgresoSinConc(false); setSoloIngresoSinConc(false); setSoloSinDetalle(false); setSoloSospechosas(false); }}
@@ -2741,12 +2771,9 @@ export default function ContabilidadPage() {
                   TODOS los movimientos de TODAS las cuentas de un solo golpe, sin
                   respetar el semaforo. Ahora se publica con "Confirmar verdes",
                   "Confirmar matriculas" o el chulo de cada fila. */}
-              <button onClick={() => setPanelCols(v => !v)} className={`ml-auto flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition ${panelCols ? 'bg-[#16a34a] text-white border-[#16a34a]' : 'text-white/70 bg-[#3C4759] border-[#4A5568] hover:bg-[#2B3547]'}`}>
-                ⚙ Columnas
-              </button>
-              <button onClick={exportarLibro} disabled={!libroFiltrado.length} className="flex items-center gap-1.5 text-sm font-black text-[#5BE39B] bg-[rgba(0,176,80,.14)] border border-[rgba(0,176,80,.45)] px-3 py-1.5 rounded-lg hover:bg-green-100 transition disabled:opacity-50">
-                <Download className="w-4 h-4" /> Exportar Excel
-              </button>
+              {/* ⚙ COLUMNAS — retirado del encabezado el 05/09/2026. Los anchos
+                  se siguen ajustando arrastrando la línea blanca del borde del
+                  encabezado de cada columna. */}
               {/* ── ELIMINAR LAS SEÑALADAS ────────────────────────────────
                   (dirección, 03/09/2026 — «casillas para chulear poder
                    eliminar varios»)
@@ -2763,7 +2790,7 @@ export default function ContabilidadPage() {
                     }}
                     disabled={borrandoFilas}
                     title="Eliminar del libro las filas que están señaladas"
-                    className="flex items-center gap-1.5 text-sm font-black text-white bg-[#C0504D] border border-[#C0504D] px-3 py-1.5 rounded-lg hover:brightness-110 transition disabled:opacity-50">
+                    className={BTN_ALERTA_ON}>
                     <Trash2 className="w-4 h-4" />
                     {borrandoFilas ? 'Eliminando…' : `Eliminar ${marcadas.size} señalada${marcadas.size === 1 ? '' : 's'}`}
                   </button>
@@ -2774,15 +2801,8 @@ export default function ContabilidadPage() {
                   </button>
                 </>
               )}
-              <button onClick={eliminarFilasPorNumero} disabled={borrandoFilas}
-                title="Eliminar filas basura del libro escribiendo su N° (la columna gris de la izquierda)"
-                className="flex items-center gap-1.5 text-sm font-black text-[#F08A87] bg-[rgba(192,80,77,.14)] border border-[rgba(192,80,77,.45)] px-3 py-1.5 rounded-lg hover:bg-[rgba(192,80,77,.20)] transition disabled:opacity-50">
-                <Trash2 className="w-4 h-4" /> {borrandoFilas ? 'Eliminando…' : 'Eliminar filas'}
-              </button>
-              <button onClick={abrirNuevaFila} title="Agregar un movimiento manualmente al libro (no vino del Excel del banco)"
-                className="flex items-center gap-1.5 text-sm font-black text-white bg-[#16a34a] border border-[#16a34a] px-3 py-1.5 rounded-lg hover:bg-[#064e1e] transition">
-                <Plus className="w-4 h-4" /> Agregar fila
-              </button>
+              {/* EXPORTAR EXCEL · ELIMINAR FILAS · AGREGAR FILA se subieron a la
+                  fila de SUBIR EXTRACTO. — dirección, 05/09/2026 */}
             </div>
 
             {/* Panel para ajustar el ancho de columnas con − / + (sin arrastrar) */}
@@ -2840,7 +2860,7 @@ export default function ContabilidadPage() {
               </div>
             )}
             <p className="px-4 py-1.5 text-[11px] text-white/40 bg-[#333F50] border-b border-[#4A5568]">
-              💡 ¿Ajustar columnas? Usa el botón <b>⚙ Columnas</b> (botones − / +, sin arrastrar). También puedes arrastrar la línea blanca del borde del encabezado.
+              💡 ¿Ajustar columnas? Arrastra la línea blanca del borde del encabezado. Doble clic en esa línea deja la columna como estaba.
             </p>
             <datalist id="codigos-libro">
               {codigosUnicos.map(c => <option key={c} value={c} />)}
@@ -3494,6 +3514,26 @@ export default function ContabilidadPage() {
     </div>
   );
 }
+
+/* ── DOS ESTILOS DE BOTÓN, Y NADA MÁS ─────────────────────────────────────
+   (dirección, 05/09/2026 — «todos los botones donde sean verdes: contorno
+    blanco, letra blanca; y las alertas y pendientes en botón rojo
+    transparente, letra blanca, borde rojo»)
+
+   Antes cada botón traía su propio color de moda —celeste, teal, violeta,
+   índigo, esmeralda—, y el encabezado parecía una caja de colores. Ahora solo
+   hay dos lenguajes, y se leen de una:
+
+     VERDE  = lo que uno HACE y está bien (exportar, agregar, confirmados).
+     ROJO   = lo que FALTA o hay que revisar (sin concepto, sin detalle,
+              mal orientadas, sospechosas, eliminar).
+
+   Cuando un filtro está PRENDIDO el botón se pone macizo, para que se vea
+   que está actuando; apagado va transparente. */
+const BTN_VERDE     = 'flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition text-white bg-[rgba(0,176,80,.22)] border-white hover:bg-[rgba(0,176,80,.38)] disabled:opacity-50';
+const BTN_VERDE_ON  = 'flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition text-white bg-[#00B050] border-white hover:brightness-110 disabled:opacity-50';
+const BTN_ALERTA    = 'flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition text-white bg-[rgba(192,80,77,.20)] border-[#C0504D] hover:bg-[rgba(192,80,77,.36)] disabled:opacity-50';
+const BTN_ALERTA_ON = 'flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition text-white bg-[#C0504D] border-white hover:brightness-110 disabled:opacity-50';
 
 const td: React.CSSProperties = { border: '1px solid #eef2f7', padding: '6px 8px', textAlign: 'center', whiteSpace: 'nowrap' };
 // Celda compacta para el Libro con tableLayout fijo: recorta con "…" y no desborda
