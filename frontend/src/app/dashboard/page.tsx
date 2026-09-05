@@ -445,7 +445,7 @@ function DashboardAdmin() {
             Va junto al Formulario de Afiliación: los dos son formatos que
             diligencia la familia — uno para entrar y el otro para salir. */}
         <AccesoCard titulo="Formato Solicitud de Retiro" icono={FileText} href="/retiro" descripcion="El formato que llena el padre" color="verde" />
-        <AccesoCard titulo="Productos" icono={DollarSign} href="/productos" descripcion="Torneos e implementos" color="verde" />
+        <AccesoCard titulo="Productos Institucional" icono={DollarSign} href="/productos" descripcion="Balones, camisetas, uniformes, informes" color="verde" />
       </CategoriaSection>
     </div>
   );

@@ -251,11 +251,45 @@ const GASTOS_REPR_DETALLE = [
  *  Usa `sinTildes`, que está definido más abajo: no hay problema porque esta
  *  función solo se llama al dibujar la pantalla, nunca al cargar el archivo. */
 const esGastoRepresentacion = (c: any) => /gastos?\s+de\s+representacion/.test(sinTildes(String(c ?? '')));
-/** Lista que le toca a la casilla DETALLE según el concepto de la fila. */
-const opcionesDetalle = (concepto: any, institucional: string[] = []) =>
-  esGastoRepresentacion(concepto)
-    ? GASTOS_REPR_DETALLE
-    : [...DETALLE_BASE, ...institucional, 'OTRO'];
+/** Lista que le toca a la casilla DETALLE según el concepto de la fila.
+ *
+ *  ── LA LISTA SE ACUERDA DE LO QUE YA ESTÁ EN EL LIBRO ────────────────────
+ *  (dirección, 04/09/2026 — «que quede un listado de desplegables con lo que
+ *   estaba por memoria en el libro que subimos, más los nuevos que
+ *   agreguemos»)
+ *
+ *  Antes la lista solo traía lo fijo —matrícula, inscripción y los meses— más
+ *  lo que estuviera creado en el módulo de Productos. Pero en el libro que se
+ *  subió ya venían escritas cosas como UNIFORME U26, CAMISETA PAPÁS 2026,
+ *  PRESENTACION 2026 o BANDA 2026, puestas a mano una por una. Esas no
+ *  aparecían en el desplegable, así que la contadora tenía que volver a
+ *  escribirlas letra por letra cada vez, y bastaba una tilde de más para que
+ *  quedaran dos versiones del mismo producto.
+ *
+ *  Ahora la lista se arma con tres cosas, en este orden:
+ *    1. Lo fijo:      matrícula, inscripción y los meses del año.
+ *    2. LA MEMORIA:   todo detalle que ya se haya usado en el libro.
+ *    3. Lo nuevo:     los productos creados en el módulo Productos.
+ *  Y al final, OTRO. Sin repetidos: si algo está en la memoria y también en
+ *  el módulo, sale una sola vez. */
+const opcionesDetalle = (
+  concepto: any,
+  institucional: string[] = [],
+  memoria: string[] = [],
+) => {
+  if (esGastoRepresentacion(concepto)) return GASTOS_REPR_DETALLE;
+  const vistos = new Set<string>();
+  const out: string[] = [];
+  for (const t of [...DETALLE_BASE, ...memoria, ...institucional, 'OTRO']) {
+    const limpio = String(t ?? '').trim();
+    if (!limpio) continue;
+    const llave = limpio.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    if (vistos.has(llave)) continue;
+    vistos.add(llave);
+    out.push(limpio);
+  }
+  return out;
+};
 
 /* ── PAGOS A TERCEROS (NÓMINA Y PROVEEDORES) ──────────────────────────────
    Regla de la dirección (25/08/2026): al escribir la CÉDULA o el NIT de un
@@ -495,6 +529,30 @@ export default function ContabilidadPage() {
   const [importando, setImportando] = useState(false);
 
   const [libro, setLibro] = useState<MovCont[]>([]);
+
+  /* LA MEMORIA DEL LIBRO: los DETALLE que ya se han usado alguna vez, sacados
+     de los movimientos que están cargados en pantalla. Se quitan los meses,
+     la matrícula y los gastos de representación, que ya van por su lado.
+     — dirección, 04/09/2026 */
+  const memoriaDetalle = useMemo(() => {
+    const fijos = new Set(
+      [...DETALLE_BASE, ...GASTOS_REPR_DETALLE, 'OTRO'].map(t =>
+        t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()),
+    );
+    const cuenta = new Map<string, number>();
+    for (const m of libro) {
+      const t = String(m.detalle ?? '').trim();
+      if (!t) continue;
+      const llave = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+      if (fijos.has(llave)) continue;
+      /* Los gastos de representación viejos venían con "G.R " adelante. */
+      if (llave.startsWith('G.R ')) continue;
+      cuenta.set(t.toUpperCase(), (cuenta.get(t.toUpperCase()) ?? 0) + 1);
+    }
+    /* De más usado a menos: lo que más se repite es lo que más se va a
+       volver a necesitar, y así queda de primero en la listica. */
+    return [...cuenta.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+  }, [libro]);
   const [cargandoLibro, setCargandoLibro] = useState(false);
   // Vista Libro: cuenta a mostrar ('TODAS' = las tres pegadas) y filtros por columna
   const [libroBanco, setLibroBanco] = useState<string>('TODAS');
@@ -2398,7 +2456,7 @@ export default function ContabilidadPage() {
               {codigosUnicos.map(c => <option key={c} value={c} />)}
             </datalist>
             <datalist id="detalle-libro">
-              {opcionesDetalle('', institucionales).map(o => <option key={o} value={o} />)}
+              {opcionesDetalle('', institucionales, memoriaDetalle).map(o => <option key={o} value={o} />)}
             </datalist>
             {/* Lista de conceptos para ESCRIBIR y que filtre mientras se teclea.
                 Antes era un <select>: al escribir "INTERES" saltaba a la primera
@@ -2878,8 +2936,8 @@ export default function ContabilidadPage() {
                               de meses a "en qué se gastó" (salud, estudio, vivienda…). */}
                           <select value={r.detalle || ''} onChange={e => editarSplit(i, 'detalle', e.target.value)} style={{ ...inp, minWidth: 120 }}>
                             <option value="">{esGastoRepresentacion(r.concepto) ? '— ¿en qué se gastó? —' : '—'}</option>
-                            {opcionesDetalle(r.concepto, institucionales).map(o => <option key={o} value={o}>{o}</option>)}
-                            {r.detalle && !opcionesDetalle(r.concepto, institucionales).includes(r.detalle) && <option value={r.detalle}>{r.detalle}</option>}
+                            {opcionesDetalle(r.concepto, institucionales, memoriaDetalle).map(o => <option key={o} value={o}>{o}</option>)}
+                            {r.detalle && !opcionesDetalle(r.concepto, institucionales, memoriaDetalle).includes(r.detalle) && <option value={r.detalle}>{r.detalle}</option>}
                           </select>
                         </td>
                         <td style={{ ...td, padding: 3 }}><input value={r.debito || ''} onChange={e => editarSplit(i, 'debito', numVal(e.target.value))} style={{ ...inp, textAlign: 'right', color: '#dc2626' }} /></td>
@@ -2986,8 +3044,8 @@ export default function ContabilidadPage() {
                     <label className={lbl}>{esGastoRepresentacion(nuevaFila.concepto) ? 'Detalle (¿en qué se gastó?)' : 'Detalle (mes)'}</label>
                     <select value={nuevaFila.detalle} onChange={e => editarNuevaFila('detalle', e.target.value)} style={inp}>
                       <option value="">—</option>
-                      {opcionesDetalle(nuevaFila.concepto, institucionales).map(o => <option key={o} value={o}>{o}</option>)}
-                      {nuevaFila.detalle && !opcionesDetalle(nuevaFila.concepto, institucionales).includes(nuevaFila.detalle) && <option value={nuevaFila.detalle}>{nuevaFila.detalle}</option>}
+                      {opcionesDetalle(nuevaFila.concepto, institucionales, memoriaDetalle).map(o => <option key={o} value={o}>{o}</option>)}
+                      {nuevaFila.detalle && !opcionesDetalle(nuevaFila.concepto, institucionales, memoriaDetalle).includes(nuevaFila.detalle) && <option value={nuevaFila.detalle}>{nuevaFila.detalle}</option>}
                     </select>
                   </div>
                 </div>

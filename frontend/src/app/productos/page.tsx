@@ -84,7 +84,8 @@ export default function ProductosPage() {
   const [exito, setExito]         = useState('');
 
   // Formulario
-  const [tipo, setTipo]         = useState<'torneo' | 'implemento'>('torneo');
+  /* Ya no se escoge: en este módulo todo es institucional. — 04/09/2026 */
+  const [tipo, setTipo]         = useState<'torneo' | 'implemento'>('implemento');
   const [desc, setDesc]         = useState('');
   const [valor, setValor]       = useState('');
   const [editId, setEditId]     = useState<string | null>(null);
@@ -188,7 +189,10 @@ export default function ProductosPage() {
     setCargando(true);
     try {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/productos?activo=eq.true&order=created_at.desc`,
+        /* SOLO LOS INSTITUCIONALES (04/09/2026): los torneos viejos se
+           quedan guardados en la base —no se borra nada— pero ya no se
+           muestran aquí, porque este módulo dejó de manejarlos. */
+        `${SUPABASE_URL}/rest/v1/productos?activo=eq.true&tipo=eq.implemento&order=created_at.desc`,
         { headers: HEADERS }
       );
       const data = await res.json();
@@ -198,7 +202,7 @@ export default function ProductosPage() {
   }
 
   function limpiarForm() {
-    setTipo('torneo'); setDesc(''); setValor(''); setEditId(null);
+    setTipo('implemento'); setDesc(''); setValor(''); setEditId(null);
   }
 
   async function guardar() {
@@ -463,8 +467,10 @@ export default function ProductosPage() {
           </svg>
         </button>
         <div>
-          <h1 className="font-black text-base tracking-wide">PRODUCTOS</h1>
-          <p className="text-white/70 text-[11px]">Catálogo de torneos e institucional</p>
+          {/* El módulo se llama por lo que de verdad hace desde hoy: los
+              torneos se fueron a Competencias. — dirección, 04/09/2026 */}
+          <h1 className="font-black text-base tracking-wide">PRODUCTOS INSTITUCIONAL</h1>
+          <p className="text-white/70 text-[11px]">Lo que vende la institución: balones, camisetas, uniformes, informes…</p>
         </div>
       </div>
 
@@ -562,26 +568,28 @@ export default function ProductosPage() {
           </div>
           <div className="p-5 space-y-4">
 
-            {/* Tipo */}
-            <div>
-              <label className="block text-xs font-black text-white/70 uppercase tracking-wide mb-2">
-                Tipo de Producto
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {(['torneo', 'implemento'] as const).map(t => (
-                  <button key={t} onClick={() => setTipo(t)}
-                    className={cn(
-                      'py-3 rounded-xl font-black text-sm transition border-2',
-                      tipo === t
-                        ? t === 'torneo'
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'bg-purple-600 border-purple-600 text-white'
-                        : 'bg-[#3C4759] border-[#4A5568] text-white/70 hover:border-[#4A5568]'
-                    )}>
-                    {t === 'torneo' ? '🏆 Torneo' : '👕 Institucional'}
-                  </button>
-                ))}
-              </div>
+            {/* ── AQUÍ YA NO SE ESCOGE TIPO: TODO ES INSTITUCIONAL ───────────
+                (dirección, 04/09/2026 — «eliminemos el tema de torneos de ese
+                 módulo, ya que lo creamos y funciona por Competencias; dejemos
+                 solo institucional»)
+
+                Los torneos se manejan en Torneos y Competencias, que es donde
+                de verdad viven: con su cuadro, sus fechas y sus formadores.
+                Tenerlos también aquí era una segunda lista que había que
+                mantener a mano y que se desactualizaba sola.
+
+                Este módulo queda para UNA sola cosa: lo que la institución
+                vende —balones, camisetas, uniformes, informes—. Por eso ya no
+                hay que escoger tipo: todo lo que se cree aquí nace
+                Institucional y llega solo al DETALLE del Libro. */}
+            <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(0,176,80,.10)', border: '1px solid rgba(0,176,80,.45)' }}>
+              <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: '#5BE39B' }}>
+                👕 Producto institucional
+              </p>
+              <p className="text-white/70 text-[11.5px] leading-snug mt-1">
+                Lo que se cree aquí aparece solo en la casilla <b className="text-white">DETALLE</b> del
+                Libro Contable, y le pone el concepto <b className="text-white">INSTITUCIONAL</b> a la fila.
+              </p>
             </div>
 
             {/* Descripción */}
@@ -648,7 +656,7 @@ export default function ProductosPage() {
           <div className="px-5 py-3 border-b border-[#4A5568] flex items-center justify-between"
             style={{ background: '#f8fafc' }}>
             <h2 className="font-black text-sm text-white uppercase tracking-wide">
-              Productos Registrados
+              Productos institucionales
             </h2>
             <span className="bg-[#2B3547] text-white/70 text-xs font-black px-2 py-1 rounded-full">
               {productos.length}
