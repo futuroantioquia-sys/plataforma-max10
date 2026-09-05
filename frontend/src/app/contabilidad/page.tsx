@@ -165,7 +165,7 @@ const COLS_LIBRO: { key: string; label: string; def: number }[] = [
   { key: 'credito',    label: 'CRÉDITO',     def: 90 },
   { key: 'saldo',      label: 'SALDO',       def: 100 },
   { key: 'concepto',   label: 'CONCEPTO',    def: 252 },
-  { key: 'codigo',     label: 'CÓDIGO',      def: 88 },
+  { key: 'codigo',     label: 'CÓDIGO / CUENTA', def: 88 },
   { key: 'deportista', label: 'DEPORTISTA',  def: 252 },
   { key: 'detalle',    label: 'DETALLE',     def: 212 },
   /* CONFIRMAR Y EDITAR, SEPARADAS Y AL FINAL (dirección, 01/09/2026).
@@ -746,7 +746,9 @@ export default function ContabilidadPage() {
   // Modo de búsqueda en la columna CÓDIGO:
   //   'exacto'   → para códigos de deportista (evita cruces con cifras que contienen esos dígitos)
   //   'contiene' → para números de cuenta de proveedores/empleados (busca por parte del número)
-  const [filCodModo, setFilCodModo] = useState<'exacto' | 'contiene'>('exacto');
+  /* Ya no hay modo de búsqueda que escoger: el buscador de CÓDIGO / CUENTA lo
+     resuelve solo. Ver la explicación completa en el filtro, más abajo.
+     — dirección, 05/09/2026 */
   // Editor por movimiento (para editar y dividir una cifra en varias filas)
   const [editRow, setEditRow] = useState<{ orig: MovCont; filas: MovCont[] } | null>(null);
   const [guardandoEd, setGuardandoEd] = useState(false);
@@ -1687,6 +1689,11 @@ export default function ContabilidadPage() {
     const inc = (v: any, q: string) => String(v ?? '').toLowerCase().includes(q.trim().toLowerCase());
     const dig = (s: any) => String(s ?? '').replace(/\D/g, '');
     const incDig = (v: any, q: string) => { const d = dig(q); return !d || dig(v).includes(d); };
+    /* ¿Lo que se escribió es un código que existe tal cual en el libro? Se
+       mira UNA sola vez, no una por renglón. — 05/09/2026 */
+    const buscadoCod = String(f.codigo ?? '').trim();
+    const codigoEsExacto = !!buscadoCod
+      && libro.some(m => String(m.codigo ?? '').trim() === buscadoCod);
     return libro.filter(m => {
       if (f.banco && !inc(m.banco, f.banco)) return false;
       if (f.fecha && !inc(m.fecha, f.fecha)) return false;
@@ -1695,26 +1702,32 @@ export default function ContabilidadPage() {
       if (f.credito && !incDig(m.credito, f.credito)) return false;
       if (f.saldo && !incDig(m.saldo, f.saldo)) return false;
       if (f.concepto && !inc(m.concepto, f.concepto)) return false;
-      // CÓDIGO: 'exacto' evita cruces con cifras que contienen esos dígitos (códigos de deportista);
-      //         'contiene' permite hallar números de cuenta largos de proveedores/empleados por parte.
+      /* ── UN SOLO BUSCADOR, QUE DECIDE SOLO ────────────────────────────
+         (dirección, 05/09/2026 — «ya la verdad no sé ni para qué es el uno
+          del otro; finalmente los deportistas tienen código y los
+          proveedores y empleados tienen cédula»)
+
+         Antes tocaba escoger entre dos botones, Código o Nº cuenta. Esa
+         decisión no la debería tomar nadie: la máquina puede verlo.
+
+         La regla, calculada una sola vez arriba (`codigoEsExacto`):
+           · Si lo que se escribió ES un código que existe tal cual en el
+             libro —25577, el de un deportista—, se busca EXACTO. Así 25577
+             no arrastra las cuentas largas que por casualidad lleven esos
+             cinco dígitos adentro.
+           · Si no existe tal cual —los últimos 4 del soporte, un pedazo de
+             cédula, una cuenta con guiones—, se busca por PARTE: solo los
+             números, en la columna CÓDIGO y dentro del texto del banco. Así
+             da igual 236-000-03104 o 23600003104. */
       if (f.codigo) {
         const needle = f.codigo.trim();
         const hay    = String(m.codigo ?? '').trim();
         let ok: boolean;
-        if (filCodModo === 'contiene') {
-          /* ── BUSCAR CUENTAS: SOLO LOS DÍGITOS, Y TAMBIÉN EN LA DESCRIPCIÓN ──
-             (dirección, 05/09/2026 — «poder filtrar el número que estoy mirando
-              en el soporte y buscarlo a ver si ya está en código o cuenta; hay
-              soportes que solo muestran los últimos 4 dígitos»)
-
-             Se comparan únicamente los números: así da igual que la cuenta esté
-             escrita 236-000-03104, 236 000 03104 o 23600003104. Y se busca en
-             dos partes: en la columna CÓDIGO y dentro del texto del banco, que
-             es donde muchas veces queda la cuenta escrita. */
+        if (codigoEsExacto) {
+          ok = hay === needle;
+        } else {
           const d = dig(needle);
           ok = !d || dig(hay).includes(d) || dig(m.descripcion).includes(d);
-        } else {
-          ok = hay === needle;
         }
         if (!ok) return false;
       }
@@ -1760,7 +1773,7 @@ export default function ContabilidadPage() {
       }
       return true;
     });
-  }, [libro, filDebounced, soloEgresoSinConc, soloIngresoSinConc, soloSinDetalle, soloSospechosas, soloMalOrientadas, codigosReales, dirtyIds, filChulo, confirmadas, filCodModo, filSem, semaforo]);
+  }, [libro, filDebounced, soloEgresoSinConc, soloIngresoSinConc, soloSinDetalle, soloSospechosas, soloMalOrientadas, codigosReales, dirtyIds, filChulo, confirmadas, filSem, semaforo]);
   /** Pagos del libro que ya quedaron confirmados en el estado de cuenta. */
   const confirmadosCount = useMemo(
     () => libro.filter(m => {
@@ -2137,7 +2150,6 @@ export default function ContabilidadPage() {
        3º las que lo llevan por dentro,
      y dentro de cada grupo, primero la que más movimientos tiene. */
   const cuentasPosibles = useMemo(() => {
-    if (filCodModo !== 'contiene') return [];
     const d = String(fil.codigo ?? '').replace(/\D/g, '');
     if (d.length < 2) return [];
     const mapa = new Map<string, { cuenta: string; nombre: string; n: number }>();
@@ -2160,7 +2172,7 @@ export default function ContabilidadPage() {
       .sort((a, b) => rango(a.cuenta) - rango(b.cuenta) || b.n - a.n)
       .slice(0, 12);
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [libro, fil.codigo, filCodModo]);
+  }, [libro, fil.codigo]);
   const [verCuentas, setVerCuentas] = useState(true);
 
   const totDebito = useMemo(() => libroFiltrado.reduce((s, m) => s + (Number(m.debito) || 0), 0), [libroFiltrado]);
@@ -2224,7 +2236,6 @@ export default function ContabilidadPage() {
     saltarReset.current = true;          // que no se reinicie el bloque de filas
     setVista('libro');
     setLibroBanco('TODAS');
-    setFilCodModo('exacto');
     setFilChulo('todos');                // que no se esconda por el chulo
     setFil(f => ({ ...filVacio, codigo: cod, banco: f.banco }));
     setVengoDePendientes(cod);
@@ -2793,6 +2804,41 @@ export default function ContabilidadPage() {
                 </div>
               </div>
             )}
+            {/* ── LAS CUENTAS POSIBLES ─────────────────────────────────────
+                (dirección, 05/09/2026 — «reubica mejor esto, ya que borra el
+                 poder ver el código de la primera fila, y es mejor tener la
+                 certeza de que todo está ok»)
+
+                Antes esta lista salía colgando debajo de la casilla, encima de
+                la tabla, y tapaba justo el primer renglón —el que uno necesita
+                ver para confirmar que la búsqueda dio con la cuenta correcta—.
+                Ahora va como una FRANJA ENCIMA de la tabla: empuja la tabla
+                hacia abajo en vez de taparla, así que se ve la lista Y se ven
+                todos los renglones al tiempo. */}
+            {verCuentas && cuentasPosibles.length > 0 && (
+              <div className="px-4 py-2 border-b border-[#4A5568]" style={{ background: '#064e1e' }}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-white font-black" style={{ fontSize: 10, letterSpacing: '.06em' }}>
+                    CUENTAS POSIBLES CON “{fil.codigo}” ({cuentasPosibles.length})
+                  </span>
+                  <button type="button" onClick={() => setVerCuentas(false)}
+                    className="ml-auto text-white/70 hover:text-white font-black" style={{ fontSize: 11 }}>✕ ocultar</button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {cuentasPosibles.map(c => (
+                    <button key={c.cuenta} type="button"
+                      onClick={() => { setFil(f => ({ ...f, codigo: c.cuenta })); setVerCuentas(false); }}
+                      title={`Filtrar el libro por la cuenta ${c.cuenta}`}
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-1 hover:brightness-110 transition"
+                      style={{ background: '#FFFFFF', border: '1px solid #16a34a' }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 900, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>{c.cuenta}</span>
+                      <span style={{ fontSize: 9.5, fontWeight: 700, color: '#475569', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre || '—'}</span>
+                      <span style={{ fontSize: 9.5, fontWeight: 900, color: '#16a34a', whiteSpace: 'nowrap' }}>{c.n} mov.</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <p className="px-4 py-1.5 text-[11px] text-white/40 bg-[#333F50] border-b border-[#4A5568]">
               💡 ¿Ajustar columnas? Usa el botón <b>⚙ Columnas</b> (botones − / +, sin arrastrar). También puedes arrastrar la línea blanca del borde del encabezado.
             </p>
@@ -2842,57 +2888,23 @@ export default function ContabilidadPage() {
                     <th style={thFil}><input value={fil.credito} onChange={e => setFil(f => ({ ...f, credito: e.target.value }))} placeholder="crédito…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.saldo} onChange={e => setFil(f => ({ ...f, saldo: e.target.value }))} placeholder="saldo…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.concepto} onChange={e => setFil(f => ({ ...f, concepto: e.target.value }))} placeholder="concepto…" style={inpFil} /></th>
-                    <th style={{ ...thFil, position: 'relative' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <input autoComplete="off" value={fil.codigo}
-                          onChange={e => { setFil(f => ({ ...f, codigo: e.target.value })); setVerCuentas(true); }}
-                          onFocus={() => setVerCuentas(true)}
-                          placeholder={filCodModo === 'contiene' ? 'nº cuenta o últimos 4…' : 'exacto: 25450'}
-                          style={{ ...inpFil, fontWeight: 800 }} />
-                        {/* ── LAS CUENTAS POSIBLES ────────────────────────────────
-                            Aparece sola al teclear en modo Nº cuenta. Un clic deja
-                            el libro filtrado por esa cuenta. — dirección, 05/09/2026 */}
-                        {verCuentas && cuentasPosibles.length > 0 && (
-                          <div style={{ position: 'absolute', top: '100%', left: 2, zIndex: 40, minWidth: 250, maxWidth: 340,
-                                        background: '#fff', border: '2px solid #16a34a', borderRadius: 8,
-                                        boxShadow: '0 10px 24px rgba(0,0,0,.35)', overflow: 'hidden', textAlign: 'left' }}>
-                            <div style={{ background: '#064e1e', color: '#fff', fontSize: 9, fontWeight: 900, padding: '3px 7px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span>CUENTAS POSIBLES ({cuentasPosibles.length})</span>
-                              <button type="button" onClick={() => setVerCuentas(false)}
-                                style={{ color: '#fff', fontWeight: 900, cursor: 'pointer', padding: '0 3px' }}>✕</button>
-                            </div>
-                            {cuentasPosibles.map(c => (
-                              <button key={c.cuenta} type="button"
-                                onClick={() => { setFil(f => ({ ...f, codigo: c.cuenta })); setVerCuentas(false); }}
-                                title={`Filtrar el libro por la cuenta ${c.cuenta}`}
-                                style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 6,
-                                         padding: '3px 7px', borderBottom: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}>
-                                <span style={{ fontSize: 11, fontWeight: 900, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>{c.cuenta}</span>
-                                <span style={{ fontSize: 9, fontWeight: 700, color: '#475569', flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre || '—'}</span>
-                                <span style={{ fontSize: 9, fontWeight: 900, color: '#16a34a', whiteSpace: 'nowrap' }}>{c.n} mov.</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 2 }}>
-                          <button type="button" onClick={() => setFilCodModo('exacto')}
-                            title="Buscar el código exacto del deportista"
-                            style={{ flex: 1, fontSize: 9, fontWeight: 800, padding: '1px 0', borderRadius: 4, cursor: 'pointer',
-                              border: '1px solid ' + (filCodModo === 'exacto' ? '#16a34a' : '#d1d5db'),
-                              background: filCodModo === 'exacto' ? '#16a34a' : '#fff',
-                              color: filCodModo === 'exacto' ? '#fff' : '#6b7280' }}>
-                            Código
-                          </button>
-                          <button type="button" onClick={() => setFilCodModo('contiene')}
-                            title="Buscar por parte del número de cuenta (proveedor / empleado)"
-                            style={{ flex: 1, fontSize: 9, fontWeight: 800, padding: '1px 0', borderRadius: 4, cursor: 'pointer',
-                              border: '1px solid ' + (filCodModo === 'contiene' ? '#16a34a' : '#d1d5db'),
-                              background: filCodModo === 'contiene' ? '#16a34a' : '#fff',
-                              color: filCodModo === 'contiene' ? '#fff' : '#6b7280' }}>
-                            Nº cuenta
-                          </button>
-                        </div>
-                      </div>
+                    {/* ── UNA SOLA CASILLA: CÓDIGO O CUENTA ────────────────────
+                        (dirección, 05/09/2026 — «ya la verdad no sé ni para qué
+                         es el uno del otro; finalmente los deportistas tienen
+                         código y los proveedores y empleados tienen cédula»)
+
+                        Se quitaron los dos botones. Aquí se escribe lo que sea
+                        —el código de un deportista, la cédula de un empleado, el
+                        NIT de un proveedor, la cuenta con guiones, o solo los
+                        últimos dígitos que muestra un soporte— y el buscador
+                        decide solo si busca exacto o por parte. */}
+                    <th style={thFil}>
+                      <input autoComplete="off" value={fil.codigo}
+                        onChange={e => { setFil(f => ({ ...f, codigo: e.target.value })); setVerCuentas(true); }}
+                        onFocus={() => setVerCuentas(true)}
+                        title="Escribe el código del deportista, la cédula o NIT, la cuenta, o solo los últimos dígitos del soporte. El buscador se encarga."
+                        placeholder="código, cédula o cuenta…"
+                        style={{ ...inpFil, fontWeight: 800 }} />
                     </th>
                     <th style={thFil}><input value={fil.deportista} onChange={e => setFil(f => ({ ...f, deportista: e.target.value }))} placeholder="nombre…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.detalle} onChange={e => setFil(f => ({ ...f, detalle: e.target.value }))} placeholder="detalle…" style={inpFil} /></th>
@@ -3487,7 +3499,7 @@ const td: React.CSSProperties = { border: '1px solid #eef2f7', padding: '6px 8px
 // Celda compacta para el Libro con tableLayout fijo: recorta con "…" y no desborda
 const tdC: React.CSSProperties = { border: '1px solid #eef2f7', padding: '4px 6px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 // Celda y control de la fila de filtros (queda pegada bajo el encabezado)
-const thFil: React.CSSProperties = { position: 'sticky', top: 28, zIndex: 2, background: '#ecfdf5', border: '1px solid #fff', padding: '3px 4px' };
+const thFil: React.CSSProperties = { position: 'sticky', top: 28, zIndex: 2, background: '#ecfdf5', border: '1px solid #fff', padding: '3px 4px', verticalAlign: 'top' };
 /* LA FILA DE FILTROS DEL LIBRO, TAMBIÉN (dirección, 04/09/2026). Es la fila
    donde la contadora escribe para buscar: iba blanco sobre blanco igual que
    las demás casillas, así que tecleaba y no veía lo que estaba buscando. */
