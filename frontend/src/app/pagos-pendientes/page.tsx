@@ -528,6 +528,29 @@ export default function PagosPendientesPage() {
           </div>
         )}
 
+        {/* Estilo de la fila marcada. Va en cada casilla porque el fondo del
+            renglón lo tapan las casillas, y la sombra del renglón no se pinta
+            en tablas de bordes pegados. — 05/09/2026 */}
+        <style>{`
+          /* FRANJA ROJA CLARA — «el rojo me recuerda que lo estoy gestionando»
+             (dirección, 05/09/2026)
+
+             El gris queda para el mouse: es el «estoy parado aquí» de siempre.
+             El renglón marcado va en ROJO CLARO, que sobre el fondo oscuro se
+             ve desde lejos y significa otra cosa: «este es el que estoy
+             gestionando». Como el renglón queda claro, la letra se pone
+             oscura —si no, quedaría blanco sobre casi blanco—; los botones
+             conservan su color, que ahí sí hay que distinguir OK de rechazar. */
+          tr.fila-marcada > td {
+            background: #F0D2D1 !important;
+            color: #111827 !important;
+            border-top: 2px solid #C0504D;
+            border-bottom: 2px solid #C0504D;
+          }
+          tr.fila-marcada > td button { color: #FFFFFF !important; }
+          tr.fila-marcada > td:first-child { box-shadow: inset 7px 0 0 #C0504D; }
+        `}</style>
+
         {/* ── Tabla de soportes ── */}
         {!cargando && vista.length > 0 && (
           <div className="overflow-x-auto rounded-2xl shadow-sm border" style={{ borderColor: BORDE }}>
@@ -553,15 +576,36 @@ export default function PagosPendientesPage() {
                   const idx = soportes.findIndex(x => x.id === s.id);
                   return (
                   <tr key={s.id} id={`sop-${s.id}`}
-                      /* LA SOMBRA ROJA DE «POR AQUÍ IBA» — 04/09/2026 */
-                      style={ultimaFila === s.id
-                        ? { background: 'rgba(192,80,77,.30)', boxShadow: `inset 4px 0 0 ${ROJO}` }
-                        : { background: PANEL }}
-                      className="hover:brightness-125 transition">
+                      /* ── POR QUÉ NO SE VEÍA LA FRANJA ROJA ─────────────────
+                         (corregido 05/09/2026 — «nada que aparece franja roja
+                          ni en local»)
+
+                         El color SÍ se estaba poniendo; lo que pasaba es que no
+                         se alcanzaba a ver, por dos cosas de cómo pintan las
+                         tablas los navegadores:
+
+                           · El rojo iba al 30% de transparencia sobre un fondo
+                             azul oscuro. Eso da un tono apenas distinto del
+                             normal: a simple vista, el mismo renglón.
+                           · La rayita roja del borde izquierdo era una SOMBRA
+                             puesta en el renglón (<tr>), y en una tabla con
+                             bordes pegados —border-collapse— el navegador no
+                             pinta sombras de renglón. Nunca se dibujó.
+
+                         Ahora el color va en CADA CASILLA (eso sí lo pinta
+                         siempre), en un rojo que se ve de lejos, con una barra
+                         roja gruesa a la izquierda y el renglón enmarcado. */
+                      style={ultimaFila === s.id ? undefined : { background: PANEL }}
+                      className={`transition ${ultimaFila === s.id ? 'fila-marcada' : 'hover:brightness-125'}`}>
 
                     {/* Código */}
                     <td className="px-3 py-3 font-black whitespace-nowrap" style={{ color: VERDE }}>
                       {s.depCodigo || '—'}
+                      {/* Letrero, para que no quede duda de cuál renglón es. */}
+                      {ultimaFila === s.id && (
+                        <span className="block mt-1 text-[9px] font-black tracking-wider"
+                          style={{ color: '#8B2F2C' }}>AQUÍ IBAS</span>
+                      )}
                     </td>
 
                     {/* Nombre */}
@@ -827,16 +871,29 @@ export default function PagosPendientesPage() {
                   </div>
                 </div>
 
-                {/* Ir a comprobar, sin cerrar la foto de memoria */}
+                {/* ── AQUÍ ESTABA EL PROBLEMA DE LA FRANJA ──────────────────
+                    (corregido 05/09/2026 — «sigue sin salir la banda, incluso
+                     como estaba antes»)
+
+                    La franja SÍ estaba programada… pero solo en los botones
+                    Cuenta y Libro de la TABLA. Estos dos, los del VISOR —los
+                    que de verdad se usan, porque uno primero abre la foto del
+                    soporte y desde ahí se va a comprobar—, salían sin anotar
+                    en qué renglón iba. Por eso al devolverse no había nada que
+                    pintar y parecía que la franja no servía.
+
+                    Ahora los cuatro botones anotan el renglón antes de salir.
+                    Y el del Libro se lleva también el día del soporte, igual
+                    que el de la tabla. */}
                 <div className="px-4 pb-4 flex gap-2">
                   <button
-                    onClick={() => router.push(`/alumnos/${s.depId}/estado-cuenta?readonly=1`)}
+                    onClick={() => { marcarDondeIba(s.id); router.push(`/alumnos/${s.depId}/estado-cuenta?readonly=1`); }}
                     style={{ background: CAMPO, border: `1px solid ${BORDE}` }}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-white font-black text-[11.5px] hover:opacity-85 transition">
                     <Eye className="w-3.5 h-3.5" /> Cuenta
                   </button>
                   <button
-                    onClick={() => router.push(`/contabilidad?codigo=${encodeURIComponent(cod)}`)}
+                    onClick={() => { marcarDondeIba(s.id); router.push(`/contabilidad?codigo=${encodeURIComponent(cod)}&dia=${encodeURIComponent(diaDe(s))}`); }}
                     disabled={!cod || cod === '—'}
                     style={{ background: CAMPO, border: `1px solid ${BORDE}` }}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-white font-black text-[11.5px] hover:opacity-85 transition disabled:opacity-35">

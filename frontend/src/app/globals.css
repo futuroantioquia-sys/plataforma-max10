@@ -304,3 +304,21 @@ body {
    Se les devuelve la letra oscura marcando su caja con `data-hoja="clara"`.
    Todo lo que esté adentro vuelve a heredar negro, como antes. */
 [data-hoja="clara"] { color: #111827; }
+
+/* Y las casillas de esas hojas blancas también. — 05/09/2026
+   («diccionario de cuentas y códigos: con el nuevo diseño no se ven letras»)
+
+   Dentro de una hoja blanca hay casillas para escribir. Algunas no traían
+   color propio y heredaban el blanco; otras traían escrito "letra blanca" de
+   cuando el cuadro era oscuro. En los dos casos quedaba blanco sobre blanco:
+   la contadora escribía y no veía nada. Aquí se les impone fondo blanco y
+   letra oscura, y así queda resuelto para toda hoja clara, también las que se
+   hagan más adelante. */
+[data-hoja="clara"] input,
+[data-hoja="clara"] select,
+[data-hoja="clara"] textarea {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+}
+[data-hoja="clara"] input::placeholder,
+[data-hoja="clara"] textarea::placeholder { color: #9CA3AF !important; }

@@ -2923,11 +2923,11 @@ export default function ContabilidadPage() {
                 </thead>
                 <tbody>
                   {cargandoLibro ? (
-                    <tr><td colSpan={colsVis.length} className="text-center py-10 text-white/40 font-semibold">Cargando…</td></tr>
+                    <tr><td colSpan={colsVis.length} className="text-center py-10 font-semibold" style={{ color: '#94a3b8' }}>Cargando…</td></tr>
                   ) : libro.length === 0 ? (
-                    <tr><td colSpan={colsVis.length} className="text-center py-10 text-white/40 font-semibold">Este libro aún no tiene movimientos.</td></tr>
+                    <tr><td colSpan={colsVis.length} className="text-center py-10 font-semibold" style={{ color: '#94a3b8' }}>Este libro aún no tiene movimientos.</td></tr>
                   ) : libroFiltrado.length === 0 ? (
-                    <tr><td colSpan={colsVis.length} className="text-center py-10 text-white/40 font-semibold">Ningún movimiento coincide con el filtro.</td></tr>
+                    <tr><td colSpan={colsVis.length} className="text-center py-10 font-semibold" style={{ color: '#94a3b8' }}>Ningún movimiento coincide con el filtro.</td></tr>
                   ) : visiblesVista.map((m, i) => (
                     <tr key={m.id || i} id={'mov-' + (m.id || '')}
                       title={semaforo[m.id || '']?.motivo || filasProblema[m.id || ''] || undefined}
@@ -3642,7 +3642,7 @@ function DiccionarioEditor({ codMap, flash, onCount }: {
         <p className="font-black text-white text-sm">Diccionario de cuentas y códigos <span className="text-white/40 font-semibold">({rows.length.toLocaleString('es-CO')})</span></p>
         <div className="flex items-center gap-1.5 border border-[#4A5568] rounded-lg px-2 py-1.5 bg-[#3C4759]">
           <Search className="w-3.5 h-3.5 text-white/40" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cuenta, código o deportista…" className="w-56 text-xs focus:outline-none" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cuenta, código o deportista…" className="w-56 text-xs focus:outline-none rounded px-1" style={{ background: '#FFFFFF', color: '#111827' }} />
         </div>
         <button onClick={cargar} disabled={cargando} className="ml-auto text-xs font-black text-white/70 bg-[#3C4759] border border-[#4A5568] px-3 py-1.5 rounded-lg hover:bg-[#2B3547] transition disabled:opacity-60">{cargando ? 'Cargando…' : 'Actualizar'}</button>
       </div>
@@ -3653,14 +3653,16 @@ function DiccionarioEditor({ codMap, flash, onCount }: {
           <input value={nuevaClave} onChange={e => setNuevaClave(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') agregarCruce(); }}
             placeholder="Ej: 10202589777  o  MARIA MEZA 4155"
-            className="w-64 border border-[#4A5568] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-green-500" />
+            className="w-64 border border-[#4A5568] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-green-500"
+            style={{ background: '#FFFFFF', color: '#111827' }} />
         </div>
         <div className="flex flex-col">
           <label className="text-[10px] font-black text-white/70 mb-0.5">CÓDIGO</label>
           <input list="codigos-libro" value={nuevoCodigo} onChange={e => setNuevoCodigo(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') agregarCruce(); }}
             placeholder="25277"
-            className="w-28 border border-[#4A5568] rounded-lg px-2 py-1.5 text-xs font-bold text-center focus:outline-none focus:border-green-500" />
+            className="w-28 border border-[#4A5568] rounded-lg px-2 py-1.5 text-xs font-bold text-center focus:outline-none focus:border-green-500"
+            style={{ background: '#FFFFFF', color: '#111827' }} />
         </div>
         <button onClick={agregarCruce} disabled={agregando}
           className="flex items-center gap-1.5 text-xs font-black text-white bg-[#16a34a] border border-[#16a34a] px-3 py-2 rounded-lg hover:bg-[#064e1e] transition disabled:opacity-60">
@@ -3672,7 +3674,11 @@ function DiccionarioEditor({ codMap, flash, onCount }: {
         Cada fila es un cruce aprendido: cuando en un extracto llega una cuenta o nombre igual, se le pone este código automáticamente. Puedes corregir un código o eliminar un cruce equivocado.
       </p>
       <div className="overflow-x-auto" style={{ maxHeight: '62vh' }}>
-        <table className="w-full border-collapse text-xs" style={{ minWidth: 720 }}>
+        {/* HOJA CLARA: este cuadro es blanco de verdad, así que se marca para
+            que la letra vuelva a ser oscura. Sin esto, con el diseño nuevo la
+            letra sale blanca sobre blanco y no se ve nada.
+            — corregido 05/09/2026 */}
+        <table data-hoja="clara" className="w-full border-collapse text-xs" style={{ minWidth: 720 }}>
           <thead><tr>
             {['TIPO', 'CUENTA / NOMBRE', 'CÓDIGO', 'DEPORTISTA', ''].map(h => (
               <th key={h} style={{ position: 'sticky', top: 0, zIndex: 2, background: '#16a34a', color: '#fff', border: '1px solid #fff', padding: '7px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap' }}>{h}</th>
@@ -3680,9 +3686,9 @@ function DiccionarioEditor({ codMap, flash, onCount }: {
           </tr></thead>
           <tbody>
             {cargando ? (
-              <tr><td colSpan={5} className="text-center py-10 text-white/40 font-semibold">Cargando…</td></tr>
+              <tr><td colSpan={5} className="text-center py-10 font-semibold" style={{ color: '#94a3b8' }}>Cargando…</td></tr>
             ) : filtradas.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-10 text-white/40 font-semibold">No hay cruces que coincidan.</td></tr>
+              <tr><td colSpan={5} className="text-center py-10 font-semibold" style={{ color: '#94a3b8' }}>No hay cruces que coincidan.</td></tr>
             ) : vis.map((r, i) => (
               <tr key={r.id} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
                 <td style={{ ...td, fontSize: 10, color: '#64748b', fontWeight: 700 }}>{r.tipo === 'cuenta' ? 'CUENTA' : r.tipo === 'pagador' ? 'PAGADOR QR' : 'NOMBRE'}</td>
@@ -3693,7 +3699,7 @@ function DiccionarioEditor({ codMap, flash, onCount }: {
                 <td style={{ ...td, width: 110 }}>
                   <input value={r.codigo} onChange={e => editarLocal(r.id, e.target.value)} className="w-24 border border-[#4A5568] rounded px-1.5 py-1 text-[11px] text-center font-bold" />
                 </td>
-                <td style={{ ...td, textAlign: 'left' }} title={codMap[r.codigo] || ''}>{codMap[r.codigo] || <span className="text-white/40">—</span>}</td>
+                <td style={{ ...td, textAlign: 'left' }} title={codMap[r.codigo] || ''}>{codMap[r.codigo] || <span style={{ color: '#94a3b8' }}>—</span>}</td>
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>
                   <div className="flex items-center gap-1 justify-center">
                     <button onClick={() => guardar(r)} disabled={guardandoId === r.id} className="text-[11px] font-black text-white bg-[#16a34a] px-2.5 py-1 rounded-lg hover:bg-[#064e1e] transition disabled:opacity-60">{guardandoId === r.id ? '…' : 'Guardar'}</button>
@@ -3803,7 +3809,7 @@ function DesconocidasEditor({ deportistas, conceptos, flash }: {
         Son pagos recibidos que el sistema no pudo cruzar con un deportista. Asigna cada cuenta: se corrige en el libro y queda guardado en el diccionario para que el próximo extracto se cruce solo.
       </p>
       <div className="overflow-x-auto" style={{ maxHeight: '64vh' }}>
-        <table className="w-full border-collapse text-xs" style={{ minWidth: 900 }}>
+        <table data-hoja="clara" className="w-full border-collapse text-xs" style={{ minWidth: 900 }}>
           <thead>
             <tr>
               {['REFERENCIA / CUENTA', 'MOV.', 'TOTAL $', 'EJEMPLO DESCRIPCIÓN', 'CONCEPTO', 'ASIGNAR DEPORTISTA'].map(h => (
@@ -3813,7 +3819,7 @@ function DesconocidasEditor({ deportistas, conceptos, flash }: {
           </thead>
           <tbody>
             {cargando ? (
-              <tr><td colSpan={6} className="text-center py-10 text-white/40 font-semibold">Cargando…</td></tr>
+              <tr><td colSpan={6} className="text-center py-10 font-semibold" style={{ color: '#94a3b8' }}>Cargando…</td></tr>
             ) : grupos.length === 0 ? (
               <tr><td colSpan={6} className="text-center py-10 text-[#5BE39B] font-semibold">🎉 No hay cuentas por asignar. Todos los pagos están cruzados.</td></tr>
             ) : grupos.map(g => (
@@ -3866,9 +3872,9 @@ function FilaDesconocida({ g, deportistas, conceptos, onAsignar, busy }: {
         </select>
       </td>
       <td style={{ ...td, textAlign: 'left', minWidth: 220 }}>
-        {busy ? <span className="text-[11px] font-bold text-white/40">Asignando…</span> : (
+        {busy ? <span className="text-[11px] font-bold" style={{ color: '#64748b' }}>Asignando…</span> : (
           <div className="relative">
-            <div className="flex items-center gap-1 border border-orange-300 rounded px-1.5 py-1 bg-[#3C4759]">
+            <div className="flex items-center gap-1 border border-orange-300 rounded px-1.5 py-1 " style={{ background: '#FFFFFF' }}>
               <Search className="w-3 h-3 text-orange-400" />
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar deportista o código…" className="w-44 text-[11px] focus:outline-none" />
             </div>
@@ -3952,7 +3958,7 @@ function CuentasEditor({ conceptos, onCambio, flash }: {
         Estas son las opciones que aparecen en la lista desplegable de <b>CONCEPTO</b> al revisar los movimientos. Edita el nombre, el tipo o el código y pulsa Guardar.
       </p>
       <div className="overflow-x-auto" style={{ maxHeight: '62vh' }}>
-        <table className="w-full border-collapse text-xs" style={{ minWidth: 640 }}>
+        <table data-hoja="clara" className="w-full border-collapse text-xs" style={{ minWidth: 640 }}>
           <thead>
             <tr>
               {['ORDEN', 'NOMBRE DE LA CUENTA', 'TIPO', 'CÓD. CUENTA', ''].map(h => (
@@ -3962,7 +3968,7 @@ function CuentasEditor({ conceptos, onCambio, flash }: {
           </thead>
           <tbody>
             {lista.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-10 text-white/40 font-semibold">No hay cuentas. Crea una con “+ Nueva cuenta”.</td></tr>
+              <tr><td colSpan={5} className="text-center py-10 font-semibold" style={{ color: '#94a3b8' }}>No hay cuentas. Crea una con “+ Nueva cuenta”.</td></tr>
             ) : lista.map((c, i) => (
               <tr key={c.id} style={{ background: i % 2 ? '#f8fafc' : '#fff' }}>
                 <td style={{ ...td, width: 70 }}>
@@ -3971,11 +3977,11 @@ function CuentasEditor({ conceptos, onCambio, flash }: {
                 </td>
                 <td style={{ ...td, textAlign: 'left' }}>
                   <input value={c.nombre} onChange={e => editarLocal(c.id, 'nombre', e.target.value)}
-                    className="w-full min-w-[200px] border border-[#4A5568] rounded px-2 py-1 text-[11px] font-bold text-white uppercase" placeholder="Nombre de la cuenta" />
+                    className="w-full min-w-[200px] border border-[#4A5568] rounded px-2 py-1 text-[11px] font-bold uppercase" placeholder="Nombre de la cuenta" />
                 </td>
                 <td style={{ ...td }}>
                   <select value={c.tipo} onChange={e => editarLocal(c.id, 'tipo', e.target.value)}
-                    className="border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold text-white bg-[#3C4759]">
+                    className="border border-[#4A5568] rounded px-1.5 py-1 text-[11px] font-semibold">
                     {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
                     {c.tipo && !TIPOS.includes(c.tipo) && <option value={c.tipo}>{c.tipo}</option>}
                   </select>
