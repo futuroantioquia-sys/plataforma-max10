@@ -857,7 +857,15 @@ function PagosInner() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-4 py-5 space-y-4">
+      {/* ── A TODO EL ANCHO DE LA PANTALLA ──────────────────────────────────
+          (dirección, 06/09/2026 — «amplía a pantalla completa para que se lea
+           todo y no se corte nada»)
+
+          Estaba topado en 1.400 píxeles. Con las tres columnas nuevas
+          —PROGRAMA, MENSUALIDAD y VALOR DEUDA— ya no cabía: la OBSERVACIÓN
+          quedaba cortada por la derecha, y esa columna es la que dice por qué
+          una familia debe. Ahora el cuadro usa todo el monitor. */}
+      <main className="mx-auto px-4 py-5 space-y-4" style={{ maxWidth: '100%' }}>
 
         {/* TÍTULO SECCIÓN */}
         <div className="flex items-center gap-2 pt-1">
@@ -1301,7 +1309,7 @@ function PagosInner() {
                           El clic NO abre el estado de cuenta: se queda aquí para escribir. */}
                       <td
                         onClick={e => e.stopPropagation()}
-                        style={{ background: bg, border: '1px solid white', padding: '4px 6px', minWidth: 240, maxWidth: 320, cursor: 'text' }}>
+                        style={{ background: bg, border: '1px solid white', padding: '4px 6px', minWidth: 240, cursor: 'text' }}>
                         {/* Se escribe directo, sin botones. Al hacer clic afuera
                             (o al oprimir Tab) queda guardado. Esc devuelve lo que
                             estaba. El cuadro crece solo mientras se escribe. */}
