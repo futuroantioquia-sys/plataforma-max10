@@ -1655,26 +1655,49 @@ function EstadoCuentaInner() {
                                     : malDesc ? <>PAGÓ CON MAL DESCUENTO<br/>DEBE: {ensurePeso(String(debeDesc))}</>
                                     : 'PAGÓ'}
                                 </span>
-                              : (esProfesor || esReadonly)
-                                ? isProx
+                              /* ── EL BOTÓN PAGAR ES DEL CALIDOSO, DE NADIE MÁS ──
+                                 (dirección, 06/09/2026 — «grave error: Diana,
+                                  observando estado de cuentas, ve el estado como
+                                  si fuera a pagar. No debe ser así: ella, igual
+                                  que el admón principal, elimina pagos y demás,
+                                  pero no ese botón de cobrar; ese es del
+                                  calidoso»)
+
+                                 EL ERROR. La pantalla solo apagaba el botón para
+                                 el PROFESOR y para el modo de solo lectura. La
+                                 administración y la contabilidad caían en el
+                                 «else» y les salía 💳 PAGAR, rojo y parpadeando,
+                                 en la cuenta de otra persona. Un clic de más y
+                                 se abre un pago que no es de ellas.
+
+                                 LA REGLA, AHORA AL DERECHO: el botón se enciende
+                                 ÚNICAMENTE si quien entró es el deportista o su
+                                 acudiente. Antes se preguntaba «¿quién NO lo
+                                 ve?» y había que acordarse de nombrar a todos;
+                                 bastaba un rol nuevo para que se colara otra vez.
+                                 Ahora se pregunta «¿quién SÍ lo ve?», y la
+                                 respuesta es uno solo.
+
+                                 Lo que ellas sí siguen viendo —y necesitan— es
+                                 ⏳ POR CONFIRMAR cuando el papá ya subió el
+                                 soporte, y PEND o PRÓX en lo demás. */
+                              : hasSoporte
+                                ? <span className="px-1 py-[5px] rounded-lg font-black text-[9px] w-full block text-center leading-tight whitespace-nowrap"
+                                    style={{ background: 'rgba(224,163,58,.16)', color: '#E0A33A', border: '1px solid rgba(224,163,58,.65)' }}>
+                                    ⏳ POR CONFIRMAR
+                                  </span>
+                                : isProx
                                   ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
                                       style={{ background:'#2B3547', color:'#9AA5B5' }}>PRÓX</span>
-                                  : <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
-                                      style={{ background:'rgba(192,80,77,.18)', color:'#F08A87' }}>PEND</span>
-                                : hasSoporte
-                                  ? <span className="px-1 py-[5px] rounded-lg font-black text-[9px] w-full block text-center leading-tight whitespace-nowrap"
-                                      style={{ background: 'rgba(224,163,58,.16)', color: '#E0A33A', border: '1px solid rgba(224,163,58,.65)' }}>
-                                      ⏳ POR CONFIRMAR
-                                    </span>
-                                  : isProx
-                                    ? <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
-                                        style={{ background:'#2B3547', color:'#9AA5B5' }}>PRÓX</span>
-                                    : <button
+                                  : (esDeportista && !esReadonly)
+                                    ? <button
                                         onClick={() => { setShowPagoModal(true); setPagoModalIdx(idx); }}
                                         className="px-1 py-2 rounded-lg font-black text-[11px] w-full block text-center text-white shadow-sm active:scale-95 transition-transform animate-pulse whitespace-nowrap"
                                         style={{ background: '#dc2626' }}>
                                         💳 PAGAR
                                       </button>
+                                    : <span className="px-2 py-1 rounded font-black text-[11px] w-full block text-center"
+                                        style={{ background:'rgba(192,80,77,.18)', color:'#F08A87' }}>PEND</span>
                       }
                     </td>
                   </tr>

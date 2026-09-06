@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quién ve PAGAR</title>
+<style>
+ body{margin:0;background:#333F50;color:#fff;font-family:system-ui,"Segoe UI",Arial,sans-serif;padding:20px}
+ h1{font-size:19px;margin:0 0 3px;letter-spacing:.4px}
+ p.sub{margin:0 0 18px;color:#9fb0c5;font-size:13px}
+ .par{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:18px}
+ .caja{flex:1;min-width:280px;background:#3C4759;border:1px solid #4A5568;border-radius:14px;overflow:hidden}
+ .caja.mal{border:2px solid #C0504D}
+ .caja.bien{border:2px solid #00B050}
+ .tit{padding:8px 12px;font-size:11px;font-weight:900;letter-spacing:.07em}
+ .mal .tit{background:#C0504D}
+ .bien .tit{background:#00B050}
+ .cuerpo{padding:12px}
+ table{width:100%;border-collapse:collapse;font-size:11px}
+ th{background:#00B050;color:#fff;font-size:9px;font-weight:900;padding:6px 4px;border:1px solid #fff}
+ td{padding:5px 4px;border:1px solid #4A5568;text-align:center;color:#fff}
+ .pagar{background:#dc2626;color:#fff;font-weight:900;border-radius:7px;padding:6px 4px;display:block;font-size:10px}
+ .pend{background:rgba(192,80,77,.18);color:#F08A87;font-weight:900;border-radius:5px;padding:4px;display:block;font-size:10px}
+ .pago{background:#22c55e;color:#fff;font-weight:900;border-radius:5px;padding:4px;display:block;font-size:10px}
+ .conf{background:rgba(224,163,58,.16);color:#E0A33A;border:1px solid rgba(224,163,58,.65);font-weight:900;border-radius:6px;padding:4px 2px;display:block;font-size:8.5px;line-height:1.2}
+ .nota{font-size:12px;color:#cfe0d4;line-height:1.55;margin:10px 0 0}
+ .quien{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+ .chip{border-radius:9px;padding:7px 11px;font-size:11.5px;font-weight:800}
+ .no{background:rgba(192,80,77,.16);border:1px solid #C0504D}
+ .si{background:rgba(0,176,80,.16);border:1px solid #00B050}
+ b.v{color:#5BE39B}
+</style></head><body>
+
+<h1>EL BOTÓN PAGAR ES DEL CALIDOSO</h1>
+<p class="sub">Estado de Cuenta · corregido el 06/09/2026</p>
+
+<div class="par">
+  <div class="caja mal">
+    <div class="tit">✕ ANTES · lo que veía Diana</div>
+    <div class="cuerpo">
+      <table>
+        <tr><th>DETALLE</th><th>ESTADO</th></tr>
+        <tr><td>AGOSTO 2026</td><td><span class="pago">PAGÓ</span></td></tr>
+        <tr><td>SEPTIEMBRE 2026</td><td><span class="pagar">💳 PAGAR</span></td></tr>
+        <tr><td>OCTUBRE 2026</td><td><span class="pagar">💳 PAGAR</span></td></tr>
+      </table>
+      <p class="nota">Rojo y parpadeando, en la cuenta de otra familia.
+      Un clic de más y se abre un pago que no es de ella.</p>
+    </div>
+  </div>
+
+  <div class="caja bien">
+    <div class="tit">✓ AHORA · lo que ve Diana</div>
+    <div class="cuerpo">
+      <table>
+        <tr><th>DETALLE</th><th>ESTADO</th></tr>
+        <tr><td>AGOSTO 2026</td><td><span class="pago">PAGÓ</span></td></tr>
+        <tr><td>SEPTIEMBRE 2026</td><td><span class="conf">⏳ POR<br>CONFIRMAR</span></td></tr>
+        <tr><td>OCTUBRE 2026</td><td><span class="pend">PEND</span></td></tr>
+      </table>
+      <p class="nota">Ve el estado, y <b class="v">sigue confirmando, revirtiendo y eliminando</b> pagos como siempre. Lo que no ve es el botón de pagar.</p>
+    </div>
+  </div>
+</div>
+
+<div class="caja" style="border-color:#4A5568">
+  <div class="tit" style="background:#2B3547">QUIÉN VE 💳 PAGAR</div>
+  <div class="cuerpo">
+    <div class="quien">
+      <span class="chip si">✓ Deportista</span>
+      <span class="chip si">✓ Acudiente</span>
+      <span class="chip no">✕ Administración</span>
+      <span class="chip no">✕ Contabilidad</span>
+      <span class="chip no">✕ Deportivo</span>
+      <span class="chip no">✕ Formador</span>
+    </div>
+    <p class="nota"><b>Por qué se había colado:</b> la pantalla preguntaba
+    «¿quién <b>NO</b> lo ve?» y solo nombraba al formador y al modo de solo lectura.
+    La administración y la contabilidad caían en el resto, y les salía.
+    Bastaba un rol nuevo para que volviera a pasar.<br><br>
+    <b>Ahora pregunta al derecho: «¿quién <b class="v">SÍ</b> lo ve?»</b> — y la respuesta es una sola:
+    el deportista o su acudiente. Cualquier rol que se cree mañana queda por fuera solo.</p>
+  </div>
+</div>
+
+</body></html>
