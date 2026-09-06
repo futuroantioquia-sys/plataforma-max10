@@ -103,6 +103,52 @@ const MES_NUM: Record<string, number> = {
 const MES_ACTUAL = new Date().getMonth() + 1;
 function esFuturo(d: string) { const n = MES_NUM[d]; return n !== undefined && n > 0 && n > MES_ACTUAL; }
 
+/* ── POR QUÉ A UNOS SE LES COBRABA HASTA AGOSTO Y A OTROS HASTA SEPTIEMBRE ─
+   (dirección, 06/09/2026 — «lo que más raro me parece es que estábamos
+    cobrando y a unos se les cobraba hasta agosto y a otros hasta septiembre» ·
+    «que a todos por igual se les cobre hasta septiembre»)
+
+   ERA UN ERROR, Y ESTÁ MEDIDO. En la base hay 628 renglones de SEPTIEMBRE:
+       413 PAGÓ · 204 PROX · 9 PEND · 2 NOPAGA
+   Esos 204 en PROX son el problema. PROX quiere decir «todavía no le toca»,
+   y se les puso cuando septiembre aún era futuro. Pero llegó septiembre y
+   NADIE los cambió: se quedaron en PROX para siempre.
+
+   Resultado: al que NO tenía renglón de septiembre, la pantalla se lo contaba
+   como pendiente (así funciona por defecto); al que sí lo tenía en PROX, no.
+   Dos deportistas iguales, cobros distintos. En agosto no pasa: ahí no quedó
+   ni un PROX (919 PAGÓ y 81 PEND).
+
+   EL ARREGLO: un PROX de un mes que YA LLEGÓ vale lo mismo que no tener nada
+   — es PENDIENTE. No se toca la base: se corrige al leer, y así queda parejo
+   para todos, ahora y en octubre, sin que nadie tenga que acordarse.
+
+   (Si algún día se quiere volver a la regla de «el mes en curso no se cobra
+   antes del 15», es cambiar MES_ACTUAL por MES_ACTUAL-1 en las dos líneas
+   marcadas más abajo. Hoy la dirección lo quiere hasta el mes en curso.) */
+/** ¿Este renglón está pendiente de verdad? Un PROX de un mes que ya llegó, sí. */
+function estaPendiente(det: string, saved: any): boolean {
+  if (!saved) return true;                       // sin renglón = pendiente
+  if (saved.estado === 'PEND') return true;
+  if (saved.estado === 'PROX') {
+    const n = MES_NUM[det];
+    return n === 0 || n <= MES_ACTUAL;           // ya llegó su mes → pendiente
+  }
+  return false;                                   // PAGÓ, NOPAGA, ELIM…
+}
+
+/* ── LA MENSUALIDAD DE ESTE DEPORTISTA ────────────────────────────────────
+   Se apoya en `tarifaMensual` —la misma tabla del Estado de Cuenta, que ya
+   estaba más abajo en este archivo— y le aplica encima el acuerdo con la
+   familia si lo hay (CUOTA_MANUAL). Así las dos pantallas nunca discrepan. */
+function mensualidadDe(dep: Deportista): number {
+  const cols = dep._columnas ?? {};
+  const kMan = Object.keys(cols).find(k => /^cuota_?manual$/i.test(String(k).trim()));
+  const man = kMan ? String(cols[kMan] ?? '').replace(/\D/g, '') : '';
+  if (man) return Number(man);
+  return tarifaMensual(getCol(dep, /^program/i), getCol(dep, /^sede/i));
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    COBRAR POR WHATSAPP
 
@@ -314,8 +360,11 @@ function calcularResumen(dep: Deportista, allPagos: AllPagos) {
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
   const pagados    = fullRows.filter((r: any) => r.estado === 'PAGÓ').length;
-  const pendientes = fullRows.filter((r: any) => r.estado === 'PEND').length;
-  const proximos   = fullRows.filter((r: any) => r.estado === 'PROX').length;
+  /* Un PROX cuyo mes ya llegó cuenta como PENDIENTE, no como próximo. */
+  const pendientes = fullRows.filter((r: any) => r.estado === 'PEND'
+    || (r.estado === 'PROX' && (MES_NUM[r.detalle] ?? 99) <= MES_ACTUAL)).length;
+  const proximos   = fullRows.filter((r: any) => r.estado === 'PROX'
+    && (MES_NUM[r.detalle] ?? 99) > MES_ACTUAL).length;
   const cargados   = pagados + pendientes + proximos;
 
   /* Meses pendientes solo hasta el mes en curso (no futuros).
@@ -332,8 +381,10 @@ function calcularResumen(dep: Deportista, allPagos: AllPagos) {
       if (n !== 0 && n < mesAfil) return false;
       const saved = mergeMap.get(det) as any;
       if (saved?.estado === 'ELIM') return false;
-      if (saved) return saved.estado === 'PEND';
-      return true; // sin registro = PEND
+      /* Aquí estaba el error de los 204 (ver arriba): se pedía estado 'PEND'
+         exacto, y un 'PROX' viejo de un mes ya llegado se colaba como si el
+         deportista estuviera al día. — 06/09/2026 */
+      return estaPendiente(det, saved);
     });
   const mesesPendientes: string[] = mesesPendFull.map(det => MES_ABREV[det] ?? det.slice(0, 3));
 
@@ -564,8 +615,33 @@ function PagosInner() {
       if (filtroPrograma && prog !== filtroPrograma) return false;
       if (filtroProyecto && proy !== filtroProyecto) return false;
       if (filtroCodigo && !cod.includes(filtroCodigo.toLowerCase())) return false;
-      // CARTERA por mes: solo quienes tienen ese mes PENDIENTE
-      if (filtroMes && !resumenPago(d).mesesPendientes.includes(filtroMes)) return false;
+      /* ── DEBE DESDE ─────────────────────────────────────────────────
+         (dirección, 06/09/2026 — «cuando voy a mirar quién me debe mayo, me
+          aparecen otra vez los de marzo y abril, y me puedo volver a
+          equivocar cobrándoles nuevamente»)
+
+         ANTES: «deben el mes de MAYO» mostraba a TODO el que tuviera mayo
+         pendiente. Pero el que debe desde marzo también debe mayo — así que
+         salía en marzo, en abril y en mayo. Uno cobraba por listas y a la
+         misma familia le llegaban tres cobros.
+
+         AHORA: manda el mes MÁS VIEJO que debe. El que arrastra desde marzo
+         sale ÚNICAMENTE en «Debe desde MARZO». Cada deportista aparece en una
+         sola lista, nunca en dos. Se puede bajar la lista completa mes por mes
+         sin repetirle el cobro a nadie.
+
+         Y aparte, «Debe matrícula», que no es un mes y se cobra distinto. */
+      if (filtroMes) {
+        const pend: string[] = (resumenPago(d) as any).mesesPendFull ?? [];
+        if (filtroMes === '__MAT__') {
+          if (!pend.some(det => (MES_NUM[det] ?? -1) === 0)) return false;
+        } else {
+          const meses = pend.filter(det => (MES_NUM[det] ?? 0) > 0);
+          if (!meses.length) return false;
+          const masViejo = meses.reduce((a2, b2) => (MES_NUM[a2] <= MES_NUM[b2] ? a2 : b2));
+          if (masViejo !== filtroMes) return false;
+        }
+      }
       // Solo los que les toca este botón de cobro
       if (filtroBoton) {
         const c = cobroDeCache(d);
@@ -828,14 +904,21 @@ function PagosInner() {
               />
             </div>
             <div className="w-[160px]">
-              <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Deben el mes</label>
+              <label className="block text-[10px] font-black text-white uppercase tracking-widest mb-1">Debe desde</label>
               <select value={filtroMes} onChange={e => { setFiltroMes(e.target.value); syncURL(busqueda, filtroCodigo, filtroPrograma, filtroProyecto, e.target.value); }}
-                title="Ver solo los deportistas que tienen ese mes pendiente"
+                title="El mes MÁS VIEJO que debe. Cada deportista sale en una sola lista, nunca en dos."
                 className="w-full rounded-xl px-3 py-2 text-sm text-white border focus:outline-none focus:ring-2 focus:ring-[#00B050]"
                 style={{ background: CAMPO, borderColor: BORDE }}>
-                <option value="">Todos los meses</option>
-                {DETALLE_ROWS.filter(det => MES_NUM[det] <= MES_ACTUAL).map(det => (
-                  <option key={det} value={MES_ABREV[det] ?? det.slice(0, 3)}>{det.replace(' 2026', '')}</option>
+                <option value="">Todos</option>
+                <option value="__MAT__">Debe matrícula</option>
+                {/* LOS DOCE MESES, NO SOLO HASTA EL DE HOY (dirección, 06/09/2026:
+                    «solo falta el listado desplegable»). Antes la lista se
+                    cortaba en el mes en curso y no aparecían octubre, noviembre
+                    ni diciembre. Ahora está completa: los meses que todavía no
+                    llegan simplemente no traen a nadie, y en octubre la lista ya
+                    sirve sin que nadie tenga que tocar nada. */}
+                {DETALLE_ROWS.filter(det => (MES_NUM[det] ?? 0) > 0).map(det => (
+                  <option key={det} value={det}>Debe desde {det.replace(' 2026', '')}</option>
                 ))}
               </select>
             </div>
@@ -942,6 +1025,13 @@ function PagosInner() {
                     { h: 'FECHA AFILIACIÓN',      align: 'center' },
                     { h: 'CÓDIGO',                align: 'center' },
                     { h: 'NOMBRE DEL DEPORTISTA', align: 'left'   },
+                    /* Tres columnas nuevas — dirección, 06/09/2026:
+                       de qué programa es, cuánto paga al mes, y cuánto suma
+                       lo que debe. Sin esto tocaba abrir la ficha de cada uno
+                       para saber si un cobro era de 80 mil o de 138 mil. */
+                    { h: 'PROGRAMA',              align: 'left'   },
+                    { h: 'MENSUALIDAD',           align: 'right'  },
+                    { h: 'VALOR DEUDA',           align: 'right'  },
                     { h: 'MESES PENDIENTES',      align: 'left'   },
                     { h: 'COBRAR',                align: 'center' },
                     { h: 'OBSERVACIÓN',           align: 'left'   },
@@ -961,7 +1051,7 @@ function PagosInner() {
                 {filtrados.map((dep) => {
                   const bg  = PANEL;
                   const cod = codigoDe(dep);
-                  const { pendientes, total, mesesPendientes, becado } = resumenPago(dep) as any;
+                  const { pendientes, total, mesesPendientes, mesesPendFull, becado } = resumenPago(dep) as any;
                   const cobro = cobroDeCache(dep);
                   const tieneDatos = total > 0;
 
@@ -1069,6 +1159,47 @@ function PagosInner() {
                       }}>
                         <span className="hover:underline" title="Abrir el estado de cuenta">{dep._nombre}</span>
                       </td>
+
+                      {/* ── PROGRAMA · MENSUALIDAD · VALOR DEUDA ──────────────
+                          (dirección, 06/09/2026)
+
+                          La deuda se calcula así: los MESES pendientes por la
+                          mensualidad de ese deportista —la de su programa y su
+                          sede, o la que se le haya acordado a mano—. La
+                          MATRÍCULA no se suma en pesos porque su valor cambia
+                          según el programa y el semestre; cuando está
+                          pendiente se avisa con «+ MAT» al lado, para que no
+                          se olvide. */}
+                      {(() => {
+                        const prog = getCol(dep, /^program/i) || '—';
+                        const mens = becado ? 0 : mensualidadDe(dep);
+                        const pend: string[] = (mesesPendFull as string[]) ?? [];
+                        const nMeses = pend.filter(det => (MES_NUM[det] ?? 0) > 0).length;
+                        const debeMat = pend.some(det => (MES_NUM[det] ?? -1) === 0);
+                        const deuda = becado ? 0 : nMeses * mens;
+                        const celda = {
+                          background: bg, border: '1px solid white',
+                          padding: '6px 8px', fontSize: 11, whiteSpace: 'nowrap' as const,
+                        };
+                        return (
+                          <>
+                            <td style={{ ...celda, color: '#FFFFFF', fontWeight: 700, textAlign: 'left' as const, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                              title={prog}>{prog}</td>
+                            <td style={{ ...celda, color: '#FFFFFF', fontWeight: 800, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' }}>
+                              {becado ? '—' : pesos(mens)}
+                            </td>
+                            <td style={{ ...celda, textAlign: 'right' as const, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+                                         color: deuda > 0 ? '#F08A87' : '#5BE39B' }}>
+                              {becado ? '—' : deuda > 0 ? pesos(deuda) : 'AL DÍA'}
+                              {debeMat && (
+                                <span style={{ display: 'block', fontSize: 8.5, fontWeight: 900, color: '#E0A33A' }}>
+                                  + MATRÍCULA
+                                </span>
+                              )}
+                            </td>
+                          </>
+                        );
+                      })()}
 
                       {/* MESES PENDIENTES — aquí se dice TODO de una vez:
                           los meses que debe, o AL DÍA, o BECADO. */}

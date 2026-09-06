@@ -3083,7 +3083,11 @@ export default function ContabilidadPage() {
                           if (nombreDep && depId) {
                             return (
                               <button onClick={() => { setFilaDondeIba(m.id || null); setEstadoCuentaUrl(`/alumnos/${depId}/estado-cuenta?edit=1`); }}
-                                className="text-left text-[#5BE39B] hover:text-green-900 hover:underline font-semibold w-full truncate"
+                                /* VERDE OSCURO, no el verde claro de la plataforma:
+                                   este renglón va sobre la hoja BLANCA del libro, y
+                                   ahí el verde claro casi no se lee. — 06/09/2026 */
+                                className="text-left hover:underline font-semibold w-full truncate"
+                                style={{ color: '#0a7d2e' }}
                                 title={`Ver estado de cuenta de ${nombreDep} (se abre en ventana, sin salir del libro)`}>
                                 {nombreDep}
                               </button>

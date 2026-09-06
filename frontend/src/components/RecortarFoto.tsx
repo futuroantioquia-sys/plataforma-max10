@@ -90,37 +90,38 @@ export function RecortarFoto({
 
   /* ── LA FOTO QUE NO APARECÍA ─────────────────────────────────────────────
      (dirección, 06/09/2026 — «no aparece la foto»: el recuadro abría con las
-      rayas puestas, pero adentro todo negro)
+      rayas puestas, pero adentro todo negro. Y con el primer arreglo seguía
+      igual.)
 
-     LA CAUSA. El tamaño real de la foto se leía SOLO en el `onLoad` de la
-     imagen. Eso sirve cuando la foto se acaba de escoger del computador: llega
-     nueva, el navegador la baja y avisa. Pero cuando uno toca una foto QUE YA
-     ESTÁ EN PANTALLA —para volverla a acomodar—, el navegador ya la tiene
-     lista y NO vuelve a avisar: el `onLoad` no ocurre nunca. Sin ese aviso el
-     recortador no sabía de qué tamaño dibujarla, y la dejaba en cero: negro.
+     EL PRIMER INTENTO SE QUEDÓ CORTO. Se preguntaba por la imagen que dibuja
+     la pantalla (`imgRef`), y esa no siempre está lista en el momento en que
+     se pregunta: depende de cuándo el navegador decida terminarla.
 
-     Por eso fallaba justo en el caso más natural —«esta foto quedó torcida,
-     déjame acomodarla»— y funcionaba al subir una nueva.
-
-     LA SOLUCIÓN. Además del aviso, se pregunta directamente: apenas se monta
-     el recuadro, si la imagen ya está lista (`complete`), se le lee el tamaño
-     de una. Y al cambiar de foto se borra el anterior, para que una foto no
-     herede la medida de la otra. */
+     AHORA NO SE LE PREGUNTA A LA PANTALLA. Se carga la foto aparte, en
+     memoria, solo para medirla. Esa sí avisa siempre —esté en caché o no— y
+     es el mismo camino para una foto recién escogida del computador que para
+     una que ya estaba puesta. Si además falla de verdad (una foto dañada, un
+     enlace roto), se marca y abajo sale un aviso en vez de un cuadro negro
+     mudo. */
+  const [noSePudo, setNoSePudo] = useState(false);
   useEffect(() => {
     setNat(null);
-    const mirar = () => {
-      const im = imgRef.current;
-      if (im && im.complete && im.naturalWidth > 0) {
-        setNat({ w: im.naturalWidth, h: im.naturalHeight });
-        return true;
-      }
-      return false;
+    setNoSePudo(false);
+    if (!src) { setNoSePudo(true); return; }
+    let vivo = true;
+    const medidor = new window.Image();
+    medidor.onload = () => {
+      if (!vivo) return;
+      if (medidor.naturalWidth > 0) setNat({ w: medidor.naturalWidth, h: medidor.naturalHeight });
+      else setNoSePudo(true);
     };
-    if (mirar()) return;
-    /* Si todavía no está lista, se vuelve a mirar en el siguiente pintado:
-       cubre el caso en que quede lista entre el montaje y el aviso. */
-    const t = setTimeout(mirar, 60);
-    return () => clearTimeout(t);
+    medidor.onerror = () => { if (vivo) setNoSePudo(true); };
+    medidor.src = src;
+    /* Si ya estaba en memoria, `onload` puede no volver a ocurrir: se mira de una. */
+    if (medidor.complete && medidor.naturalWidth > 0) {
+      setNat({ w: medidor.naturalWidth, h: medidor.naturalHeight });
+    }
+    return () => { vivo = false; };
   }, [src]);
   const [escala, setEscala] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -268,6 +269,16 @@ export function RecortarFoto({
               userSelect: 'none',
             }}
           >
+            {noSePudo && (
+              <div style={{
+                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', textAlign: 'center', padding: 20, zIndex: 5,
+                color: '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1.5,
+              }}>
+                No se pudo abrir esta foto.<br />
+                Toca CANCELAR y vuelve a escogerla desde el computador.
+              </div>
+            )}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               ref={imgRef}
