@@ -191,6 +191,40 @@ const QUIENES = [
 type QuienId = typeof QUIENES[number]['id'];
 type Saludos = Record<string, string>;
 
+/* ── LAS ETIQUETAS: LO QUE SE LLENA SOLO ──────────────────────────────────
+   (dirección, 06/09/2026 — «no sé cómo escribir el código para que el nombre
+    del deportista aparezca por defecto»)
+
+   No hay que escribir código. Se escribe la palabra entre llaves y el
+   contestador la cambia por el dato de verdad antes de mandar el mensaje:
+
+       ¡Hola {DEPORTISTA}! Gracias por escribirnos.
+       →  ¡Hola ANTHONY! Gracias por escribirnos.
+
+   Si el dato no existe —una ficha sin acudiente, por ejemplo— la etiqueta NO
+   se manda escrita: se borra junto con el espacio que le sobra, para que
+   nunca le llegue a un papá un mensaje con llaves adentro. */
+const ETIQUETAS = [
+  { tag: '{DEPORTISTA}', que: 'Nombre del deportista',  ejemplo: 'ANTHONY' },
+  { tag: '{ACUDIENTE}',  que: 'Nombre de quien escribe', ejemplo: 'CLAUDIA' },
+  { tag: '{CODIGO}',     que: 'Código del deportista',   ejemplo: '26391' },
+  { tag: '{PROGRAMA}',   que: 'Programa en el que está', ejemplo: 'FORMACIÓN' },
+  { tag: '{SEDE}',       que: 'Sede donde entrena',      ejemplo: 'BELLO NIQUÍA' },
+];
+
+/** Cambia las etiquetas por los datos. Lo que no tenga dato se quita limpio. */
+function llenarEtiquetas(texto: string, datos: Record<string, string>): string {
+  let t = String(texto ?? '');
+  for (const e of ETIQUETAS) {
+    const valor = String(datos[e.tag] ?? '').trim();
+    t = valor
+      ? t.split(e.tag).join(valor)
+      // sin dato: se lleva la etiqueta y el espacio que quede colgando
+      : t.split(e.tag + ' ').join('').split(e.tag).join('');
+  }
+  return t.replace(/[ \t]{2,}/g, ' ').replace(/ +\n/g, '\n');
+}
+
 /** Las sedes donde se entrena. */
 const SEDES = ['Santa Mónica', 'La 80', 'Centro', 'Bello Niquía', 'Sabaneta', 'Rionegro'];
 const DIAS  = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -216,6 +250,24 @@ export default function AtencionPage() {
   const [aviso, setAviso]         = useState('');
   const [pestana, setPestana]     = useState<'saludos' | 'programas' | 'respuestas' | 'probar'>('saludos');
   const [saludos, setSaludos]     = useState<Saludos>({});
+  /* Para poder meter una etiqueta JUSTO donde está el cursor. */
+  const cajasSaludo = useRef<Record<string, HTMLTextAreaElement | null>>({});
+
+  /** Mete la etiqueta donde quedó el cursor de esa casilla. */
+  function meterEtiqueta(quien: string, tag: string) {
+    const caja = cajasSaludo.current[quien];
+    const actual = saludos[quien] ?? '';
+    if (!caja) { setSaludos(p => ({ ...p, [quien]: actual + tag })); return; }
+    const i = caja.selectionStart ?? actual.length;
+    const j = caja.selectionEnd ?? i;
+    const nuevo = actual.slice(0, i) + tag + actual.slice(j);
+    setSaludos(p => ({ ...p, [quien]: nuevo }));
+    requestAnimationFrame(() => {
+      caja.focus();
+      const pos = i + tag.length;
+      caja.setSelectionRange(pos, pos);
+    });
+  }
   const [programas, setProgramas] = useState<Programa[]>([]);
   /* Lo que quedó guardado de la tabla vieja. NO se muestra ni se toca: se
      guarda igualito para no borrarle nada a nadie. — 06/09/2026 */
@@ -457,10 +509,38 @@ export default function AtencionPage() {
                   <span className="text-[11.5px]" style={{ color: GRIS }}>{q.ayuda}</span>
                 </div>
                 <textarea value={saludos[q.id] ?? ''} rows={6}
+                  ref={el => { cajasSaludo.current[q.id] = el; }}
                   onChange={e => setSaludos(p => ({ ...p, [q.id]: e.target.value }))}
                   placeholder="Escriba aquí el saludo, tal cual como le va a llegar…"
                   className="w-full rounded-xl px-3 py-2.5 text-[13px] text-white outline-none resize-y placeholder:text-white/30"
                   style={{ background: CAMPO, border: `1px solid ${BORDE}`, lineHeight: 1.6 }} />
+
+                {/* ── LOS DATOS QUE SE LLENAN SOLOS ──────────────────────
+                    Se pone el cursor donde va el nombre y se toca la pastilla.
+                    No hay que escribir código. — 06/09/2026 */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10.5px] font-black tracking-widest" style={{ color: GRIS }}>
+                    PONER UN DATO:
+                  </span>
+                  {ETIQUETAS.map(e => (
+                    <button key={e.tag} onClick={() => meterEtiqueta(q.id, e.tag)}
+                      title={`${e.que} — ejemplo: ${e.ejemplo}`}
+                      className="rounded-lg px-2 py-1 text-[11px] font-black text-white transition hover:brightness-125"
+                      style={{ background: 'rgba(0,176,80,.18)', border: `1px solid ${VERDE}` }}>
+                      {e.tag}
+                    </button>
+                  ))}
+                </div>
+                {/(\{[A-ZÁÉÍÓÚÑ]+\})/.test(saludos[q.id] ?? '') && (
+                  <div className="rounded-xl px-3 py-2.5 text-[12.5px] text-white whitespace-pre-wrap"
+                    style={{ background: 'rgba(0,176,80,.12)', border: `1px solid ${VERDE}` }}>
+                    <span className="block text-[9.5px] font-black tracking-widest mb-1" style={{ color: VERDECL }}>
+                      ASÍ LE LLEGARÍA
+                    </span>
+                    {llenarEtiquetas(saludos[q.id] ?? '',
+                      Object.fromEntries(ETIQUETAS.map(e => [e.tag, e.ejemplo])))}
+                  </div>
+                )}
               </div>
             ))}
           </>

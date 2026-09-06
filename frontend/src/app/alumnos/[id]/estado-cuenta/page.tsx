@@ -3,13 +3,14 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Camera } from 'lucide-react';
+import { ArrowLeft, Camera, Download, Trash2 } from 'lucide-react';
+import { RecortarFoto } from '@/components/RecortarFoto';
 import LoadingBall from '@/components/LoadingBall';
 import { cn, abrirSoporte, esPdfDato } from '@/lib/utils';
 import { getDeportistas } from '@/lib/db';
 import { partirNombre } from '@/lib/nombres';
 import type { Deportista } from '@/lib/db';
-import { getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre, updateColumnasDeportista, enviarMensaje } from '@/lib/db';
+import { comprimirImagen, getFoto, saveFoto, savePagosDeportista, getPagosPorCodigos, saveSoportePago, eliminarSoportePorNombre, updateColumnasDeportista, enviarMensaje } from '@/lib/db';
 import { useAuthStore } from '@/store/auth.store';
 import { rolManejaFinanzas } from '@/lib/permisos';
 
@@ -235,6 +236,8 @@ function EstadoCuentaInner() {
   /* Cuánto hay que acercar la foto. Lo decide la propia foto al cargarse
      (ver el onLoad de la imagen). 1 = no se toca. */
   const [fotoZoom, setFotoZoom] = useState(1);
+  /* La foto que se está acomodando en el recuadro 3×4. — 06/09/2026 */
+  const [fotoPorRecortar, setFotoPorRecortar] = useState<string | null>(null);
   const [editMens,      setEditMens]      = useState(false);   // editando la mensualidad del encabezado
   const [mensInput,     setMensInput]     = useState('');
   const [guardandoMens, setGuardandoMens] = useState(false);
@@ -455,16 +458,53 @@ function EstadoCuentaInner() {
     if (Array.isArray(nuevos)) setOtrosPagos(prev => [...prev, ...nuevos]);
   }
 
-  function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
+  /* ── SUBIR Y ACOMODAR LA FOTO, IGUAL QUE EN LA FICHA ────────────────────
+     (dirección, 06/09/2026 — «ya en estado de cuenta me permite descargar la
+      foto pero no subirla y editarla»)
+
+     ASÍ ERA ANTES Y POR ESO FALLABA. Se leía el archivo tal cual —una foto de
+     celular pesa entre 3 y 8 MB— y se mandaba de una a la nube. Dos cosas
+     pasaban:
+       · La foto SÍ aparecía en pantalla, pero el guardado en la nube se caía
+         por el tamaño… y el error se lo tragaba un `.catch(console.error)`.
+         Al recargar, la foto ya no estaba. Se veía como «no me deja subirla».
+       · Y no había forma de ACOMODARLA: entraba como viniera, sin el recuadro
+         3×4 de cabeza y escudos.
+
+     Ahora hace lo mismo que la ficha: se achica, se abre el recuadro para
+     acomodarla, y solo lo que quede entre las rayas se guarda. Además se
+     limpia el `value` del archivo, para poder escoger DOS VECES SEGUIDAS la
+     misma foto —antes la segunda vez no hacía nada—. */
+  async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const base64 = ev.target?.result as string;
-      setFoto(base64);
-      saveFoto(id, base64).catch(console.error); // guarda en Supabase + localStorage
-    };
-    reader.readAsDataURL(file);
+    try {
+      let previa: string;
+      try { previa = await comprimirImagen(file, 1400, 0.92); }
+      catch { previa = await new Promise<string>((ok, mal) => {
+        const r = new FileReader();
+        r.onload = () => ok(String(r.result || ''));
+        r.onerror = mal;
+        r.readAsDataURL(file);
+      }); }
+      setFotoPorRecortar(previa);
+    } catch (err) {
+      console.error('[estado-cuenta] subirFoto:', err);
+      alert('No se pudo leer esa imagen. Intenta con otra.');
+    }
+  }
+
+  /** Lo que quedó entre las rayas del recuadro: eso es lo que se guarda. */
+  async function guardarFotoRecortada(b64: string) {
+    setFotoPorRecortar(null);
+    try {
+      setFoto(b64);
+      await saveFoto(id, b64);
+    } catch (err) {
+      console.error('[estado-cuenta] guardarFotoRecortada:', err);
+      alert('La foto se ve en pantalla, pero no se pudo guardar en la nube. Intenta de nuevo.');
+    }
   }
 
   /* ─── Cargar soportes de pago desde localStorage ─── */
@@ -1131,7 +1171,10 @@ function EstadoCuentaInner() {
 
                 El 8% baja el encuadre un pelo para no dejar aire muerto encima
                 de la cabeza. Es el único número que habría que mover. */}
-            <button onClick={() => fotoInputRef.current?.click()}
+            {/* Tocar la foto la vuelve a ACOMODAR en el recuadro 3×4. Si no
+                hay foto todavía, abre el archivo. — 06/09/2026 */}
+            <button onClick={() => { if (foto) setFotoPorRecortar(foto); else fotoInputRef.current?.click(); }}
+              title={foto ? 'Acomodar la foto en el recuadro' : 'Poner una foto'}
               className="relative flex-shrink-0 group">
               <div className="w-[112px] h-[140px] sm:w-[144px] sm:h-[180px] rounded-xl overflow-hidden bg-[#2B3547] border border-[#4A5568] flex flex-col items-center justify-center">
                 {foto
@@ -1174,6 +1217,57 @@ function EstadoCuentaInner() {
                 </div>
               </div>
             </button>
+
+            {/* ── LOS TRES ÍCONOS DE LA FOTO, TAMBIÉN AQUÍ ──────────────────
+                (dirección, 06/09/2026 — «habíamos quedado que admón podía
+                 descargar la foto del deportista y volverla a subir» ·
+                 «déjame hacerlo desde cualquier ruta»)
+
+                Estos botones ya existían en la FICHA del deportista, pero no
+                aquí. Y esta es la pantalla donde la administración pasa el día
+                —revisando pagos—, así que le tocaba salirse a la ficha solo
+                para bajar una foto. Ahora se hace desde las dos partes.
+
+                Van los mismos tres y en el mismo orden: cámara, bajar,
+                papelera. La flechita verde en el medio porque es lo que más se
+                hace; la papelera de última, lejos del dedo.
+
+                Al PAPÁ no le salen: él ya tiene la foto de su hijo, y no debe
+                poder borrarla desde aquí. */}
+            {!esReadonly && (
+              <div className="flex items-center justify-center gap-1.5 -mt-2.5 mb-1">
+                <button onClick={() => fotoInputRef.current?.click()}
+                  title={foto ? 'Cambiar la foto' : 'Poner una foto'}
+                  className="bg-white rounded-full p-1.5 shadow-md transition hover:scale-105">
+                  <Camera className="w-3.5 h-3.5" style={{ color: '#0a2e12' }}/>
+                </button>
+                {foto && (
+                  <a href={foto}
+                    download={`${String(nombre || 'deportista').replace(/[\\/:*?"<>|]/g, ' ').trim()}${codVal ? ` - ${codVal}` : ''}.jpg`}
+                    title="Bajar la foto a este computador"
+                    className="bg-white rounded-full p-1.5 shadow-md transition hover:scale-105 flex items-center justify-center">
+                    <Download className="w-3.5 h-3.5" style={{ color: '#0a7d2e' }}/>
+                  </a>
+                )}
+                {foto && (
+                  <button
+                    onClick={() => {
+                      if (!confirm('¿Quitarle la foto a este deportista?')) return;
+                      setFoto(null);
+                      saveFoto(id, '').catch(console.error);
+                      try {
+                        const f = JSON.parse(localStorage.getItem(FOTOS_KEY) ?? '{}');
+                        delete f[id];
+                        localStorage.setItem(FOTOS_KEY, JSON.stringify(f));
+                      } catch { /* si el navegador no deja, la nube ya quedó sin foto */ }
+                    }}
+                    title="Quitar la foto"
+                    className="bg-white rounded-full p-1.5 shadow-md transition hover:scale-105">
+                    <Trash2 className="w-3.5 h-3.5" style={{ color: '#C0504D' }}/>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Nombre + filas de datos */}
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
@@ -2676,6 +2770,15 @@ function EstadoCuentaInner() {
           </div>
         );
       })()}
+      {/* EL RECUADRO 3×4 PARA ACOMODAR LA FOTO. — 06/09/2026 */}
+      {fotoPorRecortar && (
+        <RecortarFoto
+          src={fotoPorRecortar}
+          onCancelar={() => setFotoPorRecortar(null)}
+          onListo={guardarFotoRecortada}
+        />
+      )}
+
     </div>
   );
 }
