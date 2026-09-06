@@ -1188,8 +1188,15 @@ function PagosInner() {
                             <td style={{ ...celda, color: '#FFFFFF', fontWeight: 800, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' }}>
                               {becado ? '—' : pesos(mens)}
                             </td>
-                            <td style={{ ...celda, textAlign: 'right' as const, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
-                                         color: deuda > 0 ? '#F08A87' : '#5BE39B' }}>
+                            {/* LA CIFRA DE LA DEUDA: BLANCA Y MÁS GRANDE
+                                (dirección, 06/09/2026). Es el número que se
+                                mira al cobrar; en rojo pálido y del mismo
+                                tamaño que todo lo demás, se perdía. AL DÍA sí
+                                se queda verde: no es una cifra, es un estado. */}
+                            <td style={{ ...celda, textAlign: 'right' as const, fontWeight: 900,
+                                         fontVariantNumeric: 'tabular-nums',
+                                         fontSize: deuda > 0 ? 14 : 11,
+                                         color: deuda > 0 ? '#FFFFFF' : '#5BE39B' }}>
                               {becado ? '—' : deuda > 0 ? pesos(deuda) : 'AL DÍA'}
                               {debeMat && (
                                 <span style={{ display: 'block', fontSize: 8.5, fontWeight: 900, color: '#E0A33A' }}>
