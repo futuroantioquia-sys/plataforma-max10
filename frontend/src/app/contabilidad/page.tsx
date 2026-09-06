@@ -158,14 +158,34 @@ function terceroPorDescripcion(desc: any, directorio: TerceroLibro[]): TerceroLi
 // coincidir con el orden en que se pintan las celdas en el cuerpo de la tabla.
 const COLS_LIBRO: { key: string; label: string; def: number }[] = [
   { key: 'num',        label: 'N°',          def: 74 },
-  { key: 'cuenta',     label: 'CUENTA',      def: 62 },
+  /* Esta columna es LA CUENTA NUESTRA donde entró la plata (613, 908, 382…).
+     Se llamaba CUENTA y se confundía con la cuenta del que paga; desde el
+     05/09/2026 se llama BANCO, que es lo que de verdad dice. */
+  { key: 'cuenta',     label: 'BANCO',       def: 62 },
   { key: 'fecha',      label: 'FECHA',       def: 102 },
   { key: 'desc',       label: 'DESCRIPCIÓN', def: 354 },
   { key: 'debito',     label: 'DÉBITO',      def: 86 },
   { key: 'credito',    label: 'CRÉDITO',     def: 90 },
   { key: 'saldo',      label: 'SALDO',       def: 100 },
   { key: 'concepto',   label: 'CONCEPTO',    def: 252 },
-  { key: 'codigo',     label: 'CÓDIGO / CUENTA', def: 88 },
+  /* ── LA CUENTA DE QUIEN PAGÓ ───────────────────────────────────────────
+     (dirección, 05/09/2026 — «es mejor crear la cuenta columna entre concepto
+      y código; en todo código llega la cuenta con la que se relacionó»)
+
+     POR QUÉ EXISTE. El banco manda, en cada movimiento, la cuenta desde la
+     que salió la plata. Con ese número la plataforma le pone el código al
+     deportista. Pero el número NO SE VEÍA en ninguna parte: uno veía el
+     código puesto y tenía que creerle. Si algún día un cruce quedara mal, no
+     había forma de darse cuenta mirando el libro.
+
+     Ahora la cuenta va al lado del código, para poder comprobar de un
+     vistazo con qué cuenta se relacionó cada pago.
+
+     LOS MOVIMIENTOS VIEJOS SALEN VACÍOS, y está bien: esos no vinieron de un
+     extracto del banco sino del libro de Excel del principio, que no traía la
+     cuenta. De ahí para adelante todos la traen. */
+  { key: 'refcta',     label: 'CUENTA',      def: 118 },
+  { key: 'codigo',     label: 'CÓDIGO',      def: 88 },
   { key: 'deportista', label: 'DEPORTISTA',  def: 252 },
   { key: 'detalle',    label: 'DETALLE',     def: 212 },
   /* CONFIRMAR Y EDITAR, SEPARADAS Y AL FINAL (dirección, 01/09/2026).
@@ -721,11 +741,11 @@ export default function ContabilidadPage() {
   const [cargandoLibro, setCargandoLibro] = useState(false);
   // Vista Libro: cuenta a mostrar ('TODAS' = las tres pegadas) y filtros por columna
   const [libroBanco, setLibroBanco] = useState<string>('TODAS');
-  const [fil, setFil] = useState({ banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', codigo: '', deportista: '', detalle: '' });
+  const [fil, setFil] = useState({ banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', refcta: '', codigo: '', deportista: '', detalle: '' });
   // Cuántas filas se dibujan a la vez (los últimos N movimientos; "Mostrar más" trae más atrás)
   const [limite, setLimite] = useState(100);
   // Filtro con retraso: no recalcular en cada tecla (se aplica al dejar de escribir)
-  const [filDebounced, setFilDebounced] = useState({ banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', codigo: '', deportista: '', detalle: '' });
+  const [filDebounced, setFilDebounced] = useState({ banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', refcta: '', codigo: '', deportista: '', detalle: '' });
   // Filtros de trabajo pendiente del LIBRO (barra del encabezado).
   // 25/08/2026 · dirección: se quitaron los botones "Por confirmar / orientar"
   // (naranja) y "Sin concepto" (azul). En su lugar quedan dos, que separan lo que
@@ -1719,6 +1739,9 @@ export default function ContabilidadPage() {
              cédula, una cuenta con guiones—, se busca por PARTE: solo los
              números, en la columna CÓDIGO y dentro del texto del banco. Así
              da igual 236-000-03104 o 23600003104. */
+      /* CUENTA de quien pagó: se compara solo por números, así sirve escribir
+         la cuenta completa, con guiones, o solo sus últimos dígitos. */
+      if (f.refcta && !incDig(m.referencia, f.refcta)) return false;
       if (f.codigo) {
         const needle = f.codigo.trim();
         const hay    = String(m.codigo ?? '').trim();
@@ -1726,8 +1749,21 @@ export default function ContabilidadPage() {
         if (codigoEsExacto) {
           ok = hay === needle;
         } else {
+          /* ── ERROR CORREGIDO EL 05/09/2026 ─────────────────────────────
+             Faltaba mirar LA REFERENCIA, que es justamente donde el banco
+             guarda EL NÚMERO DE CUENTA de quien pagó.
+
+             Se buscaba solo en la columna CÓDIGO y en la descripción. Por eso,
+             al escribir los últimos dígitos de una cuenta —9389— no salía el
+             pago de esa cuenta, y en cambio salía cualquier renglón que
+             llevara esos números en otra parte. Así se ve un pago que no es, al
+             lado de un código que no le corresponde, y parece que la
+             plataforma cruzó mal. NO cruzó mal: la BÚSQUEDA miraba donde no
+             era. Ahora mira también la referencia. */
           const d = dig(needle);
-          ok = !d || dig(hay).includes(d) || dig(m.descripcion).includes(d);
+          ok = !d || dig(hay).includes(d)
+                  || dig(m.referencia).includes(d)
+                  || dig(m.descripcion).includes(d);
         }
         if (!ok) return false;
       }
@@ -2134,7 +2170,7 @@ export default function ContabilidadPage() {
     [libro]);
   const totDebito = useMemo(() => libroFiltrado.reduce((s, m) => s + (Number(m.debito) || 0), 0), [libroFiltrado]);
   const totCredito = useMemo(() => libroFiltrado.reduce((s, m) => s + (Number(m.credito) || 0), 0), [libroFiltrado]);
-  const filVacio = { banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', codigo: '', deportista: '', detalle: '' };
+  const filVacio = { banco: '', fecha: '', desc: '', debito: '', credito: '', saldo: '', concepto: '', refcta: '', codigo: '', deportista: '', detalle: '' };
   const hayFiltro = Object.values(fil).some(v => v);
   // Al montar, recuperar el estado guardado (pestaña, cuenta, filtros, filas) para volver con "Atrás"
   useEffect(() => {
@@ -2460,8 +2496,35 @@ export default function ContabilidadPage() {
             <Upload className="w-4 h-4" /> {cargando ? 'Leyendo…' : 'Subir extracto'}
             <input type="file" accept=".xlsx,.xls" className="hidden" onChange={onArchivo} disabled={cargando} />
           </label>
+          {/* ── QUÉ CUENTA SE ESTÁ MIRANDO EN EL LIBRO ────────────────────
+              (dirección, 05/09/2026 — «enseguida de subir extracto»)
+
+              Estaba abajo, mezclado con los filtros y los avisos. Aquí arriba,
+              al lado de SUBIR EXTRACTO, se ve de una en qué cuenta se está
+              parado —o si están las cinco pegadas—, que es lo primero que uno
+              necesita saber al abrir el libro. Solo sale en la pestaña Libro,
+              que es la única donde manda. */}
+          {vista === 'libro' && (
+            <div className="flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
+              {['TODAS', ...BANCOS].map(b => (
+                <button key={b} onClick={() => setLibroBanco(b)}
+                  /* Sin reborde blanco: el verde solo ya dice cuál está escogida.
+                     — dirección, 05/09/2026 */
+                  className={`text-xs font-black px-2.5 py-1.5 rounded-lg transition ${libroBanco === b ? 'bg-[#00B050] text-white shadow-sm' : 'text-white/70 hover:bg-[#333F50]'}`}>
+                  {b === 'TODAS' ? 'Todas las cuentas' : b.replace('Bancolombia ', '')}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="ml-auto flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
+            {([['subir', 'Movimientos'], ['libro', 'Libro'], ['desconocidas', 'Por asignar'], ['cuentas', 'Cuentas']] as const).map(([v, l]) => (
+              <button key={v} onClick={() => setVista(v)}
+                className={`text-sm font-black px-3 py-1.5 rounded-lg transition ${vista === v ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white/70 hover:bg-[#2B3547]'}`}>{l}</button>
+            ))}
+          </div>
           {/* ── LAS TRES ACCIONES DEL LIBRO, ARRIBA ───────────────────────
-              (dirección, 05/09/2026 — «también en la fila de subir extracto»)
+              (dirección, 05/09/2026 — «también en la fila de subir extracto» ·
+               «estos tres botones de últimos a la derecha, en la misma fila»)
 
               Exportar, eliminar y agregar no son filtros: son acciones. Abajo
               quedaban revueltas entre los avisos de lo que falta por clasificar
@@ -2484,30 +2547,6 @@ export default function ContabilidadPage() {
             </>
           )}
 
-          {/* ── QUÉ CUENTA SE ESTÁ MIRANDO EN EL LIBRO ────────────────────
-              (dirección, 05/09/2026 — «enseguida de subir extracto»)
-
-              Estaba abajo, mezclado con los filtros y los avisos. Aquí arriba,
-              al lado de SUBIR EXTRACTO, se ve de una en qué cuenta se está
-              parado —o si están las cinco pegadas—, que es lo primero que uno
-              necesita saber al abrir el libro. Solo sale en la pestaña Libro,
-              que es la única donde manda. */}
-          {vista === 'libro' && (
-            <div className="flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
-              {['TODAS', ...BANCOS].map(b => (
-                <button key={b} onClick={() => setLibroBanco(b)}
-                  className={`text-xs font-black px-2.5 py-1.5 rounded-lg border transition ${libroBanco === b ? 'bg-[#00B050] text-white border-white shadow-sm' : 'text-white/70 border-transparent hover:bg-[#333F50]'}`}>
-                  {b === 'TODAS' ? 'Todas las cuentas' : b.replace('Bancolombia ', '')}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="ml-auto flex items-center gap-1.5 bg-[#2B3547] rounded-xl p-1">
-            {([['subir', 'Movimientos'], ['libro', 'Libro'], ['desconocidas', 'Por asignar'], ['cuentas', 'Cuentas']] as const).map(([v, l]) => (
-              <button key={v} onClick={() => setVista(v)}
-                className={`text-sm font-black px-3 py-1.5 rounded-lg transition ${vista === v ? 'bg-[#16a34a] text-white shadow-sm' : 'text-white/70 hover:bg-[#2B3547]'}`}>{l}</button>
-            ))}
-          </div>
           {mapeoCount < 100 && (
             <button onClick={sembrar} disabled={sembrando} className="flex items-center gap-1.5 border border-amber-300 text-[#E0A33A] bg-[rgba(224,163,58,.14)] text-xs font-black px-3 py-2 rounded-xl hover:bg-amber-100 transition disabled:opacity-60">
               <Database className="w-4 h-4" /> {sembrando ? progreso || 'Sembrando…' : 'Sembrar diccionario'}
@@ -2833,6 +2872,14 @@ export default function ContabilidadPage() {
                     <th style={thFil}><input value={fil.credito} onChange={e => setFil(f => ({ ...f, credito: e.target.value }))} placeholder="crédito…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.saldo} onChange={e => setFil(f => ({ ...f, saldo: e.target.value }))} placeholder="saldo…" style={inpFil} /></th>
                     <th style={thFil}><input value={fil.concepto} onChange={e => setFil(f => ({ ...f, concepto: e.target.value }))} placeholder="concepto…" style={inpFil} /></th>
+                    {/* Filtro de la CUENTA de quien pagó. — 05/09/2026 */}
+                    <th style={thFil}>
+                      <input autoComplete="off" value={fil.refcta}
+                        onChange={ev => setFil(x => ({ ...x, refcta: ev.target.value }))}
+                        title="Escribe la cuenta completa o solo sus últimos dígitos"
+                        placeholder="cuenta o últimos 4…"
+                        style={{ ...inpFil, fontWeight: 800 }} />
+                    </th>
                     {/* ── UNA SOLA CASILLA: CÓDIGO O CUENTA ────────────────────
                         (dirección, 05/09/2026 — «ya la verdad no sé ni para qué
                          es el uno del otro; finalmente los deportistas tienen
@@ -2847,7 +2894,7 @@ export default function ContabilidadPage() {
                       <input autoComplete="off" value={fil.codigo}
                         onChange={e => setFil(f => ({ ...f, codigo: e.target.value }))}
                         title="Escribe el código del deportista, la cédula o NIT, la cuenta, o solo los últimos dígitos del soporte. El buscador se encarga."
-                        placeholder="código, cédula o cuenta…"
+                        placeholder="código, cédula o nº de cuenta…"
                         style={{ ...inpFil, fontWeight: 800 }} />
                     </th>
                     <th style={thFil}><input value={fil.deportista} onChange={e => setFil(f => ({ ...f, deportista: e.target.value }))} placeholder="nombre…" style={inpFil} /></th>
@@ -2937,6 +2984,26 @@ export default function ContabilidadPage() {
                         ) : (
                           <span className="block truncate">{m.concepto || <span style={{ color: '#cbd5e1' }}>—</span>}</span>
                         )}
+                      </td>
+                      {/* LA CUENTA DE QUIEN PAGÓ. Solo se mira, no se edita: la
+                          manda el banco. En un PAGO QR se muestra en gris,
+                          porque esa es NUESTRA cuenta de recaudo —la misma para
+                          todo el que pague por ahí— y no identifica a nadie.
+                          — 05/09/2026 */}
+                      {/* TODA LA COLUMNA EN GRIS (dirección, 05/09/2026): este
+                          número no se edita ni se decide, solo se consulta. En
+                          gris se lee sin competirle a lo que sí se trabaja
+                          —concepto, código, detalle—. Los PAGO QR van además en
+                          cursiva, porque esa cuenta es la nuestra de recaudo. */}
+                      <td style={{ ...tdC, fontVariantNumeric: 'tabular-nums', fontWeight: 700,
+                                   color: '#94a3b8',
+                                   fontStyle: /PAGO\s*QR/i.test(String(m.descripcion ?? '')) ? 'italic' : 'normal' }}
+                        title={String(m.referencia ?? '').trim()
+                          ? (/PAGO\s*QR/i.test(String(m.descripcion ?? ''))
+                              ? 'Cuenta de recaudo del QR (nuestra): la comparten todos los que pagan por ahí, no dice quién pagó.'
+                              : `Cuenta desde la que se hizo el pago: ${m.referencia}`)
+                          : 'Este movimiento vino del libro de Excel del principio, que no traía la cuenta.'}>
+                        {String(m.referencia ?? '').trim() || <span style={{ color: '#cbd5e1' }}>—</span>}
                       </td>
                       <td style={{ ...tdC, padding: '2px 3px', cursor: 'pointer', background: m.codigo ? '#16a34a' : undefined, color: m.codigo ? '#fff' : undefined, fontWeight: 900 }}
                         title="Clic para cambiar o borrar el código del deportista"
@@ -3469,10 +3536,15 @@ export default function ContabilidadPage() {
 
    Cuando un filtro está PRENDIDO el botón se pone macizo, para que se vea
    que está actuando; apagado va transparente. */
-const BTN_VERDE     = 'flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition text-white bg-[rgba(0,176,80,.22)] border-white hover:bg-[rgba(0,176,80,.38)] disabled:opacity-50';
-const BTN_VERDE_ON  = 'flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition text-white bg-[#00B050] border-white hover:brightness-110 disabled:opacity-50';
+/* El VERDE es exactamente el del botón SUBIR EXTRACTO —verde macizo, letra
+   blanca, esquina redonda— para que toda esa fila se vea de la misma familia.
+   (dirección, 05/09/2026: «después de Todas las cuentas, todos los botones
+   verdes igual al de subir extracto»). Los ROJOS SE QUEDAN COMO ESTABAN
+   —así lo pidió la dirección—: rojo transparente, borde rojo, letra blanca. */
+const BTN_VERDE     = 'flex items-center gap-2 text-sm font-black px-4 py-2 rounded-xl border transition text-white bg-[#16a34a] border-[#16a34a] hover:bg-[#064e1e] disabled:opacity-50';
+const BTN_VERDE_ON  = 'flex items-center gap-2 text-sm font-black px-4 py-2 rounded-xl border transition text-white bg-[#00B050] border-[#00B050] hover:brightness-110 disabled:opacity-50';
 const BTN_ALERTA    = 'flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition text-white bg-[rgba(192,80,77,.20)] border-[#C0504D] hover:bg-[rgba(192,80,77,.36)] disabled:opacity-50';
-const BTN_ALERTA_ON = 'flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition text-white bg-[#C0504D] border-white hover:brightness-110 disabled:opacity-50';
+const BTN_ALERTA_ON = 'flex items-center gap-1.5 text-sm font-black px-3 py-1.5 rounded-lg border transition text-white bg-[#C0504D] border-[#C0504D] hover:brightness-110 disabled:opacity-50';
 
 const td: React.CSSProperties = { border: '1px solid #eef2f7', padding: '6px 8px', textAlign: 'center', whiteSpace: 'nowrap' };
 // Celda compacta para el Libro con tableLayout fijo: recorta con "…" y no desborda

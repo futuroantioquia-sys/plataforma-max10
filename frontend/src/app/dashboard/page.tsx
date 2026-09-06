@@ -7,7 +7,7 @@ import {
   Star, MessageCircle, Clipboard, ClipboardList, UserPlus, LayoutList,
   Link2, Copy, Check, QrCode, BarChart3, Trophy, Upload, FolderKanban,
   LogOut, Zap, Shield, Dumbbell, HardHat, Clock, UserCog, Calculator, Cake, CalendarDays,
-  UserMinus, FileText,
+  UserMinus, FileText, Headphones,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { esSuperAdmin, esDeportivo, getSesion } from '@/lib/permisos';
@@ -446,6 +446,15 @@ function DashboardAdmin() {
             diligencia la familia — uno para entrar y el otro para salir. */}
         <AccesoCard titulo="Formato Solicitud de Retiro" icono={FileText} href="/retiro" descripcion="El formato que llena el padre" color="verde" />
         <AccesoCard titulo="Productos Institucional" icono={DollarSign} href="/productos" descripcion="Balones, camisetas, uniformes, informes" color="verde" />
+        {/* ── ATENCIÓN POR WHATSAPP ────────────────────────────────────────
+            (dirección, 05/09/2026 — «¿cómo puedo acceder en la app a un módulo
+             donde me muestre las posibles preguntas, agregar otras preguntas y
+             editar las respuestas de todas?»)
+
+            El módulo ya existía en /atencion, pero no tenía entrada por
+            ninguna parte: solo se llegaba escribiendo la dirección de memoria.
+            Aquí queda su tarjeta. Es solo para la dirección. */}
+        <AccesoCard titulo="Atención por WhatsApp" icono={Headphones} href="/atencion" descripcion="Preguntas y respuestas del agente" color="verde" />
       </CategoriaSection>
     </div>
   );

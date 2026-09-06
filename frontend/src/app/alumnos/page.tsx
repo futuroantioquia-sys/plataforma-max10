@@ -39,8 +39,14 @@ function CeldaPosicion({ depId, valor, onChange, readOnly = false }: {
 }) {
   if (readOnly) {
     return (
-      <div style={{ minWidth: 110, fontSize: 11, color: '#374151', fontWeight: 600, padding: '2px 4px' }}>
-        {valor || <span style={{ color: '#d1d5db' }}>—</span>}
+      /* LETRA BLANCA (dirección, 05/09/2026 — «la letra blanca en POSICIÓN, ya
+         que no se ve»). Esta casilla se quedó con la letra gris oscura del
+         diseño viejo, cuando el cuadro era blanco. Con el fondo gris verde de
+         hoy quedaba oscuro sobre oscuro: la posición estaba escrita, pero no
+         se leía. Es la vista de la dirección —de solo mirar—; la del formador,
+         que sí edita, ya iba en blanco. */
+      <div style={{ minWidth: 110, fontSize: 11, color: '#FFFFFF', fontWeight: 600, padding: '2px 4px' }}>
+        {valor || <span style={{ color: '#7C879A' }}>—</span>}
       </div>
     );
   }
@@ -976,9 +982,9 @@ function DashboardProyecto({
                   <th className="border border-white px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center" style={{ minWidth: 156 }}>
                     DOCUMENTOS
                   </th>
-                  <th className="border border-white px-3 py-2 font-black text-white text-[11px] tracking-wide whitespace-nowrap text-center" style={{ minWidth: 120 }}>
-                    INFORMES
-                  </th>
+                  {/* La columna INFORMES se retiró el 05/09/2026 por pedido de
+                      la dirección. Los informes de valoración se siguen viendo
+                      en la ficha de cada deportista. */}
                 </tr>
               </thead>
               <tbody>
@@ -1073,26 +1079,12 @@ function DashboardProyecto({
                         </span>
                       </td>
 
-                      {/* ── INFORMES — los tres de valoración, con semáforo (31/08/2026) ── */}
-                      <td className="border border-white px-2 py-1.5 whitespace-nowrap" style={{ verticalAlign: 'middle', background: PANEL }}>
-                        {(() => {
-                          const cod  = getCol(dep, /^c[oó]d/i).trim().toUpperCase();
-                          const info = infMap[cod] ?? {};
-                          return (
-                            <span className="inline-flex items-center gap-1 justify-center w-full">
-                              {([1, 2, 3] as const).map(n => (
-                                <PastillaInf key={n} n={n} inf={info[String(n)]} onAbrir={() => abrirInforme(cod, info[String(n)]?.id ?? '')} />
-                              ))}
-                            </span>
-                          );
-                        })()}
-                      </td>
                     </tr>
                   );
                 })}
-                {/* +5 = # · VAL · POSICIÓN · DOCUMENTOS · INFORMES */}
+                {/* +4 = # · VAL · POSICIÓN · DOCUMENTOS (INFORMES se retiró) */}
                 {filtrada.length === 0 && (
-                  <tr><td colSpan={cols.length + 5} className="py-10 text-center text-sm text-white/45 border border-white" style={{ background: PANEL }}>Sin resultados</td></tr>
+                  <tr><td colSpan={cols.length + 4} className="py-10 text-center text-sm text-white/45 border border-white" style={{ background: PANEL }}>Sin resultados</td></tr>
                 )}
               </tbody>
             </table>
